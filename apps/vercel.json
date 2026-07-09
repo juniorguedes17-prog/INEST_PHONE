@@ -1,0 +1,14 @@
+{
+  "buildCommand": "pnpm --filter @inest/web build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "outputDirectory": "apps/web/.next",
+  "framework": "nextjs",
+  "env": {
+    "APP_ENV": "staging"
+  },
+  "build": {
+    "env": {
+      "APP_ENV": "staging"
+    }
+  }
+}

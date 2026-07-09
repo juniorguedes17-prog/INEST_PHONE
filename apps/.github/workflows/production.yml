@@ -1,0 +1,63 @@
+name: Production Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_go_live:
+        description: 'Digite GO-LIVE para confirmar o deploy de producao'
+        required: true
+        type: string
+
+jobs:
+  production-gate:
+    name: Production Gate
+    runs-on: ubuntu-latest
+    if: ${{ inputs.confirm_go_live == 'GO-LIVE' }}
+    env:
+      VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+      BACKEND_DEPLOY_HOOK_URL: ${{ secrets.BACKEND_DEPLOY_HOOK_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.17.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm prisma:generate
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Validate Prisma Schema
+        run: pnpm exec prisma validate
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+
+      - name: Quality Check
+        run: pnpm check
+
+      - name: API Tests
+        run: pnpm test:api
+
+      - name: Build
+        run: pnpm build
+
+      - name: Deploy Frontend by Vercel Hook
+        if: ${{ env.VERCEL_DEPLOY_HOOK_URL != '' }}
+        run: curl -fsS -X POST "$VERCEL_DEPLOY_HOOK_URL"
+
+      - name: Deploy Backend by Provider Hook
+        if: ${{ env.BACKEND_DEPLOY_HOOK_URL != '' }}
+        run: curl -fsS -X POST "$BACKEND_DEPLOY_HOOK_URL"

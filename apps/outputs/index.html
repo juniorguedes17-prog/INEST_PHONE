@@ -1,0 +1,622 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iNest Phone | Gestão Comercial</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Montserrat:wght@700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar" id="sidebar">
+        <div class="brand">
+          <div class="brand-mark">iN</div>
+          <div>
+            <strong>iNest Phone</strong>
+            <span>Gestão Comercial</span>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Módulos">
+          <button class="nav-item active" data-view="dashboard" title="Dashboard">
+            <span class="icon">⌂</span><span>Dashboard</span>
+          </button>
+          <button class="nav-item" data-view="radar" title="Radar de Preços">
+            <span class="icon">⌕</span><span>Radar de Preços</span>
+          </button>
+          <button class="nav-item" data-view="importRadar" title="Radar de Importação">
+            <span class="icon">⇄</span><span>Radar de Importação</span>
+          </button>
+          <button class="nav-item" data-view="pricing" title="Precificação">
+            <span class="icon">%</span><span>Precificação</span>
+          </button>
+          <button class="nav-item" data-view="offers" title="Gerador de Ofertas">
+            <span class="icon">✦</span><span>Ofertas</span>
+          </button>
+          <button class="nav-item" data-view="products" title="Produtos e Estoque">
+            <span class="icon">□</span><span>Produtos</span>
+          </button>
+          <button class="nav-item" data-view="clients" title="Clientes">
+            <span class="icon">◯</span><span>Clientes</span>
+          </button>
+          <button class="nav-item" data-view="suppliers" title="Fornecedores">
+            <span class="icon">F</span><span>Fornecedores</span>
+          </button>
+          <button class="nav-item" data-view="finance" title="Financeiro">
+            <span class="icon">$</span><span>Financeiro</span>
+          </button>
+          <button class="nav-item" data-view="bi" title="Business Intelligence">
+            <span class="icon">▥</span><span>BI</span>
+          </button>
+          <button class="nav-item" data-view="users" title="Usuários">
+            <span class="icon">U</span><span>Usuários</span>
+          </button>
+          <button class="nav-item" data-view="settings" title="Configurações">
+            <span class="icon">*</span><span>Configurações</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-chip">
+            <span class="avatar">JA</span>
+            <div>
+              <strong>Admin</strong>
+              <span>Online agora</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <button class="icon-button mobile-only" id="menuButton" title="Abrir menu">☰</button>
+          <div>
+            <p class="eyebrow">Operação comercial</p>
+            <h1 id="viewTitle">Dashboard</h1>
+          </div>
+          <div class="topbar-actions">
+            <div class="search">
+              <span>⌕</span>
+              <input id="globalSearch" type="search" placeholder="Buscar produto, cliente ou oferta" />
+            </div>
+            <button class="icon-button" id="themeButton" title="Alternar tema">◐</button>
+            <button class="primary-action" id="quickOfferButton">Nova oferta</button>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboard">
+          <div class="kpi-grid">
+            <article class="kpi accent-blue">
+              <span>Receita do mês</span>
+              <strong>R$ 186.420</strong>
+              <small>+18,4% vs. mês anterior</small>
+            </article>
+            <article class="kpi accent-green">
+              <span>Margem média</span>
+              <strong>22,8%</strong>
+              <small>Meta: 24%</small>
+            </article>
+            <article class="kpi accent-purple">
+              <span>Ofertas geradas</span>
+              <strong>312</strong>
+              <small>47 aguardando retorno</small>
+            </article>
+            <article class="kpi accent-amber">
+              <span>Itens críticos</span>
+              <strong>9</strong>
+              <small>Baixo estoque ou preço instável</small>
+            </article>
+          </div>
+
+          <div class="dashboard-grid">
+            <section class="panel wide">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Performance</p>
+                  <h2>Receita e lucro por semana</h2>
+                </div>
+                <select id="periodSelect">
+                  <option>Últimos 30 dias</option>
+                  <option>Últimos 90 dias</option>
+                  <option>Este ano</option>
+                </select>
+              </div>
+              <div class="chart" aria-label="Gráfico de receita e lucro">
+                <div style="--h: 62%"><span></span><small>S1</small></div>
+                <div style="--h: 74%"><span></span><small>S2</small></div>
+                <div style="--h: 58%"><span></span><small>S3</small></div>
+                <div style="--h: 86%"><span></span><small>S4</small></div>
+                <div style="--h: 70%"><span></span><small>S5</small></div>
+                <div style="--h: 92%"><span></span><small>S6</small></div>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Alertas</p>
+                  <h2>Prioridades de hoje</h2>
+                </div>
+              </div>
+              <div class="alert-list" id="alertList"></div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Atividades</p>
+                <h2>Últimas movimentações</h2>
+              </div>
+            </div>
+            <div class="activity-list" id="activityList"></div>
+          </section>
+        </section>
+
+        <section class="view" id="radar">
+          <div class="radar-catalog">
+            <aside class="pricing-filter-panel radar-filter-panel" aria-label="Filtros do radar de preços">
+              <div class="filter-header">
+                <div>
+                  <p class="eyebrow">Fornecedores</p>
+                  <h2>Radar de preços</h2>
+                </div>
+                <button class="pricing-filter-close" id="radarFilterClose" type="button" title="Fechar filtros">×</button>
+              </div>
+
+              <details class="filter-group" open>
+                <summary>Busca</summary>
+                <input class="field" id="radarFilter" placeholder="Filtrar por modelo ou fornecedor" />
+              </details>
+
+              <details class="filter-group" open>
+                <summary>Fornecedor</summary>
+                <select class="field">
+                  <option>Todos os fornecedores</option>
+                  <option>Alpha Mobile</option>
+                  <option>Prime Imports</option>
+                </select>
+              </details>
+
+              <details class="filter-group" open>
+                <summary>Ordenação</summary>
+                <select class="field">
+                  <option>Menor preço primeiro</option>
+                  <option>Maior lucro líquido</option>
+                  <option>Atualizados hoje</option>
+                </select>
+              </details>
+
+              <button class="primary-action radar-import-action" type="button">Importar planilha</button>
+            </aside>
+
+            <div class="pricing-filter-backdrop radar-filter-backdrop" id="radarFilterBackdrop"></div>
+
+            <div class="radar-main">
+              <div class="radar-kpi-strip">
+                <article class="kpi accent-blue"><span>Menor preço válido</span><strong id="radarMinPrice">R$ 0</strong><small>Somente itens aprovados</small></article>
+                <article class="kpi accent-purple"><span>Preço médio</span><strong id="radarAveragePrice">R$ 0</strong><small id="radarSupplierCount">0 fornecedores</small></article>
+                <article class="kpi accent-green"><span>Maior preço</span><strong id="radarMaxPrice">R$ 0</strong><small>Base histórica importada</small></article>
+                <article class="kpi accent-amber"><span>Ocultados</span><strong id="radarHiddenCount">0</strong><small>Critérios de exclusão BRD</small></article>
+              </div>
+
+              <div class="radar-catalog-top">
+                <div>
+                  <p class="eyebrow">Cotações aprovadas</p>
+                  <h2 id="radarFoundCount">0 produtos encontrados</h2>
+                  <span>Compare fornecedores, prazos e disponibilidade sem expor dados internos.</span>
+                </div>
+                <div class="pricing-controls">
+                  <button class="pricing-filter-trigger" id="radarFilterToggle" type="button">Filtros</button>
+                  <select class="field" aria-label="Ordenação do radar">
+                    <option>Menor preço</option>
+                    <option>Maior preço</option>
+                    <option>Mais recentes</option>
+                    <option>Última atualização</option>
+                  </select>
+                  <div class="segmented-control" aria-label="Modo de visualização do radar">
+                    <button class="active" type="button">Lista</button>
+                    <button type="button">Cards</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="radar-card-list" id="priceRows"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="importRadar">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Importação</p>
+              <h2>Radar de Importação</h2>
+              <span>Simulação preparada para Compras Paraguai, com cálculo de custo final por tipo de produto.</span>
+            </div>
+            <div class="import-dollar-badge">
+              <span>Cotação do dólar</span>
+              <strong id="importDollarIndicator">R$ 5,35</strong>
+            </div>
+          </div>
+
+          <div class="import-radar-layout">
+            <section class="panel import-search-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Compras Paraguai</p>
+                  <h2>Buscar produtos</h2>
+                </div>
+              </div>
+              <div class="import-search-row">
+                <input class="field" id="importSearchInput" type="search" placeholder="Buscar iPhone, MacBook, perfume..." />
+                <button class="primary-action" id="importSearchButton" type="button">Buscar</button>
+              </div>
+              <div class="import-state" id="importLoadingState">Buscando produtos...</div>
+              <div class="import-state" id="importEmptyState">Nenhum produto encontrado.</div>
+              <div class="import-result-list" id="importResultList"></div>
+            </section>
+
+            <aside class="panel import-calculation-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Cálculo</p>
+                  <h2>Produto selecionado</h2>
+                </div>
+              </div>
+              <div class="import-selected-empty" id="importCalculationEmpty">
+                Selecione um produto para visualizar o custo final estimado.
+              </div>
+              <div class="import-calculation" id="importCalculationPanel">
+                <div class="import-product-summary">
+                  <strong id="importSelectedName"></strong>
+                  <a id="importSelectedLink" href="#" target="_blank" rel="noopener noreferrer">Abrir produto</a>
+                </div>
+                <label>Tipo de produto
+                  <select id="importProductTypeSelect"></select>
+                </label>
+                <div class="import-total">
+                  <span>Total estimado de importação</span>
+                  <strong id="importEstimatedTotal">R$ 0,00</strong>
+                </div>
+                <div class="import-breakdown" id="importBreakdown"></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="view" id="pricing">
+          <div class="pricing-catalog">
+            <aside class="pricing-filter-panel" aria-label="Filtros de precificacao">
+              <div class="filter-header">
+                <div>
+                  <p class="eyebrow">Catalogo</p>
+                  <h2>Precificacao</h2>
+                </div>
+                <button class="icon-button pricing-filter-close" id="pricingFilterClose" title="Fechar filtros">x</button>
+              </div>
+
+              <details class="filter-group" open>
+                <summary>Categoria</summary>
+                <label><input type="checkbox" name="category" value="iPhone" checked /> iPhone</label>
+                <label><input type="checkbox" name="category" value="iPad" checked /> iPad</label>
+                <label><input type="checkbox" name="category" value="MacBook" checked /> MacBook</label>
+                <label><input type="checkbox" name="category" value="Apple Watch" checked /> Apple Watch</label>
+                <label><input type="checkbox" name="category" value="AirPods" checked /> AirPods</label>
+              </details>
+
+              <details class="filter-group" open>
+                <summary>Faixa de Preco</summary>
+                <label>Ate
+                  <select id="pricingPriceRange">
+                    <option value="999999">Todos os valores</option>
+                    <option value="2500">R$ 2.500</option>
+                    <option value="5000">R$ 5.000</option>
+                    <option value="7500">R$ 7.500</option>
+                    <option value="10000">R$ 10.000</option>
+                  </select>
+                </label>
+              </details>
+
+              <details class="filter-group" open>
+                <summary>Status</summary>
+                <label><input type="checkbox" name="status" value="Novo" checked /> Novo</label>
+                <label><input type="checkbox" name="status" value="Seminovo" checked /> Seminovo</label>
+                <label><input type="checkbox" name="status" value="CPO" checked /> CPO</label>
+              </details>
+
+              <details class="filter-group" open>
+                <summary>Fornecedor</summary>
+                <select id="pricingSupplierFilter">
+                  <option value="all">Todos</option>
+                  <option>Prime Imports</option>
+                  <option>Alpha Mobile</option>
+                  <option>Connect BR</option>
+                  <option>Global Tech</option>
+                </select>
+              </details>
+
+              <details class="filter-group" open>
+                <summary>Cidade</summary>
+                <select id="pricingCityFilter">
+                  <option value="all">Todas</option>
+                  <option>Sao Paulo</option>
+                  <option>Campinas</option>
+                  <option>Santos</option>
+                  <option>Rio de Janeiro</option>
+                </select>
+              </details>
+
+              <details class="filter-group" open>
+                <summary>Prazo de entrega</summary>
+                <select id="pricingDeadlineFilter">
+                  <option value="all">Todos</option>
+                  <option>1-2 dias uteis</option>
+                  <option>3-5 dias uteis</option>
+                  <option>7-10 dias uteis</option>
+                </select>
+              </details>
+            </aside>
+
+            <div class="pricing-filter-backdrop" id="pricingFilterBackdrop"></div>
+
+            <div class="pricing-main">
+              <div class="pricing-catalog-top">
+                <div>
+                  <p class="eyebrow">Precos calculados automaticamente</p>
+                  <h2 id="pricingFoundCount">0 produtos encontrados</h2>
+                  <span>Valores finais com custo fixo, frete, taxa e lucro por modelo.</span>
+                </div>
+                <div class="pricing-controls">
+                  <button class="icon-button pricing-filter-trigger" id="pricingFilterTrigger" title="Abrir filtros">F</button>
+                  <select class="field" id="pricingSort">
+                    <option value="lowest">Menor preco</option>
+                    <option value="highest">Maior preco</option>
+                    <option value="recent">Mais recentes</option>
+                    <option value="updated">Ultima atualizacao</option>
+                    <option value="profit">Maior lucro</option>
+                  </select>
+                  <div class="segmented-control" aria-label="Modo de visualizacao">
+                    <button class="active" id="pricingListMode" type="button">Lista</button>
+                    <button id="pricingCardMode" type="button">Cards</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pricing-skeleton" id="pricingSkeleton" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+
+              <div class="pricing-results list-mode" id="pricingResults"></div>
+
+              <div class="empty-state" id="pricingEmptyState">
+                <strong>Nenhum produto encontrado.</strong>
+                <span>Ajuste os filtros para visualizar outros produtos disponiveis.</span>
+              </div>
+
+              <div class="pagination" id="pricingPagination"></div>
+            </div>
+          </div>
+        </section>
+        <section class="view" id="offers">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Comercial</p>
+              <h2>Gerador de ofertas</h2>
+              <span>Monte mensagens prontas para copiar e enviar ao cliente.</span>
+            </div>
+            <button class="primary-action" id="copyOffer">Copiar oferta</button>
+          </div>
+          <div class="offer-builder">
+            <section class="panel form-panel">
+              <label>Template
+                <select id="offerTemplate">
+                  <option value="sealed">Lacrado oficial</option>
+                  <option value="used">Seminovo oficial</option>
+                </select>
+              </label>
+              <label>Modelo<input id="offerProduct" value="iPhone 15 Pro 256GB Natural" /></label>
+              <label>Cores e valores<input id="offerColors" value="Natural - R$ 6.890" /></label>
+              <label>Prazo<input id="offerDeadline" value="3-5 dias úteis" /></label>
+            </section>
+            <section class="panel preview-panel">
+              <p class="eyebrow">Pré-visualização</p>
+              <div class="phone-preview">
+                <div class="message" id="offerPreview"></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="products">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Catálogo</p>
+              <h2>Produtos e estoque</h2>
+              <span>Cadastro, disponibilidade, IMEI, reservas e movimentações.</span>
+            </div>
+            <button class="primary-action">Novo produto</button>
+          </div>
+          <div class="product-grid" id="productGrid"></div>
+        </section>
+
+        <section class="view" id="clients">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Relacionamento</p>
+              <h2>Clientes</h2>
+              <span>Histórico, origem, cidade, ticket médio e observações comerciais.</span>
+            </div>
+            <button class="primary-action">Novo cliente</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Cliente</th><th>Cidade</th><th>Origem</th><th>Ticket médio</th><th>Última compra</th></tr></thead>
+              <tbody id="clientRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="suppliers">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Compras</p>
+              <h2>Fornecedores</h2>
+              <span>Cadastro, confiabilidade, prazos, listas de preço e relacionamento comercial.</span>
+            </div>
+            <button class="primary-action">Novo fornecedor</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Nome</th><th>Cidade</th><th>Estado</th><th>Telefone</th><th>WhatsApp</th><th>Link direto</th><th>Observações</th><th>Status</th></tr></thead>
+              <tbody id="supplierRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="finance">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Controle</p>
+              <h2>Financeiro</h2>
+              <span>Receitas, despesas, fluxo de caixa, lucro e categorias.</span>
+            </div>
+          </div>
+          <div class="kpi-grid">
+            <article class="kpi accent-green"><span>Entradas</span><strong>R$ 214.900</strong><small>128 vendas</small></article>
+            <article class="kpi accent-red"><span>Saídas</span><strong>R$ 158.300</strong><small>Produtos, fretes e taxas</small></article>
+            <article class="kpi accent-blue"><span>Caixa projetado</span><strong>R$ 72.840</strong><small>Próximos 15 dias</small></article>
+            <article class="kpi accent-purple"><span>Lucro líquido</span><strong>R$ 42.670</strong><small>19,8% da receita</small></article>
+          </div>
+          <section class="panel">
+            <div class="cashflow" id="cashflow"></div>
+          </section>
+        </section>
+
+        <section class="view" id="bi">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Análise</p>
+              <h2>Business Intelligence</h2>
+              <span>Indicadores executivos para margem, giro, origem e desempenho comercial.</span>
+            </div>
+          </div>
+          <div class="insight-grid">
+            <article class="panel insight"><strong>Produtos de maior giro</strong><span>iPhone 14 128GB, iPhone 15 256GB e AirPods Pro concentram 54% das vendas do mês.</span></article>
+            <article class="panel insight"><strong>Origem com melhor conversão</strong><span>Indicação converte 31% acima dos leads vindos de anúncios pagos.</span></article>
+            <article class="panel insight"><strong>Margem em atenção</strong><span>Modelos Pro Max tiveram queda média de 3,2 pontos por aumento de custo.</span></article>
+          </div>
+        </section>
+
+        <section class="view" id="users">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Acesso</p>
+              <h2>Usuários e permissões</h2>
+              <span>Perfis de Administrador, Gestor e Operador com controle por módulo.</span>
+            </div>
+            <button class="primary-action">Convidar usuário</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Usuário</th><th>Perfil</th><th>Status</th><th>Último acesso</th><th>Permissões</th></tr></thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="view" id="settings">
+          <div class="module-header">
+            <div>
+              <p class="eyebrow">Sistema</p>
+              <h2>Configurações</h2>
+              <span>Parâmetros comerciais, segurança, integrações futuras e identidade visual.</span>
+            </div>
+            <button class="primary-action">Salvar ajustes</button>
+          </div>
+          <div class="settings-grid">
+            <article class="panel setting-card import-config-card">
+              <div class="setting-card-header">
+                <strong>Configuração Financeira de Importação</strong>
+                <span>Parâmetros utilizados exclusivamente pelo Radar de Importação.</span>
+              </div>
+              <div class="import-config-form">
+                <label>Cotação do Dólar
+                  <input id="importConfigDollar" type="number" step="0.01" />
+                </label>
+                <label>Saída de CDE
+                  <input id="importConfigCde" type="number" step="0.01" />
+                </label>
+                <label>Despacho Brasil
+                  <input id="importConfigDispatch" type="number" step="0.01" />
+                </label>
+                <label>Etiqueta Correios
+                  <input id="importConfigLabel" type="number" step="0.01" />
+                </label>
+                <label>Percentual de Nota Fiscal
+                  <input id="importConfigInvoice" type="number" step="0.01" />
+                </label>
+              </div>
+              <div class="setting-card-header compact">
+                <strong>Custos de redirecionamento</strong>
+                <span>Valores editáveis por categoria de produto.</span>
+              </div>
+              <div class="redirect-config-list" id="redirectConfigList"></div>
+              <button class="primary-action" id="saveImportConfigButton" type="button">Salvar importação</button>
+            </article>
+            <article class="panel setting-card">
+              <strong>Configuração Financeira</strong>
+              <span>Custo fixo global</span>
+              <span>Frete padrão</span>
+              <span>Taxa padrão</span>
+              <span>Lucro por modelo</span>
+              <span>Desconto padrão</span>
+            </article>
+            <article class="panel setting-card">
+              <strong>Regras comerciais</strong>
+              <span>Lucro líquido em R$ por produto ou categoria</span>
+              <span>Sem porcentagem fixa de lucro</span>
+              <span>Desconto nunca reduz lucro abaixo do mínimo</span>
+            </article>
+            <article class="panel setting-card">
+              <strong>Segurança</strong>
+              <span>JWT com refresh token</span>
+              <span>Auditoria de atividades</span>
+              <span>Backup automático diário</span>
+            </article>
+            <article class="panel setting-card">
+              <strong>Integrações preparadas</strong>
+              <span>Google Sheets</span>
+              <span>WhatsApp Business</span>
+              <span>CSV e Excel</span>
+              <span>APIs de fornecedores</span>
+            </article>
+            <article class="panel setting-card">
+              <strong>Design system</strong>
+              <span>Azul Glow #5F7CFF</span>
+              <span>Roxo Tech #7B2CFF</span>
+              <span>Inter e Montserrat</span>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="toast" id="toast">Oferta copiada</div>
+    <div class="modal-backdrop" id="supplierModalBackdrop" aria-hidden="true">
+      <section class="supplier-modal" role="dialog" aria-modal="true" aria-labelledby="supplierModalTitle">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Fornecedor</p>
+            <h2 id="supplierModalTitle">Detalhes do fornecedor</h2>
+          </div>
+          <button class="icon-button" id="supplierModalClose" type="button" title="Fechar">×</button>
+        </div>
+        <div class="supplier-modal-grid" id="supplierModalContent"></div>
+      </section>
+    </div>
+    <script src="./app.js"></script>
+  </body>
+</html>
