@@ -1,0 +1,85 @@
+services:
+  - type: web
+    name: inest-phone-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: apps/api/Dockerfile
+    healthCheckPath: /api/v1/health
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_ENV
+        value: staging
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false
+      - key: NEXT_PUBLIC_API_URL
+        sync: false
+      - key: API_PORT
+        value: 3333
+      - key: PORT
+        value: 3333
+      - key: API_PREFIX
+        value: api/v1
+      - key: API_VERSION
+        value: 1.0.0
+      - key: SWAGGER_ENABLED
+        value: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 7d
+      - key: NEXTAUTH_SECRET
+        sync: false
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: GOOGLE_SHEETS_ENABLED
+        value: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_SHEETS_ID
+        sync: false
+      - key: GOOGLE_SHEETS_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_SHEETS_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_SHEETS_PRIVATE_KEY
+        sync: false
+      - key: WHATSAPP_ENABLED
+        value: false
+      - key: WHATSAPP_BASE_URL
+        value: https://wa.me
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: BETTER_STACK_SOURCE_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: IMPORT_PROVIDER_KEY
+        sync: false

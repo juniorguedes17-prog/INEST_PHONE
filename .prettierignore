@@ -1,0 +1,9 @@
+node_modules
+.pnpm-store
+.next
+dist
+coverage
+outputs
+work
+pnpm-lock.yaml
+prisma/migrations
