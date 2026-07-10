@@ -5,7 +5,7 @@ import { PasswordService } from '../services/password.service';
 describe('PasswordService', () => {
   const service = new PasswordService();
 
-  it('validates bcrypt passwords', async () => {
+  it('validates generated passwords', async () => {
     const hash = await service.hashPassword('ChangeMe@12345');
 
     await expect(service.verifyPassword('ChangeMe@12345', hash)).resolves.toBe(true);
