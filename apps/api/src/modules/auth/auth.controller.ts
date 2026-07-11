@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Inject, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Request, Response } from 'express';
+import { CookieOptions, Request, Response } from 'express';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { AuthResponseDto } from './dto/auth-response.dto';
@@ -104,7 +104,7 @@ export class AuthController {
     response.clearCookie(REFRESH_TOKEN_COOKIE, cookieOptions);
   }
 
-  private getAuthCookieOptions() {
+  private getAuthCookieOptions(): CookieOptions {
     const isProduction = process.env.NODE_ENV === 'production';
 
     return {
