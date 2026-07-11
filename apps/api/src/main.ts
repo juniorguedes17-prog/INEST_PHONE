@@ -23,8 +23,20 @@ async function bootstrap() {
   const swaggerEnabled = config.get<boolean>('app.swaggerEnabled', true);
 
   app.setGlobalPrefix(apiPrefix);
+  const allowedOrigins = corsOrigin
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/$/, ''))
+    .filter(Boolean);
+
   app.enableCors({
-    origin: corsOrigin.split(',').map((origin) => origin.trim()),
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin.replace(/\/$/, ''))) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`Origem nao permitida pelo CORS: ${origin}`));
+    },
     credentials: true,
   });
   app.useGlobalPipes(

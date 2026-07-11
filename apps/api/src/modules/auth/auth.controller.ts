@@ -91,23 +91,28 @@ export class AuthController {
   }
 
   private setAuthCookies(response: Response, accessToken: string, refreshToken: string) {
-    response.cookie(ACCESS_TOKEN_COOKIE, accessToken, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-    });
-    response.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-    });
+    const cookieOptions = this.getAuthCookieOptions();
+
+    response.cookie(ACCESS_TOKEN_COOKIE, accessToken, cookieOptions);
+    response.cookie(REFRESH_TOKEN_COOKIE, refreshToken, cookieOptions);
   }
 
   private clearAuthCookies(response: Response) {
-    response.clearCookie(ACCESS_TOKEN_COOKIE, { path: '/' });
-    response.clearCookie(REFRESH_TOKEN_COOKIE, { path: '/' });
+    const cookieOptions = this.getAuthCookieOptions();
+
+    response.clearCookie(ACCESS_TOKEN_COOKIE, cookieOptions);
+    response.clearCookie(REFRESH_TOKEN_COOKIE, cookieOptions);
+  }
+
+  private getAuthCookieOptions() {
+    const isProduction = process.env.NODE_ENV === 'production';
+
+    return {
+      httpOnly: true,
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+      path: '/',
+    };
   }
 
   private getCookie(request: Request, name: string): string | null {
