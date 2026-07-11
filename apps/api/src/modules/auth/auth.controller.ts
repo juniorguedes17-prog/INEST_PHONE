@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Post, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CookieOptions, Request, Response } from 'express';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -19,8 +19,9 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Autentica usuario por e-mail e senha.' })
-  @ApiResponse({ status: 201, type: AuthResponseDto })
+  @ApiResponse({ status: 200, type: AuthResponseDto })
   async login(
     @Body() loginDto: LoginDto,
     @Req() request: Request,
