@@ -93,7 +93,7 @@ export function ProductsPageContent() {
 
       {error ? <ErrorState title="Atencao" description={error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)]">
+      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
         <FilterSidebar eyebrow="Catalogo" title="Filtros">
           <FilterSection title="Busca">
             <TextInput
@@ -156,7 +156,7 @@ export function ProductsPageContent() {
             description="Lista centralizada para os proximos modulos consumirem como fonte unica."
           />
 
-          <div className="mt-5 grid gap-4">
+          <div className="mt-4 grid gap-3">
             {loading ? <LoadingState /> : null}
             {!loading && !products.length ? (
               <EmptyState

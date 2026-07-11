@@ -27,7 +27,7 @@ export function DashboardPageContent() {
 
       {dashboard.error ? <ErrorState title="Atencao" description={dashboard.error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)]">
+      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
         <FilterSidebar eyebrow="BI" title="Filtros globais">
           <FilterSection title="Periodo">
             <TextInput
@@ -90,7 +90,7 @@ export function DashboardPageContent() {
           ) : null}
           {data ? (
             <div className="grid gap-6">
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                 <KpiCard
                   label="Faturamento do mes"
                   value={formatCurrency(data.kpis.monthRevenue)}

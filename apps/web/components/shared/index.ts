@@ -17,6 +17,7 @@ export * from './LoadingState';
 export * from './Modal';
 export * from './PageHeader';
 export * from './PageSection';
+export * from './Pagination';
 export * from './PercentageInput';
 export * from './ProductCard';
 export * from './SearchInput';

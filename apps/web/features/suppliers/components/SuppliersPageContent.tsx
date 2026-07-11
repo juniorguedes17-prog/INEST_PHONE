@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useMemo, useState } from 'react';
 import {
   ActionButton,
+  Card,
   EmptyState,
   ErrorState,
   FilterSection,
@@ -13,7 +14,6 @@ import {
   LoadingState,
   Modal,
   PageHeader,
-  SettingsCard,
   StatusBadge,
 } from '@/components/shared';
 import { useSuppliers } from '../hooks/useSuppliers';
@@ -69,7 +69,7 @@ export function SuppliersPageContent() {
 
       {error ? <ErrorState title="Atencao" description={error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)]">
+      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
         <FilterSidebar eyebrow="Fornecedores" title="Filtros">
           <FilterSection title="Busca">
             <TextInput
@@ -107,7 +107,7 @@ export function SuppliersPageContent() {
             description="Dados preparados para Radar de Precos, Radar de Importacao e futuras integracoes."
           />
 
-          <div className="mt-5 grid gap-4">
+          <div className="mt-4 grid gap-3">
             {loading ? <LoadingState /> : null}
             {!loading && !suppliers.length ? (
               <EmptyState
@@ -117,38 +117,42 @@ export function SuppliersPageContent() {
             ) : null}
             {!loading
               ? suppliers.map((supplier) => (
-                  <SettingsCard
-                    key={supplier.id}
-                    eyebrow={supplier.source ?? 'Fornecedor'}
-                    title={supplier.name}
-                    description={
-                      supplier.contact
-                        ? `Contato principal: ${supplier.contact}`
-                        : 'Contato nao informado'
-                    }
-                  >
-                    <div className="grid gap-5 lg:grid-cols-[1fr_280px] lg:items-center">
-                      <div className="flex flex-wrap gap-2">
-                        <InfoTag>{supplier.phone ?? 'Telefone nao informado'}</InfoTag>
-                        <InfoTag>{supplier.whatsappLink ?? 'WhatsApp nao cadastrado'}</InfoTag>
-                        <StatusBadge tone={supplier.status === 'ACTIVE' ? 'green' : 'gray'}>
-                          {translateStatus(supplier.status)}
-                        </StatusBadge>
+                  <Card key={supplier.id} className="p-3">
+                    <article className="grid gap-3 md:grid-cols-[56px_minmax(180px,1fr)_minmax(180px,0.8fr)_auto] md:items-center">
+                      <div className="grid h-14 w-14 place-items-center rounded-lg bg-inest-soft text-lg font-black text-inest-blue">
+                        {supplier.name.slice(0, 2).toUpperCase()}
                       </div>
-                      <div className="flex flex-wrap justify-start gap-3 lg:justify-end">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-card-title">{supplier.name}</h3>
+                          <StatusBadge tone={supplier.status === 'ACTIVE' ? 'green' : 'gray'}>
+                            {translateStatus(supplier.status)}
+                          </StatusBadge>
+                        </div>
+                        <p className="mt-1 truncate text-sm text-inest-muted">
+                          {supplier.contact
+                            ? `Contato principal: ${supplier.contact}`
+                            : 'Contato nao informado'}
+                        </p>
+                      </div>
+                      <div className="flex min-w-0 flex-wrap gap-1.5">
+                        <InfoTag>{supplier.source ?? 'Fornecedor'}</InfoTag>
+                        <InfoTag>{supplier.phone ?? 'Telefone nao informado'}</InfoTag>
+                      </div>
+                      <div className="flex flex-wrap justify-start gap-1.5 md:justify-end">
                         {supplier.whatsappLink ? (
                           <a
                             href={supplier.whatsappLink}
                             target="_blank"
                             rel="noreferrer"
-                            className="inline-flex h-11 items-center rounded-xl bg-inest-green px-4 text-sm font-black text-white"
+                            className="inline-flex h-9 items-center rounded-lg bg-inest-green px-3 text-xs font-black text-white"
                           >
                             WhatsApp
                           </a>
                         ) : null}
                         <Link
                           href={`/suppliers/${supplier.id}`}
-                          className="inline-flex h-11 items-center rounded-xl border border-inest-line bg-white px-4 text-sm font-black text-inest-text"
+                          className="inline-flex h-9 items-center rounded-lg border border-inest-line bg-white px-3 text-xs font-black text-inest-text"
                         >
                           Ver fornecedor
                         </Link>
@@ -159,8 +163,8 @@ export function SuppliersPageContent() {
                           Remover
                         </ActionButton>
                       </div>
-                    </div>
-                  </SettingsCard>
+                    </article>
+                  </Card>
                 ))
               : null}
           </div>

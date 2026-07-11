@@ -120,34 +120,7 @@ export function PriceRadarPageContent() {
 
       {radar.error ? <ErrorState title="Atencao" description={radar.error} /> : null}
 
-      <div className="grid gap-4 xl:grid-cols-4">
-        <KpiCard
-          label="Menor preco valido"
-          value={formatCurrency(radar.kpis.lowestValidPrice)}
-          detail="Apenas registros validos"
-          tone="green"
-        />
-        <KpiCard
-          label="Preco medio"
-          value={formatCurrency(radar.kpis.averagePrice)}
-          detail="Base de cotacoes validas"
-          tone="blue"
-        />
-        <KpiCard
-          label="Maior preco"
-          value={formatCurrency(radar.kpis.highestPrice)}
-          detail="Apenas registros validos"
-          tone="purple"
-        />
-        <KpiCard
-          label="Produtos ocultados"
-          value={String(radar.kpis.hiddenCount)}
-          detail="Reprovados ou ocultados"
-          tone="amber"
-        />
-      </div>
-
-      <section className="grid min-h-[calc(100vh-310px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)]">
+      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
         <FilterSidebar eyebrow="Radar" title="Filtros">
           <FilterSection title="Busca">
             <TextInput
@@ -225,6 +198,32 @@ export function PriceRadarPageContent() {
         </FilterSidebar>
 
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+            <KpiCard
+              label="Menor preco valido"
+              value={formatCurrency(radar.kpis.lowestValidPrice)}
+              detail="Apenas registros validos"
+              tone="green"
+            />
+            <KpiCard
+              label="Preco medio"
+              value={formatCurrency(radar.kpis.averagePrice)}
+              detail="Base de cotacoes validas"
+              tone="blue"
+            />
+            <KpiCard
+              label="Maior preco"
+              value={formatCurrency(radar.kpis.highestPrice)}
+              detail="Apenas registros validos"
+              tone="purple"
+            />
+            <KpiCard
+              label="Produtos ocultados"
+              value={String(radar.kpis.hiddenCount)}
+              detail="Reprovados ou ocultados"
+              tone="amber"
+            />
+          </div>
           <ListHeader
             sticky
             eyebrow="Cotacoes de fornecedores"
@@ -241,7 +240,7 @@ export function PriceRadarPageContent() {
             }
           />
 
-          <div className="mt-5 grid gap-4">
+          <div className="mt-4 grid gap-3">
             {radar.loading ? <LoadingState /> : null}
             {!radar.loading && !radar.quotes.length ? (
               <EmptyState

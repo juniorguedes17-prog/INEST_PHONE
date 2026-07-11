@@ -9,21 +9,22 @@ interface PageHeaderProps {
 
 export function PageHeader({ eyebrow, title, description, actions }: PageHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 border-b border-inest-line pb-5 lg:flex-row lg:items-end lg:justify-between">
-      <div>
+    <section
+      className="flex min-h-14 flex-col gap-3 rounded-xl border border-inest-line bg-white px-4 py-3 shadow-card lg:flex-row lg:items-center lg:justify-between"
+      aria-label={`Acoes de ${title}`}
+    >
+      <div className="min-w-0">
+        <h2 className="sr-only">{title}</h2>
         {eyebrow ? (
-          <p className="mb-1 text-xs font-black uppercase text-inest-blue">
+          <p className="text-[11px] font-black uppercase text-inest-blue">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-page-title">
-          {title}
-        </h1>
         {description ? (
-          <p className="mt-2 max-w-3xl text-body-muted">{description}</p>
+          <p className="mt-0.5 max-w-3xl text-sm text-inest-muted">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
-    </div>
+    </section>
   );
 }

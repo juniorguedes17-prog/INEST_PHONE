@@ -40,7 +40,7 @@ export function ImportRadarPageContent() {
 
       {radar.error ? <ErrorState title="Atencao" description={radar.error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)_320px]">
+      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)_320px]">
         <FilterSidebar eyebrow="Radar" title="Filtros">
           <FilterSection title="Pesquisa">
             <TextInput
@@ -89,7 +89,7 @@ export function ImportRadarPageContent() {
             description="Provider desacoplado preparado para Compras Paraguai e novos marketplaces."
           />
 
-          <div className="mt-5 grid gap-4">
+          <div className="mt-4 grid gap-3">
             {radar.loading ? <LoadingState /> : null}
             {!radar.loading && !radar.products.length ? (
               <EmptyState
