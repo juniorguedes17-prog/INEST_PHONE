@@ -4,7 +4,7 @@ export function LoadingState() {
       {[0, 1, 2].map((item) => (
         <div
           key={item}
-          className="h-32 animate-pulse rounded-2xl border border-inest-line bg-gradient-to-r from-white via-inest-soft to-white"
+          className="h-28 animate-pulse rounded-xl border border-inest-line bg-gradient-to-r from-white via-inest-soft to-white"
         />
       ))}
     </div>

@@ -23,28 +23,28 @@ export function FilterSidebar({
   return (
     <aside
       className={cn(
-        'h-full min-h-0 overflow-y-auto rounded-2xl border border-inest-line bg-white p-6 shadow-panel scrollbar-stable',
+        'h-full min-h-0 overflow-y-auto rounded-xl border border-inest-line bg-white p-5 shadow-card scrollbar-stable',
         className,
       )}
       aria-label={title}
     >
-      <div className="mb-5">
-        <p className="text-xs font-black uppercase tracking-wide text-inest-blue">{eyebrow}</p>
-        <h2 className="mt-1 font-display text-2xl font-black text-inest-text">{title}</h2>
+      <div className="mb-4">
+        <p className="text-xs font-black uppercase text-inest-blue">{eyebrow}</p>
+        <h2 className="mt-1 text-card-title">{title}</h2>
       </div>
-      <div className="grid gap-5">{children}</div>
+      <div className="grid gap-4">{children}</div>
     </aside>
   );
 }
 
 export function FilterSection({ title, children, defaultOpen = true }: FilterSectionProps) {
   return (
-    <details className="group border-t border-inest-line pt-5" open={defaultOpen}>
-      <summary className="cursor-pointer list-none text-lg font-black text-inest-text focus:outline-none focus-visible:ring-2 focus-visible:ring-inest-blue">
-        <span className="mr-2 inline-block transition group-open:rotate-90">›</span>
+    <details className="group border-t border-inest-line pt-4" open={defaultOpen}>
+      <summary className="cursor-pointer list-none text-sm font-black text-inest-text focus:outline-none focus-visible:ring-2 focus-visible:ring-inest-blue">
+        <span className="mr-2 inline-block transition group-open:rotate-90">&gt;</span>
         {title}
       </summary>
-      <div className="mt-4 grid gap-3">{children}</div>
+      <div className="mt-3 grid gap-3">{children}</div>
     </details>
   );
 }

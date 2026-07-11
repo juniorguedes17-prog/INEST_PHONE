@@ -10,7 +10,7 @@ interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants: Record<ActionButtonVariant, string> = {
   primary:
-    'border-transparent bg-gradient-to-br from-inest-blue to-inest-purple text-white shadow-soft',
+    'border-transparent bg-inest-blue text-white shadow-soft hover:bg-[#526ee8]',
   secondary: 'border-inest-line bg-white text-inest-text hover:bg-inest-soft',
   success:
     'border-transparent bg-inest-green text-white shadow-[0_12px_28px_rgba(14,163,113,0.18)]',
@@ -31,7 +31,7 @@ export function ActionButton({
     <button
       type={type}
       className={cn(
-        'inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-black transition-colors focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
         variants[variant],
         className,
       )}

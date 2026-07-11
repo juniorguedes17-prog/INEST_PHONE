@@ -128,7 +128,7 @@ export function OffersPageContent() {
           >
             {offers.currentOffer ? (
               <div className="grid gap-4">
-                <pre className="whitespace-pre-wrap rounded-2xl border border-inest-line bg-inest-soft p-4 text-sm leading-6 text-inest-text">
+                <pre className="whitespace-pre-wrap rounded-xl border border-inest-line bg-inest-soft p-4 text-sm leading-6 text-inest-text">
                   {offers.currentOffer.message}
                 </pre>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -175,7 +175,7 @@ function OfferHistoryCard({
   onDelete: () => void;
 }) {
   return (
-    <article className="rounded-2xl border border-inest-line bg-white p-5 shadow-panel">
+    <article className="rounded-xl border border-inest-line bg-white p-5 shadow-card">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <p className="text-xs font-black uppercase tracking-wide text-inest-blue">
@@ -240,7 +240,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       >
         {options.map(([valueOption, labelOption]) => (
           <option key={valueOption} value={valueOption}>

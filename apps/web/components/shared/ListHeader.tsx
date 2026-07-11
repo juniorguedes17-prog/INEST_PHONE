@@ -19,19 +19,19 @@ export function ListHeader({
   return (
     <div
       className={cn(
-        'rounded-2xl border border-inest-line bg-white p-6 shadow-panel',
+        'rounded-xl border border-inest-line bg-white p-5 shadow-card',
         sticky && 'sticky top-0 z-10',
       )}
     >
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
           {eyebrow ? (
             <p className="text-xs font-black uppercase tracking-wide text-inest-blue">{eyebrow}</p>
           ) : null}
-          <h2 className="mt-1 font-display text-2xl font-black text-inest-text">{title}</h2>
-          {description ? <p className="mt-2 text-base text-inest-muted">{description}</p> : null}
+          <h2 className="mt-1 text-card-title">{title}</h2>
+          {description ? <p className="mt-1.5 text-body-muted">{description}</p> : null}
         </div>
-        {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
+        {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
       </div>
     </div>
   );

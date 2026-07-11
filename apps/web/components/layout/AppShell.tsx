@@ -1,7 +1,7 @@
 'use client';
 
 import { ReactNode, useState } from 'react';
-import { Drawer } from '@/components/shared';
+import { ContentContainer, Drawer } from '@/components/shared';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { cn } from '@/utils/cn';
@@ -19,7 +19,7 @@ export function AppShell({ children }: AppShellProps) {
       <div
         className={cn(
           'grid min-h-screen transition-[grid-template-columns]',
-          collapsed ? 'lg:grid-cols-[92px_minmax(0,1fr)]' : 'lg:grid-cols-[280px_minmax(0,1fr)]',
+          collapsed ? 'lg:grid-cols-[76px_minmax(0,1fr)]' : 'lg:grid-cols-[244px_minmax(0,1fr)]',
         )}
       >
         <div className="sticky top-0 hidden h-screen min-h-0 lg:block">
@@ -28,7 +28,9 @@ export function AppShell({ children }: AppShellProps) {
 
         <div className="min-w-0">
           <Header onOpenMenu={() => setDrawerOpen(true)} />
-          <main className="min-w-0 px-5 py-6 md:px-8">{children}</main>
+          <main className="min-w-0 py-6 lg:py-8">
+            <ContentContainer>{children}</ContentContainer>
+          </main>
         </div>
       </div>
 

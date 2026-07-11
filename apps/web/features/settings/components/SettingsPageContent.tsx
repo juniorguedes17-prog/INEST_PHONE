@@ -345,7 +345,7 @@ export function SettingsPageContent() {
           />
         </div>
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-inest-line">
+        <div className="mt-6 overflow-hidden rounded-xl border border-inest-line">
           <div className="grid grid-cols-[1.4fr_1.2fr_160px_110px_96px] gap-3 bg-inest-soft px-4 py-3 text-sm font-black text-inest-muted">
             <span>Categoria</span>
             <span>Termos</span>
@@ -561,7 +561,7 @@ function TextInput({ label, value, type = 'text', onChange }: TextInputProps) {
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       />
     </label>
   );
@@ -601,7 +601,7 @@ function SelectInput({ label, value, options, onChange }: SelectInputProps) {
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       >
         {options.map(([optionValue, labelText]) => (
           <option key={optionValue} value={optionValue}>

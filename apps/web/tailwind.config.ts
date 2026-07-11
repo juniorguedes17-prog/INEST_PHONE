@@ -19,14 +19,15 @@ const config: Config = {
         },
       },
       borderRadius: {
-        panel: '16px',
+        panel: '12px',
       },
       fontFamily: {
         sans: ['Inter', 'Montserrat', 'Arial', 'sans-serif'],
         display: ['Montserrat', 'Inter', 'Arial', 'sans-serif'],
       },
       boxShadow: {
-        panel: '0 24px 60px rgba(25, 33, 52, 0.10)',
+        panel: '0 12px 32px rgba(16, 24, 40, 0.07)',
+        card: '0 8px 24px rgba(16, 24, 40, 0.06)',
         soft: '0 12px 28px rgba(95, 124, 255, 0.22)',
       },
     },

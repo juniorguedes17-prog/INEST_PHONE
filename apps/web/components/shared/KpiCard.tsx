@@ -22,7 +22,7 @@ export function KpiCard({ label, value, detail, tone = 'blue', icon }: KpiCardPr
   return (
     <article
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-inest-line bg-white p-5 shadow-panel before:absolute before:left-0 before:top-0 before:h-full before:w-1',
+        'relative min-h-[116px] overflow-hidden rounded-xl border border-inest-line bg-white p-4 shadow-card before:absolute before:inset-y-0 before:left-0 before:w-1',
         accents[tone],
       )}
     >
@@ -30,10 +30,10 @@ export function KpiCard({ label, value, detail, tone = 'blue', icon }: KpiCardPr
         <span className="text-sm font-bold text-inest-muted">{label}</span>
         {icon ? <span className="text-inest-muted">{icon}</span> : null}
       </div>
-      <strong className="mt-2 block font-display text-3xl font-black text-inest-text">
+      <strong className="mt-2 block font-display text-2xl font-black text-inest-text">
         {value}
       </strong>
-      {detail ? <small className="mt-2 block text-sm text-inest-muted">{detail}</small> : null}
+      {detail ? <small className="mt-1.5 block text-xs text-inest-muted">{detail}</small> : null}
     </article>
   );
 }

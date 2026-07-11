@@ -10,6 +10,8 @@
   --inest-text: #101828;
   --inest-muted: #667085;
   --inest-line: #dce3ef;
+  --inest-sidebar: #ffffff;
+  --inest-header: rgba(244, 247, 251, 0.94);
   background: var(--inest-bg);
 }
 
@@ -43,6 +45,36 @@ textarea {
   font: inherit;
 }
 
+@layer components {
+  .page-stack {
+    @apply grid gap-6;
+  }
+
+  .text-page-title {
+    @apply font-display text-3xl font-black leading-tight text-inest-text;
+  }
+
+  .text-section-title {
+    @apply font-display text-xl font-black leading-tight text-inest-text;
+  }
+
+  .text-card-title {
+    @apply font-display text-lg font-black leading-tight text-inest-text;
+  }
+
+  .text-body-muted {
+    @apply text-sm leading-6 text-inest-muted;
+  }
+
+  .field-label {
+    @apply mb-2 block text-sm font-bold text-inest-muted;
+  }
+
+  .field-control {
+    @apply h-11 w-full rounded-lg border border-inest-line bg-white px-3.5 text-sm text-inest-text outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-inest-blue focus:ring-2 focus:ring-inest-blue/15;
+  }
+}
+
 button {
   cursor: pointer;
 }
@@ -58,4 +90,9 @@ button:disabled {
 
 .scrollbar-stable {
   scrollbar-gutter: stable;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c8d0df transparent;
 }

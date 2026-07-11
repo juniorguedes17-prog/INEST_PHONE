@@ -5,14 +5,16 @@ export function SearchInput({ className, ...props }: InputHTMLAttributes<HTMLInp
   return (
     <label
       className={cn(
-        'flex h-12 items-center gap-3 rounded-xl border border-inest-line bg-white px-4 text-inest-muted shadow-[0_8px_24px_rgba(25,33,52,0.04)] focus-within:border-inest-blue',
+        'flex h-10 items-center gap-2 rounded-lg border border-inest-line bg-white px-3 text-inest-muted transition-colors focus-within:border-inest-blue focus-within:ring-2 focus-within:ring-inest-blue/15',
         className,
       )}
     >
-      <span aria-hidden="true">⌕</span>
+      <span aria-hidden="true" className="text-xs font-black">
+        Q
+      </span>
       <input
         type="search"
-        className="min-w-0 flex-1 bg-transparent text-base text-inest-text outline-none placeholder:text-inest-muted"
+        className="min-w-0 flex-1 bg-transparent text-sm text-inest-text outline-none placeholder:text-inest-muted"
         {...props}
       />
     </label>

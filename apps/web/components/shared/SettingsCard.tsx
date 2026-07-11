@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { Card } from './Card';
 
 interface SettingsCardProps {
   eyebrow?: string;
@@ -9,15 +10,15 @@ interface SettingsCardProps {
 
 export function SettingsCard({ eyebrow, title, description, children }: SettingsCardProps) {
   return (
-    <section className="rounded-2xl border border-inest-line bg-white p-6 shadow-panel">
+    <Card>
       {eyebrow ? (
         <p className="text-xs font-black uppercase tracking-wide text-inest-blue">{eyebrow}</p>
       ) : null}
-      <h2 className="mt-1 font-display text-2xl font-black text-inest-text">{title}</h2>
+      <h2 className="mt-1 text-card-title">{title}</h2>
       {description ? (
-        <p className="mt-2 text-base leading-7 text-inest-muted">{description}</p>
+        <p className="mt-2 text-body-muted">{description}</p>
       ) : null}
-      <div className="mt-6">{children}</div>
-    </section>
+      <div className="mt-5">{children}</div>
+    </Card>
   );
 }

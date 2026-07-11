@@ -93,7 +93,7 @@ export function ProductsPageContent() {
 
       {error ? <ErrorState title="Atencao" description={error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)]">
         <FilterSidebar eyebrow="Catalogo" title="Filtros">
           <FilterSection title="Busca">
             <TextInput
@@ -357,7 +357,7 @@ function TextInput({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       />
     </label>
   );
@@ -402,7 +402,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       >
         {options.map(([valueOption, labelOption]) => (
           <option key={valueOption} value={valueOption}>

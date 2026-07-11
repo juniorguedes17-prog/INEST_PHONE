@@ -19,7 +19,7 @@ export function StatusBadge({ className, tone = 'blue', children, ...props }: St
   return (
     <span
       className={cn(
-        'inline-flex min-h-8 items-center rounded-full border px-3 text-sm font-black',
+        'inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs font-black',
         tones[tone],
         className,
       )}

@@ -147,7 +147,7 @@ export function PriceRadarPageContent() {
         />
       </div>
 
-      <section className="grid min-h-[calc(100vh-310px)] grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <section className="grid min-h-[calc(100vh-310px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)]">
         <FilterSidebar eyebrow="Radar" title="Filtros">
           <FilterSection title="Busca">
             <TextInput
@@ -519,7 +519,7 @@ function TextInput({
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       />
     </label>
   );
@@ -543,7 +543,7 @@ function NumberInput({
         step="0.01"
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       />
     </label>
   );
@@ -592,7 +592,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       >
         {options.map(([valueOption, labelOption]) => (
           <option key={valueOption} value={valueOption}>

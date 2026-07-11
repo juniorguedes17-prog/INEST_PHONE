@@ -40,7 +40,7 @@ export function ImportRadarPageContent() {
 
       {radar.error ? <ErrorState title="Atencao" description={radar.error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)_360px]">
+      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-6 xl:grid-cols-[288px_minmax(0,1fr)_320px]">
         <FilterSidebar eyebrow="Radar" title="Filtros">
           <FilterSection title="Pesquisa">
             <TextInput
@@ -69,7 +69,7 @@ export function ImportRadarPageContent() {
           </FilterSection>
 
           <FilterSection title="Cambio">
-            <div className="rounded-2xl border border-inest-line bg-inest-soft p-4">
+            <div className="rounded-xl border border-inest-line bg-inest-soft p-4">
               <p className="text-sm font-bold text-inest-muted">Cotacao cadastrada</p>
               <strong className="mt-1 block font-display text-3xl font-black text-inest-text">
                 {formatCurrency(radar.dollarQuote)}
@@ -182,7 +182,7 @@ function CalculationPanel({
             <BreakdownRow label="Nota Fiscal" value={calculation.breakdown.invoiceTax} />
             <BreakdownRow label="Etiqueta Correios" value={calculation.breakdown.correiosLabel} />
 
-            <div className="rounded-2xl bg-inest-text p-5 text-white">
+            <div className="rounded-xl bg-inest-text p-5 text-white">
               <p className="text-xs font-black uppercase tracking-wide text-white/70">
                 Total estimado de importacao
               </p>
@@ -229,7 +229,7 @@ function TextInput({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       />
     </label>
   );
@@ -252,7 +252,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 w-full rounded-xl border border-inest-line bg-white px-4 outline-none focus:border-inest-blue"
+        className="field-control"
       >
         {options.map(([valueOption, labelOption]) => (
           <option key={valueOption} value={valueOption}>

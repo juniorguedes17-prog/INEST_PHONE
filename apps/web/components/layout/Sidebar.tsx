@@ -17,20 +17,20 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-full min-h-0 flex-col border-r border-inest-line bg-white/95 p-5 transition-all',
-        collapsed ? 'w-[92px]' : 'w-[280px]',
+        'flex h-full min-h-0 flex-col border-r border-inest-line bg-[var(--inest-sidebar)] px-3 py-4 transition-[width] duration-200',
+        collapsed ? 'w-[76px]' : 'w-[244px]',
       )}
     >
-      <div className="flex items-center gap-3">
-        <div className="grid h-12 w-12 flex-none place-items-center rounded-xl bg-gradient-to-br from-inest-blue to-inest-purple font-display text-lg font-black text-white">
+      <div className="flex min-h-12 items-center gap-3 px-2">
+        <div className="grid h-10 w-10 flex-none place-items-center rounded-lg bg-inest-blue font-display text-base font-black text-white shadow-soft">
           iN
         </div>
         {!collapsed ? (
           <div className="min-w-0">
-            <strong className="block truncate text-lg font-black text-inest-text">
+            <strong className="block truncate text-base font-black text-inest-text">
               iNest Phone
             </strong>
-            <span className="block truncate text-sm text-inest-muted">Gestão Comercial</span>
+            <span className="block truncate text-xs text-inest-muted">Gestao Comercial</span>
           </div>
         ) : null}
       </div>
@@ -39,12 +39,12 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         type="button"
         onClick={onToggle}
         aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-        className="mt-6 hidden h-10 items-center justify-center rounded-xl border border-inest-line text-inest-muted hover:bg-inest-soft lg:flex"
+        className="mt-4 hidden h-9 items-center justify-center rounded-lg border border-inest-line text-inest-muted transition-colors hover:bg-inest-soft hover:text-inest-text lg:flex"
       >
-        {collapsed ? '›' : '‹'}
+        {collapsed ? '>' : '<'}
       </button>
 
-      <nav className="mt-6 grid gap-2 overflow-y-auto pr-1" aria-label="Módulos">
+      <nav className="mt-4 grid gap-1 overflow-y-auto pr-1" aria-label="Modulos">
         {navigationItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -55,27 +55,27 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
               onClick={onNavigate}
               title={item.label}
               className={cn(
-                'flex min-h-12 items-center gap-3 rounded-xl px-3 text-inest-muted transition focus:outline-none focus:ring-2 focus:ring-inest-blue',
+                'group flex min-h-11 items-center gap-3 rounded-lg px-2.5 text-inest-muted transition-colors focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-1',
                 active
-                  ? 'bg-inest-soft text-inest-text'
+                  ? 'bg-inest-blue/10 text-inest-blue'
                   : 'hover:bg-inest-soft hover:text-inest-text',
                 collapsed && 'justify-center',
               )}
             >
-              <span className="grid h-9 w-9 flex-none place-items-center rounded-xl border border-inest-line bg-white text-sm font-bold">
+              <span className="grid h-8 w-8 flex-none place-items-center rounded-md border border-inest-line bg-white text-xs font-black transition-colors group-hover:border-slate-300">
                 {item.icon}
               </span>
               {!collapsed ? (
-                <span className="truncate text-base font-semibold">{item.label}</span>
+                <span className="truncate text-sm font-semibold">{item.label}</span>
               ) : null}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto rounded-2xl border border-inest-line bg-white p-3">
+      <div className="mt-4 rounded-xl border border-inest-line bg-white p-2.5">
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
-          <div className="grid h-10 w-10 flex-none place-items-center rounded-xl bg-inest-soft font-black text-inest-blue">
+          <div className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-inest-soft text-xs font-black text-inest-blue">
             AD
           </div>
           {!collapsed ? (
