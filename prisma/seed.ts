@@ -1,4 +1,4 @@
-import { pbkdf2Sync, randomBytes } from 'node:crypto';
+import { hash } from 'bcrypt';
 import {
   GenericStatus,
   PrismaClient,
@@ -40,10 +40,7 @@ function requiredEnv(name: string) {
 }
 
 function hashPassword(password: string) {
-  const salt = randomBytes(16).toString('hex');
-  const hash = pbkdf2Sync(password, salt, 120000, 64, 'sha512').toString('hex');
-
-  return `pbkdf2_sha512$120000$${salt}$${hash}`;
+  return hash(password, 12);
 }
 
 async function seedRoles() {
@@ -172,21 +169,23 @@ async function seedRolePermissions() {
 
 async function seedAdminUser() {
   const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'Administrador' } });
-  const adminEmail = requiredEnv('SEED_ADMIN_EMAIL');
+  const adminEmail = requiredEnv('SEED_ADMIN_EMAIL').trim().toLowerCase();
   const adminPassword = requiredEnv('SEED_ADMIN_PASSWORD');
+  const passwordHash = await hashPassword(adminPassword);
 
   await prisma.user.upsert({
     where: { email: adminEmail },
     update: {
       roleId: adminRole.id,
-      passwordHash: hashPassword(adminPassword),
+      passwordHash,
       status: UserStatus.ACTIVE,
+      deletedAt: null,
     },
     create: {
       roleId: adminRole.id,
       name: 'Administrador iNest Phone',
       email: adminEmail,
-      passwordHash: hashPassword(adminPassword),
+      passwordHash,
       status: UserStatus.ACTIVE,
     },
   });

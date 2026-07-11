@@ -1,18 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import { pbkdf2Sync, randomBytes, timingSafeEqual } from 'crypto';
+import { compare, hash } from 'bcrypt';
+import { pbkdf2Sync, timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class PasswordService {
   private readonly iterations = 120000;
+  private readonly bcryptRounds = 12;
 
   hashPassword(password: string): Promise<string> {
-    const salt = randomBytes(16).toString('hex');
-    const hash = pbkdf2Sync(password, salt, this.iterations, 64, 'sha512').toString('hex');
-
-    return Promise.resolve(`pbkdf2_sha512$${this.iterations}$${salt}$${hash}`);
+    return hash(password, this.bcryptRounds);
   }
 
   async verifyPassword(password: string, storedHash: string): Promise<boolean> {
+    if (/^\$2[aby]\$/.test(storedHash)) {
+      return compare(password, storedHash);
+    }
+
     if (storedHash.startsWith('pbkdf2_sha512$')) {
       return this.verifyLegacyPbkdf2(password, storedHash);
     }

@@ -169,7 +169,7 @@ export class AuthService {
 
   private findUserByEmail(email: string): Promise<AuthUserRecord | null> {
     return this.prisma.user.findUnique({
-      where: { email },
+      where: { email: email.trim().toLowerCase() },
       include: this.userInclude,
     });
   }

@@ -97,4 +97,19 @@ describe('AuthService', () => {
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it('normalizes the email before querying Prisma', async () => {
+    const { service, prisma } = createService();
+
+    await service.login({
+      email: 'ADMIN@INESTPHONE.LOCAL',
+      password: 'ChangeMe@12345',
+    });
+
+    expect(prisma.user.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { email: 'admin@inestphone.local' },
+      }),
+    );
+  });
 });

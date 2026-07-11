@@ -8,6 +8,7 @@ describe('PasswordService', () => {
   it('validates generated passwords', async () => {
     const hash = await service.hashPassword('ChangeMe@12345');
 
+    expect(hash).toMatch(/^\$2[aby]\$/);
     await expect(service.verifyPassword('ChangeMe@12345', hash)).resolves.toBe(true);
     await expect(service.verifyPassword('wrong-password', hash)).resolves.toBe(false);
   });
