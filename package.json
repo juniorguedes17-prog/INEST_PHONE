@@ -8,6 +8,7 @@
     "dev": "node scripts/run-env.mjs development pnpm --parallel dev:web dev:api",
     "dev:web": "pnpm --filter @inest/web dev",
     "dev:api": "pnpm --filter @inest/api start:dev",
+    "start:api": "pnpm --filter @inest/api start",
     "dev:staging": "node scripts/run-env.mjs staging pnpm --parallel dev:web dev:api",
     "build": "pnpm build:web && pnpm build:api",
     "build:development": "node scripts/run-env.mjs development pnpm build",

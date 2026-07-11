@@ -18,7 +18,12 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const apiPrefix = config.get<string>('app.apiPrefix', 'api/v1');
   const corsOrigin = config.get<string>('app.corsOrigin', 'http://localhost:3000');
-  const port = config.get<number>('app.port', 3333);
+  const configuredPort = config.get<number>('app.port', 3333);
+  const PORT = Number(process.env.PORT ?? configuredPort);
+
+  if (!Number.isInteger(PORT) || PORT <= 0) {
+    throw new Error('PORT deve ser um numero inteiro positivo.');
+  }
   const apiVersion = config.get<string>('app.apiVersion', '1.0.0');
   const swaggerEnabled = config.get<boolean>('app.swaggerEnabled', true);
 
@@ -76,10 +81,10 @@ async function bootstrap() {
     }
   }
 
-  await app.listen(port);
-  logger.log(`API running on http://localhost:${port}/${apiPrefix}`);
+  await app.listen(PORT, '0.0.0.0');
+  logger.log(`API running on http://0.0.0.0:${PORT}/${apiPrefix}`);
   if (swaggerReady) {
-    logger.log(`Swagger running on http://localhost:${port}/${apiPrefix}/docs`);
+    logger.log(`Swagger running on http://localhost:${PORT}/${apiPrefix}/docs`);
   }
 }
 
