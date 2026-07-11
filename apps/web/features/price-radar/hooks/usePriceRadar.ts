@@ -146,6 +146,7 @@ export function usePriceRadar() {
     error,
     success,
     lastImport,
+    reload: load,
     save,
     hide,
     importCsv,
