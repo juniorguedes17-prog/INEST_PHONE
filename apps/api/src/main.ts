@@ -7,15 +7,20 @@ import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { AppLoggerService } from './common/logger/app-logger.service';
 
+const bootstrapLogger = new Logger('Bootstrap');
+
 async function bootstrap() {
+  bootstrapLogger.log('Iniciando aplicacao Nest');
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
+  bootstrapLogger.log('Aplicacao Nest criada');
 
   const config = app.get(ConfigService);
   const appLogger = app.get(AppLoggerService);
   app.useLogger(appLogger);
-  const logger = new Logger('Bootstrap');
+  const logger = bootstrapLogger;
+  logger.log('Configuracao carregada e validada');
   const apiPrefix = config.get<string>('app.apiPrefix', 'api/v1');
   const corsOrigin = config.get<string>('app.corsOrigin', 'http://localhost:3000');
   const configuredPort = config.get<number>('app.port', 3333);
@@ -24,6 +29,7 @@ async function bootstrap() {
   if (!Number.isInteger(PORT) || PORT <= 0) {
     throw new Error('PORT deve ser um numero inteiro positivo.');
   }
+  logger.log('Porta de execucao definida');
   const apiVersion = config.get<string>('app.apiVersion', '1.0.0');
   const swaggerEnabled = config.get<boolean>('app.swaggerEnabled', true);
 
@@ -82,10 +88,17 @@ async function bootstrap() {
   }
 
   await app.listen(PORT, '0.0.0.0');
-  logger.log(`API running on http://0.0.0.0:${PORT}/${apiPrefix}`);
+  logger.log(`Servidor iniciado em 0.0.0.0:${PORT}/${apiPrefix}`);
   if (swaggerReady) {
     logger.log(`Swagger running on http://localhost:${PORT}/${apiPrefix}/docs`);
   }
 }
 
-void bootstrap();
+void bootstrap().catch((error: unknown) => {
+  bootstrapLogger.error(
+    `Falha durante a inicializacao: ${
+      error instanceof Error ? error.message : 'erro desconhecido'
+    }`,
+  );
+  process.exitCode = 1;
+});

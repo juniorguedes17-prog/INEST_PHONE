@@ -4,7 +4,6 @@ const requiredVariables = [
   'DATABASE_URL',
   'JWT_SECRET',
   'JWT_REFRESH_SECRET',
-  'API_PORT',
   'API_PREFIX',
   'API_VERSION',
   'CORS_ORIGIN',
@@ -31,6 +30,10 @@ const unsafeProductionValues = new Set([
 
 export function validateEnv(config: Env) {
   const missing = requiredVariables.filter((key) => !config[key]);
+
+  if (!config.PORT && !config.API_PORT) {
+    missing.push('PORT ou API_PORT');
+  }
 
   if (missing.length > 0) {
     throw new Error(`Variaveis de ambiente obrigatorias ausentes: ${missing.join(', ')}`);
