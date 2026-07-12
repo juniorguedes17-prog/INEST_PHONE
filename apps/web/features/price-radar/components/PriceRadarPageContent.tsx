@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   ActionButton,
+  Drawer,
   EmptyState,
   ErrorState,
   FilterSection,
@@ -20,8 +21,10 @@ import { listSuppliers } from '@/features/suppliers/services/suppliers-service';
 import { SupplierItem } from '@/features/suppliers/types/suppliers';
 import { usePriceRadar } from '../hooks/usePriceRadar';
 import { PriceQuoteFormPayload, PriceQuoteItem } from '../types/price-radar';
-import { RadarQuoteCard } from './RadarQuoteCard';
+import { BrazilRadarProduct, BrazilRadarProductCard } from './BrazilRadarProductCard';
+import { PreparedRadarOrigin } from './PreparedRadarOrigin';
 import { RadarToolbar } from './RadarToolbar';
+import { RadarOrigin, RadarOriginTabs } from './RadarOriginTabs';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -54,6 +57,8 @@ const emptyVisualFilters = {
 
 export function PriceRadarPageContent() {
   const radar = usePriceRadar();
+  const [origin, setOrigin] = useState<RadarOrigin>('brasil');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
@@ -61,7 +66,6 @@ export function PriceRadarPageContent() {
   const [editingQuote, setEditingQuote] = useState<PriceQuoteItem | null>(null);
   const [visualFilters, setVisualFilters] = useState(emptyVisualFilters);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -151,10 +155,11 @@ export function PriceRadarPageContent() {
     });
   }, [radar.quotes, visualFilters]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredQuotes.length / pageSize));
-  const visibleQuotes = useMemo(
-    () => filteredQuotes.slice((page - 1) * pageSize, page * pageSize),
-    [filteredQuotes, page, pageSize],
+  const groupedProducts = useMemo(() => groupQuotesByProduct(filteredQuotes), [filteredQuotes]);
+  const totalPages = Math.max(1, Math.ceil(groupedProducts.length / pageSize));
+  const visibleProducts = useMemo(
+    () => groupedProducts.slice((page - 1) * pageSize, page * pageSize),
+    [groupedProducts, page, pageSize],
   );
 
   const lastUpdated = useMemo(() => {
@@ -208,44 +213,54 @@ export function PriceRadarPageContent() {
     });
   }
 
-  function toggleFavorite(id: string) {
-    setFavoriteIds((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   return (
-    <div className="grid gap-6">
+    <div className="grid min-w-0 gap-4">
       <PageHeader
         eyebrow="Inteligencia comercial"
         title="Radar de Precos"
         description="Central de custos de fornecedores para identificar melhores oportunidades."
         actions={
-          <>
-            {radar.success ? <StatusBadge tone="green">{radar.success}</StatusBadge> : null}
-            <ActionButton variant="secondary" onClick={() => setImportModalOpen(true)}>
-              Importar CSV
-            </ActionButton>
-            <ActionButton
-              onClick={() => {
-                setEditingQuote(null);
-                setQuoteModalOpen(true);
-              }}
-            >
-              Nova cotacao
-            </ActionButton>
-          </>
+          origin === 'brasil' ? (
+            <>
+              {radar.success ? <StatusBadge tone="green">{radar.success}</StatusBadge> : null}
+              <ActionButton variant="secondary" onClick={() => setImportModalOpen(true)}>
+                Importar CSV
+              </ActionButton>
+              <ActionButton
+                onClick={() => {
+                  setEditingQuote(null);
+                  setQuoteModalOpen(true);
+                }}
+              >
+                Nova cotacao
+              </ActionButton>
+            </>
+          ) : (
+            <StatusBadge tone="amber">Estrutura preparada</StatusBadge>
+          )
         }
       />
 
-      {radar.error ? <ErrorState title="Atencao" description={radar.error} /> : null}
+      {origin === 'brasil' && radar.error ? (
+        <ErrorState title="Atencao" description={radar.error} />
+      ) : null}
+
+      <RadarOriginTabs
+        value={origin}
+        onChange={(nextOrigin) => {
+          setOrigin(nextOrigin);
+          setSelectedIds(new Set());
+        }}
+      />
+
+      {origin !== 'brasil' ? <PreparedRadarOrigin origin={origin} /> : null}
+
+      {origin === 'brasil' ? (
+        <>
 
       <RadarToolbar
         search={radar.filters.search}
-        total={filteredQuotes.length}
+        total={groupedProducts.length}
         lastUpdated={lastUpdated}
         sort={radar.filters.sort}
         sortOptions={sortOptions}
@@ -263,7 +278,7 @@ export function PriceRadarPageContent() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" aria-label="Indicadores do Radar">
         <KpiCard
           label="Produtos encontrados"
-          value={String(filteredQuotes.length)}
+          value={String(groupedProducts.length)}
           detail="Resultado dos filtros atuais"
           tone="blue"
         />
@@ -299,8 +314,16 @@ export function PriceRadarPageContent() {
         />
       </section>
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="Radar" title="Filtros">
+      <ActionButton
+        variant="secondary"
+        className="min-h-11 w-full xl:hidden"
+        onClick={() => setFiltersOpen(true)}
+      >
+        Abrir filtros do Radar Brasil
+      </ActionButton>
+
+      <section className="grid min-w-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+        <FilterSidebar eyebrow="BR" title="Filtros" className="hidden max-h-[calc(100vh-220px)] xl:block">
           <FilterSection title="Categoria">
             <SelectInput
               label="Categoria"
@@ -470,13 +493,13 @@ export function PriceRadarPageContent() {
             <label className="flex items-center gap-2 text-sm font-bold text-inest-text">
               <input
                 type="checkbox"
-                checked={visibleQuotes.length > 0 && visibleQuotes.every((quote) => selectedIds.has(quote.id))}
+                checked={visibleProducts.length > 0 && visibleProducts.every((product) => selectedIds.has(product.id))}
                 onChange={(event) => {
                   setSelectedIds((current) => {
                     const next = new Set(current);
-                    visibleQuotes.forEach((quote) => {
-                      if (event.target.checked) next.add(quote.id);
-                      else next.delete(quote.id);
+                    visibleProducts.forEach((product) => {
+                      if (event.target.checked) next.add(product.id);
+                      else next.delete(product.id);
                     });
                     return next;
                   });
@@ -494,11 +517,8 @@ export function PriceRadarPageContent() {
             <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 shadow-card">
               <strong className="text-sm text-blue-800">{selectedIds.size} produtos selecionados</strong>
               <div className="flex flex-wrap gap-2">
-                <ActionButton variant="secondary" disabled title="Comparacao preparada para evolucao futura">
-                  Comparar
-                </ActionButton>
-                <ActionButton variant="secondary" disabled title="Oferta em lote preparada para evolucao futura">
-                  Gerar oferta
+                <ActionButton disabled title="Integracao com Precificacao preparada para evolucao futura">
+                  Enviar para Precificacao
                 </ActionButton>
                 <ActionButton variant="ghost" onClick={() => setSelectedIds(new Set())}>
                   Limpar selecao
@@ -527,23 +547,17 @@ export function PriceRadarPageContent() {
               />
             ) : null}
             {!radar.loading
-              ? visibleQuotes.map((quote) => (
-                  <RadarQuoteCard
-                    key={quote.id}
-                    quote={quote}
-                    selected={selectedIds.has(quote.id)}
-                    favorite={favoriteIds.has(quote.id)}
+              ? visibleProducts.map((product) => (
+                  <BrazilRadarProductCard
+                    key={product.id}
+                    product={product}
+                    selected={selectedIds.has(product.id)}
                     onSelect={toggleSelected}
                     onView={(selectedQuote) => {
                       setEditingQuote(selectedQuote);
                       setQuoteModalOpen(true);
                     }}
-                    onPricing={() => (window.location.href = '/pricing')}
-                    onOffer={() => (window.location.href = '/offers')}
-                    onFavorite={toggleFavorite}
-                    onCopy={(selectedQuote) => void copyQuote(selectedQuote)}
                     onSupplier={openWhatsapp}
-                    onHide={(id) => void radar.hide(id)}
                   />
                 ))
               : null}
@@ -553,17 +567,88 @@ export function PriceRadarPageContent() {
             <Pagination
               page={page}
               totalPages={totalPages}
-              totalItems={filteredQuotes.length}
+              totalItems={groupedProducts.length}
               onPageChange={setPage}
             />
             {totalPages <= 1 ? (
               <p className="text-sm text-inest-muted">
-                Exibindo {visibleQuotes.length} de {filteredQuotes.length} registros
+                Exibindo {visibleProducts.length} de {groupedProducts.length} produtos
               </p>
             ) : null}
           </div>
         </div>
       </section>
+
+      <Drawer open={filtersOpen} title="Filtros - Brasil" onClose={() => setFiltersOpen(false)}>
+        <div className="grid gap-3">
+          <SelectInput
+            label="Categoria"
+            value={visualFilters.category}
+            options={toOptions(filterOptions.categories, 'Todas')}
+            onChange={(category) => setVisualFilters((current) => ({ ...current, category }))}
+          />
+          <SelectInput
+            label="Modelo"
+            value={visualFilters.model}
+            options={toOptions(filterOptions.models, 'Todos')}
+            onChange={(model) => setVisualFilters((current) => ({ ...current, model }))}
+          />
+          <SelectInput
+            label="Cor"
+            value={visualFilters.color}
+            options={toOptions(filterOptions.colors, 'Todas')}
+            onChange={(color) => setVisualFilters((current) => ({ ...current, color }))}
+          />
+          <SelectInput
+            label="Capacidade"
+            value={visualFilters.capacity}
+            options={toOptions(filterOptions.capacities, 'Todas')}
+            onChange={(capacity) => setVisualFilters((current) => ({ ...current, capacity }))}
+          />
+          <SelectInput
+            label="Condicao"
+            value={radar.filters.quality}
+            options={[['', 'Todas'], ...qualities.map((quality) => [quality, quality])]}
+            onChange={(quality) => radar.setFilters((current) => ({ ...current, quality }))}
+          />
+          <SelectInput
+            label="Fornecedor"
+            value={radar.filters.supplierId}
+            options={[['', 'Todos'], ...suppliers.map((supplier) => [supplier.id, supplier.name])]}
+            onChange={(supplierId) => radar.setFilters((current) => ({ ...current, supplierId }))}
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <TextInput
+              label="Custo minimo"
+              type="number"
+              value={visualFilters.minPrice}
+              onChange={(minPrice) => setVisualFilters((current) => ({ ...current, minPrice }))}
+            />
+            <TextInput
+              label="Custo maximo"
+              type="number"
+              value={visualFilters.maxPrice}
+              onChange={(maxPrice) => setVisualFilters((current) => ({ ...current, maxPrice }))}
+            />
+          </div>
+          <ActionButton
+            variant="secondary"
+            className="min-h-11"
+            onClick={() => {
+              clearFilters();
+              setFiltersOpen(false);
+            }}
+          >
+            Limpar filtros
+          </ActionButton>
+          <ActionButton className="min-h-11" onClick={() => setFiltersOpen(false)}>
+            Ver resultados
+          </ActionButton>
+        </div>
+      </Drawer>
+
+        </>
+      ) : null}
 
       <QuoteFormModal
         open={quoteModalOpen}
@@ -752,18 +837,53 @@ function toOptions(values: string[], emptyLabel: string) {
   return [['', emptyLabel], ...values.map((value) => [value, value])];
 }
 
-async function copyQuote(quote: PriceQuoteItem) {
-  const summary = [
-    quote.productName,
-    quote.color,
-    quote.capacity,
-    quote.supplier.name,
-    quote.city,
-    formatCurrency(quote.costProduct),
-  ]
-    .filter(Boolean)
-    .join(' | ');
-  await navigator.clipboard.writeText(summary);
+function groupQuotesByProduct(quotes: PriceQuoteItem[]): BrazilRadarProduct[] {
+  const grouped = new Map<string, BrazilRadarProduct & { supplierIds: Set<string> }>();
+
+  quotes.forEach((quote) => {
+    const current = grouped.get(quote.productId);
+    if (!current) {
+      grouped.set(quote.productId, {
+        id: quote.productId,
+        name: quote.productName,
+        category: quote.category,
+        model: quote.model,
+        color: quote.color,
+        capacity: quote.capacity,
+        lowestCost: quote.costProduct,
+        supplierCount: 1,
+        supplierIds: new Set([quote.supplier.id]),
+        updatedAt: quote.updatedAt,
+        referenceQuote: quote,
+      });
+      return;
+    }
+
+    current.supplierIds.add(quote.supplier.id);
+    current.supplierCount = current.supplierIds.size;
+
+    if (quote.costProduct < current.lowestCost) {
+      current.lowestCost = quote.costProduct;
+      current.referenceQuote = quote;
+    }
+
+    if (new Date(quote.updatedAt) > new Date(current.updatedAt)) {
+      current.updatedAt = quote.updatedAt;
+    }
+  });
+
+  return Array.from(grouped.values()).map((item) => ({
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    model: item.model,
+    color: item.color,
+    capacity: item.capacity,
+    lowestCost: item.lowestCost,
+    supplierCount: item.supplierCount,
+    updatedAt: item.updatedAt,
+    referenceQuote: item.referenceQuote,
+  }));
 }
 
 function openWhatsapp(quote: PriceQuoteItem) {
