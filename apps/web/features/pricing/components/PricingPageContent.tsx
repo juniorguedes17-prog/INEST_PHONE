@@ -1,20 +1,22 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActionButton,
   EmptyState,
   ErrorState,
   FilterSection,
   FilterSidebar,
-  ListHeader,
+  KpiCard,
   LoadingState,
   Modal,
   PageHeader,
-  ProductCard,
+  Pagination,
   StatusBadge,
 } from '@/components/shared';
 import { usePricing } from '../hooks/usePricing';
+import { PricingProductCard } from './PricingProductCard';
+import { PricingToolbar } from './PricingToolbar';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -23,8 +25,23 @@ const sortOptions = [
   ['highest_profit', 'Maior lucro'],
 ];
 
+const initialFilters = {
+  search: '',
+  category: '',
+  model: '',
+  color: '',
+  capacity: '',
+  productType: '',
+  status: '',
+  minPrice: '',
+  maxPrice: '',
+  sort: 'lowest_price',
+};
+
 export function PricingPageContent() {
   const pricing = usePricing();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const categories = useUnique(pricing.items.map((item) => item.category));
   const models = useUnique(pricing.items.map((item) => item.model));
   const colors = useUnique(pricing.items.map((item) => item.color));
@@ -32,39 +49,110 @@ export function PricingPageContent() {
   const types = useUnique(pricing.items.map((item) => item.productType));
   const statuses = useUnique(pricing.items.map((item) => item.status));
 
+  const metrics = useMemo(() => {
+    const total = pricing.items.length;
+    const averageSalePrice = total
+      ? pricing.items.reduce((sum, item) => sum + item.salePrice, 0) / total
+      : 0;
+    const averageProfit = total
+      ? pricing.items.reduce((sum, item) => sum + item.desiredNetProfit, 0) / total
+      : 0;
+    const highestMargin = total ? Math.max(...pricing.items.map((item) => item.margin)) : 0;
+    return { total, averageSalePrice, averageProfit, highestMargin };
+  }, [pricing.items]);
+
+  const lastUpdated = useMemo(
+    () =>
+      pricing.items.reduce<string | undefined>((latest, item) => {
+        if (!latest || new Date(item.lastUpdatedAt) > new Date(latest)) {
+          return item.lastUpdatedAt;
+        }
+        return latest;
+      }, undefined),
+    [pricing.items],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(pricing.items.length / pageSize));
+  const paginatedItems = useMemo(
+    () => pricing.items.slice((page - 1) * pageSize, page * pageSize),
+    [page, pageSize, pricing.items],
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [pricing.filters, pageSize]);
+
+  function clearFilters() {
+    pricing.setFilters(initialFilters);
+    setPage(1);
+  }
+
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
       <PageHeader
         eyebrow="Catalogo inteligente"
         title="Precificacao"
         description="Precos calculados automaticamente com Radar, Configuracoes e lucro por modelo."
         actions={
-          <>
-            {pricing.success ? <StatusBadge tone="green">{pricing.success}</StatusBadge> : null}
-            <ActionButton variant="secondary" onClick={() => void pricing.recalculate()}>
-              {pricing.saving ? 'Recalculando...' : 'Recalcular'}
-            </ActionButton>
-          </>
+          pricing.success ? <StatusBadge tone="green">{pricing.success}</StatusBadge> : null
         }
       />
 
       {pricing.error ? <ErrorState title="Atencao" description={pricing.error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="Catalogo" title="Precificacao">
-          <FilterSection title="Busca">
-            <TextInput
-              label="Pesquisar"
-              value={pricing.filters.search}
-              onChange={(value) => pricing.setFilters((current) => ({ ...current, search: value }))}
-            />
-          </FilterSection>
+      <PricingToolbar
+        search={pricing.filters.search}
+        total={pricing.items.length}
+        lastUpdated={lastUpdated ? formatDateTime(lastUpdated) : undefined}
+        sort={pricing.filters.sort}
+        sortOptions={sortOptions}
+        pageSize={pageSize}
+        recalculating={pricing.saving}
+        onSearchChange={(value) =>
+          pricing.setFilters((current) => ({ ...current, search: value }))
+        }
+        onRecalculate={() => void pricing.recalculate()}
+        onClear={clearFilters}
+        onSortChange={(value) =>
+          pricing.setFilters((current) => ({ ...current, sort: value }))
+        }
+        onPageSizeChange={setPageSize}
+      />
 
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Indicadores da Precificacao">
+        <KpiCard
+          label="Produtos encontrados"
+          value={String(metrics.total)}
+          detail="Com preco valido no Radar"
+          tone="blue"
+        />
+        <KpiCard
+          label="Preco medio"
+          value={formatCurrency(metrics.averageSalePrice)}
+          detail="Preco de venda calculado"
+          tone="purple"
+        />
+        <KpiCard
+          label="Lucro medio"
+          value={formatCurrency(metrics.averageProfit)}
+          detail="Lucro liquido por modelo"
+          tone="green"
+        />
+        <KpiCard
+          label="Maior margem"
+          value={formatPercent(metrics.highestMargin)}
+          detail="Entre os produtos listados"
+          tone="amber"
+        />
+      </section>
+
+      <section className="grid min-h-[calc(100vh-330px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
+        <FilterSidebar eyebrow="Filtros" title="Precificacao">
           <FilterSection title="Categoria">
             <SelectInput
               label="Categoria"
               value={pricing.filters.category}
-              options={[['', 'Todas'], ...categories.map((item) => [item, item])]}
+              options={[['', 'Todas'], ...toOptions(categories)]}
               onChange={(value) =>
                 pricing.setFilters((current) => ({ ...current, category: value }))
               }
@@ -75,8 +163,10 @@ export function PricingPageContent() {
             <SelectInput
               label="Modelo"
               value={pricing.filters.model}
-              options={[['', 'Todos'], ...models.map((item) => [item, item])]}
-              onChange={(value) => pricing.setFilters((current) => ({ ...current, model: value }))}
+              options={[['', 'Todos'], ...toOptions(models)]}
+              onChange={(value) =>
+                pricing.setFilters((current) => ({ ...current, model: value }))
+              }
             />
           </FilterSection>
 
@@ -84,8 +174,10 @@ export function PricingPageContent() {
             <SelectInput
               label="Cor"
               value={pricing.filters.color}
-              options={[['', 'Todas'], ...colors.map((item) => [item, item])]}
-              onChange={(value) => pricing.setFilters((current) => ({ ...current, color: value }))}
+              options={[['', 'Todas'], ...toOptions(colors)]}
+              onChange={(value) =>
+                pricing.setFilters((current) => ({ ...current, color: value }))
+              }
             />
           </FilterSection>
 
@@ -93,9 +185,31 @@ export function PricingPageContent() {
             <SelectInput
               label="Capacidade"
               value={pricing.filters.capacity}
-              options={[['', 'Todas'], ...capacities.map((item) => [item, item])]}
+              options={[['', 'Todas'], ...toOptions(capacities)]}
               onChange={(value) =>
                 pricing.setFilters((current) => ({ ...current, capacity: value }))
+              }
+            />
+          </FilterSection>
+
+          <FilterSection title="Tipo">
+            <SelectInput
+              label="Tipo"
+              value={pricing.filters.productType}
+              options={[['', 'Todos'], ...toOptions(types)]}
+              onChange={(value) =>
+                pricing.setFilters((current) => ({ ...current, productType: value }))
+              }
+            />
+          </FilterSection>
+
+          <FilterSection title="Status">
+            <SelectInput
+              label="Status"
+              value={pricing.filters.status}
+              options={[['', 'Todos'], ...toOptions(statuses, translateStatus)]}
+              onChange={(value) =>
+                pricing.setFilters((current) => ({ ...current, status: value }))
               }
             />
           </FilterSection>
@@ -120,46 +234,10 @@ export function PricingPageContent() {
               />
             </div>
           </FilterSection>
-
-          <FilterSection title="Tipo">
-            <SelectInput
-              label="Tipo"
-              value={pricing.filters.productType}
-              options={[['', 'Todos'], ...types.map((item) => [item, item])]}
-              onChange={(value) =>
-                pricing.setFilters((current) => ({ ...current, productType: value }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Status">
-            <SelectInput
-              label="Status"
-              value={pricing.filters.status}
-              options={[['', 'Todos'], ...statuses.map((item) => [item, item])]}
-              onChange={(value) => pricing.setFilters((current) => ({ ...current, status: value }))}
-            />
-          </FilterSection>
         </FilterSidebar>
 
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
-          <ListHeader
-            sticky
-            eyebrow="Precos calculados automaticamente"
-            title={`${pricing.items.length} produtos encontrados`}
-            description="Valores finais com custo fixo, frete, taxa e lucro por modelo."
-            actions={
-              <SelectInput
-                label="Ordenacao"
-                value={pricing.filters.sort}
-                options={sortOptions}
-                compact
-                onChange={(value) => pricing.setFilters((current) => ({ ...current, sort: value }))}
-              />
-            }
-          />
-
-          <div className="mt-4 grid gap-3">
+          <div className="grid gap-3">
             {pricing.loading ? <LoadingState /> : null}
             {!pricing.loading && !pricing.items.length ? (
               <EmptyState
@@ -168,43 +246,30 @@ export function PricingPageContent() {
               />
             ) : null}
             {!pricing.loading
-              ? pricing.items.map((item) => (
-                  <ProductCard
+              ? paginatedItems.map((item) => (
+                  <PricingProductCard
                     key={item.productId}
-                    title={item.productName}
-                    status={translateStatus(item.status)}
-                    tags={[
-                      item.category,
-                      item.color,
-                      item.capacity,
-                      item.supplier.name,
-                      item.deliveryTime,
-                    ].filter(Boolean)}
-                    meta={`Atualizado em ${formatDateTime(item.lastUpdatedAt)} - Lucro por modelo: ${
-                      item.profitSource === 'default' ? 'padrao' : 'configurado'
-                    } - Oferta: ${formatCurrency(item.offerPrice)}`}
-                    supplier={{
-                      name: item.supplier.name,
-                      location: item.supplier.source || 'Menor preco valido',
-                      delivery: item.deliveryTime || 'Prazo nao informado',
-                    }}
-                    price={formatCurrency(item.salePrice)}
-                    priceLabel={`Margem ${formatPercent(item.margin)}`}
-                    actions={[
-                      {
-                        label: 'Gerar Oferta',
-                        variant: 'success',
-                        onClick: () => void pricing.generateOffer(item.productId),
-                      },
-                      {
-                        label: 'Detalhes',
-                        variant: 'secondary',
-                      },
-                    ]}
+                    item={item}
+                    generating={pricing.saving}
+                    onGenerateOffer={(productId) => void pricing.generateOffer(productId)}
                   />
                 ))
               : null}
           </div>
+
+          {pricing.items.length ? (
+            <div className="mt-4 rounded-xl border border-inest-line bg-white p-4 shadow-card">
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                totalItems={pricing.items.length}
+                onPageChange={setPage}
+              />
+              {totalPages === 1 ? (
+                <p className="text-sm text-inest-muted">{pricing.items.length} produtos exibidos</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -242,9 +307,7 @@ function OfferDraftModal({
             Os dados abaixo foram preparados para o modulo de Ofertas, sem preenchimento manual.
           </p>
           <div className="rounded-xl border border-inest-line bg-inest-soft p-4">
-            <strong className="block font-display text-xl text-inest-text">
-              {item.productName}
-            </strong>
+            <strong className="block font-display text-xl text-inest-text">{item.productName}</strong>
             <p className="mt-2 text-sm text-inest-muted">
               {item.color} {item.capacity} - {item.deliveryTime}
             </p>
@@ -269,6 +332,10 @@ function OfferDraftModal({
 
 function useUnique(values: string[]) {
   return useMemo(() => Array.from(new Set(values.filter(Boolean))).sort(), [values]);
+}
+
+function toOptions(values: string[], label = (value: string) => value) {
+  return values.map((value) => [value, label(value)]);
 }
 
 function translateStatus(status: string) {
@@ -328,25 +395,23 @@ function SelectInput({
   value,
   options,
   onChange,
-  compact = false,
 }: {
   label: string;
   value: string;
   options: string[][];
   onChange: (value: string) => void;
-  compact?: boolean;
 }) {
   return (
-    <label className={compact ? 'min-w-60' : 'block'}>
+    <label className="block">
       <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="field-control"
       >
-        {options.map(([valueOption, labelOption]) => (
-          <option key={valueOption} value={valueOption}>
-            {labelOption}
+        {options.map(([optionValue, optionLabel]) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
           </option>
         ))}
       </select>
