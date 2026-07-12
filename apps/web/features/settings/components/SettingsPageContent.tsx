@@ -14,7 +14,7 @@ import { useSettings } from '../hooks/useSettings';
 import { ImportRedirectRule, SettingsPayload } from '../types/settings';
 
 export function SettingsPageContent() {
-  const { settings, setSettings, loading, saving, error, success, save, resetDefaults } =
+  const { settings, setSettings, loading, saving, error, success, reload, save, resetDefaults } =
     useSettings();
 
   if (loading) {
@@ -85,6 +85,19 @@ export function SettingsPageContent() {
         redirectRules: current.importation.redirectRules.filter(
           (_, ruleIndex) => ruleIndex !== index,
         ),
+      },
+    }));
+  }
+
+  function updateUsaFinancial(
+    field: keyof Omit<SettingsPayload['usaFinancial'], 'lastUpdated'>,
+    value: number,
+  ) {
+    updateSettings((current) => ({
+      ...current,
+      usaFinancial: {
+        ...current.usaFinancial,
+        [field]: value,
       },
     }));
   }
@@ -412,6 +425,99 @@ export function SettingsPageContent() {
         </ActionButton>
       </SettingsCard>
 
+      <SettingsCard
+        eyebrow="Radar USA"
+        title="Configuracao Financeira USA"
+        description="Parametros editaveis para a futura composicao do custo de importacao dos Estados Unidos."
+      >
+        <div className="mb-5 flex flex-col gap-3 border-b border-inest-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase text-inest-muted">Ultima atualizacao</p>
+            <p className="mt-1 text-sm font-bold text-inest-text">
+              {formatLastUpdated(settings.usaFinancial.lastUpdated)}
+            </p>
+          </div>
+          <StatusBadge tone="blue">USD / Importacao</StatusBadge>
+        </div>
+
+        <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <CurrencyInput
+            label="Cotacao do Dolar"
+            value={settings.usaFinancial.dollarQuote}
+            onChange={(event) => updateUsaFinancial('dollarQuote', toNumber(event.target.value))}
+          />
+          <CurrencyInput
+            label="Frete Aereo"
+            value={settings.usaFinancial.airFreight}
+            onChange={(event) => updateUsaFinancial('airFreight', toNumber(event.target.value))}
+          />
+          <PercentageInput
+            label="Desconto no Frete"
+            value={settings.usaFinancial.freightDiscountPercent}
+            onChange={(event) =>
+              updateUsaFinancial('freightDiscountPercent', toNumber(event.target.value))
+            }
+          />
+          <CurrencyInput
+            label="Taxa Administrativa"
+            value={settings.usaFinancial.administrativeFee}
+            onChange={(event) =>
+              updateUsaFinancial('administrativeFee', toNumber(event.target.value))
+            }
+          />
+          <CurrencyInput
+            label="Despachante"
+            value={settings.usaFinancial.customsBroker}
+            onChange={(event) => updateUsaFinancial('customsBroker', toNumber(event.target.value))}
+          />
+          <CurrencyInput
+            label="Seguro"
+            value={settings.usaFinancial.insurance}
+            onChange={(event) => updateUsaFinancial('insurance', toNumber(event.target.value))}
+          />
+          <CurrencyInput
+            label="Etiqueta"
+            value={settings.usaFinancial.label}
+            onChange={(event) => updateUsaFinancial('label', toNumber(event.target.value))}
+          />
+          <PercentageInput
+            label="Nota Fiscal"
+            value={settings.usaFinancial.invoiceTaxPercent}
+            onChange={(event) =>
+              updateUsaFinancial('invoiceTaxPercent', toNumber(event.target.value))
+            }
+          />
+          <CurrencyInput
+            label="IOF"
+            value={settings.usaFinancial.iof}
+            onChange={(event) => updateUsaFinancial('iof', toNumber(event.target.value))}
+          />
+          <CurrencyInput
+            label="Outras Despesas"
+            value={settings.usaFinancial.otherExpenses}
+            onChange={(event) => updateUsaFinancial('otherExpenses', toNumber(event.target.value))}
+          />
+        </div>
+
+        <div className="mt-6 grid gap-2 border-t border-inest-line pt-4 sm:flex sm:justify-end">
+          <ActionButton
+            variant="secondary"
+            className="min-h-11 w-full sm:w-auto"
+            onClick={() => void reload()}
+            disabled={saving}
+          >
+            Restaurar valores salvos
+          </ActionButton>
+          <ActionButton
+            className="min-h-11 w-full sm:w-auto"
+            onClick={() => void save(settings)}
+            disabled={saving}
+          >
+            {saving ? 'Salvando...' : 'Salvar configuracao USA'}
+          </ActionButton>
+        </div>
+      </SettingsCard>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <SettingsCard
           eyebrow="Ofertas"
@@ -544,6 +650,17 @@ export function SettingsPageContent() {
 function toNumber(value: string) {
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatLastUpdated(value?: string) {
+  if (!value) {
+    return 'Ainda nao atualizada';
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
 
 interface TextInputProps {

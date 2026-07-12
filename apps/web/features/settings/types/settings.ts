@@ -32,6 +32,20 @@ export interface ImportSettings {
   redirectRules: ImportRedirectRule[];
 }
 
+export interface UsaFinancialSettings {
+  dollarQuote: number;
+  airFreight: number;
+  freightDiscountPercent: number;
+  administrativeFee: number;
+  customsBroker: number;
+  insurance: number;
+  label: number;
+  invoiceTaxPercent: number;
+  iof: number;
+  otherExpenses: number;
+  lastUpdated?: string;
+}
+
 export interface OfferSettings {
   defaultWarranty: string;
   defaultDeadline: string;
@@ -51,6 +65,7 @@ export interface SettingsPayload {
   general: GeneralSettings;
   financial: FinancialSettings;
   importation: ImportSettings;
+  usaFinancial: UsaFinancialSettings;
   offers: OfferSettings;
   userPreferences: UserPreferences;
 }

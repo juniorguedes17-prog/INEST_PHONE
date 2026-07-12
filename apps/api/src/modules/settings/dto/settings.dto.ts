@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsEmail,
   IsIn,
   IsNumber,
@@ -126,6 +127,65 @@ export class ImportSettingsDto {
   redirectRules!: ImportRedirectRuleDto[];
 }
 
+export class UsaFinancialSettingsDto {
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  dollarQuote!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  airFreight!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  freightDiscountPercent!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  administrativeFee!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  customsBroker!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  insurance!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  label!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  invoiceTaxPercent!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  iof!: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  otherExpenses!: number;
+
+  @ApiProperty()
+  @IsDateString()
+  @IsOptional()
+  lastUpdated?: string;
+}
+
 export class OfferSettingsDto {
   @ApiProperty()
   @IsString()
@@ -184,6 +244,12 @@ export class UpdateSettingsDto {
   @ValidateNested()
   @Type(() => ImportSettingsDto)
   importation?: ImportSettingsDto;
+
+  @ApiProperty({ type: UsaFinancialSettingsDto, required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UsaFinancialSettingsDto)
+  usaFinancial?: UsaFinancialSettingsDto;
 
   @ApiProperty({ type: OfferSettingsDto, required: false })
   @IsOptional()

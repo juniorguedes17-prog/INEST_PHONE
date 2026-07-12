@@ -54,6 +54,29 @@ export class SettingsService {
               })) ?? defaultSettings.importation.redirectRules,
           }
         : defaultSettings.importation,
+      usaFinancial: {
+        dollarQuote: toNumber(system.usaDollarQuote ?? defaultSettings.usaFinancial.dollarQuote),
+        airFreight: toNumber(system.usaAirFreight ?? defaultSettings.usaFinancial.airFreight),
+        freightDiscountPercent: toNumber(
+          system.usaFreightDiscountPercent ?? defaultSettings.usaFinancial.freightDiscountPercent,
+        ),
+        administrativeFee: toNumber(
+          system.usaAdministrativeFee ?? defaultSettings.usaFinancial.administrativeFee,
+        ),
+        customsBroker: toNumber(
+          system.usaCustomsBroker ?? defaultSettings.usaFinancial.customsBroker,
+        ),
+        insurance: toNumber(system.usaInsurance ?? defaultSettings.usaFinancial.insurance),
+        label: toNumber(system.usaLabel ?? defaultSettings.usaFinancial.label),
+        invoiceTaxPercent: toNumber(
+          system.usaInvoiceTaxPercent ?? defaultSettings.usaFinancial.invoiceTaxPercent,
+        ),
+        iof: toNumber(system.usaIof ?? defaultSettings.usaFinancial.iof),
+        otherExpenses: toNumber(
+          system.usaOtherExpenses ?? defaultSettings.usaFinancial.otherExpenses,
+        ),
+        lastUpdated: system.usaFinancialLastUpdated || undefined,
+      },
       offers: {
         ...defaultSettings.offers,
         defaultWarranty: system.defaultWarranty ?? defaultSettings.offers.defaultWarranty,
@@ -78,6 +101,9 @@ export class SettingsService {
       general: settings.general ?? oldValue.general,
       financial: settings.financial ?? oldValue.financial,
       importation: settings.importation ?? oldValue.importation,
+      usaFinancial: settings.usaFinancial
+        ? { ...settings.usaFinancial, lastUpdated: new Date().toISOString() }
+        : oldValue.usaFinancial,
       offers: settings.offers ?? oldValue.offers,
       userPreferences: settings.userPreferences ?? oldValue.userPreferences,
     };
@@ -137,6 +163,21 @@ export class SettingsService {
       ['language', settings.userPreferences.language, 'texto'],
       ['currencyFormat', settings.userPreferences.currencyFormat, 'texto'],
       ['dateFormat', settings.userPreferences.dateFormat, 'texto'],
+      ['usaDollarQuote', String(settings.usaFinancial.dollarQuote), 'moeda'],
+      ['usaAirFreight', String(settings.usaFinancial.airFreight), 'moeda'],
+      [
+        'usaFreightDiscountPercent',
+        String(settings.usaFinancial.freightDiscountPercent),
+        'percentual',
+      ],
+      ['usaAdministrativeFee', String(settings.usaFinancial.administrativeFee), 'moeda'],
+      ['usaCustomsBroker', String(settings.usaFinancial.customsBroker), 'moeda'],
+      ['usaInsurance', String(settings.usaFinancial.insurance), 'moeda'],
+      ['usaLabel', String(settings.usaFinancial.label), 'moeda'],
+      ['usaInvoiceTaxPercent', String(settings.usaFinancial.invoiceTaxPercent), 'percentual'],
+      ['usaIof', String(settings.usaFinancial.iof), 'moeda'],
+      ['usaOtherExpenses', String(settings.usaFinancial.otherExpenses), 'moeda'],
+      ['usaFinancialLastUpdated', settings.usaFinancial.lastUpdated ?? '', 'data_hora'],
     ];
 
     await Promise.all(
