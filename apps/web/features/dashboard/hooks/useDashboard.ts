@@ -18,12 +18,14 @@ export function useDashboard() {
   const [filters, setFilters] = useState<DashboardFilters>(initialFilters);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       setData(await getDashboard(filters));
+      setLastUpdated(new Date());
     } catch (dashboardError) {
       setError(
         dashboardError instanceof Error
@@ -39,5 +41,5 @@ export function useDashboard() {
     void load();
   }, [load]);
 
-  return { data, filters, setFilters, loading, error };
+  return { data, filters, setFilters, loading, error, lastUpdated, load };
 }
