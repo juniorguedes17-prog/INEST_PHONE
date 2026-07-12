@@ -25,6 +25,6 @@ import { WhatsappProvider } from './providers/whatsapp.provider';
     ExcelExportProvider,
     PdfExportProvider,
   ],
-  exports: [IntegrationsService],
+  exports: [IntegrationsService, GoogleSheetsProvider],
 })
 export class IntegrationsModule {}

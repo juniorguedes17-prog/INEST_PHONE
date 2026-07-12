@@ -4,6 +4,16 @@ export interface DashboardPoint {
 }
 
 export interface DashboardData {
+  sheet: {
+    totalCustomers: number;
+    totalSales: number;
+    totalRevenue: number;
+    totalProfit: number;
+    averageTicket: number;
+    productsSold: number;
+    lastSale: string | null;
+    lastSync: string;
+  };
   kpis: {
     monthRevenue: number;
     monthProfit: number;

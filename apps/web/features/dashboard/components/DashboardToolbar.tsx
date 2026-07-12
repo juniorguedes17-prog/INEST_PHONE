@@ -29,7 +29,7 @@ export function DashboardToolbar({
           disabled={loading}
           aria-busy={loading}
         >
-          {loading ? 'Atualizando...' : 'Atualizar Dashboard'}
+          {loading ? 'Sincronizando...' : 'Sincronizar Google Sheets'}
         </ActionButton>
       </Toolbar>
     </section>

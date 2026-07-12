@@ -8,6 +8,7 @@ import { authConfig } from './config/auth.config';
 import { databaseConfig } from './config/database.config';
 import { validateEnv } from './config/env.validation';
 import { AuthModule } from './modules/auth/auth.module';
+import { CustomersModule } from './modules/customers/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HealthModule } from './modules/health/health.module';
 import { ImportRadarModule } from './modules/import-radar/import-radar.module';
@@ -40,6 +41,7 @@ const envFileName = `.env.${appEnv}`;
     }),
     PrismaModule,
     AuthModule,
+    CustomersModule,
     DashboardModule,
     HealthModule,
     SettingsModule,

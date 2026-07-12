@@ -1,0 +1,3 @@
+export interface Customer { id: string; name: string; cpf: string; address: string; complement: string; city: string; state: string; phone: string; email: string; origin: string; salesCount: number; productsSold: number; totalRevenue: number; lastSale: string | null; }
+export interface SheetSummary { totalCustomers: number; totalSales: number; totalRevenue: number; totalProfit: number; averageTicket: number; productsSold: number; lastSale: string | null; lastSync: string; }
+export interface CustomersResponse { items: Customer[]; summary: SheetSummary; pagination: { page: number; pageSize: number; totalItems: number; totalPages: number }; }

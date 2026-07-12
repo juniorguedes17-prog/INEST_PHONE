@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getDashboard } from '../services/dashboard-service';
+import { getDashboard, syncDashboardSource } from '../services/dashboard-service';
 import { DashboardData, DashboardFilters } from '../types/dashboard';
 
 const initialFilters: DashboardFilters = {
@@ -19,6 +19,7 @@ export function useDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,5 +42,18 @@ export function useDashboard() {
     void load();
   }, [load]);
 
-  return { data, filters, setFilters, loading, error, lastUpdated, load };
+  const sync = async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      await syncDashboardSource();
+      await load();
+    } catch (syncError) {
+      setError(syncError instanceof Error ? syncError.message : 'Nao foi possivel sincronizar.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return { data, filters, setFilters, loading, syncing, error, lastUpdated, load, sync };
 }

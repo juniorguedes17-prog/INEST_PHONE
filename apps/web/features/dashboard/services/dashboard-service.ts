@@ -32,3 +32,14 @@ export async function getDashboard(filters: DashboardFilters): Promise<Dashboard
   });
   return parseResponse<DashboardData>(response);
 }
+
+export async function syncDashboardSource(): Promise<void> {
+  const response = await fetch(`${env.apiUrl}/customers/sync`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(payload?.message ?? 'Nao foi possivel sincronizar o Google Sheets.');
+  }
+}

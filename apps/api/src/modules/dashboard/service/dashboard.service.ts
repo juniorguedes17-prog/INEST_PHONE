@@ -9,6 +9,8 @@ import {
 } from '../interfaces/dashboard-prisma.interface';
 import { DashboardRepository } from '../repository/dashboard.repository';
 import { isToday, monthKey, toNumber } from '../validators/dashboard.validators';
+import { GoogleSheetsMetrics } from '../../integrations/interfaces/google-sheets-data.interface';
+import { GoogleSheetsProvider } from '../../integrations/providers/google-sheets.provider';
 
 interface CacheEntry {
   expiresAt: number;
@@ -23,23 +25,28 @@ export interface DashboardOverview {
   importation: unknown;
   offers: unknown;
   suppliers: unknown;
+  sheet: GoogleSheetsMetrics;
 }
 
 @Injectable()
 export class DashboardService {
   private readonly cache = new Map<string, CacheEntry>();
 
-  constructor(@Inject(DashboardRepository) private readonly dashboardRepository: DashboardRepository) {}
+  constructor(
+    @Inject(DashboardRepository) private readonly dashboardRepository: DashboardRepository,
+    @Inject(GoogleSheetsProvider) private readonly googleSheetsProvider: GoogleSheetsProvider,
+  ) {}
 
   async overview(query: DashboardQueryDto, user: AuthenticatedUser): Promise<DashboardOverview> {
-    const cacheKey = JSON.stringify(query);
+    const sheetSnapshot = await this.googleSheetsProvider.getSnapshot();
+    const cacheKey = JSON.stringify({ ...query, sheetVersion: this.googleSheetsProvider.version });
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
       return cached.value;
     }
 
     const snapshot = await this.dashboardRepository.snapshot(query);
-    const value = this.buildDashboard(snapshot);
+    const value = { ...this.buildDashboard(snapshot), sheet: sheetSnapshot.metrics };
 
     this.cache.set(cacheKey, { value, expiresAt: Date.now() + 30_000 });
     await this.dashboardRepository.createAccessAudit({ userId: user.id, filters: query });
@@ -155,6 +162,16 @@ export class DashboardService {
       suppliers: {
         active: activeSuppliers,
         total: suppliers.length,
+      },
+      sheet: {
+        totalCustomers: 0,
+        totalSales: 0,
+        totalRevenue: 0,
+        totalProfit: 0,
+        averageTicket: 0,
+        productsSold: 0,
+        lastSale: null,
+        lastSync: '',
       },
     };
   }
