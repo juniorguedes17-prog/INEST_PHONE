@@ -18,4 +18,25 @@ describe('GoogleSheetsProvider mapping', () => {
   it('informa cabecalhos obrigatorios ausentes', () => {
     expect(() => mapSheetValues([['cliente_nome'], ['Maria']])).toThrow('Cabecalhos obrigatorios ausentes');
   });
+
+  it('aceita os aliases da planilha oficial e separa cidade e UF', () => {
+    const officialHeaders: string[] = [
+      ...GOOGLE_SHEETS_HEADERS.filter(
+        (header) =>
+          !['categoria_produto', 'produto_codigo', 'cliente_cidade', 'cliente_uf'].includes(header),
+      ),
+      'codigo',
+      'cliente_cidade_uf',
+    ];
+    const row = officialHeaders.map((header) =>
+      header === 'codigo' ? '13128GB' : header === 'cliente_cidade_uf' ? 'Telemaco Borba-PR' : '',
+    );
+
+    const [record] = mapSheetValues([officialHeaders, row]);
+
+    expect(record!.categoria_produto).toBe('');
+    expect(record!.produto_codigo).toBe('13128GB');
+    expect(record!.cliente_cidade).toBe('Telemaco Borba');
+    expect(record!.cliente_uf).toBe('PR');
+  });
 });

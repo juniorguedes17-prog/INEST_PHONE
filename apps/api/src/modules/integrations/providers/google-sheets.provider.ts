@@ -18,6 +18,14 @@ interface GoogleValuesResponse {
   values?: unknown[][];
 }
 
+const HEADER_ALIASES: Partial<Record<GoogleSheetsHeader, readonly string[]>> = {
+  produto_codigo: ['codigo'],
+  cliente_cidade: ['cliente_cidade_uf'],
+  cliente_uf: ['cliente_cidade_uf'],
+};
+
+const OPTIONAL_HEADERS = new Set<GoogleSheetsHeader>(['categoria_produto']);
+
 @Injectable()
 export class GoogleSheetsProvider implements IntegrationProvider {
   readonly key = 'google_sheets';
@@ -157,7 +165,12 @@ export function mapSheetValues(values: unknown[][]): GoogleSheetsSaleRecord[] {
   if (!values.length) return [];
   const headers = values[0]!.map((value) => normalizeHeader(String(value ?? '')));
   const indexByHeader = new Map(headers.map((header, index) => [header, index]));
-  const missing = GOOGLE_SHEETS_HEADERS.filter((header) => !indexByHeader.has(header));
+  const sourceByHeader = new Map(
+    GOOGLE_SHEETS_HEADERS.map((header) => [header, resolveSourceHeader(header, indexByHeader)]),
+  );
+  const missing = GOOGLE_SHEETS_HEADERS.filter(
+    (header) => !OPTIONAL_HEADERS.has(header) && !sourceByHeader.get(header),
+  );
   if (missing.length) {
     throw new Error(`Cabecalhos obrigatorios ausentes no Google Sheets: ${missing.join(', ')}`);
   }
@@ -165,10 +178,25 @@ export function mapSheetValues(values: unknown[][]): GoogleSheetsSaleRecord[] {
   return values.slice(1).filter(hasContent).map((row) => {
     const record = {} as GoogleSheetsSaleRecord;
     GOOGLE_SHEETS_HEADERS.forEach((header) => {
-      record[header] = String(row[indexByHeader.get(header) as number] ?? '').trim();
+      const source = sourceByHeader.get(header);
+      const value = source ? String(row[source.index] ?? '').trim() : '';
+      record[header] = mapAliasedValue(header, source?.name, value);
     });
     return record;
   });
+}
+
+function resolveSourceHeader(header: GoogleSheetsHeader, indexByHeader: Map<string, number>) {
+  const candidates = [header, ...(HEADER_ALIASES[header] ?? [])];
+  const name = candidates.find((candidate) => indexByHeader.has(candidate));
+  return name ? { name, index: indexByHeader.get(name) as number } : null;
+}
+
+function mapAliasedValue(header: GoogleSheetsHeader, source: string | undefined, value: string) {
+  if (source !== 'cliente_cidade_uf') return value;
+  const location = value.match(/^(.*?)(?:\s*[-/]\s*([A-Za-z]{2}))$/);
+  if (!location) return header === 'cliente_cidade' ? value : '';
+  return header === 'cliente_cidade' ? location[1]!.trim() : location[2]!.toUpperCase();
 }
 
 export function buildGoogleSheetsSnapshot(
