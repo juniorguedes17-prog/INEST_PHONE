@@ -8,7 +8,13 @@ import {
   DashboardSaleRecord,
 } from '../interfaces/dashboard-prisma.interface';
 import { DashboardRepository } from '../repository/dashboard.repository';
-import { isToday, monthKey, toNumber } from '../validators/dashboard.validators';
+import {
+  buildSheetCharts,
+  DashboardSheetCharts,
+  isToday,
+  monthKey,
+  toNumber,
+} from '../validators/dashboard.validators';
 import { GoogleSheetsMetrics } from '../../integrations/interfaces/google-sheets-data.interface';
 import { GoogleSheetsProvider } from '../../integrations/providers/google-sheets.provider';
 
@@ -26,6 +32,7 @@ export interface DashboardOverview {
   offers: unknown;
   suppliers: unknown;
   sheet: GoogleSheetsMetrics;
+  sheetCharts: DashboardSheetCharts;
 }
 
 @Injectable()
@@ -46,7 +53,11 @@ export class DashboardService {
     }
 
     const snapshot = await this.dashboardRepository.snapshot(query);
-    const value = { ...this.buildDashboard(snapshot), sheet: sheetSnapshot.metrics };
+    const value = {
+      ...this.buildDashboard(snapshot),
+      sheet: sheetSnapshot.metrics,
+      sheetCharts: buildSheetCharts(sheetSnapshot.records, sheetSnapshot.customers),
+    };
 
     this.cache.set(cacheKey, { value, expiresAt: Date.now() + 30_000 });
     await this.dashboardRepository.createAccessAudit({ userId: user.id, filters: query });
@@ -172,6 +183,13 @@ export class DashboardService {
         productsSold: 0,
         lastSale: null,
         lastSync: '',
+      },
+      sheetCharts: {
+        monthlyUnits: [],
+        monthlyRevenue: [],
+        monthlyProfit: [],
+        revenueByCity: [],
+        customersByOrigin: [],
       },
     };
   }

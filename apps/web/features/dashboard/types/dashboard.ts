@@ -14,6 +14,13 @@ export interface DashboardData {
     lastSale: string | null;
     lastSync: string;
   };
+  sheetCharts?: {
+    monthlyUnits: DashboardPoint[];
+    monthlyRevenue: DashboardPoint[];
+    monthlyProfit: DashboardPoint[];
+    revenueByCity: DashboardPoint[];
+    customersByOrigin: DashboardPoint[];
+  };
   kpis: {
     monthRevenue: number;
     monthProfit: number;
