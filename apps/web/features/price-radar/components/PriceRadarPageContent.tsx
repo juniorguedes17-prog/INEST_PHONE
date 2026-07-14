@@ -23,6 +23,7 @@ import { usePriceRadar } from '../hooks/usePriceRadar';
 import { PriceQuoteFormPayload, PriceQuoteItem } from '../types/price-radar';
 import { BrazilRadarProduct, BrazilRadarProductCard } from './BrazilRadarProductCard';
 import { PreparedRadarOrigin } from './PreparedRadarOrigin';
+import { ParaguayRadarOrigin } from './ParaguayRadarOrigin';
 import { RadarToolbar } from './RadarToolbar';
 import { RadarOrigin, RadarOriginTabs } from './RadarOriginTabs';
 
@@ -235,6 +236,8 @@ export function PriceRadarPageContent() {
                 Nova cotacao
               </ActionButton>
             </>
+          ) : origin === 'paraguai' ? (
+            <StatusBadge tone="green">Fonte oficial ativa</StatusBadge>
           ) : (
             <StatusBadge tone="amber">Estrutura preparada</StatusBadge>
           )
@@ -253,7 +256,8 @@ export function PriceRadarPageContent() {
         }}
       />
 
-      {origin !== 'brasil' ? <PreparedRadarOrigin origin={origin} /> : null}
+      {origin === 'paraguai' ? <ParaguayRadarOrigin /> : null}
+      {origin === 'eua' ? <PreparedRadarOrigin origin="eua" /> : null}
 
       {origin === 'brasil' ? (
         <>
