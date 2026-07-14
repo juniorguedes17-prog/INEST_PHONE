@@ -1,3 +1,5 @@
+import { createPrivateKey } from 'node:crypto';
+
 type Env = Record<string, string | undefined>;
 
 const requiredVariables = [
@@ -29,6 +31,7 @@ const unsafeProductionValues = new Set([
 ]);
 
 export function validateEnv(config: Env) {
+  const normalizedConfig = { ...config };
   const missing = requiredVariables.filter((key) => !config[key]);
 
   if (!config.PORT && !config.API_PORT) {
@@ -48,5 +51,75 @@ export function validateEnv(config: Env) {
     throw new Error(`Segredos inseguros em ${appEnv}: ${unsafe.join(', ')}`);
   }
 
-  return config;
+  validateGoogleSheetsCredentials(normalizedConfig);
+
+  return normalizedConfig;
+}
+
+function validateGoogleSheetsCredentials(config: Env) {
+  if (!isEnabled(config.GOOGLE_SHEETS_ENABLED)) return;
+
+  const requiredGoogleVariables = [
+    'GOOGLE_SHEETS_CLIENT_EMAIL',
+    'GOOGLE_SHEETS_PRIVATE_KEY',
+    'GOOGLE_SHEETS_SPREADSHEET_ID',
+    'GOOGLE_SHEETS_RANGE',
+  ] as const;
+  const missing = requiredGoogleVariables.filter((key) => !config[key]?.trim());
+
+  if (missing.length > 0) {
+    throw new Error(`Variaveis do Google Sheets ausentes: ${missing.join(', ')}`);
+  }
+
+  const clientEmail = config.GOOGLE_SHEETS_CLIENT_EMAIL!.trim();
+  if (!/^[^\s@]+@[^\s@]+\.iam\.gserviceaccount\.com$/i.test(clientEmail)) {
+    throw new Error(
+      'Variavel GOOGLE_SHEETS_CLIENT_EMAIL invalida: use o client_email da mesma conta de servico da chave privada.',
+    );
+  }
+
+  const privateKey = normalizePrivateKey(config.GOOGLE_SHEETS_PRIVATE_KEY!);
+  if (!isPemPrivateKey(privateKey)) {
+    throw new Error(
+      'Variavel GOOGLE_SHEETS_PRIVATE_KEY invalida: informe a private_key completa em formato PEM.',
+    );
+  }
+
+  try {
+    createPrivateKey(privateKey);
+  } catch {
+    throw new Error(
+      'Variavel GOOGLE_SHEETS_PRIVATE_KEY invalida: a chave PEM nao pode ser decodificada.',
+    );
+  }
+
+  config.GOOGLE_SHEETS_CLIENT_EMAIL = clientEmail;
+  config.GOOGLE_SHEETS_PRIVATE_KEY = privateKey;
+  config.GOOGLE_SHEETS_SPREADSHEET_ID = config.GOOGLE_SHEETS_SPREADSHEET_ID!.trim();
+  config.GOOGLE_SHEETS_RANGE = config.GOOGLE_SHEETS_RANGE!.trim();
+}
+
+export function normalizePrivateKey(value: string) {
+  let normalized = value.trim();
+  const hasWrappingQuotes =
+    (normalized.startsWith('"') && normalized.endsWith('"')) ||
+    (normalized.startsWith("'") && normalized.endsWith("'"));
+
+  if (hasWrappingQuotes) normalized = normalized.slice(1, -1);
+
+  return normalized
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n?/g, '\n')
+    .trim();
+}
+
+function isPemPrivateKey(value: string) {
+  return /^-----BEGIN (?:RSA )?PRIVATE KEY-----\n[\s\S]+\n-----END (?:RSA )?PRIVATE KEY-----$/.test(
+    value,
+  );
+}
+
+function isEnabled(value: string | undefined) {
+  return ['true', '1', 'yes', 'on'].includes(value?.trim().toLowerCase() ?? '');
 }
