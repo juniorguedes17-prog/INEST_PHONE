@@ -73,6 +73,10 @@ export class ComprasParaguaiProvider implements ImportProvider {
 
       const ordered = [...offers].sort((a, b) => a.priceUsd - b.priceUsd);
       const cheapest = ordered[0];
+      const mostExpensive = ordered[ordered.length - 1];
+      if (!cheapest || !mostExpensive) {
+        return product;
+      }
       const prices = ordered.map((offer) => offer.priceUsd);
       const stores = new Set(ordered.map((offer) => normalizeText(offer.store)).filter(Boolean));
 
@@ -85,7 +89,7 @@ export class ComprasParaguaiProvider implements ImportProvider {
         priceUsd: cheapest.priceUsd,
         minimumPriceUsd: cheapest.priceUsd,
         averagePriceUsd: roundMoney(prices.reduce((total, price) => total + price, 0) / prices.length),
-        maximumPriceUsd: ordered[ordered.length - 1].priceUsd,
+        maximumPriceUsd: mostExpensive.priceUsd,
         storeCount: stores.size || product.storeCount,
         offerCount: offers.length,
       };
@@ -128,18 +132,19 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
   const products: ImportProviderProduct[] = [];
 
   for (const card of extractElementsByClass(html, 'promocao-produtos-item')) {
+    const cardHtml = card.full;
     const link =
-      findElementByClass(card, 'promocao-item-nome', 'a') ??
-      findElementByClass(card, 'truncate', 'a') ??
-      findAnchor(card, (href) => href.includes('_'));
+      findElementByClass(cardHtml, 'promocao-item-nome', 'a') ??
+      findElementByClass(cardHtml, 'truncate', 'a') ??
+      findAnchor(cardHtml, (href) => href.includes('_'));
     const href = link ? extractAttribute(link.openingTag, 'href') : undefined;
     const name = cleanText(
       link?.content ??
-        findElementByClass(card, 'promocao-item-nome')?.content ??
-        findElementByClass(card, 'truncate')?.content ??
+        findElementByClass(cardHtml, 'promocao-item-nome')?.content ??
+        findElementByClass(cardHtml, 'truncate')?.content ??
         '',
     );
-    const priceModel = findElementByClass(card, 'price-model')?.content ?? '';
+    const priceModel = findElementByClass(cardHtml, 'price-model')?.content ?? '';
     const priceUsd = parseLocalizedMoney(stripHtml(priceModel));
     if (!href || !name || !priceUsd) {
       continue;
@@ -147,9 +152,13 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
 
     const productUrl = new URL(href, BASE_URL).toString();
     const externalId = extractExternalId(productUrl);
-    const offerCount = parseInteger(stripHtml(findElementByClass(card, 'ver-detalhes')?.content ?? ''));
+    const offerCount = parseInteger(
+      stripHtml(findElementByClass(cardHtml, 'ver-detalhes')?.content ?? ''),
+    );
     const attributes = inferProductAttributes(name);
-    const image = findFirstTag(card, 'img', (tag) => hasClass(tag, 'lozad')) ?? findFirstTag(card, 'img');
+    const image =
+      findFirstTag(cardHtml, 'img', (tag) => hasClass(tag, 'lozad')) ??
+      findFirstTag(cardHtml, 'img');
 
     products.push({
       id: externalId ? `py-${externalId}` : `py-${slugify(productUrl)}`,
@@ -164,7 +173,7 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
       priceUsd,
       minimumPriceUsd: priceUsd,
       priceBrlSource: parseLocalizedMoney(
-        stripHtml(findElementByClass(card, 'promocao-item-preco-text')?.content ?? ''),
+        stripHtml(findElementByClass(cardHtml, 'promocao-item-preco-text')?.content ?? ''),
       ),
       productUrl,
       imageUrl: image
@@ -188,10 +197,11 @@ export function parseProductOffers(html: string): ParsedOffer[] {
   ];
 
   for (const card of cards) {
-    const text = cleanText(stripHtml(card));
+    const cardHtml = card.full;
+    const text = cleanText(stripHtml(cardHtml));
     const priceText = stripHtml(
-      findElementByClass(card, 'price-model')?.content ??
-        findElementByClass(card, 'promocao-item-preco')?.content ??
+      findElementByClass(cardHtml, 'price-model')?.content ??
+        findElementByClass(cardHtml, 'promocao-item-preco')?.content ??
         text,
     );
     const priceUsd = parseUsdFromText(priceText);
@@ -200,11 +210,11 @@ export function parseProductOffers(html: string): ParsedOffer[] {
     }
 
     const storeElement =
-      findElementByClass(card, 'promocao-item-loja', 'a') ??
-      findElementByClass(card, 'loja-nome', 'a') ??
-      findAnchor(card, (href) => href.includes('loja')) ??
-      findElementByClass(card, 'promocao-item-loja') ??
-      findElementByClass(card, 'loja-nome');
+      findElementByClass(cardHtml, 'promocao-item-loja', 'a') ??
+      findElementByClass(cardHtml, 'loja-nome', 'a') ??
+      findAnchor(cardHtml, (href) => href.includes('loja')) ??
+      findElementByClass(cardHtml, 'promocao-item-loja') ??
+      findElementByClass(cardHtml, 'loja-nome');
     const store = cleanText(storeElement?.content ?? '');
     if (!store) {
       continue;
@@ -235,8 +245,10 @@ function extractElementsByClass(html: string, className: string): HtmlElement[] 
   let match: RegExpExecArray | null;
 
   while ((match = openingPattern.exec(html))) {
-    if (!hasClass(match[0], className)) continue;
-    const element = extractElementAt(html, match.index, match[1], match[0]);
+    const openingTag = match[0];
+    const tagName = match[1];
+    if (!openingTag || !tagName || !hasClass(openingTag, className)) continue;
+    const element = extractElementAt(html, match.index, tagName, openingTag);
     if (element) elements.push(element);
   }
 
@@ -260,9 +272,11 @@ function findAnchor(
   const pattern = /<a\b[^>]*>/gi;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(html))) {
-    const href = extractAttribute(match[0], 'href');
+    const openingTag = match[0];
+    if (!openingTag) continue;
+    const href = extractAttribute(openingTag, 'href');
     if (!href || !predicate(href)) continue;
-    const element = extractElementAt(html, match.index, 'a', match[0]);
+    const element = extractElementAt(html, match.index, 'a', openingTag);
     if (element) return element;
   }
   return undefined;
@@ -276,7 +290,8 @@ function findFirstTag(
   const pattern = new RegExp(`<${tagName}\\b[^>]*>`, 'gi');
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(html))) {
-    if (predicate(match[0])) return match[0];
+    const tag = match[0];
+    if (tag && predicate(tag)) return tag;
   }
   return undefined;
 }
@@ -296,8 +311,10 @@ function extractElementAt(
   let depth = 1;
   let token: RegExpExecArray | null;
   while ((token = tokenPattern.exec(html))) {
-    if (token[0].startsWith('</')) depth -= 1;
-    else if (!token[0].endsWith('/>')) depth += 1;
+    const tokenValue = token[0];
+    if (!tokenValue) continue;
+    if (tokenValue.startsWith('</')) depth -= 1;
+    else if (!tokenValue.endsWith('/>')) depth += 1;
     if (depth !== 0) continue;
 
     return {
@@ -375,14 +392,16 @@ export function inferProductAttributes(name: string) {
 
 function parseLocalizedMoney(value: string): number | undefined {
   const match = value.match(/([\d.]+(?:,\d{1,2})?)/);
-  if (!match) return undefined;
-  const parsed = Number(match[1].replace(/\./g, '').replace(',', '.'));
+  const amount = match?.[1];
+  if (!amount) return undefined;
+  const parsed = Number(amount.replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function parseUsdFromText(value: string): number | undefined {
   const match = value.match(/(?:US\$|USD|U\$)\s*([\d.]+(?:,\d{1,2})?)/i);
-  return match ? parseLocalizedMoney(match[1]) : undefined;
+  const amount = match?.[1];
+  return amount ? parseLocalizedMoney(amount) : undefined;
 }
 
 function parseInteger(value: string): number | undefined {
@@ -433,11 +452,12 @@ async function mapWithConcurrency<T, R>(
   mapper: (item: T) => Promise<R>,
 ): Promise<R[]> {
   const results: R[] = new Array(items.length);
-  let cursor = 0;
+  const queue = items.map((item, index) => ({ index, item }));
   async function worker(): Promise<void> {
-    while (cursor < items.length) {
-      const index = cursor++;
-      results[index] = await mapper(items[index]);
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (!next) return;
+      results[next.index] = await mapper(next.item);
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
