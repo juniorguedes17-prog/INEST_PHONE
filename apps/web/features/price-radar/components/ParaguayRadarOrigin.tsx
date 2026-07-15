@@ -288,7 +288,11 @@ export function ParaguayRadarOrigin() {
                 selected={selectedIds.has(product.id)}
                 onSelect={(checked) => setSelectedIds((current) => {
                   const next = new Set(current);
-                  checked ? next.add(product.id) : next.delete(product.id);
+                  if (checked) {
+                    next.add(product.id);
+                  } else {
+                    next.delete(product.id);
+                  }
                   return next;
                 })}
                 onCalculate={() => void calculate(product)}
