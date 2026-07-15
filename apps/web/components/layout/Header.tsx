@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { ActionButton, ContentContainer, SearchInput } from '@/components/shared';
 import { logout } from '@/services/auth-service';
@@ -32,12 +33,20 @@ export function Header({ onOpenMenu }: HeaderProps) {
           >
             Menu
           </button>
+          <Image
+            src="/brand/inest-phone-logo.jpg"
+            alt="iNest Phone"
+            width={40}
+            height={40}
+            priority
+            className="hidden h-10 w-10 flex-none object-contain sm:block"
+          />
           <div className="min-w-0">
             <nav
               aria-label="Breadcrumb"
               className="text-[11px] font-black uppercase text-inest-blue"
             >
-              iNest Phone / {item.eyebrow ?? 'Sistema'}
+              Operacao Comercial / {item.eyebrow ?? 'Sistema'}
             </nav>
             <h1 className="truncate font-display text-xl font-black text-inest-text sm:text-2xl">
               {item.label}

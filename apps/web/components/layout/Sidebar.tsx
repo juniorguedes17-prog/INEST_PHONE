@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { navigationItems } from './navigation';
 import { cn } from '@/utils/cn';
@@ -22,15 +23,17 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       )}
     >
       <div className="flex min-h-12 items-center gap-3 px-2">
-        <div className="grid h-10 w-10 flex-none place-items-center rounded-lg bg-inest-blue font-display text-base font-black text-white shadow-soft">
-          iN
-        </div>
+        <Image
+          src="/brand/inest-phone-logo.jpg"
+          alt="iNest Phone"
+          width={56}
+          height={56}
+          priority
+          className="h-12 w-12 flex-none object-contain"
+        />
         {!collapsed ? (
           <div className="min-w-0">
-            <strong className="block truncate text-base font-black text-inest-text">
-              iNest Phone
-            </strong>
-            <span className="block truncate text-xs text-inest-muted">Gestao Comercial</span>
+            <span className="block truncate text-sm font-semibold text-inest-muted">Gestao Comercial</span>
           </div>
         ) : null}
       </div>
