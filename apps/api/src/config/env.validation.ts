@@ -97,6 +97,12 @@ function validateGoogleSheetsCredentials(config: Env) {
   config.GOOGLE_SHEETS_PRIVATE_KEY = privateKey;
   config.GOOGLE_SHEETS_SPREADSHEET_ID = config.GOOGLE_SHEETS_SPREADSHEET_ID!.trim();
   config.GOOGLE_SHEETS_RANGE = config.GOOGLE_SHEETS_RANGE!.trim();
+  if (config.GOOGLE_SHEETS_PROFIT_SPREADSHEET_ID) {
+    config.GOOGLE_SHEETS_PROFIT_SPREADSHEET_ID = config.GOOGLE_SHEETS_PROFIT_SPREADSHEET_ID.trim();
+  }
+  if (config.GOOGLE_SHEETS_PROFIT_RANGE) {
+    config.GOOGLE_SHEETS_PROFIT_RANGE = config.GOOGLE_SHEETS_PROFIT_RANGE.trim();
+  }
 }
 
 export function normalizePrivateKey(value: string) {

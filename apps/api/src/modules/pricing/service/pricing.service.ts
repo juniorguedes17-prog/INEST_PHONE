@@ -1,13 +1,15 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { SettingsService } from '../../settings/service/settings.service';
 import { GenerateOfferDraftDto, PricingQueryDto, UpdateModelProfitDto } from '../dto/pricing.dto';
 import { PricingPriceHistoryRecord } from '../interfaces/pricing-prisma.interface';
+import { ProfitCondition } from '../interfaces/profit-sheet.interface';
 import {
-  MODEL_PROFIT_PREFIX,
-  OFFER_INCREMENT_KEY,
-  PricingRepository,
-} from '../repository/pricing.repository';
+  GoogleSheetsProfitProvider,
+  lookupProfit,
+  normalizeProfitProductDescription,
+} from '../providers/google-sheets-profit.provider';
+import { OFFER_INCREMENT_KEY, PricingRepository } from '../repository/pricing.repository';
 import { quoteIsValid, toNumber } from '../validators/pricing.validators';
 
 @Injectable()
@@ -15,16 +17,18 @@ export class PricingService {
   constructor(
     @Inject(PricingRepository) private readonly pricingRepository: PricingRepository,
     @Inject(SettingsService) private readonly settingsService: SettingsService,
+    @Inject(GoogleSheetsProfitProvider)
+    private readonly profitProvider: GoogleSheetsProfitProvider,
   ) {}
 
   async list(query: PricingQueryDto = {}) {
-    const [settings, pricingConfigurations, quotes] = await Promise.all([
+    const [settings, pricingConfigurations, quotes, profitCatalog] = await Promise.all([
       this.settingsService.getSettings(),
       this.pricingRepository.listPricingConfigurations(),
       this.pricingRepository.listQuotes(),
+      this.profitProvider.getCatalog(),
     ]);
 
-    const modelProfits = this.getModelProfits(pricingConfigurations);
     const offerIncrement = toNumber(
       pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
     );
@@ -34,13 +38,25 @@ export class PricingService {
       const product = quote.product;
       const costProduct = toNumber(quote.costProduct);
       const modelName = product?.model?.name ?? '';
-      const desiredNetProfit =
-        modelProfits[modelName] ?? toNumber(settings.financial.defaultMargin);
+      const profitCondition = this.getProfitCondition(product?.productType ?? '');
+      const profitProductDescription = this.getProfitProductDescription(quote);
+      const profitLookup = lookupProfit(profitCatalog, profitCondition, profitProductDescription);
       const fixedCost = toNumber(settings.financial.globalFixedCost);
       const freight = toNumber(settings.financial.defaultFreight);
       const paymentFee = toNumber(settings.financial.defaultPaymentFee);
-      const salePrice = costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
-      const offerPrice = salePrice + offerIncrement;
+      const desiredNetProfit =
+        profitLookup.status === 'found' ? profitLookup.record.netProfit : null;
+      const salePrice =
+        desiredNetProfit === null
+          ? null
+          : costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
+      const offerPrice = salePrice === null ? null : salePrice + offerIncrement;
+      const calculationError =
+        profitLookup.status === 'not_found'
+          ? 'Lucro líquido não cadastrado para este modelo e condição.'
+          : profitLookup.status === 'duplicate'
+            ? 'Cadastro duplicado de lucro líquido para este modelo e condição.'
+            : null;
 
       return {
         productId: quote.productId,
@@ -63,12 +79,23 @@ export class PricingService {
         freight,
         paymentFee,
         desiredNetProfit,
-        margin: salePrice ? desiredNetProfit / salePrice : 0,
+        margin: salePrice && desiredNetProfit !== null ? desiredNetProfit / salePrice : null,
         salePrice,
         offerPrice,
         lastUpdatedAt: quote.createdAt ?? quote.quoteDate,
-        profitSource: modelProfits[modelName] !== undefined ? 'pricing_configuration' : 'default',
-        googleSheetsReady: true,
+        profitSource: profitLookup.status === 'found' ? 'google_sheets_profit' : 'unavailable',
+        profitCondition,
+        profitProductDescription,
+        profitRecordId: profitLookup.status === 'found' ? profitLookup.record.productId : null,
+        profitUpdatedAt: profitCatalog.fetchedAt,
+        calculationStatus:
+          profitLookup.status === 'found'
+            ? 'ready'
+            : profitLookup.status === 'duplicate'
+              ? 'duplicate_profit'
+              : 'missing_profit',
+        calculationError,
+        googleSheetsReady: profitLookup.status === 'found',
       };
     });
 
@@ -81,10 +108,26 @@ export class PricingService {
     if (!item) {
       throw new NotFoundException('Preco calculado nao encontrado para o produto.');
     }
-    return item;
+    if (
+      !item.googleSheetsReady ||
+      item.desiredNetProfit === null ||
+      item.margin === null ||
+      item.salePrice === null ||
+      item.offerPrice === null
+    ) {
+      throw new BadRequestException(item.calculationError);
+    }
+    return {
+      ...item,
+      desiredNetProfit: item.desiredNetProfit,
+      margin: item.margin,
+      salePrice: item.salePrice,
+      offerPrice: item.offerPrice,
+    };
   }
 
   async recalculate(query: PricingQueryDto, user: AuthenticatedUser) {
+    await this.profitProvider.refresh();
     const items = await this.list(query);
     await this.pricingRepository.createAuditLog({
       userId: user.id,
@@ -165,15 +208,6 @@ export class PricingService {
     return bestQuotes;
   }
 
-  private getModelProfits(configurations: Array<{ key: string; value: string }>) {
-    return configurations.reduce<Record<string, number>>((result, item) => {
-      if (item.key.startsWith(MODEL_PROFIT_PREFIX)) {
-        result[item.key.replace(MODEL_PROFIT_PREFIX, '')] = toNumber(item.value);
-      }
-      return result;
-    }, {});
-  }
-
   private applyFilters(items: ReturnType<PricingService['mapItem']>[], query: PricingQueryDto) {
     const normalizedSearch = query.search?.toLowerCase();
     const filtered = items.filter((item) => {
@@ -201,17 +235,23 @@ export class PricingService {
       if (query.status && item.status !== query.status) {
         return false;
       }
-      if (query.minPrice !== undefined && item.salePrice < Number(query.minPrice)) {
+      if (
+        query.minPrice !== undefined &&
+        (item.salePrice === null || item.salePrice < Number(query.minPrice))
+      ) {
         return false;
       }
-      if (query.maxPrice !== undefined && item.salePrice > Number(query.maxPrice)) {
+      if (
+        query.maxPrice !== undefined &&
+        (item.salePrice === null || item.salePrice > Number(query.maxPrice))
+      ) {
         return false;
       }
       return true;
     });
 
     if (query.sort === 'highest_price') {
-      return filtered.sort((a, b) => b.salePrice - a.salePrice);
+      return filtered.sort((a, b) => nullableNumber(b.salePrice) - nullableNumber(a.salePrice));
     }
     if (query.sort === 'recent') {
       return filtered.sort(
@@ -219,9 +259,15 @@ export class PricingService {
       );
     }
     if (query.sort === 'highest_profit') {
-      return filtered.sort((a, b) => b.desiredNetProfit - a.desiredNetProfit);
+      return filtered.sort(
+        (a, b) => nullableNumber(b.desiredNetProfit) - nullableNumber(a.desiredNetProfit),
+      );
     }
-    return filtered.sort((a, b) => a.salePrice - b.salePrice);
+    return filtered.sort((a, b) => {
+      if (a.salePrice === null) return 1;
+      if (b.salePrice === null) return -1;
+      return a.salePrice - b.salePrice;
+    });
   }
 
   private getProductName(quote: PricingPriceHistoryRecord) {
@@ -233,6 +279,25 @@ export class PricingService {
     ]
       .filter(Boolean)
       .join(' ');
+  }
+
+  private getProfitProductDescription(quote: PricingPriceHistoryRecord) {
+    const model = quote.product?.model?.name?.trim() ?? '';
+    const capacity = quote.product?.storage?.displayName?.trim() ?? '';
+    if (!capacity) return model;
+
+    const normalizedModel = normalizeProfitProductDescription(model);
+    const normalizedCapacity = normalizeProfitProductDescription(capacity);
+    const modelTokens = normalizedModel.split(' ');
+    const capacityTokens = normalizedCapacity.split(' ');
+    const containsCapacity = capacityTokens.every((token) => modelTokens.includes(token));
+    return containsCapacity ? model : `${model} ${capacity}`.trim();
+  }
+
+  private getProfitCondition(productType: string): ProfitCondition {
+    if (productType === 'APPLE_CPO') return 'CPO';
+    if (productType === 'IPHONE_USED') return 'SEMINOVO';
+    return 'NOVO';
   }
 
   private mapItem() {
@@ -252,13 +317,23 @@ export class PricingService {
       fixedCost: 0,
       freight: 0,
       paymentFee: 0,
-      desiredNetProfit: 0,
-      margin: 0,
-      salePrice: 0,
-      offerPrice: 0,
+      desiredNetProfit: null as number | null,
+      margin: null as number | null,
+      salePrice: null as number | null,
+      offerPrice: null as number | null,
       lastUpdatedAt: new Date(),
       profitSource: '',
-      googleSheetsReady: true,
+      profitCondition: 'NOVO' as ProfitCondition,
+      profitProductDescription: '',
+      profitRecordId: null as string | null,
+      profitUpdatedAt: '',
+      calculationStatus: 'missing_profit',
+      calculationError: null as string | null,
+      googleSheetsReady: false,
     };
   }
+}
+
+function nullableNumber(value: number | null) {
+  return value ?? Number.NEGATIVE_INFINITY;
 }

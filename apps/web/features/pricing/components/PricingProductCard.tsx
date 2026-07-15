@@ -29,12 +29,24 @@ export const PricingProductCard = memo(function PricingProductCard({
           </StatusBadge>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {[item.category, item.model, item.color, item.capacity, item.productType]
+          {[
+            item.category,
+            item.model,
+            item.color,
+            item.capacity,
+            item.productType,
+            item.profitCondition,
+          ]
             .filter(Boolean)
             .map((tag) => (
               <InfoTag key={tag}>{tag}</InfoTag>
             ))}
         </div>
+        {item.calculationError ? (
+          <p className="mt-2 text-xs font-bold text-red-700" role="alert">
+            {item.calculationError}
+          </p>
+        ) : null}
         <p className="mt-1.5 truncate text-xs text-inest-muted">
           Atualizado {formatDateTime(item.lastUpdatedAt)}
         </p>
@@ -73,10 +85,14 @@ export const PricingProductCard = memo(function PricingProductCard({
         <ActionButton
           variant="success"
           className="mt-1 h-9 px-3 text-xs"
-          disabled={generating}
+          disabled={generating || !item.googleSheetsReady}
           onClick={() => onGenerateOffer(item.productId)}
         >
-          {generating ? 'Preparando...' : 'Gerar Oferta'}
+          {generating
+            ? 'Preparando...'
+            : item.googleSheetsReady
+              ? 'Gerar Oferta'
+              : 'Calculo bloqueado'}
         </ActionButton>
       </div>
     </article>
@@ -92,11 +108,13 @@ function translateStatus(status: string) {
   return map[status] ?? status;
 }
 
-function formatCurrency(value: number) {
+function formatCurrency(value: number | null) {
+  if (value === null) return '--';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-function formatPercent(value: number) {
+function formatPercent(value: number | null) {
+  if (value === null) return '--';
   return new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 }).format(
     value,
   );

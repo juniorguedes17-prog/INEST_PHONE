@@ -51,14 +51,18 @@ export function PricingPageContent() {
 
   const metrics = useMemo(() => {
     const total = pricing.items.length;
-    const averageSalePrice = total
-      ? pricing.items.reduce((sum, item) => sum + item.salePrice, 0) / total
+    const readyItems = pricing.items.filter(
+      (item) => item.salePrice !== null && item.desiredNetProfit !== null && item.margin !== null,
+    );
+    const readyTotal = readyItems.length;
+    const averageSalePrice = readyTotal
+      ? readyItems.reduce((sum, item) => sum + (item.salePrice ?? 0), 0) / readyTotal
       : 0;
-    const averageProfit = total
-      ? pricing.items.reduce((sum, item) => sum + item.desiredNetProfit, 0) / total
+    const averageProfit = readyTotal
+      ? readyItems.reduce((sum, item) => sum + (item.desiredNetProfit ?? 0), 0) / readyTotal
       : 0;
-    const highestMargin = total ? Math.max(...pricing.items.map((item) => item.margin)) : 0;
-    return { total, averageSalePrice, averageProfit, highestMargin };
+    const highestMargin = readyTotal ? Math.max(...readyItems.map((item) => item.margin ?? 0)) : 0;
+    return { total, readyTotal, averageSalePrice, averageProfit, highestMargin };
   }, [pricing.items]);
 
   const lastUpdated = useMemo(
@@ -93,9 +97,7 @@ export function PricingPageContent() {
         eyebrow="Catalogo inteligente"
         title="Precificacao"
         description="Precos calculados automaticamente com Radar, Configuracoes e lucro por modelo."
-        actions={
-          pricing.success ? <StatusBadge tone="green">{pricing.success}</StatusBadge> : null
-        }
+        actions={pricing.success ? <StatusBadge tone="green">{pricing.success}</StatusBadge> : null}
       />
 
       {pricing.error ? <ErrorState title="Atencao" description={pricing.error} /> : null}
@@ -108,22 +110,21 @@ export function PricingPageContent() {
         sortOptions={sortOptions}
         pageSize={pageSize}
         recalculating={pricing.saving}
-        onSearchChange={(value) =>
-          pricing.setFilters((current) => ({ ...current, search: value }))
-        }
+        onSearchChange={(value) => pricing.setFilters((current) => ({ ...current, search: value }))}
         onRecalculate={() => void pricing.recalculate()}
         onClear={clearFilters}
-        onSortChange={(value) =>
-          pricing.setFilters((current) => ({ ...current, sort: value }))
-        }
+        onSortChange={(value) => pricing.setFilters((current) => ({ ...current, sort: value }))}
         onPageSizeChange={setPageSize}
       />
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Indicadores da Precificacao">
+      <section
+        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+        aria-label="Indicadores da Precificacao"
+      >
         <KpiCard
           label="Produtos encontrados"
           value={String(metrics.total)}
-          detail="Com preco valido no Radar"
+          detail={`${metrics.readyTotal} com lucro cadastrado`}
           tone="blue"
         />
         <KpiCard
@@ -164,9 +165,7 @@ export function PricingPageContent() {
               label="Modelo"
               value={pricing.filters.model}
               options={[['', 'Todos'], ...toOptions(models)]}
-              onChange={(value) =>
-                pricing.setFilters((current) => ({ ...current, model: value }))
-              }
+              onChange={(value) => pricing.setFilters((current) => ({ ...current, model: value }))}
             />
           </FilterSection>
 
@@ -175,9 +174,7 @@ export function PricingPageContent() {
               label="Cor"
               value={pricing.filters.color}
               options={[['', 'Todas'], ...toOptions(colors)]}
-              onChange={(value) =>
-                pricing.setFilters((current) => ({ ...current, color: value }))
-              }
+              onChange={(value) => pricing.setFilters((current) => ({ ...current, color: value }))}
             />
           </FilterSection>
 
@@ -208,9 +205,7 @@ export function PricingPageContent() {
               label="Status"
               value={pricing.filters.status}
               options={[['', 'Todos'], ...toOptions(statuses, translateStatus)]}
-              onChange={(value) =>
-                pricing.setFilters((current) => ({ ...current, status: value }))
-              }
+              onChange={(value) => pricing.setFilters((current) => ({ ...current, status: value }))}
             />
           </FilterSection>
 
@@ -307,7 +302,9 @@ function OfferDraftModal({
             Os dados abaixo foram preparados para o modulo de Ofertas, sem preenchimento manual.
           </p>
           <div className="rounded-xl border border-inest-line bg-inest-soft p-4">
-            <strong className="block font-display text-xl text-inest-text">{item.productName}</strong>
+            <strong className="block font-display text-xl text-inest-text">
+              {item.productName}
+            </strong>
             <p className="mt-2 text-sm text-inest-muted">
               {item.color} {item.capacity} - {item.deliveryTime}
             </p>
@@ -347,11 +344,13 @@ function translateStatus(status: string) {
   return map[status] ?? status;
 }
 
-function formatCurrency(value: number) {
+function formatCurrency(value: number | null) {
+  if (value === null) return '--';
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-function formatPercent(value: number) {
+function formatPercent(value: number | null) {
+  if (value === null) return '--';
   return new Intl.NumberFormat('pt-BR', { style: 'percent', maximumFractionDigits: 1 }).format(
     value,
   );

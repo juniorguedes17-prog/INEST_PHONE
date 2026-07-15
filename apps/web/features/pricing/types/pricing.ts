@@ -18,12 +18,18 @@ export interface PricingItem {
   fixedCost: number;
   freight: number;
   paymentFee: number;
-  desiredNetProfit: number;
-  margin: number;
-  salePrice: number;
-  offerPrice: number;
+  desiredNetProfit: number | null;
+  margin: number | null;
+  salePrice: number | null;
+  offerPrice: number | null;
   lastUpdatedAt: string;
   profitSource: string;
+  profitCondition: 'NOVO' | 'SEMINOVO' | 'CPO';
+  profitProductDescription: string;
+  profitRecordId: string | null;
+  profitUpdatedAt: string;
+  calculationStatus: 'ready' | 'missing_profit' | 'duplicate_profit';
+  calculationError: string | null;
   googleSheetsReady: boolean;
 }
 
