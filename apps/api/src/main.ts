@@ -87,6 +87,7 @@ async function bootstrap() {
     }
   }
 
+  logger.log('Abrindo servidor HTTP para o ambiente de execucao');
   await app.listen(PORT, '0.0.0.0');
   logger.log(`Servidor iniciado em 0.0.0.0:${PORT}/${apiPrefix}`);
   if (swaggerReady) {
