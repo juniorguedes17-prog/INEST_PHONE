@@ -6,6 +6,39 @@ import {
   ImportSearchResponse,
 } from '../types/import-radar';
 
+type CalculateImportCostPayload = Omit<
+  ImportProduct,
+  'provider' | 'priceBrl' | 'dollarQuote'
+>;
+
+function toCalculateImportCostPayload(product: ImportProduct): CalculateImportCostPayload {
+  return {
+    id: product.id,
+    name: product.name,
+    store: product.store,
+    category: product.category,
+    priceUsd: product.priceUsd,
+    productUrl: product.productUrl,
+    imageUrl: product.imageUrl,
+    brand: product.brand,
+    model: product.model,
+    capacity: product.capacity,
+    color: product.color,
+    city: product.city,
+    priceBrlSource: product.priceBrlSource,
+    availability: product.availability,
+    storeUrl: product.storeUrl,
+    consultedAt: product.consultedAt,
+    origin: product.origin,
+    externalId: product.externalId,
+    minimumPriceUsd: product.minimumPriceUsd,
+    averagePriceUsd: product.averagePriceUsd,
+    maximumPriceUsd: product.maximumPriceUsd,
+    storeCount: product.storeCount,
+    offerCount: product.offerCount,
+  };
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as unknown;
 
@@ -45,7 +78,7 @@ export async function calculateImportCost(product: ImportProduct): Promise<Impor
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(product),
+    body: JSON.stringify(toCalculateImportCostPayload(product)),
   });
   return parseResponse<ImportCalculation>(response);
 }
