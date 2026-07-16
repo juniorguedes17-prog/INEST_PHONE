@@ -187,7 +187,7 @@ export function ParaguayRadarOrigin() {
       const pricing = await calculateTemporaryImportPricing(payload);
       window.sessionStorage.setItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY, JSON.stringify(pricing));
       setCalculation(null);
-      router.push('/pricing');
+      router.push('/pricing?temporaryImport=py');
     } catch (pricingError) {
       setError(
         pricingError instanceof Error

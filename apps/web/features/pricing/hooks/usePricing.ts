@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { generateOfferDraft, listPricing, recalculatePricing } from '../services/pricing-service';
 import {
   OfferDraft,
@@ -24,6 +25,7 @@ const initialFilters: PricingFilters = {
 };
 
 export function usePricing() {
+  const pathname = usePathname();
   const [items, setItems] = useState<PricingItem[]>([]);
   const [filters, setFilters] = useState<PricingFilters>(initialFilters);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ export function usePricing() {
     } catch {
       setError('Nao foi possivel carregar a precificacao temporaria do Radar Paraguai.');
     }
-  }, []);
+  }, [pathname]);
 
   const load = useCallback(async () => {
     setLoading(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ActionButton, ContentContainer, SearchInput } from '@/components/shared';
 import { logout } from '@/services/auth-service';
@@ -10,10 +11,29 @@ interface HeaderProps {
   onOpenMenu: () => void;
 }
 
+type AppTheme = 'light' | 'dark';
+
+const THEME_STORAGE_KEY = 'inest.theme';
+
 export function Header({ onOpenMenu }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const item = getNavigationItem(pathname);
+  const [theme, setTheme] = useState<AppTheme>('light');
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    const nextTheme: AppTheme = storedTheme === 'dark' ? 'dark' : 'light';
+    document.documentElement.dataset.theme = nextTheme;
+    setTheme(nextTheme);
+  }, []);
+
+  function toggleTheme() {
+    const nextTheme: AppTheme = theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nextTheme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    setTheme(nextTheme);
+  }
 
   async function handleLogout() {
     await logout();
@@ -62,8 +82,9 @@ export function Header({ onOpenMenu }: HeaderProps) {
           />
           <button
             type="button"
+            onClick={toggleTheme}
             aria-label="Alternar tema"
-            title="Tema claro/escuro preparado"
+            title={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
             className="hidden h-10 w-10 place-items-center rounded-lg border border-inest-line bg-white text-sm font-black text-inest-text transition-colors hover:bg-inest-soft sm:grid"
           >
             O
