@@ -1,5 +1,6 @@
 import { env } from '@/lib/env';
 import { LoginResponse } from '@/types/auth';
+import { clearAccessToken, persistAccessToken } from './authenticated-fetch';
 
 interface LoginInput {
   email: string;
@@ -34,7 +35,9 @@ export async function login(input: LoginInput): Promise<LoginResponse> {
     body: JSON.stringify(input),
   });
 
-  return parseResponse<LoginResponse>(response);
+  const result = await parseResponse<LoginResponse>(response);
+  persistAccessToken(result.tokens.accessToken);
+  return result;
 }
 
 export async function logout(): Promise<void> {
@@ -46,6 +49,7 @@ export async function logout(): Promise<void> {
     },
     body: JSON.stringify({}),
   });
+  clearAccessToken();
 }
 
 export async function refreshSession(): Promise<LoginResponse> {
@@ -58,5 +62,7 @@ export async function refreshSession(): Promise<LoginResponse> {
     body: JSON.stringify({}),
   });
 
-  return parseResponse<LoginResponse>(response);
+  const result = await parseResponse<LoginResponse>(response);
+  persistAccessToken(result.tokens.accessToken);
+  return result;
 }

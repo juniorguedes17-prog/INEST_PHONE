@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
   ProductFilters,
   ProductFormPayload,
@@ -32,23 +33,18 @@ function buildQuery(filters: ProductFilters) {
 
 export async function listProducts(filters: ProductFilters): Promise<ProductItem[]> {
   const query = buildQuery(filters);
-  const response = await fetch(`${env.apiUrl}/products${query ? `?${query}` : ''}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/products${query ? `?${query}` : ''}`);
   return parseResponse<ProductItem[]>(response);
 }
 
 export async function getProductReferences(): Promise<ProductReferences> {
-  const response = await fetch(`${env.apiUrl}/products/references`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/products/references`);
   return parseResponse<ProductReferences>(response);
 }
 
 export async function createProduct(payload: ProductFormPayload): Promise<ProductItem> {
-  const response = await fetch(`${env.apiUrl}/products`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/products`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -56,9 +52,8 @@ export async function createProduct(payload: ProductFormPayload): Promise<Produc
 }
 
 export async function updateProduct(id: string, payload: ProductFormPayload): Promise<ProductItem> {
-  const response = await fetch(`${env.apiUrl}/products/${id}`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/products/${id}`, {
     method: 'PATCH',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -66,9 +61,8 @@ export async function updateProduct(id: string, payload: ProductFormPayload): Pr
 }
 
 export async function deleteProduct(id: string): Promise<ProductItem> {
-  const response = await fetch(`${env.apiUrl}/products/${id}`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/products/${id}`, {
     method: 'DELETE',
-    credentials: 'include',
   });
   return parseResponse<ProductItem>(response);
 }

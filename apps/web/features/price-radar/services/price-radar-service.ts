@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
   CsvImportResult,
   PriceQuoteFormPayload,
@@ -33,24 +34,19 @@ function buildQuery(filters: Partial<PriceRadarFilters>) {
 
 export async function listPriceQuotes(filters: PriceRadarFilters): Promise<PriceQuoteItem[]> {
   const query = buildQuery(filters);
-  const response = await fetch(`${env.apiUrl}/price-radar/quotes${query ? `?${query}` : ''}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/quotes${query ? `?${query}` : ''}`);
   return parseResponse<PriceQuoteItem[]>(response);
 }
 
 export async function getPriceRadarKpis(filters: PriceRadarFilters): Promise<PriceRadarKpis> {
   const query = buildQuery(filters);
-  const response = await fetch(`${env.apiUrl}/price-radar/kpis${query ? `?${query}` : ''}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/kpis${query ? `?${query}` : ''}`);
   return parseResponse<PriceRadarKpis>(response);
 }
 
 export async function createPriceQuote(payload: PriceQuoteFormPayload): Promise<PriceQuoteItem> {
-  const response = await fetch(`${env.apiUrl}/price-radar/quotes`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/quotes`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -61,9 +57,8 @@ export async function updatePriceQuote(
   id: string,
   payload: PriceQuoteFormPayload,
 ): Promise<PriceQuoteItem> {
-  const response = await fetch(`${env.apiUrl}/price-radar/quotes/${id}`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/quotes/${id}`, {
     method: 'PATCH',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -71,17 +66,15 @@ export async function updatePriceQuote(
 }
 
 export async function hidePriceQuote(id: string): Promise<PriceQuoteItem> {
-  const response = await fetch(`${env.apiUrl}/price-radar/quotes/${id}/hide`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/quotes/${id}/hide`, {
     method: 'PATCH',
-    credentials: 'include',
   });
   return parseResponse<PriceQuoteItem>(response);
 }
 
 export async function importPriceRadarCsv(csvContent: string): Promise<CsvImportResult> {
-  const response = await fetch(`${env.apiUrl}/price-radar/import/csv`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/import/csv`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ csvContent }),
   });

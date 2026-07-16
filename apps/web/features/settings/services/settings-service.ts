@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import { SettingsPayload } from '../types/settings';
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -16,17 +17,14 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getSettings(): Promise<SettingsPayload> {
-  const response = await fetch(`${env.apiUrl}/settings`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/settings`);
 
   return parseResponse<SettingsPayload>(response);
 }
 
 export async function updateSettings(settings: SettingsPayload): Promise<SettingsPayload> {
-  const response = await fetch(`${env.apiUrl}/settings`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/settings`, {
     method: 'PATCH',
-    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -37,9 +35,8 @@ export async function updateSettings(settings: SettingsPayload): Promise<Setting
 }
 
 export async function resetSettingsDefaults(): Promise<SettingsPayload> {
-  const response = await fetch(`${env.apiUrl}/settings/reset-defaults`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/settings/reset-defaults`, {
     method: 'POST',
-    credentials: 'include',
   });
 
   return parseResponse<SettingsPayload>(response);

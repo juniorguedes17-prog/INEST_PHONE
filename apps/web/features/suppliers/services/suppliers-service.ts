@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import { SupplierFilters, SupplierFormPayload, SupplierItem } from '../types/suppliers';
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -27,23 +28,18 @@ function buildQuery(filters: SupplierFilters) {
 
 export async function listSuppliers(filters: SupplierFilters): Promise<SupplierItem[]> {
   const query = buildQuery(filters);
-  const response = await fetch(`${env.apiUrl}/suppliers${query ? `?${query}` : ''}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/suppliers${query ? `?${query}` : ''}`);
   return parseResponse<SupplierItem[]>(response);
 }
 
 export async function getSupplier(id: string): Promise<SupplierItem> {
-  const response = await fetch(`${env.apiUrl}/suppliers/${id}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/suppliers/${id}`);
   return parseResponse<SupplierItem>(response);
 }
 
 export async function createSupplier(payload: SupplierFormPayload): Promise<SupplierItem> {
-  const response = await fetch(`${env.apiUrl}/suppliers`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/suppliers`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -54,9 +50,8 @@ export async function updateSupplier(
   id: string,
   payload: SupplierFormPayload,
 ): Promise<SupplierItem> {
-  const response = await fetch(`${env.apiUrl}/suppliers/${id}`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/suppliers/${id}`, {
     method: 'PATCH',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -64,9 +59,8 @@ export async function updateSupplier(
 }
 
 export async function deleteSupplier(id: string): Promise<SupplierItem> {
-  const response = await fetch(`${env.apiUrl}/suppliers/${id}`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/suppliers/${id}`, {
     method: 'DELETE',
-    credentials: 'include',
   });
   return parseResponse<SupplierItem>(response);
 }

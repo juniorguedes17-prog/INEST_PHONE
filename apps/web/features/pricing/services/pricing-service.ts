@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
   OfferDraft,
   PricingFilters,
@@ -33,16 +34,13 @@ function buildQuery(filters: PricingFilters) {
 
 export async function listPricing(filters: PricingFilters): Promise<PricingItem[]> {
   const query = buildQuery(filters);
-  const response = await fetch(`${env.apiUrl}/pricing${query ? `?${query}` : ''}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/pricing${query ? `?${query}` : ''}`);
   return parseResponse<PricingItem[]>(response);
 }
 
 export async function recalculatePricing(filters: PricingFilters): Promise<PricingItem[]> {
-  const response = await fetch(`${env.apiUrl}/pricing/recalculate`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/pricing/recalculate`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(filters),
   });
@@ -50,9 +48,8 @@ export async function recalculatePricing(filters: PricingFilters): Promise<Prici
 }
 
 export async function generateOfferDraft(productId: string): Promise<OfferDraft> {
-  const response = await fetch(`${env.apiUrl}/pricing/generate-offer`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/pricing/generate-offer`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ productId }),
   });
@@ -62,9 +59,8 @@ export async function generateOfferDraft(productId: string): Promise<OfferDraft>
 export async function calculateTemporaryImportPricing(
   payload: TemporaryImportPricingRequest,
 ): Promise<TemporaryImportPricing> {
-  const response = await fetch(`${env.apiUrl}/pricing/temporary-import`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/pricing/temporary-import`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });

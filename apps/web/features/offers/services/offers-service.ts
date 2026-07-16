@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import { PricingItem } from '@/features/pricing/types/pricing';
 import { listPricing } from '@/features/pricing/services/pricing-service';
 import { CommercialTemplate, GenerateOfferPayload, OfferItem } from '../types/offers';
@@ -33,23 +34,18 @@ export async function listOfferProducts(): Promise<PricingItem[]> {
 }
 
 export async function listTemplates(): Promise<CommercialTemplate[]> {
-  const response = await fetch(`${env.apiUrl}/offers/templates`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/templates`);
   return parseResponse<CommercialTemplate[]>(response);
 }
 
 export async function listOffers(): Promise<OfferItem[]> {
-  const response = await fetch(`${env.apiUrl}/offers`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/offers`);
   return parseResponse<OfferItem[]>(response);
 }
 
 export async function generateOffer(payload: GenerateOfferPayload): Promise<OfferItem> {
-  const response = await fetch(`${env.apiUrl}/offers/generate`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/generate`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
@@ -57,9 +53,8 @@ export async function generateOffer(payload: GenerateOfferPayload): Promise<Offe
 }
 
 export async function duplicateOffer(id: string): Promise<OfferItem> {
-  const response = await fetch(`${env.apiUrl}/offers/${id}/duplicate`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/${id}/duplicate`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason: 'Duplicado pela interface' }),
   });
@@ -67,25 +62,22 @@ export async function duplicateOffer(id: string): Promise<OfferItem> {
 }
 
 export async function deleteOffer(id: string): Promise<OfferItem> {
-  const response = await fetch(`${env.apiUrl}/offers/${id}`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/${id}`, {
     method: 'DELETE',
-    credentials: 'include',
   });
   return parseResponse<OfferItem>(response);
 }
 
 export async function registerOfferCopy(id: string): Promise<{ success: boolean }> {
-  const response = await fetch(`${env.apiUrl}/offers/${id}/copy`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/${id}/copy`, {
     method: 'POST',
-    credentials: 'include',
   });
   return parseResponse<{ success: boolean }>(response);
 }
 
 export async function shareOffer(id: string): Promise<{ whatsappUrl: string }> {
-  const response = await fetch(`${env.apiUrl}/offers/${id}/share`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/${id}/share`, {
     method: 'POST',
-    credentials: 'include',
   });
   return parseResponse<{ whatsappUrl: string }>(response);
 }

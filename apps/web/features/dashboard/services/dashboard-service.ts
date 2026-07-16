@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import { DashboardData, DashboardFilters } from '../types/dashboard';
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -27,16 +28,13 @@ function buildQuery(filters: DashboardFilters) {
 
 export async function getDashboard(filters: DashboardFilters): Promise<DashboardData> {
   const query = buildQuery(filters);
-  const response = await fetch(`${env.apiUrl}/dashboard${query ? `?${query}` : ''}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/dashboard${query ? `?${query}` : ''}`);
   return parseResponse<DashboardData>(response);
 }
 
 export async function syncDashboardSource(): Promise<void> {
-  const response = await fetch(`${env.apiUrl}/customers/sync`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/customers/sync`, {
     method: 'POST',
-    credentials: 'include',
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { message?: string } | null;

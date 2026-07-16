@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import { ExportArtifact, IntegrationJob, IntegrationStatus } from '../types/integrations';
 
 async function parseResponse<T>(response: Response): Promise<T> {
@@ -16,30 +17,27 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 export async function getIntegrationStatus(): Promise<IntegrationStatus[]> {
-  const response = await fetch(`${env.apiUrl}/integrations/status`, { credentials: 'include' });
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/status`);
   return parseResponse<IntegrationStatus[]>(response);
 }
 
 export async function testIntegration(provider: string) {
-  const response = await fetch(`${env.apiUrl}/integrations/${provider}/test`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/${provider}/test`, {
     method: 'POST',
-    credentials: 'include',
   });
   return parseResponse<{ success: boolean; message: string; durationMs?: number }>(response);
 }
 
 export async function syncIntegration(provider: string) {
-  const response = await fetch(`${env.apiUrl}/integrations/${provider}/sync`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/${provider}/sync`, {
     method: 'POST',
-    credentials: 'include',
   });
   return parseResponse<{ success: boolean; message: string; durationMs?: number }>(response);
 }
 
 export async function exportIntegration(format: string, dataset: string): Promise<ExportArtifact> {
-  const response = await fetch(`${env.apiUrl}/integrations/export`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/export`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ format, dataset }),
   });
@@ -47,9 +45,8 @@ export async function exportIntegration(format: string, dataset: string): Promis
 }
 
 export async function importIntegration(source: string, content: string) {
-  const response = await fetch(`${env.apiUrl}/integrations/import`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/import`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ source, content }),
   });
@@ -57,19 +54,18 @@ export async function importIntegration(source: string, content: string) {
 }
 
 export async function getIntegrationJobs(): Promise<IntegrationJob[]> {
-  const response = await fetch(`${env.apiUrl}/integrations/jobs`, { credentials: 'include' });
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/jobs`);
   return parseResponse<IntegrationJob[]>(response);
 }
 
 export async function getIntegrationHistory(): Promise<unknown[]> {
-  const response = await fetch(`${env.apiUrl}/integrations/history`, { credentials: 'include' });
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/history`);
   return parseResponse<unknown[]>(response);
 }
 
 export async function clearIntegrationCache() {
-  const response = await fetch(`${env.apiUrl}/integrations/cache`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/integrations/cache`, {
     method: 'DELETE',
-    credentials: 'include',
   });
   return parseResponse<{ success: boolean; message: string }>(response);
 }

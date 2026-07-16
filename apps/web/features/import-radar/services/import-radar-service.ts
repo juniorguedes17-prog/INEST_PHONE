@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
   ImportCalculation,
   ImportProduct,
@@ -67,16 +68,13 @@ export async function searchImportProducts(
   filters: ImportRadarFilters,
 ): Promise<ImportSearchResponse> {
   const query = buildQuery(filters);
-  const response = await fetch(`${env.apiUrl}/import-radar/search${query ? `?${query}` : ''}`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/search${query ? `?${query}` : ''}`);
   return parseResponse<ImportSearchResponse>(response);
 }
 
 export async function calculateImportCost(product: ImportProduct): Promise<ImportCalculation> {
-  const response = await fetch(`${env.apiUrl}/import-radar/calculate`, {
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/calculate`, {
     method: 'POST',
-    credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toCalculateImportCostPayload(product)),
   });
@@ -84,8 +82,6 @@ export async function calculateImportCost(product: ImportProduct): Promise<Impor
 }
 
 export async function listImportHistory(): Promise<unknown[]> {
-  const response = await fetch(`${env.apiUrl}/import-radar/history`, {
-    credentials: 'include',
-  });
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/history`);
   return parseResponse<unknown[]>(response);
 }
