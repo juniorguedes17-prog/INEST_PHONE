@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { generateOfferDraft, listPricing, recalculatePricing } from '../services/pricing-service';
-import { OfferDraft, PricingFilters, PricingItem } from '../types/pricing';
+import {
+  OfferDraft,
+  PricingFilters,
+  PricingItem,
+  TemporaryImportPricing,
+  TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
+} from '../types/pricing';
 
 const initialFilters: PricingFilters = {
   search: '',
@@ -25,6 +31,21 @@ export function usePricing() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
+  const [temporaryImportPricing, setTemporaryImportPricing] =
+    useState<TemporaryImportPricing | null>(null);
+
+  useEffect(() => {
+    const stored = window.sessionStorage.getItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY);
+    if (!stored) return;
+
+    window.sessionStorage.removeItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY);
+    try {
+      setTemporaryImportPricing(JSON.parse(stored) as TemporaryImportPricing);
+      setSuccess('Precificacao temporaria do Radar Paraguai carregada.');
+    } catch {
+      setError('Nao foi possivel carregar a precificacao temporaria do Radar Paraguai.');
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,6 +102,12 @@ export function usePricing() {
     }
   }
 
+  function generateTemporaryOffer() {
+    if (!temporaryImportPricing) return;
+    setOfferDraft(temporaryImportPricing.offerDraft);
+    setSuccess('Oferta preparada com os dados da precificacao temporaria.');
+  }
+
   return {
     items,
     filters,
@@ -91,7 +118,9 @@ export function usePricing() {
     success,
     offerDraft,
     setOfferDraft,
+    temporaryImportPricing,
     recalculate,
     generateOffer,
+    generateTemporaryOffer,
   };
 }

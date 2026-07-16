@@ -234,21 +234,32 @@ export function PricingPageContent() {
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
           <div className="grid gap-3">
             {pricing.loading ? <LoadingState /> : null}
-            {!pricing.loading && !pricing.items.length ? (
+            {!pricing.loading && !pricing.items.length && !pricing.temporaryImportPricing ? (
               <EmptyState
                 title="Nenhum produto encontrado."
                 description="O produto precisa possuir preco valido no Radar para aparecer na Precificacao."
               />
             ) : null}
             {!pricing.loading
-              ? paginatedItems.map((item) => (
+              ? (
+                  <>
+                    {pricing.temporaryImportPricing ? (
+                      <TemporaryImportPricingCard
+                        item={pricing.temporaryImportPricing}
+                        generating={pricing.saving}
+                        onGenerateOffer={pricing.generateTemporaryOffer}
+                      />
+                    ) : null}
+                    {paginatedItems.map((item) => (
                   <PricingProductCard
                     key={item.productId}
                     item={item}
                     generating={pricing.saving}
                     onGenerateOffer={(productId) => void pricing.generateOffer(productId)}
                   />
-                ))
+                    ))}
+                  </>
+                )
               : null}
           </div>
 
@@ -274,6 +285,63 @@ export function PricingPageContent() {
         onClose={() => pricing.setOfferDraft(null)}
       />
     </div>
+  );
+}
+
+function TemporaryImportPricingCard({
+  item,
+  generating,
+  onGenerateOffer,
+}: {
+  item: NonNullable<ReturnType<typeof usePricing>['temporaryImportPricing']>;
+  generating: boolean;
+  onGenerateOffer: () => void;
+}) {
+  return (
+    <article className="grid w-full gap-3 rounded-xl border border-blue-200 bg-white p-3 shadow-card md:grid-cols-[64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+      <div className="grid h-16 w-16 place-items-center rounded-lg bg-blue-50 font-display text-lg font-black text-inest-blue">
+        PY
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
+            {item.product.name}
+          </h3>
+          <StatusBadge tone="blue">Paraguai</StatusBadge>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {[item.product.category, item.product.model, item.product.color, item.product.capacity]
+            .filter(Boolean)
+            .map((tag) => (
+              <StatusBadge key={tag} tone="gray">
+                {tag}
+              </StatusBadge>
+            ))}
+        </div>
+        <p className="mt-1.5 text-xs text-inest-muted">
+          Lucro por modelo: {item.profit.condition} - {item.profit.productDescription}
+        </p>
+      </div>
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
+        <strong className="mt-0.5 block truncate text-sm text-inest-text">{item.product.supplier}</strong>
+        <p className="mt-1 truncate text-xs text-inest-muted">{item.product.city || item.product.store}</p>
+      </div>
+      <div className="min-w-0 md:text-right">
+        <p className="text-[10px] font-black uppercase text-inest-muted">Custo final</p>
+        <strong className="mt-0.5 block text-sm text-inest-text">{formatCurrency(item.importCosts.totalCost)}</strong>
+        <p className="mt-2 text-[10px] font-black uppercase text-inest-muted">Lucro</p>
+        <strong className="mt-0.5 block text-sm text-inest-green">{formatCurrency(item.desiredNetProfit)}</strong>
+      </div>
+      <div className="flex min-w-0 flex-col items-start gap-1 md:items-end">
+        <span className="text-[10px] font-black uppercase text-inest-muted">Preco de venda</span>
+        <strong className="font-display text-2xl font-black text-inest-text">{formatCurrency(item.salePrice)}</strong>
+        <span className="text-xs font-bold text-inest-muted">Margem {formatPercent(item.margin)}</span>
+        <ActionButton variant="success" className="mt-1 h-9 px-3 text-xs" disabled={generating} onClick={onGenerateOffer}>
+          {generating ? 'Preparando...' : 'Gerar Oferta'}
+        </ActionButton>
+      </div>
+    </article>
   );
 }
 

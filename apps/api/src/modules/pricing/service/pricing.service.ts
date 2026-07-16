@@ -1,7 +1,12 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { SettingsService } from '../../settings/service/settings.service';
-import { GenerateOfferDraftDto, PricingQueryDto, UpdateModelProfitDto } from '../dto/pricing.dto';
+import {
+  GenerateOfferDraftDto,
+  PricingQueryDto,
+  TemporaryImportPricingDto,
+  UpdateModelProfitDto,
+} from '../dto/pricing.dto';
 import { PricingPriceHistoryRecord } from '../interfaces/pricing-prisma.interface';
 import { ProfitCondition } from '../interfaces/profit-sheet.interface';
 import {
@@ -183,6 +188,100 @@ export class PricingService {
     return draft;
   }
 
+  async calculateTemporaryImport(dto: TemporaryImportPricingDto) {
+    const [settings, pricingConfigurations, profitCatalog] = await Promise.all([
+      this.settingsService.getSettings(),
+      this.pricingRepository.listPricingConfigurations(),
+      this.profitProvider.getCatalog(),
+    ]);
+    const profitCondition = this.resolveTemporaryProfitCondition(dto);
+    const profitProductDescription = this.getTemporaryProfitProductDescription(dto);
+    const profitLookup = lookupProfit(profitCatalog, profitCondition, profitProductDescription);
+
+    if (profitLookup.status === 'not_found') {
+      throw new BadRequestException(
+        'Lucro liquido nao cadastrado para este modelo e condicao.',
+      );
+    }
+    if (profitLookup.status === 'duplicate') {
+      throw new BadRequestException(
+        'Cadastro duplicado de lucro liquido para este modelo e condicao.',
+      );
+    }
+
+    const costProduct = dto.totalCost;
+    const fixedCost = toNumber(settings.financial.globalFixedCost);
+    const freight = toNumber(settings.financial.defaultFreight);
+    const paymentFee = toNumber(settings.financial.defaultPaymentFee);
+    const desiredNetProfit = profitLookup.record.netProfit;
+    const salePrice = costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
+    const offerIncrement = toNumber(
+      pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
+    );
+    const offerPrice = salePrice + offerIncrement;
+    const productName = dto.productName.trim();
+
+    return {
+      temporary: true,
+      origin: 'PY' as const,
+      product: {
+        id: dto.productId,
+        name: productName,
+        category: dto.category,
+        brand: dto.brand ?? '',
+        model: dto.model ?? '',
+        capacity: dto.capacity ?? '',
+        color: dto.color ?? '',
+        supplier: dto.supplier,
+        store: dto.store,
+        city: dto.city ?? '',
+        productUrl: dto.productUrl,
+        priceUsd: dto.priceUsd,
+      },
+      importCosts: {
+        dollarQuote: dto.dollarQuote,
+        convertedPrice: dto.convertedPrice,
+        cdeExit: dto.cdeExit,
+        redirectCost: dto.redirectCost,
+        brazilDispatch: dto.brazilDispatch,
+        invoiceTax: dto.invoiceTax,
+        correiosLabel: dto.correiosLabel,
+        totalCost: costProduct,
+      },
+      pricingCosts: {
+        fixedCost,
+        freight,
+        paymentFee,
+        offerIncrement,
+      },
+      desiredNetProfit,
+      margin: desiredNetProfit / salePrice,
+      salePrice,
+      offerPrice,
+      profit: {
+        source: 'google_sheets_profit',
+        condition: profitCondition,
+        productDescription: profitProductDescription,
+        recordId: profitLookup.record.productId,
+        updatedAt: profitCatalog.fetchedAt,
+      },
+      offerDraft: {
+        targetModule: 'offers',
+        route: '/offers',
+        payload: {
+          productId: `temporary-py-${dto.productId}`,
+          productName,
+          color: dto.color ?? '',
+          capacity: dto.capacity ?? '',
+          salePrice,
+          offerPrice,
+          deliveryTime: '',
+          warranty: 'Garantia padrao iNest Phone',
+        },
+      },
+    };
+  }
+
   private getBestQuotesByProduct(quotes: PricingPriceHistoryRecord[]) {
     const bestQuotes = new Map<string, PricingPriceHistoryRecord>();
 
@@ -298,6 +397,26 @@ export class PricingService {
     if (productType === 'APPLE_CPO') return 'CPO';
     if (productType === 'IPHONE_USED') return 'SEMINOVO';
     return 'NOVO';
+  }
+
+  private resolveTemporaryProfitCondition(dto: TemporaryImportPricingDto): ProfitCondition {
+    if (dto.condition) return dto.condition;
+
+    const productReference = `${dto.productName} ${dto.model ?? ''}`.toUpperCase();
+    if (productReference.includes('CPO')) return 'CPO';
+    if (productReference.includes('SEMINOVO')) return 'SEMINOVO';
+    return this.getProfitCondition(dto.matchedProductType ?? '');
+  }
+
+  private getTemporaryProfitProductDescription(dto: TemporaryImportPricingDto) {
+    const model = (dto.model?.trim() || dto.productName.trim()).trim();
+    const capacity = dto.capacity?.trim() ?? '';
+    if (!capacity) return model;
+
+    const modelTokens = normalizeProfitProductDescription(model).split(' ');
+    const capacityTokens = normalizeProfitProductDescription(capacity).split(' ');
+    const containsCapacity = capacityTokens.every((token) => modelTokens.includes(token));
+    return containsCapacity ? model : `${model} ${capacity}`.trim();
   }
 
   private mapItem() {

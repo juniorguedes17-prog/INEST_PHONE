@@ -1,5 +1,11 @@
 import { env } from '@/lib/env';
-import { OfferDraft, PricingFilters, PricingItem } from '../types/pricing';
+import {
+  OfferDraft,
+  PricingFilters,
+  PricingItem,
+  TemporaryImportPricing,
+  TemporaryImportPricingRequest,
+} from '../types/pricing';
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as unknown;
@@ -51,4 +57,16 @@ export async function generateOfferDraft(productId: string): Promise<OfferDraft>
     body: JSON.stringify({ productId }),
   });
   return parseResponse<OfferDraft>(response);
+}
+
+export async function calculateTemporaryImportPricing(
+  payload: TemporaryImportPricingRequest,
+): Promise<TemporaryImportPricing> {
+  const response = await fetch(`${env.apiUrl}/pricing/temporary-import`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<TemporaryImportPricing>(response);
 }

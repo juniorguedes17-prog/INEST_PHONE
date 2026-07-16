@@ -3,7 +3,12 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
-import { GenerateOfferDraftDto, PricingQueryDto, UpdateModelProfitDto } from '../dto/pricing.dto';
+import {
+  GenerateOfferDraftDto,
+  PricingQueryDto,
+  TemporaryImportPricingDto,
+  UpdateModelProfitDto,
+} from '../dto/pricing.dto';
 import { PricingService } from '../service/pricing.service';
 
 @ApiTags('Pricing')
@@ -41,5 +46,11 @@ export class PricingController {
   @ApiOperation({ summary: 'Gera rascunho de oferta com dados calculados.' })
   generateOfferDraft(@Body() dto: GenerateOfferDraftDto, @CurrentUser() user: AuthenticatedUser) {
     return this.pricingService.generateOfferDraft(dto, user);
+  }
+
+  @Post('temporary-import')
+  @ApiOperation({ summary: 'Calcula precificacao temporaria para um item do Radar Paraguai.' })
+  calculateTemporaryImport(@Body() dto: TemporaryImportPricingDto) {
+    return this.pricingService.calculateTemporaryImport(dto);
   }
 }

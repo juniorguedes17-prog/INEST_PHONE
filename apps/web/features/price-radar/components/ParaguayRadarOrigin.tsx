@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ActionButton,
   Drawer,
@@ -23,6 +24,11 @@ import {
   ImportCalculation,
   ImportProduct,
 } from '@/features/import-radar/types/import-radar';
+import { calculateTemporaryImportPricing } from '@/features/pricing/services/pricing-service';
+import {
+  TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
+  TemporaryImportPricingRequest,
+} from '@/features/pricing/types/pricing';
 
 type SortMode = 'lowest' | 'highest' | 'recent' | 'stores' | 'name';
 
@@ -40,6 +46,7 @@ const emptyFilters = {
 };
 
 export function ParaguayRadarOrigin() {
+  const router = useRouter();
   const [search, setSearch] = useState('');
   const [submittedSearch, setSubmittedSearch] = useState('');
   const [products, setProducts] = useState<ImportProduct[]>([]);
@@ -49,6 +56,7 @@ export function ParaguayRadarOrigin() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [calculating, setCalculating] = useState(false);
+  const [sendingToPricing, setSendingToPricing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [calculation, setCalculation] = useState<ImportCalculation | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -166,6 +174,28 @@ export function ParaguayRadarOrigin() {
       );
     } finally {
       setCalculating(false);
+    }
+  }
+
+  async function sendToPricing() {
+    if (!calculation) return;
+
+    setSendingToPricing(true);
+    setError(null);
+    try {
+      const payload = buildTemporaryPricingRequest(calculation);
+      const pricing = await calculateTemporaryImportPricing(payload);
+      window.sessionStorage.setItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY, JSON.stringify(pricing));
+      setCalculation(null);
+      router.push('/pricing');
+    } catch (pricingError) {
+      setError(
+        pricingError instanceof Error
+          ? pricingError.message
+          : 'Nao foi possivel enviar este produto para a Precificacao.',
+      );
+    } finally {
+      setSendingToPricing(false);
     }
   }
 
@@ -314,7 +344,12 @@ export function ParaguayRadarOrigin() {
         </div>
       </Drawer>
 
-      <CalculationModal calculation={calculation} onClose={() => setCalculation(null)} />
+      <CalculationModal
+        calculation={calculation}
+        sending={sendingToPricing}
+        onClose={() => setCalculation(null)}
+        onSendToPricing={() => void sendToPricing()}
+      />
     </div>
   );
 }
@@ -395,7 +430,17 @@ function ParaguayFilters({ filters, options, onChange }: { filters: typeof empty
   );
 }
 
-function CalculationModal({ calculation, onClose }: { calculation: ImportCalculation | null; onClose: () => void }) {
+function CalculationModal({
+  calculation,
+  sending,
+  onClose,
+  onSendToPricing,
+}: {
+  calculation: ImportCalculation | null;
+  sending: boolean;
+  onClose: () => void;
+  onSendToPricing: () => void;
+}) {
   return (
     <Modal open={Boolean(calculation)} title="Custo estimado - Paraguai" onClose={onClose}>
       {calculation ? (
@@ -410,11 +455,45 @@ function CalculationModal({ calculation, onClose }: { calculation: ImportCalcula
             <Cost label="Etiqueta" value={calculation.breakdown.correiosLabel} />
           </dl>
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><span className="block text-xs font-bold uppercase text-blue-700">Total estimado</span><strong className="text-2xl font-black text-blue-950">{formatBrl(calculation.total)}</strong></div>
-          <ActionButton className="min-h-11" onClick={onClose}>Fechar</ActionButton>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <ActionButton variant="secondary" className="min-h-11" onClick={onClose} disabled={sending}>
+              Fechar
+            </ActionButton>
+            <ActionButton className="min-h-11" onClick={onSendToPricing} disabled={sending}>
+              {sending ? 'Preparando...' : 'Enviar para Precificacao'}
+            </ActionButton>
+          </div>
         </div>
       ) : null}
     </Modal>
   );
+}
+
+function buildTemporaryPricingRequest(calculation: ImportCalculation): TemporaryImportPricingRequest {
+  const product = calculation.product;
+  return {
+    productId: product.id,
+    productName: product.name,
+    category: product.category || 'Sem categoria',
+    supplier: product.store || product.provider,
+    store: product.store || product.provider,
+    productUrl: product.productUrl,
+    priceUsd: product.priceUsd,
+    dollarQuote: calculation.dollarQuote,
+    convertedPrice: calculation.breakdown.convertedPrice,
+    cdeExit: calculation.breakdown.cdeExit,
+    redirectCost: calculation.breakdown.redirectCost,
+    brazilDispatch: calculation.breakdown.brazilDispatch,
+    invoiceTax: calculation.breakdown.invoiceTax,
+    correiosLabel: calculation.breakdown.correiosLabel,
+    totalCost: calculation.total,
+    brand: product.brand,
+    model: product.name,
+    capacity: product.capacity,
+    color: product.color,
+    city: product.city,
+    matchedProductType: calculation.matchedProductType,
+  };
 }
 
 const filterLabels = { category: 'Categoria', brand: 'Marca', model: 'Modelo', color: 'Cor', capacity: 'Capacidade', store: 'Loja', city: 'Cidade', availability: 'Disponibilidade' };
