@@ -76,6 +76,14 @@ describe('ComprasParaguaiProvider parsers', () => {
     });
   });
 
+  it('preserva chip, tela e memoria do MacBook para a consulta exata de lucro', () => {
+    expect(inferProductAttributes('Notebook Apple MacBook Air M5 13 16GB 512GB')).toMatchObject({
+      category: 'MacBook',
+      model: 'MacBook Air M5 13 16GB/512GB',
+      capacity: '16GB/512GB',
+    });
+  });
+
   it('retorna falha controlada quando a fonte esta indisponivel', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
     const provider = new ComprasParaguaiProvider();

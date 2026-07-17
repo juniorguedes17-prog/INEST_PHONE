@@ -49,6 +49,7 @@ export interface PricingFilters {
 export interface OfferDraft {
   targetModule: string;
   route: string;
+  productType?: string;
   payload: {
     productId: string;
     productName: string;
@@ -134,3 +135,4 @@ export interface TemporaryImportPricing {
 }
 
 export const TEMPORARY_IMPORT_PRICING_STORAGE_KEY = 'inest.temporary-import-pricing';
+export const TEMPORARY_OFFER_DRAFT_STORAGE_KEY = 'inest.temporary-offer-draft';

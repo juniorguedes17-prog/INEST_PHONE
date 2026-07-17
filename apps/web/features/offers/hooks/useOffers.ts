@@ -12,7 +12,11 @@ import {
   shareOffer,
 } from '../services/offers-service';
 import { CommercialTemplate, OfferItem } from '../types/offers';
-import { PricingItem } from '@/features/pricing/types/pricing';
+import {
+  OfferDraft,
+  PricingItem,
+  TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
+} from '@/features/pricing/types/pricing';
 
 export function useOffers(initialProductId?: string | null) {
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
@@ -25,6 +29,20 @@ export function useOffers(initialProductId?: string | null) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [temporaryOfferDraft, setTemporaryOfferDraft] = useState<OfferDraft | null>(null);
+  const [temporaryOffer, setTemporaryOffer] = useState<OfferItem | null>(null);
+
+  useEffect(() => {
+    const storedDraft = window.sessionStorage.getItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
+    if (!storedDraft) return;
+
+    window.sessionStorage.removeItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
+    try {
+      setTemporaryOfferDraft(JSON.parse(storedDraft) as OfferDraft);
+    } catch {
+      setError('Nao foi possivel carregar a oferta temporaria do Radar Paraguai.');
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +73,39 @@ export function useOffers(initialProductId?: string | null) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!temporaryOfferDraft || !templates.length) return;
+
+    const template =
+      templates.find((item) => item.productType === temporaryOfferDraft.productType) ?? templates[0];
+    if (!template) return;
+
+    const payload = temporaryOfferDraft.payload;
+    const message = renderTemplate(template.content, {
+      produto: payload.productName,
+      modelo: payload.productName,
+      cor: payload.color,
+      capacidade: payload.capacity,
+      preco: formatCurrency(payload.salePrice),
+      preco_oferta: formatCurrency(payload.offerPrice),
+      prazo: payload.deliveryTime || 'Prazo conforme oferta',
+      garantia: payload.warranty,
+    });
+
+    setTemporaryOffer({
+      id: payload.productId,
+      template,
+      message,
+      status: 'DRAFT',
+      salePrice: payload.salePrice,
+      offerPrice: payload.offerPrice,
+      whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
+      productId: null,
+      createdAt: new Date().toISOString(),
+    });
+    setSuccess('Oferta temporaria preparada com o template comercial padrao.');
+  }, [templates, temporaryOfferDraft]);
 
   const selectedProduct = useMemo(
     () => pricingItems.find((item) => item.productId === selectedProductId) ?? null,
@@ -128,6 +179,7 @@ export function useOffers(initialProductId?: string | null) {
     selectedProductId,
     selectedTemplateId,
     currentOffer,
+    temporaryOffer,
     loading,
     saving,
     error,
@@ -141,4 +193,12 @@ export function useOffers(initialProductId?: string | null) {
     duplicate,
     remove,
   };
+}
+
+function renderTemplate(template: string, variables: Record<string, string>) {
+  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => variables[key] ?? '');
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }

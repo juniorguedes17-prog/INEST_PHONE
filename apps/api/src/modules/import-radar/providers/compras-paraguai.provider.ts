@@ -365,6 +365,7 @@ function escapeRegExp(value: string): string {
 
 export function inferProductAttributes(name: string) {
   const normalized = normalizeText(name);
+  const macBookAttributes = inferMacBookAttributes(name);
   const category = normalized.includes('iphone')
     ? 'iPhone'
     : normalized.includes('macbook')
@@ -376,8 +377,12 @@ export function inferProductAttributes(name: string) {
           : normalized.includes('airpods') || normalized.includes('fone')
             ? 'AirPods'
             : 'Outros';
-  const capacity = name.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/i)?.[0]?.replace(/\s+/g, ' ');
-  const model = name.match(/\b(iPhone\s+[\w\s-]+?|MacBook\s+(?:Air|Pro)(?:\s+\w+){0,3}|iPad(?:\s+\w+){0,3}|Apple\s+Watch(?:\s+\w+){0,3}|AirPods(?:\s+\w+){0,2})(?=\s+\d+\s*(?:GB|TB)|$)/i)?.[0]?.trim();
+  const capacity =
+    macBookAttributes?.capacity ??
+    name.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/i)?.[0]?.replace(/\s+/g, ' ');
+  const model =
+    macBookAttributes?.model ??
+    name.match(/\b(iPhone\s+[\w\s-]+?|MacBook\s+(?:Air|Pro)(?:\s+\w+){0,3}|iPad(?:\s+\w+){0,3}|Apple\s+Watch(?:\s+\w+){0,3}|AirPods(?:\s+\w+){0,2})(?=\s+\d+\s*(?:GB|TB)|$)/i)?.[0]?.trim();
   const colors = ['preto', 'branco', 'azul', 'verde', 'rosa', 'roxo', 'natural', 'desert', 'dourado', 'prata', 'grafite'];
   const color = colors.find((candidate) => normalized.includes(candidate));
 
@@ -388,6 +393,31 @@ export function inferProductAttributes(name: string) {
     capacity,
     color: color ? color.charAt(0).toUpperCase() + color.slice(1) : undefined,
   };
+}
+
+function inferMacBookAttributes(name: string) {
+  const familyMatch = name.match(/\bMacBook\s+(Air|Pro)\b/i);
+  if (!familyMatch) return undefined;
+
+  const chip = name.match(/\bM\d+(?:\s+(?:Pro|Max|Ultra))?\b/i)?.[0]?.replace(/\s+/g, ' ');
+  const display = name.match(/\b(13|14|15|16)(?:\.\d+)?\s*(?:["\u201c\u201d\u2033]|pol(?:egadas?)?)?\b/i)?.[1];
+  const memory = Array.from(name.matchAll(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/gi))
+    .map((match) => {
+      const amount = match[1] ?? '';
+      const unit = match[2]?.toUpperCase() ?? '';
+      return amount && unit ? `${amount}${unit}` : '';
+    })
+    .filter(Boolean);
+  const capacity = memory.length ? memory.join('/') : undefined;
+  const model = ['MacBook', capitalize(familyMatch[1] ?? ''), chip, display, capacity]
+    .filter(Boolean)
+    .join(' ');
+
+  return { model, capacity };
+}
+
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
 function parseLocalizedMoney(value: string): number | undefined {

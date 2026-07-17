@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { generateOfferDraft, listPricing, recalculatePricing } from '../services/pricing-service';
 import {
   OfferDraft,
@@ -9,6 +9,7 @@ import {
   PricingItem,
   TemporaryImportPricing,
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
+  TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '../types/pricing';
 
 const initialFilters: PricingFilters = {
@@ -26,6 +27,7 @@ const initialFilters: PricingFilters = {
 
 export function usePricing() {
   const pathname = usePathname();
+  const router = useRouter();
   const [items, setItems] = useState<PricingItem[]>([]);
   const [filters, setFilters] = useState<PricingFilters>(initialFilters);
   const [loading, setLoading] = useState(true);
@@ -106,8 +108,18 @@ export function usePricing() {
 
   function generateTemporaryOffer() {
     if (!temporaryImportPricing) return;
-    setOfferDraft(temporaryImportPricing.offerDraft);
-    setSuccess('Oferta preparada com os dados da precificacao temporaria.');
+    const isIphone = /iphone/i.test(temporaryImportPricing.product.name);
+    const productType = isIphone
+      ? temporaryImportPricing.profit.condition === 'NOVO'
+        ? 'IPHONE_SEALED'
+        : 'IPHONE_USED'
+      : 'ACCESSORY';
+
+    window.sessionStorage.setItem(
+      TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
+      JSON.stringify({ ...temporaryImportPricing.offerDraft, productType }),
+    );
+    router.push(temporaryImportPricing.offerDraft.route);
   }
 
   return {

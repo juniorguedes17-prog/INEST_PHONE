@@ -129,6 +129,23 @@ export function OffersPageContent() {
         onPageSizeChange={setPageSize}
       />
 
+      {offers.temporaryOffer ? (
+        <SettingsCard
+          eyebrow="Oferta preparada"
+          title="Template comercial do Radar Paraguai"
+          description="Rascunho temporario pronto para envio, sem gravacao no banco."
+        >
+          <div className="grid gap-3">
+            <p className="text-sm font-bold text-inest-text">
+              {offers.temporaryOffer.template?.name || 'Template comercial'}
+            </p>
+            <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-inest-line bg-inest-soft p-3 text-sm leading-6 text-inest-text">
+              {offers.temporaryOffer.message}
+            </pre>
+          </div>
+        </SettingsCard>
+      ) : null}
+
       <SettingsCard
         eyebrow="Nova oferta"
         title="Produto e template"
