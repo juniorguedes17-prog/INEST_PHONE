@@ -489,7 +489,7 @@ function buildTemporaryPricingRequest(calculation: ImportCalculation): Temporary
     correiosLabel: calculation.breakdown.correiosLabel,
     totalCost: calculation.total,
     brand: product.brand,
-    model: product.name,
+    model: product.model || product.name,
     capacity: product.capacity,
     color: product.color,
     city: product.city,
