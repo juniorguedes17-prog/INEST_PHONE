@@ -471,12 +471,13 @@ function CalculationModal({
 
 function buildTemporaryPricingRequest(calculation: ImportCalculation): TemporaryImportPricingRequest {
   const product = calculation.product;
+  const supplier = toPlainText(product.store) || toPlainText(product.provider);
   return {
     productId: product.id,
     productName: product.name,
     category: product.category || 'Sem categoria',
-    supplier: product.store || product.provider,
-    store: product.store || product.provider,
+    supplier,
+    store: supplier,
     productUrl: product.productUrl,
     priceUsd: product.priceUsd,
     dollarQuote: calculation.dollarQuote,
@@ -494,6 +495,19 @@ function buildTemporaryPricingRequest(calculation: ImportCalculation): Temporary
     city: product.city,
     matchedProductType: calculation.matchedProductType,
   };
+}
+
+function toPlainText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return '';
+
+  const entries = new Map(Object.entries(value));
+  for (const key of ['name', 'label', 'store', 'provider']) {
+    const candidate = entries.get(key);
+    if (typeof candidate === 'string') return candidate;
+  }
+
+  return '';
 }
 
 const filterLabels = { category: 'Categoria', brand: 'Marca', model: 'Modelo', color: 'Cor', capacity: 'Capacidade', store: 'Loja', city: 'Cidade', availability: 'Disponibilidade' };
