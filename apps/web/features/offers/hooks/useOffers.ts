@@ -93,16 +93,20 @@ export function useOffers(initialProductId?: string | null) {
     if (!template) return;
 
     const payload = temporaryOfferDraft.payload;
-    const message = renderTemplate(template.content, {
-      produto: payload.productName,
-      modelo: payload.productName,
-      cor: payload.color,
-      capacidade: payload.capacity,
-      preco: formatCurrency(payload.salePrice),
-      preco_oferta: formatCurrency(payload.offerPrice),
-      prazo: payload.deliveryTime || 'Prazo conforme oferta',
-      garantia: payload.warranty,
-    });
+    const offerPrice = formatCurrency(payload.offerPrice);
+    const message = ensureOfferPrice(
+      renderTemplate(template.content, {
+        produto: payload.productName,
+        modelo: payload.productName,
+        cor: payload.color,
+        capacidade: payload.capacity,
+        preco: formatCurrency(payload.salePrice),
+        preco_oferta: offerPrice,
+        prazo: payload.deliveryTime || 'Prazo conforme oferta',
+        garantia: payload.warranty,
+      }),
+      offerPrice,
+    );
 
     const preparedOffer: OfferItem = {
       id: payload.productId,
@@ -231,6 +235,17 @@ export function useOffers(initialProductId?: string | null) {
 
 function renderTemplate(template: string, variables: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => variables[key] ?? '');
+}
+
+function ensureOfferPrice(message: string, offerPrice: string) {
+  const normalizedMessage = message.replace(/\s/g, '');
+  const normalizedPrice = offerPrice.replace(/\s/g, '');
+
+  if (normalizedMessage.includes(normalizedPrice)) {
+    return message;
+  }
+
+  return `${message.trimEnd()}\n\nPreco de oferta: ${offerPrice}`;
 }
 
 function formatCurrency(value: number) {
