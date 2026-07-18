@@ -111,6 +111,52 @@ describe('profit lookup', () => {
     ).toEqual({ status: 'not_found' });
   });
 
+  it('matches MacBook Air and Pro registrations with safe formatting differences', () => {
+    const macBookCatalog = catalogFrom([
+      ['20', 'NOVO', 'MacBook Air M5 16GB / 512GB / 13"', 'R$ 980,00'],
+      ['21', 'NOVO', 'MacBook Pro M4 Pro 24GB / 512GB / 14"', 'R$ 1.600,00'],
+    ]);
+
+    expect(
+      foundProfit(
+        lookupProfit(
+          macBookCatalog,
+          'NOVO',
+          'Notebook Apple MacBook Air 2026 M5 Memoria 16GB SSD 512GB 13"',
+        ),
+      ),
+    ).toBe(980);
+    expect(
+      foundProfit(
+        lookupProfit(
+          macBookCatalog,
+          'NOVO',
+          'Apple MacBook Pro M4 Pro / 14" / 24GB / 512GB',
+        ),
+      ),
+    ).toBe(1600);
+  });
+
+  it('does not mix MacBook families, chip variants, screens, memory or storage', () => {
+    const macBookCatalog = catalogFrom([
+      ['20', 'NOVO', 'MacBook Air M5 16GB / 512GB / 13"', 'R$ 980,00'],
+      ['21', 'NOVO', 'MacBook Pro M4 Pro 24GB / 512GB / 14"', 'R$ 1.600,00'],
+    ]);
+
+    expect(
+      lookupProfit(macBookCatalog, 'NOVO', 'MacBook Pro M5 16GB / 512GB / 13"'),
+    ).toEqual({ status: 'not_found' });
+    expect(
+      lookupProfit(macBookCatalog, 'NOVO', 'MacBook Pro M4 24GB / 512GB / 14"'),
+    ).toEqual({ status: 'not_found' });
+    expect(
+      lookupProfit(macBookCatalog, 'NOVO', 'MacBook Air M5 16GB / 512GB / 15"'),
+    ).toEqual({ status: 'not_found' });
+    expect(
+      lookupProfit(macBookCatalog, 'NOVO', 'MacBook Air M5 16GB / 1TB / 13"'),
+    ).toEqual({ status: 'not_found' });
+  });
+
   it('returns not_found when the exact registration does not exist', () => {
     expect(lookupProfit(catalog, 'NOVO', 'iPhone 18 Pro 256GB')).toEqual({
       status: 'not_found',

@@ -131,7 +131,7 @@ export function lookupProfit(
   const flexibleMatches = catalog.records.filter(
     (record) =>
       record.condition === condition &&
-      isCompatibleMacBookNeoDescription(normalizedDescription, record.normalizedDescription),
+      isCompatibleMacBookDescription(normalizedDescription, record.normalizedDescription),
   );
 
   if (!flexibleMatches.length) return { status: 'not_found' };
@@ -152,14 +152,15 @@ export function normalizeProfitProductDescription(value: string) {
     .replace(/\s+/g, ' ');
 }
 
-function isCompatibleMacBookNeoDescription(source: string, candidate: string) {
-  const sourceDetails = getMacBookNeoDetails(source);
-  const candidateDetails = getMacBookNeoDetails(candidate);
+function isCompatibleMacBookDescription(source: string, candidate: string) {
+  const sourceDetails = getMacBookDetails(source);
+  const candidateDetails = getMacBookDetails(candidate);
   if (!sourceDetails || !candidateDetails) return false;
 
+  if (sourceDetails.family !== candidateDetails.family) return false;
   if (!sameValues(sourceDetails.memoryAndStorage, candidateDetails.memoryAndStorage)) return false;
   if (sourceDetails.chip !== candidateDetails.chip) return false;
-  if (sourceDetails.chipHasPro !== candidateDetails.chipHasPro) return false;
+  if (sourceDetails.chipVariant !== candidateDetails.chipVariant) return false;
   if (
     sourceDetails.screenSize &&
     candidateDetails.screenSize &&
@@ -178,11 +179,12 @@ function isCompatibleMacBookNeoDescription(source: string, candidate: string) {
   return true;
 }
 
-function getMacBookNeoDetails(description: string) {
+function getMacBookDetails(description: string) {
   const tokens = description.split(' ').filter(Boolean);
-  if (!tokens.includes('macbook') || !tokens.includes('neo')) return null;
+  const family = tokens.find((token) => token === 'air' || token === 'pro' || token === 'neo');
+  if (!tokens.includes('macbook') || !family) return null;
 
-  const chipIndex = tokens.findIndex((token) => /^a\d+$/.test(token));
+  const chipIndex = tokens.findIndex((token) => /^(?:a|m)\d+$/.test(token));
   const chip = chipIndex >= 0 ? tokens[chipIndex] : undefined;
   if (!chip) return null;
 
@@ -192,12 +194,17 @@ function getMacBookNeoDetails(description: string) {
   if (!memoryAndStorage.length) return null;
 
   return {
+    family,
     chip,
-    chipHasPro: tokens[chipIndex + 1] === 'pro',
+    chipVariant: getMacBookChipVariant(tokens[chipIndex + 1]),
     memoryAndStorage,
     screenSize: tokens.find((token) => /^(?:11|12|13|14|15|16)(?:\.\d+)?$/.test(token)),
     year: tokens.find((token) => /^20\d{2}$/.test(token)),
   };
+}
+
+function getMacBookChipVariant(value: string | undefined) {
+  return value === 'pro' || value === 'max' || value === 'ultra' ? value : undefined;
 }
 
 function sameValues(first: string[], second: string[]) {
