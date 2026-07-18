@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   deleteOffer,
   duplicateOffer,
@@ -31,6 +31,7 @@ export function useOffers(initialProductId?: string | null) {
   const [success, setSuccess] = useState<string | null>(null);
   const [temporaryOfferDraft, setTemporaryOfferDraft] = useState<OfferDraft | null>(null);
   const [temporaryOffer, setTemporaryOffer] = useState<OfferItem | null>(null);
+  const hasIncomingDraft = useRef(false);
 
   useEffect(() => {
     const storedDraft = window.sessionStorage.getItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
@@ -38,9 +39,10 @@ export function useOffers(initialProductId?: string | null) {
 
     window.sessionStorage.removeItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
     try {
+      hasIncomingDraft.current = true;
       setTemporaryOfferDraft(JSON.parse(storedDraft) as OfferDraft);
     } catch {
-      setError('Nao foi possivel carregar a oferta temporaria do Radar Paraguai.');
+      setError('Nao foi possivel carregar a oferta preparada pela Precificacao.');
     }
   }, []);
 
@@ -56,7 +58,7 @@ export function useOffers(initialProductId?: string | null) {
       setPricingItems(nextProducts);
       setTemplates(nextTemplates);
       setOffers(nextOffers);
-      if (!selectedProductId && nextProducts[0]) {
+      if (!selectedProductId && !hasIncomingDraft.current && nextProducts[0]) {
         setSelectedProductId(nextProducts[0].productId);
       }
     } catch (offersError) {
@@ -93,7 +95,7 @@ export function useOffers(initialProductId?: string | null) {
       garantia: payload.warranty,
     });
 
-    setTemporaryOffer({
+    const preparedOffer: OfferItem = {
       id: payload.productId,
       template,
       message,
@@ -103,8 +105,13 @@ export function useOffers(initialProductId?: string | null) {
       whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
       productId: null,
       createdAt: new Date().toISOString(),
-    });
-    setSuccess('Oferta temporaria preparada com o template comercial padrao.');
+    };
+
+    setSelectedProductId(payload.productId);
+    setSelectedTemplateId(template.id);
+    setTemporaryOffer(preparedOffer);
+    setCurrentOffer(preparedOffer);
+    setSuccess('Oferta preparada com o template comercial padrao.');
   }, [templates, temporaryOfferDraft]);
 
   const selectedProduct = useMemo(
@@ -139,11 +146,17 @@ export function useOffers(initialProductId?: string | null) {
 
   async function copy(offer: OfferItem) {
     await navigator.clipboard.writeText(offer.message);
-    await registerOfferCopy(offer.id);
+    if (offer.productId) {
+      await registerOfferCopy(offer.id);
+    }
     setSuccess('Texto copiado.');
   }
 
   async function share(offer: OfferItem) {
+    if (!offer.productId) {
+      window.open(offer.whatsappUrl, '_blank');
+      return;
+    }
     const result = await shareOffer(offer.id);
     window.open(result.whatsappUrl, '_blank');
   }

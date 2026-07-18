@@ -34,7 +34,6 @@ export function usePricing() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
   const [temporaryImportPricing, setTemporaryImportPricing] =
     useState<TemporaryImportPricing | null>(null);
 
@@ -95,8 +94,7 @@ export function usePricing() {
     setSuccess(null);
     try {
       const draft = await generateOfferDraft(productId);
-      setOfferDraft(draft);
-      setSuccess('Oferta preparada com os dados da precificacao.');
+      sendOfferDraft({ ...draft, source: 'pricing' });
     } catch (pricingError) {
       setError(
         pricingError instanceof Error ? pricingError.message : 'Nao foi possivel gerar a oferta.',
@@ -115,11 +113,12 @@ export function usePricing() {
         : 'IPHONE_USED'
       : 'ACCESSORY';
 
-    window.sessionStorage.setItem(
-      TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
-      JSON.stringify({ ...temporaryImportPricing.offerDraft, productType }),
-    );
-    router.push(temporaryImportPricing.offerDraft.route);
+    sendOfferDraft({ ...temporaryImportPricing.offerDraft, productType, source: 'temporary-import' });
+  }
+
+  function sendOfferDraft(draft: OfferDraft) {
+    window.sessionStorage.setItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    router.push(draft.route);
   }
 
   return {
@@ -130,8 +129,6 @@ export function usePricing() {
     saving,
     error,
     success,
-    offerDraft,
-    setOfferDraft,
     temporaryImportPricing,
     recalculate,
     generateOffer,

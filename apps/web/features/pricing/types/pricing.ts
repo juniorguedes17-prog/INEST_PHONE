@@ -50,6 +50,7 @@ export interface OfferDraft {
   targetModule: string;
   route: string;
   productType?: string;
+  source?: 'pricing' | 'temporary-import';
   payload: {
     productId: string;
     productName: string;

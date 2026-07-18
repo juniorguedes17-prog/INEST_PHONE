@@ -9,7 +9,6 @@ import {
   FilterSidebar,
   KpiCard,
   LoadingState,
-  Modal,
   PageHeader,
   Pagination,
   StatusBadge,
@@ -278,12 +277,6 @@ export function PricingPageContent() {
           ) : null}
         </div>
       </section>
-
-      <OfferDraftModal
-        open={Boolean(pricing.offerDraft)}
-        item={pricing.offerDraft?.payload ?? null}
-        onClose={() => pricing.setOfferDraft(null)}
-      />
     </div>
   );
 }
@@ -342,56 +335,6 @@ function TemporaryImportPricingCard({
         </ActionButton>
       </div>
     </article>
-  );
-}
-
-function OfferDraftModal({
-  open,
-  item,
-  onClose,
-}: {
-  open: boolean;
-  item: {
-    productName: string;
-    color: string;
-    capacity: string;
-    salePrice: number;
-    offerPrice: number;
-    deliveryTime: string;
-    warranty: string;
-  } | null;
-  onClose: () => void;
-}) {
-  return (
-    <Modal open={open} title="Oferta preparada" onClose={onClose}>
-      {item ? (
-        <div className="grid gap-4">
-          <p className="text-inest-muted">
-            Os dados abaixo foram preparados para o modulo de Ofertas, sem preenchimento manual.
-          </p>
-          <div className="rounded-xl border border-inest-line bg-inest-soft p-4">
-            <strong className="block font-display text-xl text-inest-text">
-              {item.productName}
-            </strong>
-            <p className="mt-2 text-sm text-inest-muted">
-              {item.color} {item.capacity} - {item.deliveryTime}
-            </p>
-            <p className="mt-4 text-sm font-bold text-inest-muted">Preco de venda</p>
-            <p className="font-display text-3xl font-black text-inest-text">
-              {formatCurrency(item.salePrice)}
-            </p>
-            <p className="mt-3 text-sm font-bold text-inest-muted">Preco de oferta</p>
-            <p className="font-display text-2xl font-black text-inest-green">
-              {formatCurrency(item.offerPrice)}
-            </p>
-            <p className="mt-3 text-sm text-inest-muted">{item.warranty}</p>
-          </div>
-          <div className="flex justify-end">
-            <ActionButton onClick={onClose}>Entendi</ActionButton>
-          </div>
-        </div>
-      ) : null}
-    </Modal>
   );
 }
 

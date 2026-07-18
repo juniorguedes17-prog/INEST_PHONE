@@ -132,7 +132,7 @@ export function OffersPageContent() {
       {offers.temporaryOffer ? (
         <SettingsCard
           eyebrow="Oferta preparada"
-          title="Template comercial do Radar Paraguai"
+          title="Template comercial da Precificacao"
           description="Rascunho temporario pronto para envio, sem gravacao no banco."
         >
           <div className="grid gap-3">
