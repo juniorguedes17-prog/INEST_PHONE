@@ -94,19 +94,16 @@ export function useOffers(initialProductId?: string | null) {
 
     const payload = temporaryOfferDraft.payload;
     const offerPrice = formatCurrency(payload.offerPrice);
-    const message = ensureOfferPrice(
-      renderTemplate(template.content, {
-        produto: payload.productName,
-        modelo: payload.productName,
-        cor: payload.color,
-        capacidade: payload.capacity,
-        preco: formatCurrency(payload.salePrice),
-        preco_oferta: offerPrice,
-        prazo: payload.deliveryTime || 'Prazo conforme oferta',
-        garantia: payload.warranty,
-      }),
-      offerPrice,
-    );
+    const message = renderOfferMessage(template.content, {
+      produto: payload.productName,
+      modelo: payload.productName,
+      cor: payload.color,
+      capacidade: payload.capacity,
+      preco: formatCurrency(payload.salePrice),
+      preco_oferta: offerPrice,
+      prazo: payload.deliveryTime || 'Prazo conforme oferta',
+      garantia: payload.warranty,
+    });
 
     const preparedOffer: OfferItem = {
       id: payload.productId,
@@ -237,15 +234,77 @@ function renderTemplate(template: string, variables: Record<string, string>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => variables[key] ?? '');
 }
 
-function ensureOfferPrice(message: string, offerPrice: string) {
-  const normalizedMessage = message.replace(/\s/g, '');
-  const normalizedPrice = offerPrice.replace(/\s/g, '');
+function renderOfferMessage(template: string, variables: Record<string, string>) {
+  const offerPrice = variables.preco_oferta ?? '';
+  const productName = variables.produto ?? variables.modelo ?? '';
+  const renderedMessage = removeLegacyOfferPrice(renderTemplate(template, variables));
 
-  if (normalizedMessage.includes(normalizedPrice)) {
-    return message;
+  if (hasOfferPriceByVariation(renderedMessage, offerPrice)) {
+    return normalizeMessageSpacing(renderedMessage);
   }
 
-  return `${message.trimEnd()}\n\nPreco de oferta: ${offerPrice}`;
+  const messageWithoutStandalonePrice = removeStandaloneOfferPrice(
+    renderedMessage,
+    offerPrice,
+  );
+
+  return insertOfferPriceBelowProduct(
+    messageWithoutStandalonePrice,
+    productName,
+    offerPrice,
+  );
+}
+
+function removeLegacyOfferPrice(message: string) {
+  return message
+    .split('\n')
+    .filter((line) => !/^\s*pre[cç]o\s+de\s+oferta\s*:/i.test(line))
+    .join('\n');
+}
+
+function hasOfferPriceByVariation(message: string, offerPrice: string) {
+  return message
+    .split('\n')
+    .some((line) => line.includes(offerPrice) && !isStandaloneOfferPrice(line, offerPrice));
+}
+
+function removeStandaloneOfferPrice(message: string, offerPrice: string) {
+  return message
+    .split('\n')
+    .filter((line) => !isStandaloneOfferPrice(line, offerPrice))
+    .join('\n');
+}
+
+function isStandaloneOfferPrice(line: string, offerPrice: string) {
+  return line.trim() === `💰 ${offerPrice}`;
+}
+
+function insertOfferPriceBelowProduct(message: string, productName: string, offerPrice: string) {
+  const lines = message.split('\n');
+  const normalizedProductName = normalizeForMatch(productName);
+  const productLineIndex = lines.findIndex((line) =>
+    normalizeForMatch(line).includes(normalizedProductName),
+  );
+
+  if (productLineIndex === -1) {
+    return normalizeMessageSpacing(message);
+  }
+
+  lines.splice(productLineIndex + 1, 0, '', `💰 ${offerPrice}`);
+  return normalizeMessageSpacing(lines.join('\n'));
+}
+
+function normalizeForMatch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizeMessageSpacing(message: string) {
+  return message.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function formatCurrency(value: number) {
