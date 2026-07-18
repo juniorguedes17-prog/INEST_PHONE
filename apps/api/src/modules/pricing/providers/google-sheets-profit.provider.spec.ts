@@ -81,6 +81,36 @@ describe('profit lookup', () => {
     });
   });
 
+  it('matches MacBook Neo registrations despite safe description formatting differences', () => {
+    const macBookCatalog = catalogFrom([
+      ['10', 'NOVO', 'MacBook Neo A18 Pro 8GB / 256GB / 13"', 'R$ 1.090,00'],
+      ['11', 'NOVO', 'MacBook Neo A18 Pro 8GB / 512GB / 13"', 'R$ 1.300,00'],
+    ]);
+
+    expect(
+      foundProfit(
+        lookupProfit(
+          macBookCatalog,
+          'NOVO',
+          'Notebook Apple MacBook Neo 2026 Apple A18 Pro / Memoria 8GB / SSD 256GB / 13"',
+        ),
+      ),
+    ).toBe(1090);
+  });
+
+  it('does not match a MacBook Neo when memory or storage differs', () => {
+    const macBookCatalog = catalogFrom([
+      ['10', 'NOVO', 'MacBook Neo A18 Pro 8GB / 256GB / 13"', 'R$ 1.090,00'],
+    ]);
+
+    expect(
+      lookupProfit(macBookCatalog, 'NOVO', 'MacBook Neo A18 Pro 16GB / 256GB / 13"'),
+    ).toEqual({ status: 'not_found' });
+    expect(
+      lookupProfit(macBookCatalog, 'NOVO', 'MacBook Neo A18 Pro 8GB / 512GB / 13"'),
+    ).toEqual({ status: 'not_found' });
+  });
+
   it('returns not_found when the exact registration does not exist', () => {
     expect(lookupProfit(catalog, 'NOVO', 'iPhone 18 Pro 256GB')).toEqual({
       status: 'not_found',

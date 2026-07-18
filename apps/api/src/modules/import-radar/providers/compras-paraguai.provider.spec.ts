@@ -84,6 +84,18 @@ describe('ComprasParaguaiProvider parsers', () => {
     });
   });
 
+  it('preserva a configuracao do MacBook Neo para a consulta de lucro', () => {
+    expect(
+      inferProductAttributes(
+        'Notebook Apple MacBook Neo 2026 Apple A18 Pro Memoria 8GB SSD 256GB 13"',
+      ),
+    ).toMatchObject({
+      category: 'MacBook',
+      model: 'MacBook Neo A18 Pro 13 8GB/256GB',
+      capacity: '8GB/256GB',
+    });
+  });
+
   it('retorna falha controlada quando a fonte esta indisponivel', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
     const provider = new ComprasParaguaiProvider();

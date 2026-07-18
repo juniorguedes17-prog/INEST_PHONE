@@ -120,14 +120,23 @@ export function lookupProfit(
   productDescription: string,
 ): ProfitLookupResult {
   const normalizedDescription = normalizeProfitProductDescription(productDescription);
-  const matches = catalog.records.filter(
+  const exactMatches = catalog.records.filter(
     (record) =>
       record.condition === condition && record.normalizedDescription === normalizedDescription,
   );
 
-  if (!matches.length) return { status: 'not_found' };
-  if (matches.length > 1) return { status: 'duplicate', records: matches };
-  return { status: 'found', record: matches[0]! };
+  if (exactMatches.length > 1) return { status: 'duplicate', records: exactMatches };
+  if (exactMatches.length === 1) return { status: 'found', record: exactMatches[0]! };
+
+  const flexibleMatches = catalog.records.filter(
+    (record) =>
+      record.condition === condition &&
+      isCompatibleMacBookNeoDescription(normalizedDescription, record.normalizedDescription),
+  );
+
+  if (!flexibleMatches.length) return { status: 'not_found' };
+  if (flexibleMatches.length > 1) return { status: 'duplicate', records: flexibleMatches };
+  return { status: 'found', record: flexibleMatches[0]! };
 }
 
 export function normalizeProfitProductDescription(value: string) {
@@ -141,6 +150,58 @@ export function normalizeProfitProductDescription(value: string) {
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function isCompatibleMacBookNeoDescription(source: string, candidate: string) {
+  const sourceDetails = getMacBookNeoDetails(source);
+  const candidateDetails = getMacBookNeoDetails(candidate);
+  if (!sourceDetails || !candidateDetails) return false;
+
+  if (!sameValues(sourceDetails.memoryAndStorage, candidateDetails.memoryAndStorage)) return false;
+  if (sourceDetails.chip !== candidateDetails.chip) return false;
+  if (sourceDetails.chipHasPro !== candidateDetails.chipHasPro) return false;
+  if (
+    sourceDetails.screenSize &&
+    candidateDetails.screenSize &&
+    sourceDetails.screenSize !== candidateDetails.screenSize
+  ) {
+    return false;
+  }
+  if (
+    sourceDetails.year &&
+    candidateDetails.year &&
+    sourceDetails.year !== candidateDetails.year
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function getMacBookNeoDetails(description: string) {
+  const tokens = description.split(' ').filter(Boolean);
+  if (!tokens.includes('macbook') || !tokens.includes('neo')) return null;
+
+  const chipIndex = tokens.findIndex((token) => /^a\d+$/.test(token));
+  const chip = chipIndex >= 0 ? tokens[chipIndex] : undefined;
+  if (!chip) return null;
+
+  const memoryAndStorage = Array.from(
+    new Set(tokens.filter((token) => /^\d+(?:\.\d+)?(?:gb|tb)$/.test(token))),
+  ).sort();
+  if (!memoryAndStorage.length) return null;
+
+  return {
+    chip,
+    chipHasPro: tokens[chipIndex + 1] === 'pro',
+    memoryAndStorage,
+    screenSize: tokens.find((token) => /^(?:11|12|13|14|15|16)(?:\.\d+)?$/.test(token)),
+    year: tokens.find((token) => /^20\d{2}$/.test(token)),
+  };
+}
+
+function sameValues(first: string[], second: string[]) {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
 }
 
 export function parseBrazilianCurrency(value: string): number | null {

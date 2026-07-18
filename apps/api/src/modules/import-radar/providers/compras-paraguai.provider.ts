@@ -382,7 +382,7 @@ export function inferProductAttributes(name: string) {
     name.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/i)?.[0]?.replace(/\s+/g, ' ');
   const model =
     macBookAttributes?.model ??
-    name.match(/\b(iPhone\s+[\w\s-]+?|MacBook\s+(?:Air|Pro)(?:\s+\w+){0,3}|iPad(?:\s+\w+){0,3}|Apple\s+Watch(?:\s+\w+){0,3}|AirPods(?:\s+\w+){0,2})(?=\s+\d+\s*(?:GB|TB)|$)/i)?.[0]?.trim();
+    name.match(/\b(iPhone\s+[\w\s-]+?|MacBook\s+(?:Air|Pro|Neo)(?:\s+\w+){0,4}|iPad(?:\s+\w+){0,3}|Apple\s+Watch(?:\s+\w+){0,3}|AirPods(?:\s+\w+){0,2})(?=\s+\d+\s*(?:GB|TB)|$)/i)?.[0]?.trim();
   const colors = ['preto', 'branco', 'azul', 'verde', 'rosa', 'roxo', 'natural', 'desert', 'dourado', 'prata', 'grafite'];
   const color = colors.find((candidate) => normalized.includes(candidate));
 
@@ -396,10 +396,12 @@ export function inferProductAttributes(name: string) {
 }
 
 function inferMacBookAttributes(name: string) {
-  const familyMatch = name.match(/\bMacBook\s+(Air|Pro)\b/i);
+  const familyMatch = name.match(/\bMacBook\s+(Air|Pro|Neo)\b/i);
   if (!familyMatch) return undefined;
 
-  const chip = name.match(/\bM\d+(?:\s+(?:Pro|Max|Ultra))?\b/i)?.[0]?.replace(/\s+/g, ' ');
+  const chip = name
+    .match(/\b(?:M\d+|A\d+)(?:\s+(?:Pro|Max|Ultra))?\b/i)?.[0]
+    ?.replace(/\s+/g, ' ');
   const display = name.match(/\b(13|14|15|16)(?:\.\d+)?\s*(?:["\u201c\u201d\u2033]|pol(?:egadas?)?)?\b/i)?.[1];
   const memory = Array.from(name.matchAll(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/gi))
     .map((match) => {
