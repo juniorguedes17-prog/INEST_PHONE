@@ -11,7 +11,7 @@ export const offerVariables = [
 
 export const officialTemplates = [
   {
-    name: 'Produto Novo',
+    name: 'Template Oficial - Produtos Lacrados',
     productType: 'IPHONE_SEALED',
     content: `🏆 OFERTA DE LACRADO INEST 🏆
 
@@ -34,7 +34,7 @@ Todos os produtos são importados, o que muda é apenas o prazo.
 📥 Me chama no privado e garanta sua reserva.`,
   },
   {
-    name: 'Produto Seminovo',
+    name: 'Template Oficial - Seminovos',
     productType: 'IPHONE_USED',
     content: `🏆 OFERTA DE SEMINOVO ORIGINAL INEST 🏆
 
@@ -56,16 +56,6 @@ Todos os produtos são importados, o que muda é apenas o prazo.
 
 📥 Me chama no privado e garanta sua reserva.`,
   },
-  {
-    name: 'Importacao',
-    productType: 'ACCESSORY',
-    content: `OFERTA DE IMPORTACAO INEST
-
-Produto: {{produto}}
-Prazo: {{prazo}}
-Garantia: {{garantia}}
-Valor: {{preco_oferta}}
-
-Me chama no privado e garanta sua reserva.`,
-  },
 ];
+
+export const legacyTemplateNames = ['Produto Novo', 'Produto Seminovo', 'Importacao'];

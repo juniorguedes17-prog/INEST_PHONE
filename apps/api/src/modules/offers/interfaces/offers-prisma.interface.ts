@@ -33,6 +33,8 @@ export interface OffersPrismaClient {
     findMany(args?: unknown): Promise<CommercialTemplateRecord[]>;
     findFirst(args?: unknown): Promise<CommercialTemplateRecord | null>;
     upsert(args: unknown): Promise<CommercialTemplateRecord>;
+    update(args: unknown): Promise<CommercialTemplateRecord>;
+    updateMany(args: unknown): Promise<{ count: number }>;
   };
   offer: {
     findMany(args?: unknown): Promise<OfferRecord[]>;

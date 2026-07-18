@@ -5,7 +5,11 @@ import {
   OfferRecord,
   OffersPrismaClient,
 } from '../interfaces/offers-prisma.interface';
-import { offerVariables, officialTemplates } from '../templates/official-templates';
+import {
+  legacyTemplateNames,
+  offerVariables,
+  officialTemplates,
+} from '../templates/official-templates';
 
 @Injectable()
 export class OffersRepository {
@@ -32,6 +36,11 @@ export class OffersRepository {
   }
 
   async ensureOfficialTemplates() {
+    await this.prisma.commercialTemplate.updateMany({
+      where: { name: { in: legacyTemplateNames }, deletedAt: null, status: 'ACTIVE' },
+      data: { status: 'INACTIVE' },
+    });
+
     const templates: CommercialTemplateRecord[] = [];
     for (const template of officialTemplates) {
       templates.push(
@@ -39,7 +48,6 @@ export class OffersRepository {
           where: { name: template.name },
           update: {
             productType: template.productType,
-            content: template.content,
             variables: offerVariables,
             status: 'ACTIVE',
           },
@@ -54,6 +62,13 @@ export class OffersRepository {
       );
     }
     return templates;
+  }
+
+  updateTemplateContent(id: string, content: string) {
+    return this.prisma.commercialTemplate.update({
+      where: { id },
+      data: { content },
+    });
   }
 
   listOffers() {

@@ -38,6 +38,18 @@ export async function listTemplates(): Promise<CommercialTemplate[]> {
   return parseResponse<CommercialTemplate[]>(response);
 }
 
+export async function updateOfferTemplate(
+  id: string,
+  content: string,
+): Promise<CommercialTemplate> {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/templates/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+  return parseResponse<CommercialTemplate>(response);
+}
+
 export async function listOffers(): Promise<OfferItem[]> {
   const response = await authenticatedFetch(`${env.apiUrl}/offers`);
   return parseResponse<OfferItem[]>(response);

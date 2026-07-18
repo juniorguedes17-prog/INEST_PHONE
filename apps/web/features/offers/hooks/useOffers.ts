@@ -58,8 +58,15 @@ export function useOffers(initialProductId?: string | null) {
       setPricingItems(nextProducts);
       setTemplates(nextTemplates);
       setOffers(nextOffers);
-      if (!selectedProductId && !hasIncomingDraft.current && nextProducts[0]) {
-        setSelectedProductId(nextProducts[0].productId);
+      const nextProductId =
+        selectedProductId || (!hasIncomingDraft.current ? nextProducts[0]?.productId : undefined);
+      if (nextProductId && !hasIncomingDraft.current) {
+        const product = nextProducts.find((item) => item.productId === nextProductId);
+        const template = findTemplateForProductType(nextTemplates, product?.productType);
+        setSelectedProductId(nextProductId);
+        if (template) {
+          setSelectedTemplateId(template.id);
+        }
       }
     } catch (offersError) {
       setError(
@@ -79,8 +86,10 @@ export function useOffers(initialProductId?: string | null) {
   useEffect(() => {
     if (!temporaryOfferDraft || !templates.length) return;
 
-    const template =
-      templates.find((item) => item.productType === temporaryOfferDraft.productType) ?? templates[0];
+    const template = findTemplateForProductType(
+      templates,
+      temporaryOfferDraft.productType,
+    );
     if (!template) return;
 
     const payload = temporaryOfferDraft.payload;
@@ -117,6 +126,18 @@ export function useOffers(initialProductId?: string | null) {
   const selectedProduct = useMemo(
     () => pricingItems.find((item) => item.productId === selectedProductId) ?? null,
     [pricingItems, selectedProductId],
+  );
+
+  const selectProduct = useCallback(
+    (productId: string) => {
+      setSelectedProductId(productId);
+      const product = pricingItems.find((item) => item.productId === productId);
+      const template = findTemplateForProductType(templates, product?.productType);
+      if (template) {
+        setSelectedTemplateId(template.id);
+      }
+    },
+    [pricingItems, templates],
   );
 
   async function generate() {
@@ -197,7 +218,7 @@ export function useOffers(initialProductId?: string | null) {
     saving,
     error,
     success,
-    setSelectedProductId,
+    setSelectedProductId: selectProduct,
     setSelectedTemplateId,
     setCurrentOffer,
     generate,
@@ -214,4 +235,12 @@ function renderTemplate(template: string, variables: Record<string, string>) {
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
+function findTemplateForProductType(templates: CommercialTemplate[], productType?: string) {
+  const usedProduct = productType === 'IPHONE_USED' || productType === 'APPLE_CPO';
+  return (
+    templates.find((template) => template.productType === (usedProduct ? 'IPHONE_USED' : 'IPHONE_SEALED')) ??
+    templates[0]
+  );
 }

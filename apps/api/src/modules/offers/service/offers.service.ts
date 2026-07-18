@@ -2,7 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { PricingService } from '../../pricing/service/pricing.service';
 import { SettingsService } from '../../settings/service/settings.service';
-import { DuplicateOfferDto, GenerateOfferDto } from '../dto/offers.dto';
+import { DuplicateOfferDto, GenerateOfferDto, UpdateOfferTemplateDto } from '../dto/offers.dto';
 import { OfferRecord } from '../interfaces/offers-prisma.interface';
 import { OffersRepository } from '../repository/offers.repository';
 import { getWhatsappShareLink, renderTemplate } from '../validators/offers.validators';
@@ -23,6 +23,16 @@ export class OffersService {
   async list() {
     const offers = await this.offersRepository.listOffers();
     return offers.map((offer) => this.toResponse(offer));
+  }
+
+  async updateTemplate(id: string, dto: UpdateOfferTemplateDto) {
+    await this.offersRepository.ensureOfficialTemplates();
+    const template = await this.offersRepository.findTemplate(id);
+    if (!template) {
+      throw new NotFoundException('Template comercial nao encontrado.');
+    }
+
+    return this.offersRepository.updateTemplateContent(id, dto.content);
   }
 
   async findOne(id: string) {
@@ -160,10 +170,7 @@ export class OffersService {
     if (productType === 'IPHONE_USED' || productType === 'APPLE_CPO') {
       return 'IPHONE_USED';
     }
-    if (productType === 'IPHONE_SEALED') {
-      return 'IPHONE_SEALED';
-    }
-    return 'ACCESSORY';
+    return 'IPHONE_SEALED';
   }
 
   private toResponse(offer: OfferRecord) {

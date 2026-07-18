@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, Inject, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
-import { DuplicateOfferDto, GenerateOfferDto } from '../dto/offers.dto';
+import { DuplicateOfferDto, GenerateOfferDto, UpdateOfferTemplateDto } from '../dto/offers.dto';
 import { OffersService } from '../service/offers.service';
 
 @ApiTags('Offers')
@@ -23,6 +23,12 @@ export class OffersController {
   @ApiOperation({ summary: 'Lista templates comerciais disponiveis.' })
   templates() {
     return this.offersService.templates();
+  }
+
+  @Patch('templates/:id')
+  @ApiOperation({ summary: 'Atualiza o conteudo de um template comercial oficial.' })
+  updateTemplate(@Param('id') id: string, @Body() dto: UpdateOfferTemplateDto) {
+    return this.offersService.updateTemplate(id, dto);
   }
 
   @Get(':id')

@@ -161,10 +161,7 @@ export function OffersPageContent() {
           <SelectInput
             label="Template"
             value={offers.selectedTemplateId}
-            options={[
-              ['', 'Automatico pelo tipo do produto'],
-              ...offers.templates.map((template) => [template.id, template.name]),
-            ]}
+            options={offers.templates.map((template) => [template.id, template.name])}
             onChange={offers.setSelectedTemplateId}
           />
           <ActionButton

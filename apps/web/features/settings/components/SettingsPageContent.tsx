@@ -12,6 +12,7 @@ import {
 } from '@/components/shared';
 import { useSettings } from '../hooks/useSettings';
 import { ImportRedirectRule, SettingsPayload } from '../types/settings';
+import { OfferTemplatesSettingsCard } from './OfferTemplatesSettingsCard';
 
 export function SettingsPageContent() {
   const { settings, setSettings, loading, saving, error, success, reload, save, resetDefaults } =
@@ -643,6 +644,8 @@ export function SettingsPageContent() {
           </div>
         </SettingsCard>
       </div>
+
+      <OfferTemplatesSettingsCard />
     </div>
   );
 }

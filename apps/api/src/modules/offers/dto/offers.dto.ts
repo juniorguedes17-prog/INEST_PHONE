@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class GenerateOfferDto {
   @ApiProperty()
@@ -17,4 +17,12 @@ export class DuplicateOfferDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+export class UpdateOfferTemplateDto {
+  @ApiProperty({ description: 'Conteudo comercial do template.' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(10000)
+  content!: string;
 }
