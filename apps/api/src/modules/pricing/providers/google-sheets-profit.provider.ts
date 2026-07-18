@@ -14,6 +14,26 @@ interface GoogleValuesResponse {
 }
 
 const CACHE_TTL_MS = 60_000;
+const DESCRIPTION_NOISE_TOKENS = new Set([
+  'apple',
+  'notebook',
+  'laptop',
+  'desktop',
+  'celular',
+  'smartphone',
+  'memoria',
+  'memory',
+  'ram',
+  'ssd',
+  'armazenamento',
+  'storage',
+  'disco',
+  'modelo',
+  'novo',
+  'lacrado',
+  'original',
+]);
+const PRODUCT_VARIANT_TOKENS = ['pro', 'max', 'plus', 'mini', 'air', 'neo', 'ultra', 'se'];
 
 @Injectable()
 export class GoogleSheetsProfitProvider {
@@ -141,6 +161,7 @@ export function lookupProfit(
 
 export function normalizeProfitProductDescription(value: string) {
   return value
+    .replace(/&(quot|#34|#x22);/gi, '"')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -160,8 +181,104 @@ function isCompatibleAppleProductDescription(source: string, candidate: string) 
     isCompatibleAppleWatchDescription(source, candidate) ||
     isCompatibleAirPodsDescription(source, candidate) ||
     isCompatibleMacMiniDescription(source, candidate) ||
-    isCompatibleAppleAccessoryDescription(source, candidate)
+    isCompatibleAppleAccessoryDescription(source, candidate) ||
+    isSafeKeywordMatch(source, candidate)
   );
+}
+
+/**
+ * Handles harmless catalog wording differences only after the strict product
+ * parsers above cannot recognize a description. Every meaningful term from
+ * the sheet must still be present in the source, and defining specs remain
+ * exact to avoid selecting a different Apple model.
+ */
+function isSafeKeywordMatch(source: string, candidate: string) {
+  const sourceTokens = getDescriptionTokens(source);
+  const candidateTokens = getDescriptionTokens(candidate);
+  const sourceFamily = getProductFamily(sourceTokens);
+  const candidateFamily = getProductFamily(candidateTokens);
+
+  if (!sourceFamily || sourceFamily !== candidateFamily) return false;
+
+  const requiredCandidateTokens = candidateTokens.filter(
+    (token) => !DESCRIPTION_NOISE_TOKENS.has(token),
+  );
+  if (requiredCandidateTokens.length < 2) return false;
+  if (!containsTokensWithMultiplicity(sourceTokens, requiredCandidateTokens)) return false;
+
+  return hasMatchingCriticalSpecifications(sourceTokens, candidateTokens);
+}
+
+function getDescriptionTokens(description: string) {
+  return description.split(' ').filter(Boolean);
+}
+
+function containsTokensWithMultiplicity(sourceTokens: string[], requiredTokens: string[]) {
+  const sourceCounts = new Map<string, number>();
+  for (const token of sourceTokens) {
+    sourceCounts.set(token, (sourceCounts.get(token) ?? 0) + 1);
+  }
+
+  for (const token of requiredTokens) {
+    const remaining = sourceCounts.get(token) ?? 0;
+    if (!remaining) return false;
+    sourceCounts.set(token, remaining - 1);
+  }
+
+  return true;
+}
+
+function getProductFamily(tokens: string[]) {
+  if (tokens.includes('iphone')) return 'iphone';
+  if (tokens.includes('macbook')) return 'macbook';
+  if (tokens.includes('ipad')) return 'ipad';
+  if (tokens.includes('airpods')) return 'airpods';
+  if (tokens.includes('watch')) return 'apple-watch';
+  if (tokens.includes('mac') && tokens.includes('mini')) return 'mac-mini';
+
+  const accessoryFamily = getAppleAccessoryFamily(tokens);
+  return accessoryFamily ? `accessory:${accessoryFamily}` : null;
+}
+
+function hasMatchingCriticalSpecifications(sourceTokens: string[], candidateTokens: string[]) {
+  const sourceStorage = getMemoryAndStorage(sourceTokens);
+  const candidateStorage = getMemoryAndStorage(candidateTokens);
+  if (candidateStorage.length && !sameValues(sourceStorage, candidateStorage)) return false;
+
+  const sourceChips = sourceTokens.filter((token) => /^(?:a|m)\d+$/.test(token)).sort();
+  const candidateChips = candidateTokens.filter((token) => /^(?:a|m)\d+$/.test(token)).sort();
+  if (candidateChips.length && !sameValues(sourceChips, candidateChips)) return false;
+
+  const sourceVariants = getTokenValues(sourceTokens, PRODUCT_VARIANT_TOKENS);
+  const candidateVariants = getTokenValues(candidateTokens, PRODUCT_VARIANT_TOKENS);
+  if (candidateVariants.length && !sameValues(sourceVariants, candidateVariants)) return false;
+
+  const sourceCaseSizes = sourceTokens.filter((token) => /^\d+(?:\.\d+)?mm$/.test(token)).sort();
+  const candidateCaseSizes = candidateTokens
+    .filter((token) => /^\d+(?:\.\d+)?mm$/.test(token))
+    .sort();
+  if (candidateCaseSizes.length && !sameValues(sourceCaseSizes, candidateCaseSizes)) return false;
+
+  const sourceScreens = getScreenSizes(sourceTokens);
+  const candidateScreens = getScreenSizes(candidateTokens);
+  if (candidateScreens.length && !sameValues(sourceScreens, candidateScreens)) return false;
+
+  const sourceConnectivity = getConnectivity(sourceTokens);
+  const candidateConnectivity = getConnectivity(candidateTokens);
+  if (
+    sourceConnectivity !== 'unknown' ||
+    candidateConnectivity !== 'unknown'
+  ) {
+    return sourceConnectivity === candidateConnectivity;
+  }
+
+  return true;
+}
+
+function getScreenSizes(tokens: string[]) {
+  return tokens
+    .filter((token, index) => /^\d+(?:\.\d+)?$/.test(token) && tokens[index + 1] === 'pol')
+    .sort();
 }
 
 function isCompatibleMacBookDescription(source: string, candidate: string) {

@@ -48,6 +48,9 @@ describe('GoogleSheetsProfitProvider mapping', () => {
     expect(normalizeProfitProductDescription('MacBook Air M5 13 polegadas 16GB 512GB')).toBe(
       'macbook air m5 13 pol 16gb 512gb',
     );
+    expect(normalizeProfitProductDescription('MacBook Neo 13&quot; 8 GB / 256 GB')).toBe(
+      'macbook neo 13 pol 8gb 256gb',
+    );
   });
 });
 
@@ -109,6 +112,22 @@ describe('profit lookup', () => {
     expect(
       lookupProfit(macBookCatalog, 'NOVO', 'MacBook Neo A18 Pro 8GB / 512GB / 13"'),
     ).toEqual({ status: 'not_found' });
+  });
+
+  it('uses a conservative keyword fallback for catalog wording noise', () => {
+    const accessoryCatalog = catalogFrom([
+      ['12', 'NOVO', 'Apple AirTag 1 Unidade', 'R$ 200,00'],
+      ['13', 'NOVO', 'Apple AirTag 4 Unidades', 'R$ 600,00'],
+    ]);
+
+    expect(
+      foundProfit(
+        lookupProfit(accessoryCatalog, 'NOVO', 'Produto Apple AirTag (1 Unidade) Original'),
+      ),
+    ).toBe(200);
+    expect(lookupProfit(accessoryCatalog, 'NOVO', 'Produto Apple AirTag 2 Unidades')).toEqual({
+      status: 'not_found',
+    });
   });
 
   it('matches MacBook Air and Pro registrations with safe formatting differences', () => {
