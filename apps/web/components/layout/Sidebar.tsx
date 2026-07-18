@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { navigationItems } from './navigation';
+import { visibleNavigationItems } from './navigation';
 import { cn } from '@/utils/cn';
 
 interface SidebarProps {
@@ -48,7 +48,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
       </button>
 
       <nav className="mt-4 grid gap-1 overflow-y-auto pr-1" aria-label="Modulos">
-        {navigationItems.map((item) => {
+        {visibleNavigationItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isFeatureRouteEnabled } from './lib/features';
 
 const protectedRoutes = [
   '/dashboard',
@@ -20,6 +21,10 @@ export function middleware(request: NextRequest) {
   const hasAccessToken = Boolean(request.cookies.get('access_token'));
   const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route));
   const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+
+  if (!isFeatureRouteEnabled(pathname)) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
 
   if (isProtectedRoute && !hasAccessToken) {
     return NextResponse.redirect(new URL('/login', request.url));
@@ -43,6 +48,7 @@ export const config = {
     '/customers/:path*',
     '/suppliers/:path*',
     '/finance/:path*',
+    '/integrations/:path*',
     '/bi/:path*',
     '/settings/:path*',
     '/login',
