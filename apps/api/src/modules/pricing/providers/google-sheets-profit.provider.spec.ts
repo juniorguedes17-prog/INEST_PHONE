@@ -157,6 +157,68 @@ describe('profit lookup', () => {
     ).toEqual({ status: 'not_found' });
   });
 
+  it('matches iPhones without confusing model variants or capacity', () => {
+    const appleCatalog = catalogFrom([
+      ['30', 'NOVO', 'iPhone 17 Pro Max 256GB', 'R$ 1.190,00'],
+      ['31', 'NOVO', 'iPhone 17 Pro Max 512GB', 'R$ 1.300,00'],
+    ]);
+
+    expect(
+      foundProfit(
+        lookupProfit(
+          appleCatalog,
+          'NOVO',
+          'Apple iPhone 17 Pro Max 256 GB 5G eSIM',
+        ),
+      ),
+    ).toBe(1190);
+    expect(lookupProfit(appleCatalog, 'NOVO', 'Apple iPhone 17 Pro 256GB')).toEqual({
+      status: 'not_found',
+    });
+  });
+
+  it('matches Apple Watch, AirPods, Mac mini and supported Apple accessories safely', () => {
+    const appleCatalog = catalogFrom([
+      ['40', 'NOVO', 'Apple Watch Ultra 2 49mm Cellular', 'R$ 800,00'],
+      ['41', 'NOVO', 'AirPods Pro 2 USB-C', 'R$ 450,00'],
+      ['42', 'NOVO', 'Mac mini M4 Pro 24GB 512GB', 'R$ 1.500,00'],
+      ['43', 'NOVO', 'Apple Pencil Pro USB-C', 'R$ 300,00'],
+    ]);
+
+    expect(
+      foundProfit(
+        lookupProfit(appleCatalog, 'NOVO', 'Apple Watch Ultra 2 GPS + Cellular 49 mm'),
+      ),
+    ).toBe(800);
+    expect(foundProfit(lookupProfit(appleCatalog, 'NOVO', 'Apple AirPods Pro 2 USB C'))).toBe(
+      450,
+    );
+    expect(
+      foundProfit(
+        lookupProfit(appleCatalog, 'NOVO', 'Desktop Apple Mac Mini M4 Pro 24 GB SSD 512 GB'),
+      ),
+    ).toBe(1500);
+    expect(foundProfit(lookupProfit(appleCatalog, 'NOVO', 'Apple Pencil Pro USB-C'))).toBe(300);
+  });
+
+  it('does not mix Apple Watch connectivity, AirPods variants or Mac mini chip variants', () => {
+    const appleCatalog = catalogFrom([
+      ['40', 'NOVO', 'Apple Watch Ultra 2 49mm Cellular', 'R$ 800,00'],
+      ['41', 'NOVO', 'AirPods Pro 2 USB-C', 'R$ 450,00'],
+      ['42', 'NOVO', 'Mac mini M4 Pro 24GB 512GB', 'R$ 1.500,00'],
+    ]);
+
+    expect(lookupProfit(appleCatalog, 'NOVO', 'Apple Watch Ultra 2 49mm GPS')).toEqual({
+      status: 'not_found',
+    });
+    expect(lookupProfit(appleCatalog, 'NOVO', 'AirPods 2 USB-C')).toEqual({
+      status: 'not_found',
+    });
+    expect(lookupProfit(appleCatalog, 'NOVO', 'Mac mini M4 24GB 512GB')).toEqual({
+      status: 'not_found',
+    });
+  });
+
   it('returns not_found when the exact registration does not exist', () => {
     expect(lookupProfit(catalog, 'NOVO', 'iPhone 18 Pro 256GB')).toEqual({
       status: 'not_found',

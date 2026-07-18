@@ -131,7 +131,7 @@ export function lookupProfit(
   const flexibleMatches = catalog.records.filter(
     (record) =>
       record.condition === condition &&
-      isCompatibleMacBookDescription(normalizedDescription, record.normalizedDescription),
+      isCompatibleAppleProductDescription(normalizedDescription, record.normalizedDescription),
   );
 
   if (!flexibleMatches.length) return { status: 'not_found' };
@@ -147,9 +147,21 @@ export function normalizeProfitProductDescription(value: string) {
     .replace(/(\d)\s*["\u201c\u201d\u2033]/g, '$1 pol ')
     .replace(/\b(polegadas?|inches?|inch)\b/g, 'pol')
     .replace(/\b(\d+)\s*(gb|tb)\b/g, '$1$2')
+    .replace(/\b(\d+)\s*(w|mm|m)\b/g, '$1$2')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function isCompatibleAppleProductDescription(source: string, candidate: string) {
+  return (
+    isCompatibleMacBookDescription(source, candidate) ||
+    isCompatibleIPhoneDescription(source, candidate) ||
+    isCompatibleAppleWatchDescription(source, candidate) ||
+    isCompatibleAirPodsDescription(source, candidate) ||
+    isCompatibleMacMiniDescription(source, candidate) ||
+    isCompatibleAppleAccessoryDescription(source, candidate)
+  );
 }
 
 function isCompatibleMacBookDescription(source: string, candidate: string) {
@@ -205,6 +217,196 @@ function getMacBookDetails(description: string) {
 
 function getMacBookChipVariant(value: string | undefined) {
   return value === 'pro' || value === 'max' || value === 'ultra' ? value : undefined;
+}
+
+function isCompatibleIPhoneDescription(source: string, candidate: string) {
+  const sourceDetails = getIPhoneDetails(source);
+  const candidateDetails = getIPhoneDetails(candidate);
+  if (!sourceDetails || !candidateDetails) return false;
+
+  return (
+    sourceDetails.generation === candidateDetails.generation &&
+    sameValues(sourceDetails.variants, candidateDetails.variants) &&
+    sameValues(sourceDetails.memoryAndStorage, candidateDetails.memoryAndStorage)
+  );
+}
+
+function getIPhoneDetails(description: string) {
+  const tokens = description.split(' ').filter(Boolean);
+  const iPhoneIndex = tokens.indexOf('iphone');
+  const generation = tokens[iPhoneIndex + 1];
+  if (iPhoneIndex < 0 || !generation || !/^\d+[a-z]*$/.test(generation)) return null;
+
+  const memoryAndStorage = getMemoryAndStorage(tokens);
+  if (!memoryAndStorage.length) return null;
+
+  return {
+    generation,
+    variants: getTokenValues(tokens.slice(iPhoneIndex + 2), ['pro', 'max', 'plus', 'mini', 'air']),
+    memoryAndStorage,
+  };
+}
+
+function isCompatibleAppleWatchDescription(source: string, candidate: string) {
+  const sourceDetails = getAppleWatchDetails(source);
+  const candidateDetails = getAppleWatchDetails(candidate);
+  if (!sourceDetails || !candidateDetails) return false;
+
+  return (
+    sourceDetails.family === candidateDetails.family &&
+    sourceDetails.generation === candidateDetails.generation &&
+    sourceDetails.caseSize === candidateDetails.caseSize &&
+    sourceDetails.connectivity === candidateDetails.connectivity
+  );
+}
+
+function getAppleWatchDetails(description: string) {
+  const tokens = description.split(' ').filter(Boolean);
+  const watchIndex = tokens.findIndex(
+    (token, index) => token === 'watch' && tokens[index - 1] === 'apple',
+  );
+  if (watchIndex < 0) return null;
+
+  const familyToken = tokens[watchIndex + 1];
+  const isKnownFamily = familyToken === 'series' || familyToken === 'ultra' || familyToken === 'se';
+  const family = isKnownFamily ? familyToken : 'standard';
+  const generation = tokens[watchIndex + (isKnownFamily ? 2 : 1)];
+  const caseSize = tokens.find((token) => /^\d+(?:\.\d+)?mm$/.test(token));
+  if (!generation || !/^\d+$/.test(generation) || !caseSize) return null;
+
+  return {
+    family,
+    generation,
+    caseSize,
+    connectivity: getConnectivity(tokens),
+  };
+}
+
+function isCompatibleAirPodsDescription(source: string, candidate: string) {
+  const sourceDetails = getAirPodsDetails(source);
+  const candidateDetails = getAirPodsDetails(candidate);
+  if (!sourceDetails || !candidateDetails) return false;
+
+  return (
+    sourceDetails.family === candidateDetails.family &&
+    sourceDetails.generation === candidateDetails.generation &&
+    sameValues(sourceDetails.features, candidateDetails.features)
+  );
+}
+
+function getAirPodsDetails(description: string) {
+  const tokens = description.split(' ').filter(Boolean);
+  const airPodsIndex = tokens.indexOf('airpods');
+  if (airPodsIndex < 0) return null;
+
+  const followingTokens = tokens.slice(airPodsIndex + 1);
+  const family = followingTokens[0] === 'pro' || followingTokens[0] === 'max' ? followingTokens[0] : 'standard';
+  const generation = followingTokens.find((token) => /^\d+$/.test(token));
+  if (!generation && family !== 'max') return null;
+
+  return {
+    family,
+    generation,
+    features: getTokenValues(followingTokens, ['anc', 'usb', 'lightning', 'magsafe']),
+  };
+}
+
+function isCompatibleMacMiniDescription(source: string, candidate: string) {
+  const sourceDetails = getMacMiniDetails(source);
+  const candidateDetails = getMacMiniDetails(candidate);
+  if (!sourceDetails || !candidateDetails) return false;
+
+  return (
+    sourceDetails.chip === candidateDetails.chip &&
+    sourceDetails.chipVariant === candidateDetails.chipVariant &&
+    sameValues(sourceDetails.memoryAndStorage, candidateDetails.memoryAndStorage)
+  );
+}
+
+function getMacMiniDetails(description: string) {
+  const tokens = description.split(' ').filter(Boolean);
+  const miniIndex = tokens.findIndex(
+    (token, index) => token === 'mini' && tokens[index - 1] === 'mac',
+  );
+  if (miniIndex < 0) return null;
+
+  const chipIndex = tokens.findIndex((token) => /^(?:a|m)\d+$/.test(token));
+  const chip = chipIndex >= 0 ? tokens[chipIndex] : undefined;
+  const memoryAndStorage = getMemoryAndStorage(tokens);
+  if (!chip || !memoryAndStorage.length) return null;
+
+  return {
+    chip,
+    chipVariant: getMacBookChipVariant(tokens[chipIndex + 1]),
+    memoryAndStorage,
+  };
+}
+
+function isCompatibleAppleAccessoryDescription(source: string, candidate: string) {
+  const sourceDetails = getAppleAccessoryDetails(source);
+  const candidateDetails = getAppleAccessoryDetails(candidate);
+  if (!sourceDetails || !candidateDetails) return false;
+
+  return (
+    sourceDetails.family === candidateDetails.family &&
+    sameValues(sourceDetails.identifiers, candidateDetails.identifiers)
+  );
+}
+
+function getAppleAccessoryDetails(description: string) {
+  const tokens = description.split(' ').filter(Boolean);
+  const family = getAppleAccessoryFamily(tokens);
+  if (!family) return null;
+
+  const identifiers = [
+    ...getTokenValues(tokens, [
+      'pro',
+      'max',
+      'ultra',
+      'usb',
+      'lightning',
+      'magsafe',
+      'touch',
+      'id',
+      'numeric',
+      'keypad',
+      'abnt',
+      'br',
+      'us',
+      'pt',
+    ]),
+    ...tokens.filter((token) => /^\d+(?:\.\d+)?(?:w|mm|m)$/.test(token)),
+  ].sort();
+
+  return identifiers.length ? { family, identifiers } : null;
+}
+
+function getAppleAccessoryFamily(tokens: string[]) {
+  if (tokens.includes('airtag')) return 'airtag';
+  if (tokens.includes('pencil')) return 'apple-pencil';
+  if (tokens.includes('mouse') && tokens.includes('magic')) return 'magic-mouse';
+  if (tokens.includes('keyboard') && tokens.includes('magic')) return 'magic-keyboard';
+  if (tokens.includes('trackpad') && tokens.includes('magic')) return 'magic-trackpad';
+  if (tokens.includes('magsafe') && tokens.includes('charger')) return 'magsafe-charger';
+  if (tokens.includes('adapter')) return 'power-adapter';
+  if (tokens.includes('cable')) return 'cable';
+  return null;
+}
+
+function getMemoryAndStorage(tokens: string[]) {
+  return Array.from(
+    new Set(tokens.filter((token) => /^\d+(?:\.\d+)?(?:gb|tb)$/.test(token))),
+  ).sort();
+}
+
+function getTokenValues(tokens: string[], allowedValues: string[]) {
+  return Array.from(new Set(tokens.filter((token) => allowedValues.includes(token)))).sort();
+}
+
+function getConnectivity(tokens: string[]) {
+  if (tokens.includes('cellular') || tokens.includes('lte')) return 'cellular';
+  if (tokens.includes('gps')) return 'gps';
+  return 'unknown';
 }
 
 function sameValues(first: string[], second: string[]) {
