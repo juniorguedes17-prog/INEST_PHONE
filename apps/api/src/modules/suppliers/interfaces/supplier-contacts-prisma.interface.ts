@@ -11,5 +11,9 @@ export interface SupplierContactRecord {
 export interface SupplierContactsPrismaClient {
   supplierContact: {
     findFirst(args: unknown): Promise<SupplierContactRecord | null>;
+    findMany(args: unknown): Promise<SupplierContactRecord[]>;
+    findUnique(args: unknown): Promise<SupplierContactRecord | null>;
+    create(args: unknown): Promise<SupplierContactRecord>;
+    update(args: unknown): Promise<SupplierContactRecord>;
   };
 }

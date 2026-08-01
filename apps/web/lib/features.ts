@@ -1,5 +1,5 @@
 export const FEATURES = {
-  suppliers: false,
+  suppliers: true,
   dashboardBI: false,
   importRadar: false,
   financial: false,

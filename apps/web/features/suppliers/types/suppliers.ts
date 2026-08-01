@@ -29,3 +29,24 @@ export interface SupplierFilters {
   source: string;
   status: string;
 }
+
+export interface SupplierContactItem {
+  id: string;
+  supplierName: string;
+  whatsappNumber: string;
+  address: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupplierContactFormPayload {
+  supplierName: string;
+  whatsappNumber: string;
+  address?: string;
+}
+
+export interface SupplierContactFilters {
+  search: string;
+  status: 'all' | 'active' | 'inactive';
+}

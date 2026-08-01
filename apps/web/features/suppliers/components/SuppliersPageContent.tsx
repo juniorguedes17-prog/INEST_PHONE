@@ -1,211 +1,196 @@
 'use client';
 
-import Link from 'next/link';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import {
   ActionButton,
   Card,
   EmptyState,
   ErrorState,
-  FilterSection,
-  FilterSidebar,
-  InfoTag,
-  ListHeader,
   LoadingState,
   Modal,
   PageHeader,
   StatusBadge,
 } from '@/components/shared';
-import { useSuppliers } from '../hooks/useSuppliers';
-import { SupplierFormPayload, SupplierItem } from '../types/suppliers';
+import { useSupplierContacts } from '../hooks/useSupplierContacts';
+import { SupplierContactFormPayload, SupplierContactItem } from '../types/suppliers';
 
-const supplierTypes = ['Nacional', 'Paraguai', 'Estados Unidos', 'Distribuidor', 'Marketplace'];
-const statuses = [
-  ['ACTIVE', 'Ativo'],
-  ['INACTIVE', 'Inativo'],
-];
+const emptyForm: SupplierContactFormPayload = {
+  supplierName: '',
+  whatsappNumber: '',
+  address: '',
+};
 
 export function SuppliersPageContent() {
-  const { suppliers, filters, setFilters, sources, loading, saving, error, success, save, remove } =
-    useSuppliers();
+  const {
+    contacts,
+    filters,
+    setFilters,
+    loading,
+    saving,
+    error,
+    success,
+    load,
+    save,
+    toggleActive,
+  } = useSupplierContacts();
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<SupplierItem | null>(null);
-
-  const initialForm = useMemo<SupplierFormPayload>(
-    () => ({
-      name: editingSupplier?.name ?? '',
-      contact: editingSupplier?.contact ?? '',
-      phone: editingSupplier?.phone ?? '',
-      source: editingSupplier?.source ?? 'Nacional',
-      status: editingSupplier?.status ?? 'ACTIVE',
-      whatsappLink: editingSupplier?.whatsappLink ?? '',
-    }),
-    [editingSupplier],
-  );
+  const [editingContact, setEditingContact] = useState<SupplierContactItem | null>(null);
 
   function openCreateModal() {
-    setEditingSupplier(null);
+    setEditingContact(null);
     setModalOpen(true);
   }
 
-  function openEditModal(supplier: SupplierItem) {
-    setEditingSupplier(supplier);
+  function openEditModal(contact: SupplierContactItem) {
+    setEditingContact(contact);
     setModalOpen(true);
   }
 
   return (
     <div className="grid gap-6">
       <PageHeader
-        eyebrow="Cadastro"
+        eyebrow="Automacao do Radar Brasil"
         title="Fornecedores"
-        description="Fonte oficial de contatos, origem e status dos fornecedores da iNest Phone."
+        description="Contatos operacionais identificados pelo WhatsApp. Apenas contatos ativos serao processados pela automacao."
         actions={
           <>
             {success ? <StatusBadge tone="green">{success}</StatusBadge> : null}
-            <ActionButton onClick={openCreateModal}>Novo fornecedor</ActionButton>
+            <ActionButton variant="secondary" onClick={() => void load()} disabled={loading}>
+              Atualizar
+            </ActionButton>
+            <ActionButton onClick={openCreateModal}>Novo contato</ActionButton>
           </>
         }
       />
 
       {error ? <ErrorState title="Atencao" description={error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="Fornecedores" title="Filtros">
-          <FilterSection title="Busca">
-            <TextInput
-              label="Pesquisar"
-              value={filters.search}
-              onChange={(value) => setFilters((current) => ({ ...current, search: value }))}
-            />
-          </FilterSection>
-          <FilterSection title="Tipo">
-            <SelectInput
-              label="Tipo"
-              value={filters.source}
-              options={[
-                ['', 'Todos'],
-                ...Array.from(new Set([...supplierTypes, ...sources])).map((item) => [item, item]),
-              ]}
-              onChange={(value) => setFilters((current) => ({ ...current, source: value }))}
-            />
-          </FilterSection>
-          <FilterSection title="Status">
-            <SelectInput
-              label="Status"
-              value={filters.status}
-              options={[['', 'Todos'], ...statuses]}
-              onChange={(value) => setFilters((current) => ({ ...current, status: value }))}
-            />
-          </FilterSection>
-        </FilterSidebar>
-
-        <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
-          <ListHeader
-            sticky
-            eyebrow="Cadastro centralizado"
-            title={`${suppliers.length} fornecedores encontrados`}
-            description="Dados preparados para Radar de Precos, Radar de Importacao e futuras integracoes."
+      <section className="grid gap-4 rounded-xl border border-inest-line bg-white p-4 shadow-card lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-inest-muted">Buscar fornecedor, telefone ou endereco</span>
+          <input
+            value={filters.search}
+            onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+            className="field-control"
+            placeholder="Ex.: Elite Shop ou 5511943020886"
           />
-
-          <div className="mt-4 grid gap-3">
-            {loading ? <LoadingState /> : null}
-            {!loading && !suppliers.length ? (
-              <EmptyState
-                title="Nenhum fornecedor encontrado."
-                description="Ajuste os filtros ou cadastre um novo fornecedor."
-              />
-            ) : null}
-            {!loading
-              ? suppliers.map((supplier) => (
-                  <Card key={supplier.id} className="p-3">
-                    <article className="grid gap-3 md:grid-cols-[56px_minmax(180px,1fr)_minmax(180px,0.8fr)_auto] md:items-center">
-                      <div className="grid h-14 w-14 place-items-center rounded-lg bg-inest-soft text-lg font-black text-inest-blue">
-                        {supplier.name.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="truncate text-card-title">{supplier.name}</h3>
-                          <StatusBadge tone={supplier.status === 'ACTIVE' ? 'green' : 'gray'}>
-                            {translateStatus(supplier.status)}
-                          </StatusBadge>
-                        </div>
-                        <p className="mt-1 truncate text-sm text-inest-muted">
-                          {supplier.contact
-                            ? `Contato principal: ${supplier.contact}`
-                            : 'Contato nao informado'}
-                        </p>
-                      </div>
-                      <div className="flex min-w-0 flex-wrap gap-1.5">
-                        <InfoTag>{supplier.source ?? 'Fornecedor'}</InfoTag>
-                        <InfoTag>{supplier.phone ?? 'Telefone nao informado'}</InfoTag>
-                      </div>
-                      <div className="flex flex-wrap justify-start gap-1.5 md:justify-end">
-                        {supplier.whatsappLink ? (
-                          <a
-                            href={supplier.whatsappLink}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex h-9 items-center rounded-lg bg-inest-green px-3 text-xs font-black text-white"
-                          >
-                            WhatsApp
-                          </a>
-                        ) : null}
-                        <Link
-                          href={`/suppliers/${supplier.id}`}
-                          className="inline-flex h-9 items-center rounded-lg border border-inest-line bg-white px-3 text-xs font-black text-inest-text"
-                        >
-                          Ver fornecedor
-                        </Link>
-                        <ActionButton variant="secondary" onClick={() => openEditModal(supplier)}>
-                          Editar
-                        </ActionButton>
-                        <ActionButton variant="danger" onClick={() => void remove(supplier.id)}>
-                          Remover
-                        </ActionButton>
-                      </div>
-                    </article>
-                  </Card>
-                ))
-              : null}
-          </div>
-        </div>
+        </label>
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-inest-muted">Status</span>
+          <select
+            value={filters.status}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                status: event.target.value as typeof current.status,
+              }))
+            }
+            className="field-control"
+          >
+            <option value="all">Todos os contatos</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
+          </select>
+        </label>
       </section>
 
-      <SupplierFormModal
+      <section className="grid gap-3" aria-live="polite">
+        {!loading ? (
+          <p className="text-sm font-bold text-inest-muted">
+            {contacts.length} {contacts.length === 1 ? 'contato encontrado' : 'contatos encontrados'}
+          </p>
+        ) : null}
+        {loading ? <LoadingState /> : null}
+        {!loading && !contacts.length ? (
+          <EmptyState
+            title="Nenhum contato encontrado."
+            description="Cadastre um numero de WhatsApp para habilitar a identificacao automatica do fornecedor."
+            action={<ActionButton onClick={openCreateModal}>Cadastrar contato</ActionButton>}
+          />
+        ) : null}
+        {contacts.map((contact) => (
+          <Card key={contact.id} className="p-4">
+            <article className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)_auto] md:items-center">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-card-title">{contact.supplierName}</h3>
+                  <StatusBadge tone={contact.isActive ? 'green' : 'gray'}>
+                    {contact.isActive ? 'Ativo' : 'Inativo'}
+                  </StatusBadge>
+                </div>
+                <p className="mt-1 text-sm text-inest-muted">{contact.address || 'Endereco nao informado'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-black uppercase text-inest-muted">WhatsApp identificado</p>
+                <a
+                  href={`https://wa.me/${contact.whatsappNumber}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-flex text-sm font-black text-inest-blue hover:underline"
+                >
+                  +{formatPhone(contact.whatsappNumber)}
+                </a>
+                <p className="mt-1 text-xs text-inest-muted">Somente digitos: {contact.whatsappNumber}</p>
+              </div>
+              <div className="flex flex-wrap gap-2 md:justify-end">
+                <ActionButton variant="secondary" onClick={() => openEditModal(contact)} disabled={saving}>
+                  Editar
+                </ActionButton>
+                <ActionButton
+                  variant={contact.isActive ? 'danger' : 'success'}
+                  onClick={() => void toggleActive(contact)}
+                  disabled={saving}
+                >
+                  {contact.isActive ? 'Desativar' : 'Ativar'}
+                </ActionButton>
+              </div>
+            </article>
+          </Card>
+        ))}
+      </section>
+
+      <SupplierContactFormModal
         open={modalOpen}
-        supplier={editingSupplier}
-        initialForm={initialForm}
+        contact={editingContact}
         saving={saving}
         onClose={() => setModalOpen(false)}
         onSave={async (payload) => {
-          await save(payload, editingSupplier?.id);
-          setModalOpen(false);
+          const saved = await save(payload, editingContact?.id);
+          if (saved) {
+            setModalOpen(false);
+          }
         }}
       />
     </div>
   );
 }
 
-function translateStatus(status: string) {
-  return statuses.find(([value]) => value === status)?.[1] ?? status;
-}
-
-function SupplierFormModal({
+function SupplierContactFormModal({
   open,
-  supplier,
-  initialForm,
+  contact,
   saving,
   onClose,
   onSave,
 }: {
   open: boolean;
-  supplier: SupplierItem | null;
-  initialForm: SupplierFormPayload;
+  contact: SupplierContactItem | null;
   saving: boolean;
   onClose: () => void;
-  onSave: (payload: SupplierFormPayload) => Promise<void>;
+  onSave: (payload: SupplierContactFormPayload) => Promise<void>;
 }) {
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState<SupplierContactFormPayload>(emptyForm);
+
+  useEffect(() => {
+    setForm(
+      contact
+        ? {
+            supplierName: contact.supplierName,
+            whatsappNumber: contact.whatsappNumber,
+            address: contact.address || '',
+          }
+        : emptyForm,
+    );
+  }, [contact, open]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -213,54 +198,32 @@ function SupplierFormModal({
   }
 
   return (
-    <Modal open={open} title={supplier ? 'Editar fornecedor' : 'Novo fornecedor'} onClose={onClose}>
+    <Modal open={open} title={contact ? 'Editar contato' : 'Novo contato'} onClose={onClose}>
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <TextInput
-          label="Nome fantasia"
-          value={form.name}
-          onChange={(value) => setForm((current) => ({ ...current, name: value }))}
-        />
-        <div className="grid gap-4 md:grid-cols-2">
-          <SelectInput
-            label="Tipo"
-            value={form.source ?? ''}
-            options={supplierTypes.map((item) => [item, item])}
-            onChange={(value) => setForm((current) => ({ ...current, source: value }))}
-          />
-          <SelectInput
-            label="Status"
-            value={form.status ?? 'ACTIVE'}
-            options={statuses}
-            onChange={(value) => setForm((current) => ({ ...current, status: value }))}
-          />
-        </div>
-        <TextInput
-          label="Nome do contato"
-          value={form.contact ?? ''}
-          onChange={(value) => setForm((current) => ({ ...current, contact: value }))}
+          label="Fornecedor"
+          value={form.supplierName}
+          required
+          onChange={(supplierName) => setForm((current) => ({ ...current, supplierName }))}
         />
         <TextInput
-          label="WhatsApp / Telefone"
-          value={form.phone ?? ''}
-          onChange={(value) =>
-            setForm((current) => ({
-              ...current,
-              phone: value,
-              whatsappLink: buildWhatsappLink(value),
-            }))
-          }
+          label="WhatsApp"
+          hint="Pode colar com +, espacos ou parenteses. O sistema salva apenas os digitos."
+          value={form.whatsappNumber}
+          required
+          onChange={(whatsappNumber) => setForm((current) => ({ ...current, whatsappNumber }))}
         />
         <TextInput
-          label="Link direto do WhatsApp"
-          value={form.whatsappLink ?? ''}
-          onChange={(value) => setForm((current) => ({ ...current, whatsappLink: value }))}
+          label="Endereco"
+          value={form.address || ''}
+          onChange={(address) => setForm((current) => ({ ...current, address }))}
         />
         <div className="flex justify-end gap-3">
-          <ActionButton variant="secondary" onClick={onClose}>
+          <ActionButton variant="secondary" onClick={onClose} disabled={saving}>
             Cancelar
           </ActionButton>
           <ActionButton type="submit" disabled={saving}>
-            {saving ? 'Salvando...' : 'Salvar'}
+            {saving ? 'Salvando...' : 'Salvar contato'}
           </ActionButton>
         </div>
       </form>
@@ -268,17 +231,16 @@ function SupplierFormModal({
   );
 }
 
-function buildWhatsappLink(phone: string) {
-  const digits = phone.replace(/\D/g, '');
-  return digits ? `https://wa.me/${digits}` : '';
-}
-
 function TextInput({
   label,
+  hint,
+  required,
   value,
   onChange,
 }: {
   label: string;
+  hint?: string;
+  required?: boolean;
   value: string;
   onChange: (value: string) => void;
 }) {
@@ -287,38 +249,18 @@ function TextInput({
       <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
       <input
         value={value}
+        required={required}
         onChange={(event) => onChange(event.target.value)}
         className="field-control"
       />
+      {hint ? <span className="mt-1 block text-xs text-inest-muted">{hint}</span> : null}
     </label>
   );
 }
 
-function SelectInput({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[][];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="field-control"
-      >
-        {options.map(([optionValue, labelText]) => (
-          <option key={optionValue} value={optionValue}>
-            {labelText}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+function formatPhone(phone: string) {
+  if (phone.length === 13 && phone.startsWith('55')) {
+    return `${phone.slice(0, 2)} (${phone.slice(2, 4)}) ${phone.slice(4, 9)}-${phone.slice(9)}`;
+  }
+  return phone;
 }
