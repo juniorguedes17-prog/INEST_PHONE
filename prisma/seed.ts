@@ -506,6 +506,127 @@ async function seedImportFinancialConfiguration() {
   }
 }
 
+async function seedSupplierContacts() {
+  const contacts = [
+    {
+      supplierName: 'BrockTech',
+      address: 'Shopping Mundo Oriental, LN224, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['244943944758', '5511999337000', '96171011066', '96171776655'],
+    },
+    {
+      supplierName: 'Alisson Angelim',
+      address: 'Loja Shop Importale, Av. Maria Coelho Aguiar 215, Jardim Sao Luis, Sao Paulo/SP, CEP 05805-000',
+      whatsappNumbers: ['5511914979079'],
+    },
+    {
+      supplierName: 'Emilio Shop',
+      address: 'Shopping Mundo Oriental, LN793, 7o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['96171942371', '96178813241', '9617213200'],
+    },
+    {
+      supplierName: 'Rawan Import',
+      address: 'Shopping Mundo Oriental, LN222A, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511984273294', '5511963483426'],
+    },
+    {
+      supplierName: 'Mohamad Nasser',
+      address: 'Shopping Mundo Oriental, LN229, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511994430333'],
+    },
+    {
+      supplierName: 'Trend Shop',
+      address: 'Shopping Mundo Oriental, LN232, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511958105593'],
+    },
+    {
+      supplierName: 'Fire Cell',
+      address: 'Shopping Mundo Oriental, LN235, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511947041585', '5511942379444'],
+    },
+    {
+      supplierName: 'ProNine Atacado',
+      address: 'Campo Grande/MS',
+      whatsappNumbers: ['556792217299', '5511918442204'],
+    },
+    {
+      supplierName: 'Cell Zone',
+      address: 'Shopping Mundo Oriental, LN235 / LN263, Sao Paulo/SP',
+      whatsappNumbers: ['5511947612741', '5511992740938'],
+    },
+    {
+      supplierName: 'Tala Cell',
+      address: 'Shopping Mundo Oriental, LN207A, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511940886603'],
+    },
+    {
+      supplierName: 'HyH',
+      address: 'Shopping Mundo Oriental, LN751, 7o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511954236940'],
+    },
+    {
+      supplierName: 'Mega Center',
+      address: 'Shopping Mundo Oriental, LN269, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511981051194', '96181020316', '5511959598222'],
+    },
+    {
+      supplierName: 'GN Logistica Serv',
+      address: 'Taubate/SP',
+      whatsappNumbers: ['5511934459955', '5511983797106'],
+    },
+    {
+      supplierName: 'Tio San',
+      address: 'Guarulhos/SP',
+      whatsappNumbers: ['13153886169'],
+    },
+    {
+      supplierName: 'Fox',
+      address: 'Shopping Mundo Oriental, LN200/LN269, Sao Paulo/SP',
+      whatsappNumbers: ['595973406570', '595987119077', '96176696858', '5545991075557'],
+    },
+    {
+      supplierName: 'Elite Shop',
+      address: 'Shopping Mundo Oriental, LN249A, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511943020886', '5511960650689'],
+    },
+    {
+      supplierName: 'AZUR IMPEX',
+      address: 'Galeria Page, LN24/25, 2o Andar',
+      whatsappNumbers: ['595993272728', '595973648393'],
+    },
+    {
+      supplierName: 'AZ Shop',
+      address: 'Shopping Mundo Oriental, LN793, 7o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['96171213200', '9613871138'],
+    },
+    {
+      supplierName: 'SAM CELL',
+      address: 'Shopping Mundo Oriental, LN202E, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['595975216445', '5511930152828'],
+    },
+  ] as const;
+
+  for (const supplier of contacts) {
+    for (const whatsappNumber of supplier.whatsappNumbers) {
+      const normalizedWhatsappNumber = whatsappNumber.replace(/\D/g, '');
+
+      await prisma.supplierContact.upsert({
+        where: { whatsappNumber: normalizedWhatsappNumber },
+        update: {
+          supplierName: supplier.supplierName,
+          address: supplier.address,
+          isActive: true,
+        },
+        create: {
+          supplierName: supplier.supplierName,
+          whatsappNumber: normalizedWhatsappNumber,
+          address: supplier.address,
+          isActive: true,
+        },
+      });
+    }
+  }
+}
+
 async function seedCommercialTemplates() {
   const sealedTemplate = [
     '🏆 OFERTA DE LACRADO INEST 🏆',
@@ -595,6 +716,7 @@ async function main() {
   await seedLocationBase();
   await seedFinancialConfiguration();
   await seedImportFinancialConfiguration();
+  await seedSupplierContacts();
   await seedCommercialTemplates();
 }
 

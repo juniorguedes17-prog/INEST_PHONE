@@ -318,6 +318,19 @@ model Supplier {
   @@map("fornecedor")
 }
 
+model SupplierContact {
+  id             String   @id @default(uuid()) @db.Uuid
+  supplierName   String   @map("supplier_name") @db.VarChar(160)
+  whatsappNumber String   @unique(map: "uq_supplier_contacts_whatsapp_number") @map("whatsapp_number") @db.VarChar(15)
+  address        String?  @map("address")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive], map: "idx_supplier_contacts_is_active")
+  @@map("supplier_contacts")
+}
+
 model ProductCategory {
   id        String        @id @default(uuid()) @db.Uuid
   name      String        @unique(map: "uq_categoria_nome") @map("nome") @db.VarChar(120)
