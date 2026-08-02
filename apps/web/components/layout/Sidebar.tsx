@@ -24,7 +24,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
     >
       <div className="flex min-h-12 items-center gap-3 px-2">
         <Image
-          src="/brand/inest-phone-logo.jpg"
+          src="/brand/inest-phone-logo.png"
           alt="iNest Phone"
           width={56}
           height={56}

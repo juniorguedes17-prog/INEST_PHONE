@@ -35,7 +35,7 @@ export default function LoginPage() {
         <div className="max-w-2xl">
           <p className="text-sm font-bold uppercase tracking-wide text-inest-blue">Acesso seguro</p>
           <Image
-            src="/brand/inest-phone-logo.jpg"
+            src="/brand/inest-phone-logo.png"
             alt="iNest Phone"
             width={180}
             height={180}

@@ -54,7 +54,7 @@ export function Header({ onOpenMenu }: HeaderProps) {
             Menu
           </button>
           <Image
-            src="/brand/inest-phone-logo.jpg"
+            src="/brand/inest-phone-logo.png"
             alt="iNest Phone"
             width={40}
             height={40}

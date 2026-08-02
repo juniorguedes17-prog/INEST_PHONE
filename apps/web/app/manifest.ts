@@ -11,9 +11,9 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#5f7cff',
     icons: [
       {
-        src: '/brand/inest-phone-logo.jpg',
+        src: '/brand/inest-phone-logo.png',
         sizes: 'any',
-        type: 'image/jpeg',
+        type: 'image/png',
       },
     ],
   };
