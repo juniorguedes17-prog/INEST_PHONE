@@ -12,7 +12,12 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       {
         src: '/brand/inest-phone-logo.png',
-        sizes: 'any',
+        sizes: '1200x1200',
+        type: 'image/png',
+      },
+      {
+        src: '/icon.png',
+        sizes: '512x512',
         type: 'image/png',
       },
     ],

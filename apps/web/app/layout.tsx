@@ -8,8 +8,8 @@ export const metadata: Metadata = {
   applicationName: 'iNest Phone',
   manifest: '/manifest.webmanifest',
   icons: {
-    icon: '/icon.png',
-    apple: '/icon.png',
+    icon: [{ url: '/icon.png', sizes: '512x512', type: 'image/png' }],
+    apple: [{ url: '/icon.png', sizes: '512x512', type: 'image/png' }],
   },
   appleWebApp: {
     capable: true,
@@ -22,11 +22,17 @@ export const metadata: Metadata = {
     images: [
       {
         url: '/brand/inest-phone-logo.png',
-        width: 1080,
-        height: 1080,
+        width: 1200,
+        height: 1200,
         alt: 'Logo oficial iNest Phone',
       },
     ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'iNest Phone | Gestao Comercial',
+    description: 'Plataforma comercial iNest Phone.',
+    images: ['/brand/inest-phone-logo.png'],
   },
 };
 
