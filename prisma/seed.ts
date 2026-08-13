@@ -628,6 +628,11 @@ async function seedSupplierContacts() {
       address: 'Shopping Mundo Oriental, LN325, 3o Andar, Sao Paulo/SP',
       whatsappNumbers: ['5511953375519'],
     },
+    {
+      supplierName: 'Casa do iPhone',
+      address: 'CDE, Paraguai',
+      whatsappNumbers: ['595993506874', '556581267526', '556599370112'],
+    },
   ] as const;
 
   for (const supplier of contacts) {
