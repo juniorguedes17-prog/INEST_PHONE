@@ -603,6 +603,31 @@ async function seedSupplierContacts() {
       address: 'Shopping Mundo Oriental, LN202E, 2o Andar, Sao Paulo/SP',
       whatsappNumbers: ['595975216445', '5511930152828'],
     },
+    {
+      supplierName: 'Point Cell',
+      address: 'Shopping Mundo Oriental, LN106A, 1o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511999633929', '5511984798723', '96170386595'],
+    },
+    {
+      supplierName: 'Bakkour',
+      address: 'Sao Paulo/SP',
+      whatsappNumbers: ['5511964259939'],
+    },
+    {
+      supplierName: 'Captain Cell',
+      address: 'Shopping Mundo Oriental, LN216, 2o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511999568992', '5545991052815', '5511952746286'],
+    },
+    {
+      supplierName: 'Braba Atacado',
+      address: 'Shopping Mundo Oriental, LN711, 7o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511914509898', '5511926128880'],
+    },
+    {
+      supplierName: 'Red Cell',
+      address: 'Shopping Mundo Oriental, LN325, 3o Andar, Sao Paulo/SP',
+      whatsappNumbers: ['5511953375519'],
+    },
   ] as const;
 
   for (const supplier of contacts) {
