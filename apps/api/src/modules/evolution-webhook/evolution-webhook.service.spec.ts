@@ -70,13 +70,54 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
   });
 
+  it('aceita o telefone alternativo da Evolution para mensagens de comunidade', async () => {
+    const { service, transaction, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      senderPn: '5511999999999',
+      data: {
+        key: { id: 'message-3', remoteJid: '12345@g.us', fromMe: false },
+        message: { conversation: 'IPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+    );
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+  });
+
+  it('usa o remoteJid alternativo quando a mensagem direta chega em modo LID', async () => {
+    const { service, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-4',
+          remoteJid: '123456789@lid',
+          remoteJidAlt: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'IPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+    );
+  });
+
   it('ignora mensagem de grupo sem participante identificavel', async () => {
     const { service, transaction } = createService();
 
     const result = await service.receive(webhookSecret, {
       event: 'messages.upsert',
       data: {
-        key: { id: 'message-3', remoteJid: '12345@g.us', fromMe: false },
+        key: { id: 'message-5', remoteJid: '12345@g.us', fromMe: false },
         message: { conversation: 'iPhone 17 R$ 5.000' },
       },
     });

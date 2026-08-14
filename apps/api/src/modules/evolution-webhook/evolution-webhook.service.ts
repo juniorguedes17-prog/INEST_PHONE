@@ -24,7 +24,8 @@ export class EvolutionWebhookService {
       return { accepted: false, ignored: true };
     }
 
-    if (!isDirectWhatsappJid(message.senderJid)) {
+    if (!isSupplierWhatsappJid(message.senderJid)) {
+      this.logger.warn('Mensagem ignorada: remetente do grupo nao pode ser identificado.');
       return { accepted: false, ignored: true };
     }
 
@@ -102,11 +103,10 @@ function extractEvolutionMessage(payload: unknown): EvolutionMessage | null {
   const data = isRecord(payload.data) ? payload.data : payload;
   const key = isRecord(data.key) ? data.key : null;
   const messageId = typeof key?.id === 'string' ? key.id : null;
-  const remoteJid = typeof key?.remoteJid === 'string' ? key.remoteJid : null;
-  const participant = getParticipantJid(key, data);
+  const remoteJid = getString(key?.remoteJid);
   if (!event || !messageId || !remoteJid) return null;
 
-  const senderJid = isGroupWhatsappJid(remoteJid) ? participant : remoteJid;
+  const senderJid = getSenderJid(payload, data, key, remoteJid);
   if (!senderJid) return null;
 
   return {
@@ -120,9 +120,43 @@ function extractEvolutionMessage(payload: unknown): EvolutionMessage | null {
   };
 }
 
-function getParticipantJid(key: Record<string, unknown> | null, data: Record<string, unknown>) {
-  const directParticipant = key?.participant ?? data.participant;
-  return typeof directParticipant === 'string' ? directParticipant : null;
+function getSenderJid(
+  payload: Record<string, unknown>,
+  data: Record<string, unknown>,
+  key: Record<string, unknown> | null,
+  remoteJid: string,
+) {
+  const candidates = isGroupWhatsappJid(remoteJid)
+    ? [
+        key?.participant,
+        key?.participantAlt,
+        data.participant,
+        data.sender,
+        data.senderPn,
+        payload.sender,
+        payload.senderPn,
+      ]
+    : [remoteJid, key?.remoteJidAlt, data.sender, data.senderPn, payload.sender, payload.senderPn];
+
+  for (const candidate of candidates) {
+    const jid = toWhatsappJid(candidate);
+    if (jid) return jid;
+  }
+  return null;
+}
+
+function toWhatsappJid(value: unknown) {
+  const jid = getString(value);
+  if (!jid) return null;
+  if (jid.endsWith('@s.whatsapp.net')) return jid;
+  if (jid.includes('@')) return null;
+
+  const phone = jid.replace(/\D/g, '');
+  return phone.length >= 8 && phone.length <= 15 ? `${phone}@s.whatsapp.net` : null;
+}
+
+function getString(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 function getText(message: unknown): string | null {
@@ -139,7 +173,7 @@ function getText(message: unknown): string | null {
   return text?.trim() ?? null;
 }
 
-function isDirectWhatsappJid(remoteJid: string) {
+function isSupplierWhatsappJid(remoteJid: string) {
   return remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.startsWith('status@');
 }
 
