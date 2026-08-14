@@ -115,17 +115,19 @@ export class EvolutionWebhookService {
 function extractEvolutionMessage(payload: unknown): EvolutionExtraction {
   if (!isRecord(payload)) return { message: null, reason: 'payload_not_object' };
 
-  const event =
-    typeof payload.event === 'string' ? payload.event.toLowerCase().replace(/_/g, '.') : '';
-  const data = isRecord(payload.data) ? payload.data : payload;
-  const key = isRecord(data.key) ? data.key : null;
+  const records = getPayloadRecords(payload);
+  const event = getEvent(records);
+  const data = records.find((record) => isRecord(record.key));
+  const key = data && isRecord(data.key) ? data.key : null;
   const messageId = typeof key?.id === 'string' ? key.id : null;
-  const remoteJid = getRemoteJid(payload, data, key);
   if (!event) return { message: null, reason: 'missing_event' };
   if (!messageId) return { message: null, reason: 'missing_message_id' };
+  if (!data) return { message: null, reason: 'missing_message_id' };
+
+  const remoteJid = getRemoteJid(records, key);
   if (!remoteJid) return { message: null, reason: 'missing_remote_jid' };
 
-  const senderJid = getSenderJid(payload, data, key, remoteJid);
+  const senderJid = getSenderJid(records, key, remoteJid);
   if (!senderJid) return { message: null, reason: 'missing_sender_jid' };
 
   return {
@@ -142,18 +144,45 @@ function extractEvolutionMessage(payload: unknown): EvolutionExtraction {
   };
 }
 
+function getPayloadRecords(payload: Record<string, unknown>) {
+  const records: Record<string, unknown>[] = [payload];
+
+  for (let index = 0; index < records.length && index < 12; index += 1) {
+    const record = records[index];
+    if (!record) continue;
+
+    const data = record.data;
+    if (isRecord(data) && !records.includes(data)) {
+      records.push(data);
+    }
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        if (isRecord(item) && !records.includes(item)) {
+          records.push(item);
+        }
+      }
+    }
+  }
+
+  return records;
+}
+
+function getEvent(records: Record<string, unknown>[]) {
+  for (const record of records) {
+    const event = getString(record.event) ?? getString(record.eventType) ?? getString(record.type);
+    if (event) return event.toLowerCase().replace(/_/g, '.');
+  }
+  return '';
+}
+
 function getRemoteJid(
-  payload: Record<string, unknown>,
-  data: Record<string, unknown>,
+  records: Record<string, unknown>[],
   key: Record<string, unknown> | null,
 ) {
   const candidates = [
     key?.remoteJid,
-    data.remoteJid,
-    payload.remoteJid,
     key?.remoteJidAlt,
-    data.remoteJidAlt,
-    payload.remoteJidAlt,
+    ...records.flatMap((record) => [record.remoteJid, record.remoteJidAlt]),
   ]
     .map(getString)
     .filter((value): value is string => value !== null);
@@ -167,36 +196,29 @@ function getRemoteJid(
 }
 
 function getSenderJid(
-  payload: Record<string, unknown>,
-  data: Record<string, unknown>,
+  records: Record<string, unknown>[],
   key: Record<string, unknown> | null,
   remoteJid: string,
 ) {
+  const recordValues = records.flatMap((record) => [
+    record.participant,
+    record.participantAlt,
+    record.participantPn,
+    record.sender,
+    record.senderPn,
+    record.remoteJidAlt,
+  ]);
   const candidates = isGroupWhatsappJid(remoteJid)
     ? [
         key?.participant,
         key?.participantAlt,
         key?.participantPn,
-        data.participant,
-        data.participantAlt,
-        data.participantPn,
-        data.sender,
-        data.senderPn,
-        payload.sender,
-        payload.senderPn,
-        payload.participant,
-        payload.participantAlt,
-        payload.participantPn,
+        ...recordValues,
       ]
     : [
         remoteJid,
         key?.remoteJidAlt,
-        data.remoteJidAlt,
-        payload.remoteJidAlt,
-        data.sender,
-        data.senderPn,
-        payload.sender,
-        payload.senderPn,
+        ...recordValues,
       ];
 
   for (const candidate of candidates) {

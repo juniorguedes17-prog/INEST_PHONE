@@ -89,6 +89,53 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
   });
 
+  it('aceita o envelope aninhado entregue pela Evolution em algumas mensagens de comunidade', async () => {
+    const { service, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        data: {
+          key: {
+            id: 'message-nested',
+            remoteJid: '120363351894379336@g.us',
+            participantAlt: '5511918442204@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: { conversation: 'IPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+        },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '5511918442204@s.whatsapp.net',
+    );
+  });
+
+  it('aceita o envelope em lista entregue pela Evolution', async () => {
+    const { service, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: [
+        {
+          key: {
+            id: 'message-array',
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: { conversation: 'IPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+        },
+      ],
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+    );
+  });
+
   it('aceita o participante alternativo quando o grupo usa identificador LID', async () => {
     const { service, supplierContacts } = createService();
 
