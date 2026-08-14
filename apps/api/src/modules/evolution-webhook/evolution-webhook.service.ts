@@ -19,8 +19,25 @@ export class EvolutionWebhookService {
   async receive(secret: string, payload: unknown) {
     this.assertValidSecret(secret);
 
-    const message = extractEvolutionMessage(payload);
-    if (!message || message.event !== 'messages.upsert' || message.fromMe || message.text === null) {
+    const extraction = extractEvolutionMessage(payload);
+    const message = extraction.message;
+    if (!message) {
+      this.logger.warn(`Mensagem ignorada: evento Evolution invalido (${extraction.reason}).`);
+      return { accepted: false, ignored: true };
+    }
+
+    if (message.event !== 'messages.upsert') {
+      this.logger.warn('Mensagem ignorada: evento Evolution nao e messages.upsert.');
+      return { accepted: false, ignored: true };
+    }
+
+    if (message.fromMe) {
+      this.logger.warn('Mensagem ignorada: enviada pela propria instancia.');
+      return { accepted: false, ignored: true };
+    }
+
+    if (message.text === null) {
+      this.logger.warn('Mensagem ignorada: sem texto ou legenda processavel.');
       return { accepted: false, ignored: true };
     }
 
@@ -95,29 +112,58 @@ export class EvolutionWebhookService {
   }
 }
 
-function extractEvolutionMessage(payload: unknown): EvolutionMessage | null {
-  if (!isRecord(payload)) return null;
+function extractEvolutionMessage(payload: unknown): EvolutionExtraction {
+  if (!isRecord(payload)) return { message: null, reason: 'payload_not_object' };
 
   const event =
     typeof payload.event === 'string' ? payload.event.toLowerCase().replace(/_/g, '.') : '';
   const data = isRecord(payload.data) ? payload.data : payload;
   const key = isRecord(data.key) ? data.key : null;
   const messageId = typeof key?.id === 'string' ? key.id : null;
-  const remoteJid = getString(key?.remoteJid);
-  if (!event || !messageId || !remoteJid) return null;
+  const remoteJid = getRemoteJid(payload, data, key);
+  if (!event) return { message: null, reason: 'missing_event' };
+  if (!messageId) return { message: null, reason: 'missing_message_id' };
+  if (!remoteJid) return { message: null, reason: 'missing_remote_jid' };
 
   const senderJid = getSenderJid(payload, data, key, remoteJid);
-  if (!senderJid) return null;
+  if (!senderJid) return { message: null, reason: 'missing_sender_jid' };
 
   return {
-    event,
-    messageId,
-    remoteJid,
-    senderJid,
-    fromMe: key?.fromMe === true,
-    text: getText(data.message),
-    receivedAt: new Date(),
+    message: {
+      event,
+      messageId,
+      remoteJid,
+      senderJid,
+      fromMe: key?.fromMe === true,
+      text: getText(data.message),
+      receivedAt: new Date(),
+    },
+    reason: null,
   };
+}
+
+function getRemoteJid(
+  payload: Record<string, unknown>,
+  data: Record<string, unknown>,
+  key: Record<string, unknown> | null,
+) {
+  const candidates = [
+    key?.remoteJid,
+    data.remoteJid,
+    payload.remoteJid,
+    key?.remoteJidAlt,
+    data.remoteJidAlt,
+    payload.remoteJidAlt,
+  ]
+    .map(getString)
+    .filter((value): value is string => value !== null);
+
+  return (
+    candidates.find(isGroupWhatsappJid) ??
+    candidates.find((value) => value.endsWith('@s.whatsapp.net')) ??
+    candidates[0] ??
+    null
+  );
 }
 
 function getSenderJid(
@@ -130,13 +176,28 @@ function getSenderJid(
     ? [
         key?.participant,
         key?.participantAlt,
+        key?.participantPn,
         data.participant,
+        data.participantAlt,
+        data.participantPn,
         data.sender,
         data.senderPn,
         payload.sender,
         payload.senderPn,
+        payload.participant,
+        payload.participantAlt,
+        payload.participantPn,
       ]
-    : [remoteJid, key?.remoteJidAlt, data.sender, data.senderPn, payload.sender, payload.senderPn];
+    : [
+        remoteJid,
+        key?.remoteJidAlt,
+        data.remoteJidAlt,
+        payload.remoteJidAlt,
+        data.sender,
+        data.senderPn,
+        payload.sender,
+        payload.senderPn,
+      ];
 
   for (const candidate of candidates) {
     const jid = toWhatsappJid(candidate);
@@ -193,4 +254,15 @@ function safeEqual(left: string, right: string) {
 
 function isDuplicateReceiptError(error: unknown) {
   return isRecord(error) && error.code === 'P2002';
+}
+
+interface EvolutionExtraction {
+  message: EvolutionMessage | null;
+  reason:
+    | 'payload_not_object'
+    | 'missing_event'
+    | 'missing_message_id'
+    | 'missing_remote_jid'
+    | 'missing_sender_jid'
+    | null;
 }

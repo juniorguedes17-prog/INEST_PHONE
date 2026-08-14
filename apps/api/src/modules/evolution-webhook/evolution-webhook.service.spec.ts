@@ -89,6 +89,47 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
   });
 
+  it('aceita o participante alternativo quando o grupo usa identificador LID', async () => {
+    const { service, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        remoteJid: '12345@g.us',
+        key: {
+          id: 'message-3b',
+          remoteJid: '123456789@lid',
+          participantPn: '5511999999999',
+          fromMe: false,
+        },
+        message: { conversation: 'IPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+    );
+  });
+
+  it('aceita remoteJid alternativo fora da chave da mensagem', async () => {
+    const { service, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        remoteJidAlt: '5511999999999@s.whatsapp.net',
+        key: { id: 'message-3c', remoteJid: '123456789@lid', fromMe: false },
+        message: { conversation: 'IPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+    );
+  });
+
   it('usa o remoteJid alternativo quando a mensagem direta chega em modo LID', async () => {
     const { service, supplierContacts } = createService();
 
