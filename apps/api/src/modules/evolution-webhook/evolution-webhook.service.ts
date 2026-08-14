@@ -22,12 +22,9 @@ export class EvolutionWebhookService {
     const extraction = extractEvolutionMessage(payload);
     const message = extraction.message;
     if (!message) {
-      this.logger.warn(`Mensagem ignorada: evento Evolution invalido (${extraction.reason}).`);
-      return { accepted: false, ignored: true };
-    }
-
-    if (message.event !== 'messages.upsert') {
-      this.logger.warn('Mensagem ignorada: evento Evolution nao e messages.upsert.');
+      this.logger.log(
+        `Webhook Evolution ignorado: evento=${extraction.event ?? 'ausente'} motivo=${extraction.reason}.`,
+      );
       return { accepted: false, ignored: true };
     }
 
@@ -113,22 +110,26 @@ export class EvolutionWebhookService {
 }
 
 function extractEvolutionMessage(payload: unknown): EvolutionExtraction {
-  if (!isRecord(payload)) return { message: null, reason: 'payload_not_object' };
+  if (!isRecord(payload)) return { message: null, event: null, reason: 'payload_not_object' };
 
   const records = getPayloadRecords(payload);
   const event = getEvent(records);
+  if (!event) return { message: null, event: null, reason: 'missing_event' };
+  if (event !== 'messages.upsert') {
+    return { message: null, event, reason: 'non_message_event' };
+  }
+
   const data = records.find((record) => isRecord(record.key));
   const key = data && isRecord(data.key) ? data.key : null;
   const messageId = typeof key?.id === 'string' ? key.id : null;
-  if (!event) return { message: null, reason: 'missing_event' };
-  if (!messageId) return { message: null, reason: 'missing_message_id' };
-  if (!data) return { message: null, reason: 'missing_message_id' };
+  if (!messageId) return { message: null, event, reason: 'missing_message_id' };
+  if (!data) return { message: null, event, reason: 'missing_message_id' };
 
   const remoteJid = getRemoteJid(records, key);
-  if (!remoteJid) return { message: null, reason: 'missing_remote_jid' };
+  if (!remoteJid) return { message: null, event, reason: 'missing_remote_jid' };
 
   const senderJid = getSenderJid(records, key, remoteJid);
-  if (!senderJid) return { message: null, reason: 'missing_sender_jid' };
+  if (!senderJid) return { message: null, event, reason: 'missing_sender_jid' };
 
   return {
     message: {
@@ -140,6 +141,7 @@ function extractEvolutionMessage(payload: unknown): EvolutionExtraction {
       text: getText(data.message),
       receivedAt: new Date(),
     },
+    event,
     reason: null,
   };
 }
@@ -151,14 +153,15 @@ function getPayloadRecords(payload: Record<string, unknown>) {
     const record = records[index];
     if (!record) continue;
 
-    const data = record.data;
-    if (isRecord(data) && !records.includes(data)) {
-      records.push(data);
-    }
-    if (Array.isArray(data)) {
-      for (const item of data) {
-        if (isRecord(item) && !records.includes(item)) {
-          records.push(item);
+    for (const wrapper of [record.data, record.payload, record.body, record.messages]) {
+      if (isRecord(wrapper) && !records.includes(wrapper)) {
+        records.push(wrapper);
+      }
+      if (Array.isArray(wrapper)) {
+        for (const item of wrapper) {
+          if (isRecord(item) && !records.includes(item)) {
+            records.push(item);
+          }
         }
       }
     }
@@ -280,9 +283,11 @@ function isDuplicateReceiptError(error: unknown) {
 
 interface EvolutionExtraction {
   message: EvolutionMessage | null;
+  event: string | null;
   reason:
     | 'payload_not_object'
     | 'missing_event'
+    | 'non_message_event'
     | 'missing_message_id'
     | 'missing_remote_jid'
     | 'missing_sender_jid'

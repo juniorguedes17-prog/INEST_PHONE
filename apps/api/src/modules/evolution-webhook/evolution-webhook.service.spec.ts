@@ -159,6 +159,46 @@ describe('EvolutionWebhookService', () => {
     );
   });
 
+  it('aceita o envelope de grupo encaminhado pela Evolution com participantAlt', async () => {
+    const { service, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      payload: {
+        event: 'messages.upsert',
+        data: {
+          key: {
+            id: 'message-evolution-group',
+            remoteJid: '120363350166332222@g.us',
+            participant: '238259603030262@lid',
+            participantAlt: '595987119077@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: {
+            imageMessage: { caption: 'iPhone 17 Pro Max 256GB R$ 7.099,99' },
+          },
+        },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '595987119077@s.whatsapp.net',
+    );
+  });
+
+  it('ignora eventos que nao sao mensagens antes de exigir uma chave de mensagem', async () => {
+    const { service, supplierContacts, transaction } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'CONNECTION_UPDATE',
+      data: { state: 'open' },
+    });
+
+    expect(result).toEqual({ accepted: false, ignored: true });
+    expect(supplierContacts.findActiveByWhatsappNumber).not.toHaveBeenCalled();
+    expect(transaction.evolutionWebhookReceipt.create).not.toHaveBeenCalled();
+  });
+
   it('aceita remoteJid alternativo fora da chave da mensagem', async () => {
     const { service, supplierContacts } = createService();
 
