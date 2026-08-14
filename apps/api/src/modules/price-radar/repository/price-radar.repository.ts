@@ -7,6 +7,7 @@ import {
 } from '../dto/price-radar.dto';
 import {
   PriceQuoteRecord,
+  AutomatedPriceQuoteRecord,
   PriceRadarPrismaClient,
 } from '../interfaces/price-radar-prisma.interface';
 import { markHidden } from '../validators/price-radar.validators';
@@ -51,6 +52,45 @@ export class PriceRadarRepository {
           : query.sort === 'highest_price'
             ? { costProduct: 'desc' }
             : { quoteDate: 'desc' },
+    });
+  }
+
+  listAutomatedQuotes(query: PriceRadarQueryDto): Promise<AutomatedPriceQuoteRecord[]> {
+    return this.prisma.supplierCurrentListItem.findMany({
+      where: {
+        currentList: {
+          supplierContact: {
+            isActive: true,
+          },
+        },
+        OR: query.search
+          ? [
+              { productName: { contains: query.search, mode: 'insensitive' } },
+              { category: { contains: query.search, mode: 'insensitive' } },
+              { model: { contains: query.search, mode: 'insensitive' } },
+              { color: { contains: query.search, mode: 'insensitive' } },
+              { capacity: { contains: query.search, mode: 'insensitive' } },
+              {
+                currentList: {
+                  supplierContact: {
+                    supplierName: { contains: query.search, mode: 'insensitive' },
+                  },
+                },
+              },
+            ]
+          : undefined,
+      },
+      include: {
+        currentList: {
+          include: { supplierContact: true },
+        },
+      },
+      orderBy:
+        query.sort === 'lowest_price'
+          ? { price: 'asc' }
+          : query.sort === 'highest_price'
+            ? { price: 'desc' }
+            : { createdAt: 'desc' },
     });
   }
 

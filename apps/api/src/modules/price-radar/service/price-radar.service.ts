@@ -6,7 +6,10 @@ import {
   UpdatePriceQuoteDto,
   ValidateQuoteDto,
 } from '../dto/price-radar.dto';
-import { PriceQuoteRecord } from '../interfaces/price-radar-prisma.interface';
+import {
+  AutomatedPriceQuoteRecord,
+  PriceQuoteRecord,
+} from '../interfaces/price-radar-prisma.interface';
 import { PriceRadarRepository } from '../repository/price-radar.repository';
 import {
   buildWhatsappLink,
@@ -21,9 +24,15 @@ export class PriceRadarService {
   constructor(@Inject(PriceRadarRepository) private readonly repository: PriceRadarRepository) {}
 
   async list(query: PriceRadarQueryDto) {
-    const records = await this.repository.listQuotes(query);
+    const [records, automatedRecords] = await Promise.all([
+      this.repository.listQuotes(query),
+      this.repository.listAutomatedQuotes(query),
+    ]);
     return this.applyPostFilters(
-      records.map((record) => this.toResponse(record)),
+      [
+        ...records.map((record) => this.toResponse(record)),
+        ...automatedRecords.map((record) => this.toAutomatedResponse(record)),
+      ],
       query,
     );
   }
@@ -213,6 +222,21 @@ export class PriceRadarService {
     query: PriceRadarQueryDto,
   ) {
     const filtered = quotes.filter((quote) => {
+      if (query.productId && quote.productId !== query.productId) {
+        return false;
+      }
+      if (query.supplierId && quote.supplierId !== query.supplierId) {
+        return false;
+      }
+      if (query.city && !quote.city.toLowerCase().includes(query.city.toLowerCase())) {
+        return false;
+      }
+      if (
+        query.deliveryTime &&
+        !quote.deliveryTime.toLowerCase().includes(query.deliveryTime.toLowerCase())
+      ) {
+        return false;
+      }
       if (query.status && quote.status !== query.status) {
         return false;
       }
@@ -278,6 +302,40 @@ export class PriceRadarService {
       status: hidden ? 'hidden' : 'valid',
       valid: validation.valid && !hidden,
       inconsistencies: validation.inconsistencies,
+    };
+  }
+
+  private toAutomatedResponse(record: AutomatedPriceQuoteRecord) {
+    const contact = record.currentList.supplierContact;
+    return {
+      id: `evolution:${record.id}`,
+      productId: `evolution:${record.normalizedName}`,
+      supplierId: `evolution:${contact.id}`,
+      productName: record.productName,
+      category: record.category ?? '',
+      model: record.model ?? record.productName,
+      color: record.color ?? '',
+      capacity: record.capacity ?? '',
+      productType: record.category ?? '',
+      quality: record.condition ?? 'NOVO',
+      supplier: {
+        id: contact.id,
+        name: contact.supplierName,
+        contact: contact.supplierName,
+        phone: contact.whatsappNumber,
+        source: 'Evolution API',
+        whatsappLink: buildWhatsappLink(contact.whatsappNumber),
+      },
+      city: contact.address ?? '',
+      deliveryTime: '',
+      contact: contact.whatsappNumber,
+      notes: record.rawLine,
+      costProduct: toNumber(record.price),
+      quoteDate: record.currentList.receivedAt,
+      updatedAt: record.currentList.updatedAt,
+      status: 'valid' as const,
+      valid: true,
+      inconsistencies: [],
     };
   }
 }

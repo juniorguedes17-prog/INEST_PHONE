@@ -27,6 +27,31 @@ export interface PriceQuoteRecord {
   };
 }
 
+export interface AutomatedPriceQuoteRecord {
+  id: string;
+  normalizedName: string;
+  productName: string;
+  category: string | null;
+  model: string | null;
+  capacity: string | null;
+  color: string | null;
+  condition: string | null;
+  price: number | string;
+  availability: string | null;
+  rawLine: string;
+  createdAt: Date;
+  currentList: {
+    updatedAt: Date;
+    receivedAt: Date;
+    supplierContact: {
+      id: string;
+      supplierName: string;
+      whatsappNumber: string;
+      address: string | null;
+    };
+  };
+}
+
 export interface PriceRadarPrismaClient {
   priceHistory: {
     findMany(args?: unknown): Promise<PriceQuoteRecord[]>;
@@ -45,5 +70,8 @@ export interface PriceRadarPrismaClient {
   };
   auditLog?: {
     create(args: unknown): Promise<unknown>;
+  };
+  supplierCurrentListItem: {
+    findMany(args: unknown): Promise<AutomatedPriceQuoteRecord[]>;
   };
 }

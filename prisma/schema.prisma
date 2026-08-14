@@ -327,8 +327,85 @@ model SupplierContact {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
+  currentList      SupplierCurrentList?
+  webhookReceipts  EvolutionWebhookReceipt[]
+
   @@index([isActive], map: "idx_supplier_contacts_is_active")
   @@map("supplier_contacts")
+}
+
+/// Lista operacional atual recebida pelo WhatsApp para um fornecedor.
+/// A relacao unica garante que listas anteriores nao sejam mantidas como historico.
+model SupplierCurrentList {
+  id                String   @id @default(uuid()) @db.Uuid
+  supplierContactId String   @unique(map: "uq_supplier_current_list_supplier_contact") @map("supplier_contact_id") @db.Uuid
+  sourceMessageId   String   @map("source_message_id") @db.VarChar(180)
+  sourceType        String   @map("source_type") @db.VarChar(40)
+  rawContent        String   @map("raw_content")
+  receivedAt        DateTime @map("received_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  supplierContact SupplierContact             @relation(fields: [supplierContactId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  items           SupplierCurrentListItem[]
+  attachments     SupplierCurrentListAttachment[]
+
+  @@index([updatedAt], map: "idx_supplier_current_list_updated_at")
+  @@map("supplier_current_list")
+}
+
+model SupplierCurrentListItem {
+  id                    String   @id @default(uuid()) @db.Uuid
+  supplierCurrentListId String   @map("supplier_current_list_id") @db.Uuid
+  productName           String   @map("product_name") @db.VarChar(280)
+  normalizedName        String   @map("normalized_name") @db.VarChar(280)
+  category              String?  @map("category") @db.VarChar(80)
+  model                 String?  @map("model") @db.VarChar(180)
+  capacity              String?  @map("capacity") @db.VarChar(40)
+  color                 String?  @map("color") @db.VarChar(80)
+  condition             String?  @map("condition") @db.VarChar(40)
+  price                 Decimal  @map("price") @db.Decimal(12, 2)
+  availability          String?  @map("availability") @db.VarChar(80)
+  rawLine               String   @map("raw_line")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  currentList SupplierCurrentList @relation(fields: [supplierCurrentListId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([supplierCurrentListId], map: "idx_supplier_current_list_item_list_id")
+  @@index([normalizedName], map: "idx_supplier_current_list_item_normalized_name")
+  @@map("supplier_current_list_item")
+}
+
+/// Metadados do ultimo arquivo recebido. O arquivo em si sera apontado por storageKey
+/// quando o armazenamento de objetos for configurado.
+model SupplierCurrentListAttachment {
+  id                    String   @id @default(uuid()) @db.Uuid
+  supplierCurrentListId String   @map("supplier_current_list_id") @db.Uuid
+  fileName              String?  @map("file_name") @db.VarChar(255)
+  mimeType              String   @map("mime_type") @db.VarChar(120)
+  storageKey            String?  @map("storage_key") @db.VarChar(500)
+  sizeBytes             Int?     @map("size_bytes")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  currentList SupplierCurrentList @relation(fields: [supplierCurrentListId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([supplierCurrentListId], map: "idx_supplier_current_list_attachment_list_id")
+  @@map("supplier_current_list_attachment")
+}
+
+/// Recibos tecnicos para idempotencia de entregas do Evolution. Nao contem o texto da lista.
+model EvolutionWebhookReceipt {
+  id                String   @id @default(uuid()) @db.Uuid
+  externalMessageId String   @unique(map: "uq_evolution_webhook_receipt_message_id") @map("external_message_id") @db.VarChar(180)
+  event             String   @map("event") @db.VarChar(80)
+  supplierContactId String?  @map("supplier_contact_id") @db.Uuid
+  receivedAt        DateTime @default(now()) @map("received_at")
+
+  supplierContact SupplierContact? @relation(fields: [supplierContactId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([supplierContactId], map: "idx_evolution_webhook_receipt_supplier_contact_id")
+  @@index([receivedAt], map: "idx_evolution_webhook_receipt_received_at")
+  @@map("evolution_webhook_receipt")
 }
 
 model ProductCategory {

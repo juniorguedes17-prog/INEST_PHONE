@@ -10,6 +10,7 @@ import { validateEnv } from './config/env.validation';
 import { AuthModule } from './modules/auth/auth.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { EvolutionWebhookModule } from './modules/evolution-webhook/evolution-webhook.module';
 import { HealthModule } from './modules/health/health.module';
 import { ImportRadarModule } from './modules/import-radar/import-radar.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
@@ -43,6 +44,7 @@ const envFileName = `.env.${appEnv}`;
     AuthModule,
     CustomersModule,
     DashboardModule,
+    EvolutionWebhookModule,
     HealthModule,
     SettingsModule,
     ProductsModule,

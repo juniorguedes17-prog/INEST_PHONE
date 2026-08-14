@@ -52,8 +52,20 @@ export function validateEnv(config: Env) {
   }
 
   validateGoogleSheetsCredentials(normalizedConfig);
+  validateEvolutionWebhook(normalizedConfig);
 
   return normalizedConfig;
+}
+
+function validateEvolutionWebhook(config: Env) {
+  if (config.EVOLUTION_WEBHOOK_ENABLED !== 'true') return;
+
+  const secret = config.EVOLUTION_WEBHOOK_SECRET?.trim() ?? '';
+  if (secret.length < 32) {
+    throw new Error(
+      'Variavel EVOLUTION_WEBHOOK_SECRET invalida: use um segredo aleatorio com ao menos 32 caracteres.',
+    );
+  }
 }
 
 function validateGoogleSheetsCredentials(config: Env) {

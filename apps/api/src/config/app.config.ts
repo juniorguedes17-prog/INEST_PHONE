@@ -11,4 +11,6 @@ export const appConfig = registerAs('app', () => ({
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
   logLevel: process.env.LOG_LEVEL ?? 'debug',
   swaggerEnabled: process.env.SWAGGER_ENABLED !== 'false',
+  evolutionWebhookEnabled: process.env.EVOLUTION_WEBHOOK_ENABLED === 'true',
+  evolutionWebhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET?.trim() ?? '',
 }));
