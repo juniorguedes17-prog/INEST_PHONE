@@ -30,7 +30,7 @@ WEBHOOK_EVENTS_QRCODE_UPDATED=false
 WEBHOOK_EVENTS_CONNECTION_UPDATE=false
 ```
 
-Mantenha os demais eventos desativados. O endpoint aceita somente mensagens diretas (`@s.whatsapp.net`), ignora grupos, mensagens enviadas pela propria instancia e remetentes que nao estejam ativos em `supplier_contacts`.
+Mantenha os demais eventos desativados. O endpoint aceita mensagens diretas e mensagens de grupos/comunidades. Em grupos, ele usa o participante informado pela Evolution e processa somente quando esse telefone estiver ativo em `supplier_contacts`. Mensagens enviadas pela propria instancia, grupos sem participante identificavel e remetentes nao cadastrados sao ignorados.
 
 ## Comportamento de seguranca
 

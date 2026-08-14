@@ -15,6 +15,7 @@ export interface EvolutionMessage {
   event: string;
   messageId: string;
   remoteJid: string;
+  senderJid: string;
   fromMe: boolean;
   text: string | null;
   receivedAt: Date;

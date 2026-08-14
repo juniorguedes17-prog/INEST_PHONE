@@ -24,11 +24,11 @@ export class EvolutionWebhookService {
       return { accepted: false, ignored: true };
     }
 
-    if (!isDirectWhatsappJid(message.remoteJid)) {
+    if (!isDirectWhatsappJid(message.senderJid)) {
       return { accepted: false, ignored: true };
     }
 
-    const supplier = await this.supplierContacts.findActiveByWhatsappNumber(message.remoteJid);
+    const supplier = await this.supplierContacts.findActiveByWhatsappNumber(message.senderJid);
     if (!supplier) {
       this.logger.warn('Mensagem ignorada: remetente nao corresponde a um fornecedor ativo.');
       return { accepted: false, ignored: true };
@@ -103,16 +103,26 @@ function extractEvolutionMessage(payload: unknown): EvolutionMessage | null {
   const key = isRecord(data.key) ? data.key : null;
   const messageId = typeof key?.id === 'string' ? key.id : null;
   const remoteJid = typeof key?.remoteJid === 'string' ? key.remoteJid : null;
+  const participant = getParticipantJid(key, data);
   if (!event || !messageId || !remoteJid) return null;
+
+  const senderJid = isGroupWhatsappJid(remoteJid) ? participant : remoteJid;
+  if (!senderJid) return null;
 
   return {
     event,
     messageId,
     remoteJid,
+    senderJid,
     fromMe: key?.fromMe === true,
     text: getText(data.message),
     receivedAt: new Date(),
   };
+}
+
+function getParticipantJid(key: Record<string, unknown> | null, data: Record<string, unknown>) {
+  const directParticipant = key?.participant ?? data.participant;
+  return typeof directParticipant === 'string' ? directParticipant : null;
 }
 
 function getText(message: unknown): string | null {
@@ -131,6 +141,10 @@ function getText(message: unknown): string | null {
 
 function isDirectWhatsappJid(remoteJid: string) {
   return remoteJid.endsWith('@s.whatsapp.net') && !remoteJid.startsWith('status@');
+}
+
+function isGroupWhatsappJid(remoteJid: string) {
+  return remoteJid.endsWith('@g.us');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

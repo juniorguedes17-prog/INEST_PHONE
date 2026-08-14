@@ -47,13 +47,36 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
   });
 
-  it('ignora mensagens de grupo e nao toca na lista do fornecedor', async () => {
+  it('aceita mensagem de grupo somente pelo participante fornecedor cadastrado', async () => {
+    const { service, transaction, supplierContacts } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'messages.upsert',
+      data: {
+        key: {
+          id: 'message-2',
+          remoteJid: '12345@g.us',
+          participant: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'iPhone 17 R$ 5.000' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledWith(
+      '5511999999999@s.whatsapp.net',
+    );
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+  });
+
+  it('ignora mensagem de grupo sem participante identificavel', async () => {
     const { service, transaction } = createService();
 
     const result = await service.receive(webhookSecret, {
       event: 'messages.upsert',
       data: {
-        key: { id: 'message-2', remoteJid: '12345@g.us', fromMe: false },
+        key: { id: 'message-3', remoteJid: '12345@g.us', fromMe: false },
         message: { conversation: 'iPhone 17 R$ 5.000' },
       },
     });
