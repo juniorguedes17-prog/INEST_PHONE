@@ -42,9 +42,9 @@ function createService(overrides?: { user?: unknown; passwordIsValid?: boolean }
     getAccessExpiresIn: vi.fn().mockReturnValue('15m'),
   };
   const sessionService = {
-    register: vi.fn(),
-    revoke: vi.fn(),
-    isValid: vi.fn().mockReturnValue(true),
+    register: vi.fn().mockResolvedValue(undefined),
+    revoke: vi.fn().mockResolvedValue(undefined),
+    isValid: vi.fn().mockResolvedValue(true),
   };
   const auditLogger = {
     logAuthEvent: vi.fn().mockResolvedValue(undefined),

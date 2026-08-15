@@ -52,7 +52,7 @@ export class AuthService {
 
     const authenticatedUser = this.toAuthenticatedUser(user);
     const tokens = await this.tokenService.generateTokens(authenticatedUser);
-    this.sessionService.register(
+    await this.sessionService.register(
       tokens.refreshTokenId,
       authenticatedUser.id,
       tokens.refreshExpiresAt,
@@ -82,10 +82,10 @@ export class AuthService {
     const tokens = await this.tokenService.generateTokens(authenticatedUser);
 
     if (payload.jti) {
-      this.sessionService.revoke(payload.jti);
+      await this.sessionService.revoke(payload.jti);
     }
 
-    this.sessionService.register(
+    await this.sessionService.register(
       tokens.refreshTokenId,
       authenticatedUser.id,
       tokens.refreshExpiresAt,
@@ -109,7 +109,7 @@ export class AuthService {
         const payload = await this.tokenService.verifyRefreshToken(refreshToken);
 
         if (payload.jti) {
-          this.sessionService.revoke(payload.jti);
+          await this.sessionService.revoke(payload.jti);
         }
       } catch {
         // Logout deve permanecer idempotente mesmo quando o token ja expirou.
@@ -160,7 +160,7 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token invalido.');
     }
 
-    if (!this.sessionService.isValid(payload.jti, payload.sub)) {
+    if (!(await this.sessionService.isValid(payload.jti, payload.sub))) {
       throw new UnauthorizedException('Sessao expirada ou encerrada.');
     }
 
