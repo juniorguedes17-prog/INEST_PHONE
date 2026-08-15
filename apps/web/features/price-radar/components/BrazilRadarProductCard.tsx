@@ -21,6 +21,7 @@ interface BrazilRadarProductCardProps {
   onSelect: (id: string, selected: boolean) => void;
   onView: (quote: PriceQuoteItem) => void;
   onSupplier: (quote: PriceQuoteItem) => void;
+  onSendToPricing: (quote: PriceQuoteItem) => void;
 }
 
 export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
@@ -29,6 +30,7 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
   onSelect,
   onView,
   onSupplier,
+  onSendToPricing,
 }: BrazilRadarProductCardProps) {
   return (
     <article
@@ -90,7 +92,10 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
           <ActionButton variant="success" className="min-h-11 px-3" onClick={() => onSupplier(product.referenceQuote)}>
             Fornecedor
           </ActionButton>
-          <ActionButton className="col-span-2 min-h-11 px-3 lg:col-auto" disabled title="Integracao com Precificacao preparada">
+          <ActionButton
+            className="col-span-2 min-h-11 px-3 lg:col-auto"
+            onClick={() => onSendToPricing(product.referenceQuote)}
+          >
             Enviar para Precificacao
           </ActionButton>
         </div>

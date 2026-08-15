@@ -13,6 +13,7 @@ import {
 } from '../types/pricing';
 
 const initialFilters: PricingFilters = {
+  productId: '',
   search: '',
   category: '',
   model: '',
@@ -48,6 +49,15 @@ export function usePricing() {
     } catch {
       setError('Nao foi possivel carregar a precificacao temporaria do Radar Paraguai.');
     }
+  }, [pathname]);
+
+  useEffect(() => {
+    const productId = new URLSearchParams(window.location.search).get('productId');
+    if (!productId) return;
+
+    setFilters((current) =>
+      current.productId === productId ? current : { ...current, productId },
+    );
   }, [pathname]);
 
   const load = useCallback(async () => {

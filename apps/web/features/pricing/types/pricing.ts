@@ -34,6 +34,7 @@ export interface PricingItem {
 }
 
 export interface PricingFilters {
+  productId?: string;
   search: string;
   category: string;
   model: string;

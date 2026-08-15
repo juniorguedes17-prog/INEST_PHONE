@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ActionButton,
   Drawer,
@@ -57,6 +58,7 @@ const emptyVisualFilters = {
 };
 
 export function PriceRadarPageContent() {
+  const router = useRouter();
   const radar = usePriceRadar();
   const [origin, setOrigin] = useState<RadarOrigin>('brasil');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -212,6 +214,10 @@ export function PriceRadarPageContent() {
       else next.delete(id);
       return next;
     });
+  }
+
+  function sendToPricing(quote: PriceQuoteItem) {
+    router.push(`/pricing?productId=${encodeURIComponent(quote.productId)}`);
   }
 
   return (
@@ -562,6 +568,7 @@ export function PriceRadarPageContent() {
                       setQuoteModalOpen(true);
                     }}
                     onSupplier={openWhatsapp}
+                    onSendToPricing={sendToPricing}
                   />
                 ))
               : null}
