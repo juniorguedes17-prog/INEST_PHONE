@@ -10,6 +10,7 @@ export interface ProductReference {
 
 export interface ProductItem {
   id: string;
+  productDescription?: string | null;
   categoryId: string;
   modelId: string;
   colorId?: string | null;

@@ -222,6 +222,11 @@ export function ProductsPageContent() {
 }
 
 function getProductTitle(product: ProductItem) {
+  const officialDescription = product.productDescription?.trim();
+  if (officialDescription) {
+    return officialDescription;
+  }
+
   return [
     product.category?.name,
     product.model?.name,
