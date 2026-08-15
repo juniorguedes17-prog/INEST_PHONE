@@ -43,6 +43,7 @@ describe('EvolutionWebhookService', () => {
         rawContent: 'iPhone 17 Pro 256GB\nAzul \u{1F4B0}6,150',
         items: [
           {
+            id: 'current-list-item-id',
             productName: 'iPhone 17 Pro 256GB',
             normalizedName: 'iphone 17 pro 256gb',
             category: 'iPhone',
@@ -65,9 +66,62 @@ describe('EvolutionWebhookService', () => {
         where: { id: 'current-list-id' },
         data: expect.objectContaining({
           items: expect.objectContaining({
-            create: [expect.objectContaining({ price: 6150 })],
+            update: [
+              {
+                where: { id: 'current-list-item-id' },
+                data: { price: 6150 },
+              },
+            ],
           }),
         }),
+      }),
+    );
+  });
+
+  it('nunca exclui itens existentes ao reprocessar uma lista', async () => {
+    const { service, prisma } = createService();
+    prisma.supplierCurrentList.findMany.mockResolvedValue([
+      {
+        id: 'current-list-id',
+        rawContent: 'iPhone 17 Pro 256GB\nAzul \u{1F4B0}6,150',
+        items: [
+          {
+            id: 'current-list-item-id',
+            productName: 'iPhone 17 Pro 256GB',
+            normalizedName: 'iphone 17 pro 256gb',
+            category: 'iPhone',
+            model: 'iPhone 17 Pro 256GB',
+            capacity: '256GB',
+            color: 'azul',
+            condition: 'NOVO',
+            price: { toString: () => '6.15' },
+            availability: null,
+            rawLine: 'Azul \u{1F4B0}6,150',
+          },
+          {
+            id: 'preserved-item-id',
+            productName: 'Produto preservado',
+            normalizedName: 'produto preservado',
+            category: 'Acessorio Apple',
+            model: 'Produto preservado',
+            capacity: null,
+            color: null,
+            condition: 'NOVO',
+            price: { toString: () => '100' },
+            availability: null,
+            rawLine: 'Linha que o parser nao reconhece',
+          },
+        ],
+      },
+    ]);
+
+    await service.onModuleInit();
+
+    expect(prisma.supplierCurrentList.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          items: expect.not.objectContaining({ deleteMany: expect.anything() }),
+        },
       }),
     );
   });

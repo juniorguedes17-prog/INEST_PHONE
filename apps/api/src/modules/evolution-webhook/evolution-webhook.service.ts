@@ -28,15 +28,17 @@ export class EvolutionWebhookService implements OnModuleInit {
         this.logger.warn(`Lista atual preservada: lista=${currentList.id} sem itens reconhecidos.`);
         continue;
       }
-      if (hasSameItems(currentList.items, parsedItems)) continue;
+
+      const repair = getCurrentListRepair(currentList.items, parsedItems);
+      if (repair.updates.length === 0 && repair.creates.length === 0) continue;
 
       try {
         await this.prisma.supplierCurrentList.update({
           where: { id: currentList.id },
           data: {
             items: {
-              deleteMany: {},
-              create: parsedItems,
+              update: repair.updates,
+              create: repair.creates,
             },
           },
         });
@@ -316,8 +318,9 @@ function isDuplicateReceiptError(error: unknown) {
   return isRecord(error) && error.code === 'P2002';
 }
 
-function hasSameItems(
+function getCurrentListRepair(
   storedItems: Array<{
+    id: string;
     productName: string;
     normalizedName: string;
     category: string | null;
@@ -331,56 +334,36 @@ function hasSameItems(
   }>,
   parsedItems: ReturnType<typeof parseSupplierListText>,
 ) {
-  if (storedItems.length !== parsedItems.length) return false;
+  const storedBySource = new Map(storedItems.map((item) => [sourceKey(item), item]));
+  const storedRawLines = new Set(storedItems.map((item) => normalizedRawLine(item.rawLine)));
+  const updates: Array<{ where: { id: string }; data: { price: number } }> = [];
+  const creates: ReturnType<typeof parseSupplierListText> = [];
 
-  const storedSignatures = storedItems.map(toStoredItemSignature).sort();
-  const parsedSignatures = parsedItems.map(toParsedItemSignature).sort();
-  return storedSignatures.every((signature, index) => signature === parsedSignatures[index]);
+  for (const parsedItem of parsedItems) {
+    const existing = storedBySource.get(sourceKey(parsedItem));
+    if (existing) {
+      if (Number(existing.price.toString()) !== parsedItem.price) {
+        updates.push({ where: { id: existing.id }, data: { price: parsedItem.price } });
+      }
+      continue;
+    }
+
+    // A linha e o produto precisam ser novos. Se ja houver uma linha com outro produto,
+    // ela permanece intacta e aguarda uma lista nova em vez de criar uma duplicidade ambigua.
+    if (!storedRawLines.has(normalizedRawLine(parsedItem.rawLine))) {
+      creates.push(parsedItem);
+    }
+  }
+
+  return { updates, creates };
 }
 
-function toStoredItemSignature(item: {
-  productName: string;
-  normalizedName: string;
-  category: string | null;
-  model: string | null;
-  capacity: string | null;
-  color: string | null;
-  condition: string | null;
-  price: { toString(): string };
-  availability: string | null;
-  rawLine: string;
-}) {
-  return itemSignature({ ...item, price: Number(item.price.toString()) });
+function sourceKey(item: { rawLine: string; normalizedName: string; color: string | null }) {
+  return `${normalizedRawLine(item.rawLine)}|${item.normalizedName}|${item.color ?? ''}`;
 }
 
-function toParsedItemSignature(item: ReturnType<typeof parseSupplierListText>[number]) {
-  return itemSignature(item);
-}
-
-function itemSignature(item: {
-  productName: string;
-  normalizedName: string;
-  category: string | null;
-  model: string | null;
-  capacity: string | null;
-  color: string | null;
-  condition: string | null;
-  price: number;
-  availability: string | null;
-  rawLine: string;
-}) {
-  return JSON.stringify([
-    item.productName,
-    item.normalizedName,
-    item.category,
-    item.model,
-    item.capacity,
-    item.color,
-    item.condition,
-    item.price.toFixed(2),
-    item.availability,
-    item.rawLine,
-  ]);
+function normalizedRawLine(value: string) {
+  return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
 }
 
 interface EvolutionExtraction {
