@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ActionButton, ContentContainer, SearchInput } from '@/components/shared';
+import { clearAccessToken } from '@/services/authenticated-fetch';
 import { logout } from '@/services/auth-service';
 import { getNavigationItem } from './navigation';
 
@@ -20,6 +21,7 @@ export function Header({ onOpenMenu }: HeaderProps) {
   const router = useRouter();
   const item = getNavigationItem(pathname);
   const [theme, setTheme] = useState<AppTheme>('light');
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
@@ -36,9 +38,20 @@ export function Header({ onOpenMenu }: HeaderProps) {
   }
 
   async function handleLogout() {
-    await logout();
-    router.push('/login');
-    router.refresh();
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+
+    try {
+      await logout();
+    } finally {
+      // A sessao local deve ser encerrada mesmo quando o refresh token ja expirou.
+      clearAccessToken();
+      router.replace('/login');
+      router.refresh();
+    }
   }
 
   return (
@@ -98,11 +111,13 @@ export function Header({ onOpenMenu }: HeaderProps) {
               <span className="text-xs text-inest-muted">Administrador</span>
             </div>
           </div>
-          <ActionButton variant="ghost" onClick={handleLogout} className="hidden sm:inline-flex">
-            Sair
-          </ActionButton>
-          <ActionButton variant="primary" className="hidden md:inline-flex">
-            Nova oferta
+          <ActionButton
+            variant="ghost"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="hidden sm:inline-flex"
+          >
+            {isLoggingOut ? 'Saindo...' : 'Sair'}
           </ActionButton>
         </div>
       </ContentContainer>
