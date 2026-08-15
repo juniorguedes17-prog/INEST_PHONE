@@ -744,12 +744,6 @@
     "lucro_liquido": 399
   },
   {
-    "produto_id": 125,
-    "condicao_produto": "CPO",
-    "produto_descricao": "iPhone 15 128GB",
-    "lucro_liquido": 390
-  },
-  {
     "produto_id": 126,
     "condicao_produto": "CPO",
     "produto_descricao": "iPhone 15 Pro 128GB",
