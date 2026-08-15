@@ -756,18 +756,6 @@
     "lucro_liquido": 559
   },
   {
-    "produto_id": 128,
-    "condicao_produto": "CPO",
-    "produto_descricao": "iPhone 16 128GB",
-    "lucro_liquido": 490
-  },
-  {
-    "produto_id": 129,
-    "condicao_produto": "CPO",
-    "produto_descricao": "iPhone 16 256GB",
-    "lucro_liquido": 590
-  },
-  {
     "produto_id": 130,
     "condicao_produto": "CPO",
     "produto_descricao": "iPhone 16 Pro 128GB",

@@ -186,9 +186,9 @@ function getBaseModelName(description: string, productType: ProductType) {
 }
 
 function validateProfitSeed(records: ProfitSeedProduct[]) {
-  if (records.length !== 131) {
+  if (records.length !== 129) {
     throw new Error(
-      `Carga de lucro invalida: esperados 131 registros, recebidos ${records.length}.`,
+      `Carga de lucro invalida: esperados 129 registros, recebidos ${records.length}.`,
     );
   }
 
