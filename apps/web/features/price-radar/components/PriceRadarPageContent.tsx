@@ -4,11 +4,8 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ActionButton,
-  Drawer,
   EmptyState,
   ErrorState,
-  FilterSection,
-  FilterSidebar,
   KpiCard,
   LoadingState,
   Modal,
@@ -27,6 +24,15 @@ import { PreparedRadarOrigin } from './PreparedRadarOrigin';
 import { ParaguayRadarOrigin } from './ParaguayRadarOrigin';
 import { RadarToolbar } from './RadarToolbar';
 import { RadarOrigin, RadarOriginTabs } from './RadarOriginTabs';
+import { BrazilRadarFiltersDrawer } from './BrazilRadarFiltersDrawer';
+import {
+  BrazilRadarFacetState,
+  buildBrazilRadarFacets,
+  countActiveBrazilRadarFacets,
+  emptyBrazilRadarFacetState,
+  filterBrazilRadarQuotes,
+  isVisibleRadarQuote,
+} from '../utils/brazil-radar-facets';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -36,26 +42,6 @@ const sortOptions = [
   ['product', 'Produto'],
   ['delivery', 'Prazo de entrega'],
 ];
-
-const statusOptions = [
-  ['', 'Todos'],
-  ['valid', 'Validos'],
-  ['hidden', 'Ocultados'],
-];
-
-const emptyVisualFilters = {
-  category: '',
-  brand: '',
-  model: '',
-  color: '',
-  capacity: '',
-  state: '',
-  minPrice: '',
-  maxPrice: '',
-  availability: '',
-  updatedWithin: '',
-  origin: '',
-};
 
 export function PriceRadarPageContent() {
   const router = useRouter();
@@ -67,7 +53,7 @@ export function PriceRadarPageContent() {
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<PriceQuoteItem | null>(null);
-  const [visualFilters, setVisualFilters] = useState(emptyVisualFilters);
+  const [facetFilters, setFacetFilters] = useState<BrazilRadarFacetState>(() => createEmptyFacetFilters());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -108,55 +94,19 @@ export function PriceRadarPageContent() {
     [editingQuote, products, suppliers],
   );
 
-  const cities = useMemo(
-    () => Array.from(new Set(radar.quotes.map((quote) => quote.city).filter(Boolean))),
+  const visibleRadarQuotes = useMemo(
+    () => radar.quotes.filter(isVisibleRadarQuote),
     [radar.quotes],
   );
-  const qualities = useMemo(
-    () => Array.from(new Set(radar.quotes.map((quote) => quote.quality).filter(Boolean))),
-    [radar.quotes],
+  const facets = useMemo(() => buildBrazilRadarFacets(visibleRadarQuotes), [visibleRadarQuotes]);
+  const filteredQuotes = useMemo(
+    () => filterBrazilRadarQuotes(visibleRadarQuotes, facetFilters),
+    [facetFilters, visibleRadarQuotes],
   );
-  const deliveryTimes = useMemo(
-    () => Array.from(new Set(radar.quotes.map((quote) => quote.deliveryTime).filter(Boolean))),
-    [radar.quotes],
+  const activeFilterCount = useMemo(
+    () => countActiveBrazilRadarFacets(facetFilters),
+    [facetFilters],
   );
-
-  const filterOptions = useMemo(
-    () => ({
-      categories: uniqueValues(radar.quotes.map((quote) => quote.category)),
-      brands: uniqueValues(radar.quotes.map((quote) => quote.productName.split(' ')[0] ?? '')),
-      models: uniqueValues(radar.quotes.map((quote) => quote.model)),
-      colors: uniqueValues(radar.quotes.map((quote) => quote.color)),
-      capacities: uniqueValues(radar.quotes.map((quote) => quote.capacity)),
-      origins: uniqueValues(radar.quotes.map((quote) => quote.supplier.source ?? '')),
-    }),
-    [radar.quotes],
-  );
-
-  const filteredQuotes = useMemo(() => {
-    const now = Date.now();
-    const minPrice = Number(visualFilters.minPrice) || 0;
-    const maxPrice = Number(visualFilters.maxPrice) || Number.POSITIVE_INFINITY;
-    const updatedLimit = visualFilters.updatedWithin
-      ? now - Number(visualFilters.updatedWithin) * 24 * 60 * 60 * 1000
-      : 0;
-
-    return radar.quotes.filter((quote) => {
-      return (
-        (!visualFilters.category || quote.category === visualFilters.category) &&
-        (!visualFilters.brand || quote.productName.startsWith(visualFilters.brand)) &&
-        (!visualFilters.model || quote.model === visualFilters.model) &&
-        (!visualFilters.color || quote.color === visualFilters.color) &&
-        (!visualFilters.capacity || quote.capacity === visualFilters.capacity) &&
-        (!visualFilters.state || quote.city.toLowerCase().includes(visualFilters.state.toLowerCase())) &&
-        quote.costProduct >= minPrice &&
-        quote.costProduct <= maxPrice &&
-        (!visualFilters.availability || quote.status === visualFilters.availability) &&
-        (!updatedLimit || new Date(quote.updatedAt).getTime() >= updatedLimit) &&
-        (!visualFilters.origin || quote.supplier.source === visualFilters.origin)
-      );
-    });
-  }, [radar.quotes, visualFilters]);
 
   const groupedProducts = useMemo(() => groupQuotesByProduct(filteredQuotes), [filteredQuotes]);
   const totalPages = Math.max(1, Math.ceil(groupedProducts.length / pageSize));
@@ -177,20 +127,33 @@ export function PriceRadarPageContent() {
 
   const updatedToday = useMemo(
     () =>
-      radar.quotes.filter(
+      filteredQuotes.filter(
         (quote) => Date.now() - new Date(quote.updatedAt).getTime() < 24 * 60 * 60 * 1000,
       ).length,
-    [radar.quotes],
+    [filteredQuotes],
   );
 
   const activeSuppliers = useMemo(
-    () => new Set(radar.quotes.map((quote) => quote.supplier.id)).size,
-    [radar.quotes],
+    () => new Set(filteredQuotes.map((quote) => quote.supplier.id)).size,
+    [filteredQuotes],
   );
+
+  const displayKpis = useMemo(() => {
+    const validQuotes = filteredQuotes.filter(
+      (quote) => quote.valid && quote.status === 'valid' && quote.costProduct > 0,
+    );
+    const prices = validQuotes.map((quote) => quote.costProduct);
+    return {
+      lowest: prices.length ? Math.min(...prices) : 0,
+      average: prices.length ? prices.reduce((total, price) => total + price, 0) / prices.length : 0,
+      highest: prices.length ? Math.max(...prices) : 0,
+      hidden: filteredQuotes.filter((quote) => quote.status === 'hidden').length,
+    };
+  }, [filteredQuotes]);
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, visualFilters, radar.filters.search, radar.filters.sort]);
+  }, [pageSize, facetFilters, radar.filters.search, radar.filters.sort]);
 
   function clearFilters() {
     radar.setFilters({
@@ -203,7 +166,7 @@ export function PriceRadarPageContent() {
       status: '',
       sort: 'lowest_price',
     });
-    setVisualFilters(emptyVisualFilters);
+    setFacetFilters(createEmptyFacetFilters());
     setSelectedIds(new Set());
   }
 
@@ -276,6 +239,7 @@ export function PriceRadarPageContent() {
         sortOptions={sortOptions}
         pageSize={pageSize}
         updating={radar.loading}
+        activeFilterCount={activeFilterCount}
         onSearchChange={(search) =>
           radar.setFilters((current) => ({ ...current, search }))
         }
@@ -283,6 +247,7 @@ export function PriceRadarPageContent() {
         onClear={clearFilters}
         onSortChange={(sort) => radar.setFilters((current) => ({ ...current, sort }))}
         onPageSizeChange={setPageSize}
+        onOpenFilters={() => setFiltersOpen(true)}
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" aria-label="Indicadores do Radar">
@@ -306,198 +271,25 @@ export function PriceRadarPageContent() {
         />
         <KpiCard
           label="Menor preco"
-          value={formatCurrency(radar.kpis.lowestValidPrice)}
+          value={formatCurrency(displayKpis.lowest)}
           detail="Apenas registros validos"
           tone="green"
         />
         <KpiCard
           label="Preco medio"
-          value={formatCurrency(radar.kpis.averagePrice)}
+          value={formatCurrency(displayKpis.average)}
           detail="Base de cotacoes validas"
           tone="blue"
         />
         <KpiCard
           label="Maior preco"
-          value={formatCurrency(radar.kpis.highestPrice)}
-          detail={`${radar.kpis.hiddenCount} registros ocultados`}
+          value={formatCurrency(displayKpis.highest)}
+          detail={`${displayKpis.hidden} registros ocultados`}
           tone="amber"
         />
       </section>
 
-      <ActionButton
-        variant="secondary"
-        className="min-h-11 w-full xl:hidden"
-        onClick={() => setFiltersOpen(true)}
-      >
-        Abrir filtros do Radar Brasil
-      </ActionButton>
-
-      <section className="grid min-w-0 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="BR" title="Filtros" className="hidden max-h-[calc(100vh-220px)] xl:block">
-          <FilterSection title="Categoria">
-            <SelectInput
-              label="Categoria"
-              value={visualFilters.category}
-              options={toOptions(filterOptions.categories, 'Todas')}
-              onChange={(category) => setVisualFilters((current) => ({ ...current, category }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Marca">
-            <SelectInput
-              label="Marca"
-              value={visualFilters.brand}
-              options={toOptions(filterOptions.brands, 'Todas')}
-              onChange={(brand) => setVisualFilters((current) => ({ ...current, brand }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Modelo">
-            <SelectInput
-              label="Modelo"
-              value={visualFilters.model}
-              options={toOptions(filterOptions.models, 'Todos')}
-              onChange={(model) => setVisualFilters((current) => ({ ...current, model }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Produto" defaultOpen={false}>
-            <SelectInput
-              label="Produto"
-              value={radar.filters.productId}
-              options={[
-                ['', 'Todos'],
-                ...products.map((product) => [product.id, getProductTitle(product)]),
-              ]}
-              onChange={(productId) =>
-                radar.setFilters((current) => ({ ...current, productId }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Cor" defaultOpen={false}>
-            <SelectInput
-              label="Cor"
-              value={visualFilters.color}
-              options={toOptions(filterOptions.colors, 'Todas')}
-              onChange={(color) => setVisualFilters((current) => ({ ...current, color }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Capacidade" defaultOpen={false}>
-            <SelectInput
-              label="Capacidade"
-              value={visualFilters.capacity}
-              options={toOptions(filterOptions.capacities, 'Todas')}
-              onChange={(capacity) => setVisualFilters((current) => ({ ...current, capacity }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Condicao">
-            <SelectInput
-              label="Condicao"
-              value={radar.filters.quality}
-              options={[['', 'Todas'], ...qualities.map((quality) => [quality, quality])]}
-              onChange={(quality) => radar.setFilters((current) => ({ ...current, quality }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Fornecedor">
-            <SelectInput
-              label="Fornecedor"
-              value={radar.filters.supplierId}
-              options={[
-                ['', 'Todos'],
-                ...suppliers.map((supplier) => [supplier.id, supplier.name]),
-              ]}
-              onChange={(supplierId) =>
-                radar.setFilters((current) => ({ ...current, supplierId }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Cidade" defaultOpen={false}>
-            <SelectInput
-              label="Cidade"
-              value={radar.filters.city}
-              options={[['', 'Todas'], ...cities.map((city) => [city, city])]}
-              onChange={(city) => radar.setFilters((current) => ({ ...current, city }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Estado" defaultOpen={false}>
-            <TextInput
-              label="UF ou estado"
-              value={visualFilters.state}
-              onChange={(state) => setVisualFilters((current) => ({ ...current, state }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Faixa de preco" defaultOpen={false}>
-            <div className="grid grid-cols-2 gap-2">
-              <TextInput
-                label="Minimo"
-                type="number"
-                value={visualFilters.minPrice}
-                onChange={(minPrice) => setVisualFilters((current) => ({ ...current, minPrice }))}
-              />
-              <TextInput
-                label="Maximo"
-                type="number"
-                value={visualFilters.maxPrice}
-                onChange={(maxPrice) => setVisualFilters((current) => ({ ...current, maxPrice }))}
-              />
-            </div>
-          </FilterSection>
-
-          <FilterSection title="Disponibilidade" defaultOpen={false}>
-            <SelectInput
-              label="Disponibilidade"
-              value={visualFilters.availability}
-              options={statusOptions}
-              onChange={(availability) =>
-                setVisualFilters((current) => ({ ...current, availability }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Atualizacao" defaultOpen={false}>
-            <SelectInput
-              label="Periodo"
-              value={visualFilters.updatedWithin}
-              options={[
-                ['', 'Qualquer data'],
-                ['1', 'Ultimas 24 horas'],
-                ['7', 'Ultimos 7 dias'],
-                ['30', 'Ultimos 30 dias'],
-              ]}
-              onChange={(updatedWithin) =>
-                setVisualFilters((current) => ({ ...current, updatedWithin }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Origem" defaultOpen={false}>
-            <SelectInput
-              label="Origem"
-              value={visualFilters.origin}
-              options={toOptions(filterOptions.origins, 'Todas')}
-              onChange={(origin) => setVisualFilters((current) => ({ ...current, origin }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Prazo" defaultOpen={false}>
-            <SelectInput
-              label="Prazo de entrega"
-              value={radar.filters.deliveryTime}
-              options={[['', 'Todos'], ...deliveryTimes.map((delivery) => [delivery, delivery])]}
-              onChange={(deliveryTime) =>
-                radar.setFilters((current) => ({ ...current, deliveryTime }))
-              }
-            />
-          </FilterSection>
-        </FilterSidebar>
-
+      <section className="min-w-0">
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-inest-line bg-white px-4 py-2.5 shadow-card">
             <label className="flex items-center gap-2 text-sm font-bold text-inest-text">
@@ -539,13 +331,13 @@ export function PriceRadarPageContent() {
 
           <div className="mt-4 grid gap-3">
             {radar.loading ? <LoadingState /> : null}
-            {!radar.loading && !radar.quotes.length ? (
+            {!radar.loading && !visibleRadarQuotes.length ? (
               <EmptyState
                 title="Radar ainda sem cotacoes."
                 description="Cadastre uma cotacao ou importe uma lista CSV para iniciar."
               />
             ) : null}
-            {!radar.loading && radar.quotes.length && !filteredQuotes.length ? (
+            {!radar.loading && visibleRadarQuotes.length > 0 && !filteredQuotes.length ? (
               <EmptyState
                 title="Nenhum resultado para estes filtros."
                 description="Limpe os filtros ou amplie os criterios da consulta."
@@ -590,73 +382,15 @@ export function PriceRadarPageContent() {
         </div>
       </section>
 
-      <Drawer open={filtersOpen} title="Filtros - Brasil" onClose={() => setFiltersOpen(false)}>
-        <div className="grid gap-3">
-          <SelectInput
-            label="Categoria"
-            value={visualFilters.category}
-            options={toOptions(filterOptions.categories, 'Todas')}
-            onChange={(category) => setVisualFilters((current) => ({ ...current, category }))}
-          />
-          <SelectInput
-            label="Modelo"
-            value={visualFilters.model}
-            options={toOptions(filterOptions.models, 'Todos')}
-            onChange={(model) => setVisualFilters((current) => ({ ...current, model }))}
-          />
-          <SelectInput
-            label="Cor"
-            value={visualFilters.color}
-            options={toOptions(filterOptions.colors, 'Todas')}
-            onChange={(color) => setVisualFilters((current) => ({ ...current, color }))}
-          />
-          <SelectInput
-            label="Capacidade"
-            value={visualFilters.capacity}
-            options={toOptions(filterOptions.capacities, 'Todas')}
-            onChange={(capacity) => setVisualFilters((current) => ({ ...current, capacity }))}
-          />
-          <SelectInput
-            label="Condicao"
-            value={radar.filters.quality}
-            options={[['', 'Todas'], ...qualities.map((quality) => [quality, quality])]}
-            onChange={(quality) => radar.setFilters((current) => ({ ...current, quality }))}
-          />
-          <SelectInput
-            label="Fornecedor"
-            value={radar.filters.supplierId}
-            options={[['', 'Todos'], ...suppliers.map((supplier) => [supplier.id, supplier.name])]}
-            onChange={(supplierId) => radar.setFilters((current) => ({ ...current, supplierId }))}
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <TextInput
-              label="Custo minimo"
-              type="number"
-              value={visualFilters.minPrice}
-              onChange={(minPrice) => setVisualFilters((current) => ({ ...current, minPrice }))}
-            />
-            <TextInput
-              label="Custo maximo"
-              type="number"
-              value={visualFilters.maxPrice}
-              onChange={(maxPrice) => setVisualFilters((current) => ({ ...current, maxPrice }))}
-            />
-          </div>
-          <ActionButton
-            variant="secondary"
-            className="min-h-11"
-            onClick={() => {
-              clearFilters();
-              setFiltersOpen(false);
-            }}
-          >
-            Limpar filtros
-          </ActionButton>
-          <ActionButton className="min-h-11" onClick={() => setFiltersOpen(false)}>
-            Ver resultados
-          </ActionButton>
-        </div>
-      </Drawer>
+      <BrazilRadarFiltersDrawer
+        open={filtersOpen}
+        filters={facetFilters}
+        facets={facets}
+        resultCount={groupedProducts.length}
+        onChange={setFacetFilters}
+        onClear={clearFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
 
         </>
       ) : null}
@@ -840,12 +574,14 @@ function getProductTitle(product: ProductItem) {
     .join(' ');
 }
 
-function uniqueValues(values: string[]) {
-  return Array.from(new Set(values.filter(Boolean))).sort((a, b) => a.localeCompare(b));
-}
-
-function toOptions(values: string[], emptyLabel: string) {
-  return [['', emptyLabel], ...values.map((value) => [value, value])];
+function createEmptyFacetFilters(): BrazilRadarFacetState {
+  return {
+    ...emptyBrazilRadarFacetState,
+    categories: [],
+    models: [],
+    colors: [],
+    capacities: [],
+  };
 }
 
 function groupQuotesByProduct(quotes: PriceQuoteItem[]): BrazilRadarProduct[] {

@@ -8,11 +8,13 @@ interface RadarToolbarProps {
   sortOptions: string[][];
   pageSize: number;
   updating: boolean;
+  activeFilterCount: number;
   onSearchChange: (value: string) => void;
   onRefresh: () => void;
   onClear: () => void;
   onSortChange: (value: string) => void;
   onPageSizeChange: (value: number) => void;
+  onOpenFilters: () => void;
 }
 
 export function RadarToolbar({
@@ -23,11 +25,13 @@ export function RadarToolbar({
   sortOptions,
   pageSize,
   updating,
+  activeFilterCount,
   onSearchChange,
   onRefresh,
   onClear,
   onSortChange,
   onPageSizeChange,
+  onOpenFilters,
 }: RadarToolbarProps) {
   return (
     <section className="rounded-xl border border-inest-line bg-white p-3 shadow-card" aria-label="Ferramentas do Radar">
@@ -48,6 +52,9 @@ export function RadarToolbar({
         </div>
 
         <div className="flex flex-wrap items-end gap-2 2xl:ml-auto">
+          <ActionButton variant="secondary" onClick={onOpenFilters}>
+            Filtros{activeFilterCount ? ` (${activeFilterCount})` : ''}
+          </ActionButton>
           <CompactSelect
             label="Ordenacao"
             value={sort}
