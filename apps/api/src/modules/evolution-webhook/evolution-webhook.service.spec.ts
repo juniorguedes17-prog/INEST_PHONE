@@ -8,7 +8,13 @@ function createService() {
     evolutionWebhookReceipt: { create: vi.fn().mockResolvedValue({}) },
     supplierCurrentList: { upsert: vi.fn().mockResolvedValue({}) },
   };
-  const prisma = { $transaction: vi.fn((callback: (client: typeof transaction) => unknown) => callback(transaction)) };
+  const prisma = {
+    $transaction: vi.fn((callback: (client: typeof transaction) => unknown) => callback(transaction)),
+    supplierCurrentList: {
+      findMany: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockResolvedValue({}),
+    },
+  };
   const config = {
     get: vi.fn((key: string) => {
       if (key === 'app.evolutionWebhookEnabled') return true;
@@ -22,12 +28,50 @@ function createService() {
 
   return {
     service: new EvolutionWebhookService(config as never, prisma as never, supplierContacts as never),
+    prisma,
     transaction,
     supplierContacts,
   };
 }
 
 describe('EvolutionWebhookService', () => {
+  it('reprocessa a lista atual a partir do texto original quando o formato de moeda mudou', async () => {
+    const { service, prisma } = createService();
+    prisma.supplierCurrentList.findMany.mockResolvedValue([
+      {
+        id: 'current-list-id',
+        rawContent: 'iPhone 17 Pro 256GB\nAzul \u{1F4B0}6,150',
+        items: [
+          {
+            productName: 'iPhone 17 Pro 256GB',
+            normalizedName: 'iphone 17 pro 256gb',
+            category: 'iPhone',
+            model: 'iPhone 17 Pro 256GB',
+            capacity: '256GB',
+            color: 'azul',
+            condition: 'NOVO',
+            price: { toString: () => '6.15' },
+            availability: null,
+            rawLine: 'Azul \u{1F4B0}6,150',
+          },
+        ],
+      },
+    ]);
+
+    await service.onModuleInit();
+
+    expect(prisma.supplierCurrentList.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'current-list-id' },
+        data: expect.objectContaining({
+          items: expect.objectContaining({
+            create: [expect.objectContaining({ price: 6150 })],
+          }),
+        }),
+      }),
+    );
+  });
+
   it('aceita evento do fornecedor ativo e substitui a lista atual em uma transacao', async () => {
     const { service, transaction, supplierContacts } = createService();
 

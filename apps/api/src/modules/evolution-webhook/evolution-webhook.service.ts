@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -7,7 +7,7 @@ import { parseSupplierListText } from './supplier-list.parser';
 import { EvolutionMessage } from './evolution-webhook.types';
 
 @Injectable()
-export class EvolutionWebhookService {
+export class EvolutionWebhookService implements OnModuleInit {
   private readonly logger = new Logger(EvolutionWebhookService.name);
 
   constructor(
@@ -15,6 +15,41 @@ export class EvolutionWebhookService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(SupplierContactsService) private readonly supplierContacts: SupplierContactsService,
   ) {}
+
+  async onModuleInit() {
+    const currentLists = await this.prisma.supplierCurrentList.findMany({
+      include: { items: true },
+    });
+    let updated = 0;
+
+    for (const currentList of currentLists) {
+      const parsedItems = parseSupplierListText(currentList.rawContent);
+      if (parsedItems.length === 0) {
+        this.logger.warn(`Lista atual preservada: lista=${currentList.id} sem itens reconhecidos.`);
+        continue;
+      }
+      if (hasSameItems(currentList.items, parsedItems)) continue;
+
+      try {
+        await this.prisma.supplierCurrentList.update({
+          where: { id: currentList.id },
+          data: {
+            items: {
+              deleteMany: {},
+              create: parsedItems,
+            },
+          },
+        });
+        updated += 1;
+      } catch (error) {
+        this.logger.error(`Falha ao reprocessar lista atual: lista=${currentList.id}.`, error);
+      }
+    }
+
+    if (updated > 0) {
+      this.logger.log(`Listas atuais reprocessadas: atualizadas=${updated} total=${currentLists.length}.`);
+    }
+  }
 
   async receive(secret: string, payload: unknown) {
     this.assertValidSecret(secret);
@@ -279,6 +314,73 @@ function safeEqual(left: string, right: string) {
 
 function isDuplicateReceiptError(error: unknown) {
   return isRecord(error) && error.code === 'P2002';
+}
+
+function hasSameItems(
+  storedItems: Array<{
+    productName: string;
+    normalizedName: string;
+    category: string | null;
+    model: string | null;
+    capacity: string | null;
+    color: string | null;
+    condition: string | null;
+    price: { toString(): string };
+    availability: string | null;
+    rawLine: string;
+  }>,
+  parsedItems: ReturnType<typeof parseSupplierListText>,
+) {
+  if (storedItems.length !== parsedItems.length) return false;
+
+  const storedSignatures = storedItems.map(toStoredItemSignature).sort();
+  const parsedSignatures = parsedItems.map(toParsedItemSignature).sort();
+  return storedSignatures.every((signature, index) => signature === parsedSignatures[index]);
+}
+
+function toStoredItemSignature(item: {
+  productName: string;
+  normalizedName: string;
+  category: string | null;
+  model: string | null;
+  capacity: string | null;
+  color: string | null;
+  condition: string | null;
+  price: { toString(): string };
+  availability: string | null;
+  rawLine: string;
+}) {
+  return itemSignature({ ...item, price: Number(item.price.toString()) });
+}
+
+function toParsedItemSignature(item: ReturnType<typeof parseSupplierListText>[number]) {
+  return itemSignature(item);
+}
+
+function itemSignature(item: {
+  productName: string;
+  normalizedName: string;
+  category: string | null;
+  model: string | null;
+  capacity: string | null;
+  color: string | null;
+  condition: string | null;
+  price: number;
+  availability: string | null;
+  rawLine: string;
+}) {
+  return JSON.stringify([
+    item.productName,
+    item.normalizedName,
+    item.category,
+    item.model,
+    item.capacity,
+    item.color,
+    item.condition,
+    item.price.toFixed(2),
+    item.availability,
+    item.rawLine,
+  ]);
 }
 
 interface EvolutionExtraction {

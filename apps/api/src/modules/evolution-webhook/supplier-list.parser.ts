@@ -1,7 +1,10 @@
 import { ParsedSupplierListItem } from './evolution-webhook.types';
 
 const PRODUCT_MARKERS = /\b(iphone|ipad|mac\s?book|macbook|mac\s?mini|imac|watch|airpods|air\s?pods|airtag|pencil|magic\s?mouse|earpods)\b/i;
-const PRICE_MARKER = /(?:R\$|💰|💲|\$)\s*(\d{1,3}(?:[.\s]\d{3})*(?:,\d{2})?|\d+(?:[.,]\d{2})?)/i;
+const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`;
+const MONEY_VALUE = String.raw`\d(?:[\d.,]|\s(?=\d{3}(?:\D|$)))*`;
+const PRICE_PREFIX = new RegExp(`${CURRENCY_MARKER}\\s*(${MONEY_VALUE})`, 'iu');
+const PRICE_SUFFIX = new RegExp(`(${MONEY_VALUE})\\s*(?:R\\$|\\$R)`, 'iu');
 const COLOR_MARKERS = [
   'preto',
   'black',
@@ -87,11 +90,11 @@ export function parseSupplierListText(content: string): ParsedSupplierListItem[]
 
 function isCategoryHeading(value: string, category: string | null) {
   if (!category) return false;
-  return !PRICE_MARKER.test(value) && !/\b\d+\s*(?:gb|tb|mm|inch|in)\b/i.test(value) && value.length < 60;
+  return !hasPrice(value) && !/\b\d+\s*(?:gb|tb|mm|inch|in)\b/i.test(value) && value.length < 60;
 }
 
 function isImplicitProductHeading(value: string, category: string | null) {
-  if (!category || PRICE_MARKER.test(value)) return false;
+  if (!category || hasPrice(value)) return false;
   if (extractColor(value)) return false;
   return /\b(?:1[3-7]|17e|ultra\s?\d|s\d+|se\s?\d)\b/i.test(value);
 }
@@ -122,17 +125,67 @@ function cleanLine(line: string) {
 }
 
 function removePrice(value: string) {
-  return value.replace(PRICE_MARKER, '').replace(/\s+/g, ' ').trim();
+  const match = findPriceMatch(value);
+  if (!match || match.index === undefined) return value.replace(/\s+/g, ' ').trim();
+
+  return `${value.slice(0, match.index)}${value.slice(match.index + match[0].length)}`
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function extractPrice(value: string): number | null {
-  const match = value.match(PRICE_MARKER);
-  const raw = match?.[1];
-  if (!raw) return null;
+  const raw = findPriceMatch(value)?.[1];
+  return raw ? parseMonetaryValue(raw) : null;
+}
 
-  const normalized = raw.replace(/\s/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.');
-  const price = Number(normalized);
-  return Number.isFinite(price) && price > 0 ? price : null;
+function findPriceMatch(value: string) {
+  return value.match(PRICE_PREFIX) ?? value.match(PRICE_SUFFIX);
+}
+
+function hasPrice(value: string) {
+  return findPriceMatch(value) !== null;
+}
+
+function parseMonetaryValue(value: string): number | null {
+  const compact = value.replace(/\s/g, '');
+  if (!/^\d+(?:[.,]\d+)*$/.test(compact)) return null;
+
+  const separators = [...compact.matchAll(/[.,]/g)].map((match) => match.index ?? -1);
+  if (separators.length === 0) return toPositiveNumber(compact);
+
+  const lastSeparatorIndex = Math.max(...separators);
+  const decimalSeparator = compact[lastSeparatorIndex];
+  if (!decimalSeparator) return null;
+  const fractional = compact.slice(lastSeparatorIndex + 1);
+  const integer = compact.slice(0, lastSeparatorIndex);
+
+  if (fractional.length <= 2 && isValidGroupedInteger(integer, decimalSeparator)) {
+    return toPositiveNumber(`${integer.replace(/[.,]/g, '')}.${fractional}`);
+  }
+
+  if (fractional.length === 3 && isValidGroupedInteger(compact, '')) {
+    return toPositiveNumber(compact.replace(/[.,]/g, ''));
+  }
+
+  return null;
+}
+
+function isValidGroupedInteger(value: string, decimalSeparator: string) {
+  if (!value || !/^\d[\d.,]*$/.test(value)) return false;
+
+  const groupingSeparators = [...new Set([...value].filter((character) => character === '.' || character === ','))];
+  if (groupingSeparators.length === 0) return /^\d+$/.test(value);
+  if (groupingSeparators.length !== 1 || groupingSeparators[0] === decimalSeparator) return false;
+
+  const separator = groupingSeparators[0];
+  if (!separator) return false;
+  const groups = value.split(separator);
+  return groups.length > 1 && /^\d{1,3}$/.test(groups[0] ?? '') && groups.slice(1).every((group) => /^\d{3}$/.test(group));
+}
+
+function toPositiveNumber(value: string) {
+  const price = Number(value);
+  return Number.isFinite(price) && price > 0 && price <= 9_999_999_999.99 ? price : null;
 }
 
 function detectCategory(value: string): string | null {
