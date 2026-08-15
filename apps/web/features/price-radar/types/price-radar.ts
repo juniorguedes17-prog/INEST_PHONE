@@ -12,6 +12,7 @@ export interface PriceQuoteItem {
   productId: string;
   supplierId: string;
   productName: string;
+  productDescription?: string | null;
   category: string;
   model: string;
   color: string;

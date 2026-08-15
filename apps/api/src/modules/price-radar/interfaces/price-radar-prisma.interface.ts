@@ -18,6 +18,7 @@ export interface PriceQuoteRecord {
   };
   product?: {
     id: string;
+    productDescription?: string | null;
     productType: string;
     qualityGrade?: string | null;
     category?: { id: string; name: string };

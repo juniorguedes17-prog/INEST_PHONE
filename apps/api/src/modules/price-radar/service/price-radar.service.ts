@@ -264,7 +264,7 @@ export class PriceRadarService {
       notes: record.notes,
     });
     const hidden = isHidden(record.notes) || !validation.valid;
-    const productName = [
+    const productName = record.product?.productDescription?.trim() || [
       record.product?.category?.name,
       record.product?.model?.name,
       record.product?.storage?.displayName,

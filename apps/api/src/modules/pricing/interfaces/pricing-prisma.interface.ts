@@ -16,6 +16,7 @@ export interface PricingPriceHistoryRecord {
   };
   product?: {
     id: string;
+    productDescription?: string | null;
     profitProductId?: number | null;
     productType: string;
     status?: string | null;

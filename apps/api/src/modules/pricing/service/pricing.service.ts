@@ -387,6 +387,9 @@ export class PricingService {
   }
 
   private getProductName(quote: PricingPriceHistoryRecord) {
+    const productDescription = quote.product?.productDescription?.trim();
+    if (productDescription) return productDescription;
+
     return [
       quote.product?.category?.name,
       quote.product?.model?.name,
