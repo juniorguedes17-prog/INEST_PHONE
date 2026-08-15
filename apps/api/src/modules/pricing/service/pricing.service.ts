@@ -8,12 +8,12 @@ import {
   UpdateModelProfitDto,
 } from '../dto/pricing.dto';
 import { PricingPriceHistoryRecord } from '../interfaces/pricing-prisma.interface';
-import { ProfitCondition } from '../interfaces/profit-sheet.interface';
+import { ProfitCondition, ProfitSheetCatalog } from '../interfaces/profit-sheet.interface';
 import {
-  GoogleSheetsProfitProvider,
   lookupProfit,
   normalizeProfitProductDescription,
 } from '../providers/google-sheets-profit.provider';
+import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { OFFER_INCREMENT_KEY, PricingRepository } from '../repository/pricing.repository';
 import { quoteIsValid, toNumber } from '../validators/pricing.validators';
 
@@ -22,8 +22,8 @@ export class PricingService {
   constructor(
     @Inject(PricingRepository) private readonly pricingRepository: PricingRepository,
     @Inject(SettingsService) private readonly settingsService: SettingsService,
-    @Inject(GoogleSheetsProfitProvider)
-    private readonly profitProvider: GoogleSheetsProfitProvider,
+    @Inject(ProductProfitProvider)
+    private readonly profitProvider: ProductProfitProvider,
   ) {}
 
   async list(query: PricingQueryDto = {}) {
@@ -45,7 +45,12 @@ export class PricingService {
       const modelName = product?.model?.name ?? '';
       const profitCondition = this.getProfitCondition(product?.productType ?? '');
       const profitProductDescription = this.getProfitProductDescription(quote);
-      const profitLookup = lookupProfit(profitCatalog, profitCondition, profitProductDescription);
+      const profitLookup = this.findProfit(
+        profitCatalog,
+        product?.profitProductId,
+        profitCondition,
+        profitProductDescription,
+      );
       const fixedCost = toNumber(settings.financial.globalFixedCost);
       const freight = toNumber(settings.financial.defaultFreight);
       const paymentFee = toNumber(settings.financial.defaultPaymentFee);
@@ -88,7 +93,7 @@ export class PricingService {
         salePrice,
         offerPrice,
         lastUpdatedAt: quote.createdAt ?? quote.quoteDate,
-        profitSource: profitLookup.status === 'found' ? 'google_sheets_profit' : 'unavailable',
+        profitSource: profitLookup.status === 'found' ? 'native_product_catalog' : 'unavailable',
         profitCondition,
         profitProductDescription,
         profitRecordId: profitLookup.status === 'found' ? profitLookup.record.productId : null,
@@ -199,9 +204,7 @@ export class PricingService {
     const profitLookup = lookupProfit(profitCatalog, profitCondition, profitProductDescription);
 
     if (profitLookup.status === 'not_found') {
-      throw new BadRequestException(
-        'Lucro liquido nao cadastrado para este modelo e condicao.',
-      );
+      throw new BadRequestException('Lucro liquido nao cadastrado para este modelo e condicao.');
     }
     if (profitLookup.status === 'duplicate') {
       throw new BadRequestException(
@@ -259,7 +262,7 @@ export class PricingService {
       salePrice,
       offerPrice,
       profit: {
-        source: 'google_sheets_profit',
+        source: 'native_product_catalog',
         condition: profitCondition,
         productDescription: profitProductDescription,
         recordId: profitLookup.record.productId,
@@ -280,6 +283,20 @@ export class PricingService {
         },
       },
     };
+  }
+
+  private findProfit(
+    catalog: ProfitSheetCatalog,
+    productId: number | null | undefined,
+    condition: ProfitCondition,
+    productDescription: string,
+  ) {
+    if (productId !== null && productId !== undefined) {
+      const directRecord = catalog.records.find((record) => record.productId === String(productId));
+      if (directRecord) return { status: 'found' as const, record: directRecord };
+    }
+
+    return lookupProfit(catalog, condition, productDescription);
   }
 
   private getBestQuotesByProduct(quotes: PricingPriceHistoryRecord[]) {

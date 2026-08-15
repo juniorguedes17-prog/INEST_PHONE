@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsService } from '../../settings/service/settings.service';
 import { ProfitSheetCatalog } from '../interfaces/profit-sheet.interface';
-import { GoogleSheetsProfitProvider } from '../providers/google-sheets-profit.provider';
+import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { PricingRepository } from '../repository/pricing.repository';
 import { PricingService } from './pricing.service';
 
-describe('PricingService profit sheet integration', () => {
-  it('uses the exact net profit from Google Sheets in the existing pricing formula', async () => {
+describe('PricingService native product profit integration', () => {
+  it('uses the exact native net profit in the existing pricing formula', async () => {
     const repository = {
       listPricingConfigurations: vi
         .fn()
@@ -21,6 +21,7 @@ describe('PricingService profit sheet integration', () => {
           supplier: { id: 'supplier-1', name: 'Fornecedor', status: 'ACTIVE' },
           product: {
             id: 'product-1',
+            profitProductId: 1,
             productType: 'IPHONE_SEALED',
             status: 'ACTIVE',
             category: { id: 'category-1', name: 'iPhone' },
@@ -43,7 +44,7 @@ describe('PricingService profit sheet integration', () => {
     const profitCatalog: ProfitSheetCatalog = {
       records: [
         {
-          productId: 'sheet-1',
+          productId: '1',
           condition: 'NOVO',
           productDescription: 'iPhone 17 Pro Max 256GB',
           normalizedDescription: 'iphone 17 pro max 256gb',
@@ -56,7 +57,7 @@ describe('PricingService profit sheet integration', () => {
     const service = new PricingService(
       repository as unknown as PricingRepository,
       settingsService as unknown as SettingsService,
-      profitProvider as unknown as GoogleSheetsProfitProvider,
+      profitProvider as unknown as ProductProfitProvider,
     );
 
     const [item] = await service.list();
@@ -65,7 +66,7 @@ describe('PricingService profit sheet integration', () => {
       desiredNetProfit: 1190,
       salePrice: 6540,
       offerPrice: 6640,
-      profitSource: 'google_sheets_profit',
+      profitSource: 'native_product_catalog',
       calculationStatus: 'ready',
     });
     expect(item?.desiredNetProfit).not.toBe(9999);
@@ -108,7 +109,7 @@ describe('PricingService profit sheet integration', () => {
     const service = new PricingService(
       repository as unknown as PricingRepository,
       settingsService as unknown as SettingsService,
-      profitProvider as unknown as GoogleSheetsProfitProvider,
+      profitProvider as unknown as ProductProfitProvider,
     );
 
     const [item] = await service.list();
@@ -122,4 +123,75 @@ describe('PricingService profit sheet integration', () => {
       calculationError: 'Lucro líquido não cadastrado para este modelo e condição.',
     });
   });
+
+  it.each([
+    ['NOVO', 'iPhone 17 Pro Max 256GB', 690],
+    ['SEMINOVO', 'iPhone 16 Pro 256GB', 549],
+    ['CPO', 'iPhone 17 Pro Max 256GB', 690],
+  ] as const)(
+    'uses the native %s profit record for temporary radar pricing',
+    async (condition, productDescription, expectedProfit) => {
+      const repository = {
+        listPricingConfigurations: vi
+          .fn()
+          .mockResolvedValue([{ key: 'pricing.offer_increment', value: '100', type: 'currency' }]),
+      };
+      const settingsService = {
+        getSettings: vi.fn().mockResolvedValue({
+          financial: {
+            globalFixedCost: 200,
+            defaultFreight: 50,
+            defaultPaymentFee: 100,
+          },
+        }),
+      };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: '1',
+              condition,
+              productDescription,
+              normalizedDescription: productDescription.toLowerCase(),
+              netProfit: expectedProfit,
+            },
+          ],
+          fetchedAt: '2026-08-15T00:00:00.000Z',
+        }),
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
+
+      const result = await service.calculateTemporaryImport({
+        productId: 'radar-py-1',
+        productName: productDescription,
+        category: 'iPhone',
+        supplier: 'Fornecedor',
+        store: 'Loja',
+        productUrl: 'https://example.com/product',
+        priceUsd: 1000,
+        dollarQuote: 5,
+        convertedPrice: 5000,
+        cdeExit: 0,
+        redirectCost: 0,
+        brazilDispatch: 0,
+        invoiceTax: 0,
+        correiosLabel: 0,
+        totalCost: 5000,
+        model: productDescription,
+        condition,
+      });
+
+      expect(result).toMatchObject({
+        desiredNetProfit: expectedProfit,
+        pricingCosts: { fixedCost: 200, freight: 50, paymentFee: 100 },
+        salePrice: 5350 + expectedProfit,
+        offerPrice: 5450 + expectedProfit,
+        profit: { source: 'native_product_catalog', condition },
+      });
+    },
+  );
 });

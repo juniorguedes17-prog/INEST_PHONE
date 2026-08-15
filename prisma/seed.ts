@@ -6,6 +6,7 @@ import {
   SalesOriginType,
   UserStatus,
 } from '@prisma/client';
+import { seedProfitProducts } from './profit-products.seed';
 
 const prisma = new PrismaClient();
 
@@ -742,6 +743,7 @@ async function main() {
   await seedAdminUser();
   await seedProductCategories();
   await seedProductCatalog();
+  await seedProfitProducts(prisma);
   await seedSalesOrigins();
   await seedLocationBase();
   await seedFinancialConfiguration();

@@ -48,6 +48,14 @@ enum ProductType {
   @@map("product_type")
 }
 
+enum ProductCondition {
+  NOVO     @map("novo")
+  SEMINOVO @map("seminovo")
+  CPO      @map("cpo")
+
+  @@map("product_condition")
+}
+
 enum InventoryStatus {
   AVAILABLE @map("disponivel")
   RESERVED  @map("reservado")
@@ -495,27 +503,33 @@ model ProductStorage {
 }
 
 model Product {
-  id                  String        @id @default(uuid()) @db.Uuid
-  categoryId          String        @map("categoria_id") @db.Uuid
-  modelId             String        @map("modelo_id") @db.Uuid
-  colorId             String?       @map("cor_id") @db.Uuid
-  storageId           String?       @map("capacidade_id") @db.Uuid
-  productType         ProductType   @map("tipo_produto")
-  status              ProductStatus @default(PENDING_REVIEW)
-  qualityGrade        String?       @map("grade_qualidade") @db.VarChar(40)
-  batteryHealth       Int?          @map("saude_bateria")
-  hasInternalAlert    Boolean       @default(false) @map("possui_alerta_interno")
-  hasReplacedParts    Boolean       @default(false) @map("possui_pecas_substituidas")
-  hasStructuralDefect Boolean       @default(false) @map("possui_defeito_estrutural")
-  criticalNotes       String?       @map("observacoes_criticas")
-  costProduct         Decimal?      @map("custo_produto") @db.Decimal(12, 2)
-  salePrice           Decimal?      @map("preco_venda") @db.Decimal(12, 2)
-  offerPrice          Decimal?      @map("preco_oferta") @db.Decimal(12, 2)
-  createdAt           DateTime      @default(now()) @map("created_at")
-  updatedAt           DateTime      @updatedAt @map("updated_at")
-  deletedAt           DateTime?     @map("deleted_at")
-  createdBy           String?       @map("created_by") @db.Uuid
-  updatedBy           String?       @map("updated_by") @db.Uuid
+  id                    String            @id @default(uuid()) @db.Uuid
+  categoryId            String            @map("categoria_id") @db.Uuid
+  modelId               String            @map("modelo_id") @db.Uuid
+  colorId               String?           @map("cor_id") @db.Uuid
+  storageId             String?           @map("capacidade_id") @db.Uuid
+  productType           ProductType       @map("tipo_produto")
+  status                ProductStatus     @default(PENDING_REVIEW)
+  qualityGrade          String?           @map("grade_qualidade") @db.VarChar(40)
+  batteryHealth         Int?              @map("saude_bateria")
+  hasInternalAlert      Boolean           @default(false) @map("possui_alerta_interno")
+  hasReplacedParts      Boolean           @default(false) @map("possui_pecas_substituidas")
+  hasStructuralDefect   Boolean           @default(false) @map("possui_defeito_estrutural")
+  criticalNotes         String?           @map("observacoes_criticas")
+  costProduct           Decimal?          @map("custo_produto") @db.Decimal(12, 2)
+  salePrice             Decimal?          @map("preco_venda") @db.Decimal(12, 2)
+  offerPrice            Decimal?          @map("preco_oferta") @db.Decimal(12, 2)
+  profitProductId       Int?              @unique(map: "uq_produto_lucro_produto_id") @map("produto_id")
+  productDescription    String?           @map("produto_descricao") @db.VarChar(240)
+  normalizedDescription String?           @map("produto_descricao_normalizada") @db.VarChar(240)
+  profitCondition       ProductCondition? @map("condicao_produto")
+  netProfit             Decimal?          @map("lucro_liquido") @db.Decimal(12, 2)
+  active                Boolean           @default(true) @map("ativo")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+  deletedAt             DateTime?         @map("deleted_at")
+  createdBy             String?           @map("created_by") @db.Uuid
+  updatedBy             String?           @map("updated_by") @db.Uuid
 
   category       ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   model          ProductModel    @relation(fields: [modelId], references: [id], onDelete: Restrict, onUpdate: NoAction)
@@ -527,12 +541,14 @@ model Product {
   priceHistories PriceHistory[]
   pricings       Pricing[]
 
+  @@unique([profitCondition, normalizedDescription], map: "uq_produto_condicao_descricao_lucro")
   @@index([categoryId], map: "idx_produto_categoria_id")
   @@index([modelId], map: "idx_produto_modelo_id")
   @@index([colorId], map: "idx_produto_cor_id")
   @@index([storageId], map: "idx_produto_capacidade_id")
   @@index([status], map: "idx_produto_status")
   @@index([productType], map: "idx_produto_tipo_produto")
+  @@index([profitCondition, active], map: "idx_produto_condicao_lucro_ativo")
   @@index([deletedAt], map: "idx_produto_deleted_at")
   @@index([modelId, storageId, colorId], map: "idx_produto_modelo_id_capacidade_id_cor_id")
   @@index([status, productType], map: "idx_produto_status_tipo_produto")

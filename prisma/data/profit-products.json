@@ -1,0 +1,794 @@
+[
+  {
+    "produto_id": 1,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Neo 13 8/256GB",
+    "lucro_liquido": 750
+  },
+  {
+    "produto_id": 2,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Neo 13 8/512GB",
+    "lucro_liquido": 850
+  },
+  {
+    "produto_id": 3,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M4 13 16/256GB",
+    "lucro_liquido": 750
+  },
+  {
+    "produto_id": 4,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M4 13 16/512GB",
+    "lucro_liquido": 850
+  },
+  {
+    "produto_id": 5,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M4 13 24/512GB",
+    "lucro_liquido": 1150
+  },
+  {
+    "produto_id": 6,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M5 13 16/512GB",
+    "lucro_liquido": 750
+  },
+  {
+    "produto_id": 7,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M5 13 16/1TB",
+    "lucro_liquido": 1100
+  },
+  {
+    "produto_id": 8,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M5 13 24/1TB",
+    "lucro_liquido": 1200
+  },
+  {
+    "produto_id": 9,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M5 15 16/512GB",
+    "lucro_liquido": 1200
+  },
+  {
+    "produto_id": 10,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M5 15 16/1TB",
+    "lucro_liquido": 1300
+  },
+  {
+    "produto_id": 11,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Air M5 15 24/1TB",
+    "lucro_liquido": 1500
+  },
+  {
+    "produto_id": 12,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M4 Pro 14 24/512GB",
+    "lucro_liquido": 1600
+  },
+  {
+    "produto_id": 13,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M4 Pro 14 24/1TB",
+    "lucro_liquido": 1800
+  },
+  {
+    "produto_id": 14,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 14 16/512GB",
+    "lucro_liquido": 1300
+  },
+  {
+    "produto_id": 15,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 14 16/1TB",
+    "lucro_liquido": 1400
+  },
+  {
+    "produto_id": 16,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 14 24/1TB",
+    "lucro_liquido": 1600
+  },
+  {
+    "produto_id": 17,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 14 32/1TB",
+    "lucro_liquido": 1900
+  },
+  {
+    "produto_id": 18,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 Pro 14 24/1TB",
+    "lucro_liquido": 2300
+  },
+  {
+    "produto_id": 19,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 Pro 14 24/2TB",
+    "lucro_liquido": 1950
+  },
+  {
+    "produto_id": 20,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 Pro 16 24/1TB",
+    "lucro_liquido": 2690
+  },
+  {
+    "produto_id": 21,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 Max 16 36/2TB",
+    "lucro_liquido": 1900
+  },
+  {
+    "produto_id": 22,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "MacBook Pro M5 Max 16 48/2TB",
+    "lucro_liquido": 2500
+  },
+  {
+    "produto_id": 23,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Mac Mini M4 16/256GB",
+    "lucro_liquido": 600
+  },
+  {
+    "produto_id": 24,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Mac Mini M4 16/512GB",
+    "lucro_liquido": 700
+  },
+  {
+    "produto_id": 25,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 13 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 26,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 14 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 27,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 15 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 28,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 16e 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 29,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 16e 256GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 30,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 16 128GB",
+    "lucro_liquido": 440
+  },
+  {
+    "produto_id": 31,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 16 256GB",
+    "lucro_liquido": 500
+  },
+  {
+    "produto_id": 32,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17e 256GB",
+    "lucro_liquido": 350
+  },
+  {
+    "produto_id": 33,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17e 512GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 34,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 256GB",
+    "lucro_liquido": 400
+  },
+  {
+    "produto_id": 35,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 512GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 36,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone Air 256GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 37,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone Air 512GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 38,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 Pro 256GB",
+    "lucro_liquido": 500
+  },
+  {
+    "produto_id": 39,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 Pro 512GB",
+    "lucro_liquido": 650
+  },
+  {
+    "produto_id": 40,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 Pro 1TB",
+    "lucro_liquido": 790
+  },
+  {
+    "produto_id": 41,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 Pro Max 256GB",
+    "lucro_liquido": 500
+  },
+  {
+    "produto_id": 42,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 Pro Max 512GB",
+    "lucro_liquido": 900
+  },
+  {
+    "produto_id": 43,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPhone 17 Pro Max 1TB",
+    "lucro_liquido": 1090
+  },
+  {
+    "produto_id": 44,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad 11 128GB 11\"",
+    "lucro_liquido": 300
+  },
+  {
+    "produto_id": 45,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad 11 256GB 11\"",
+    "lucro_liquido": 300
+  },
+  {
+    "produto_id": 46,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Air M4 128GB 11\"",
+    "lucro_liquido": 500
+  },
+  {
+    "produto_id": 47,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Air M4 256GB 11\"",
+    "lucro_liquido": 600
+  },
+  {
+    "produto_id": 48,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Air M4 128GB 13\"",
+    "lucro_liquido": 790
+  },
+  {
+    "produto_id": 49,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Pro M4 256GB 11\"",
+    "lucro_liquido": 600
+  },
+  {
+    "produto_id": 50,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Pro M4 1TB 11\"",
+    "lucro_liquido": 900
+  },
+  {
+    "produto_id": 51,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Pro M5 256GB 11\"",
+    "lucro_liquido": 900
+  },
+  {
+    "produto_id": 52,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Pro M5 512GB 11\"",
+    "lucro_liquido": 800
+  },
+  {
+    "produto_id": 53,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Pro M5 256GB 13\"",
+    "lucro_liquido": 900
+  },
+  {
+    "produto_id": 54,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "iPad Pro M5 512GB 13\"",
+    "lucro_liquido": 1100
+  },
+  {
+    "produto_id": 55,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE 2 40mm",
+    "lucro_liquido": 350
+  },
+  {
+    "produto_id": 56,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE 2 44mm",
+    "lucro_liquido": 350
+  },
+  {
+    "produto_id": 57,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE3 40mm",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 58,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE3 40mm com celular",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 59,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE3 44mm",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 60,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE2 44mm com celular",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 61,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE 11 GPS 42mm",
+    "lucro_liquido": 350
+  },
+  {
+    "produto_id": 62,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch SE 11 GPS 46mm",
+    "lucro_liquido": 350
+  },
+  {
+    "produto_id": 63,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch S11 42mm",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 64,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch S11 46mm",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 65,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch Ultra 2 49mm",
+    "lucro_liquido": 500
+  },
+  {
+    "produto_id": 66,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch Ultra 3 49mm",
+    "lucro_liquido": 500
+  },
+  {
+    "produto_id": 67,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Watch Ultra 3 2024",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 68,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirPods 4 Geração sem cancelamento",
+    "lucro_liquido": 200
+  },
+  {
+    "produto_id": 69,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirPods 4 Geração com cancelamento",
+    "lucro_liquido": 250
+  },
+  {
+    "produto_id": 70,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirPods 2 Geração",
+    "lucro_liquido": 200
+  },
+  {
+    "produto_id": 71,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirPods Pro 2 Geração",
+    "lucro_liquido": 400
+  },
+  {
+    "produto_id": 72,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirPods Pro 3 Geração",
+    "lucro_liquido": 400
+  },
+  {
+    "produto_id": 73,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirPods Max",
+    "lucro_liquido": 500
+  },
+  {
+    "produto_id": 74,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Pencil 1 Geração",
+    "lucro_liquido": 200
+  },
+  {
+    "produto_id": 75,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Pencil 2 Geração",
+    "lucro_liquido": 200
+  },
+  {
+    "produto_id": 76,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Pencil USB-C",
+    "lucro_liquido": 200
+  },
+  {
+    "produto_id": 77,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Apple Pencil Pro",
+    "lucro_liquido": 200
+  },
+  {
+    "produto_id": 78,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirTag 1 unidade",
+    "lucro_liquido": 40
+  },
+  {
+    "produto_id": 79,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "AirTag 4 unidades",
+    "lucro_liquido": 95
+  },
+  {
+    "produto_id": 80,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Magic Keyboard sem teclado numérico",
+    "lucro_liquido": 150
+  },
+  {
+    "produto_id": 81,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Magic Keyboard com teclado numérico",
+    "lucro_liquido": 250
+  },
+  {
+    "produto_id": 82,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Carregador Apple 20W USB-C",
+    "lucro_liquido": 35
+  },
+  {
+    "produto_id": 83,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Cabo Apple USB-C",
+    "lucro_liquido": 50
+  },
+  {
+    "produto_id": 84,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Magic Mouse 1G",
+    "lucro_liquido": 240
+  },
+  {
+    "produto_id": 85,
+    "condicao_produto": "NOVO",
+    "produto_descricao": "Magic Mouse 2G",
+    "lucro_liquido": 240
+  },
+  {
+    "produto_id": 86,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 12 128GB",
+    "lucro_liquido": 399
+  },
+  {
+    "produto_id": 87,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 13 128GB",
+    "lucro_liquido": 349
+  },
+  {
+    "produto_id": 88,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 14 128GB",
+    "lucro_liquido": 399
+  },
+  {
+    "produto_id": 89,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 14 Pro 128GB",
+    "lucro_liquido": 399
+  },
+  {
+    "produto_id": 90,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 14 Pro Max 128GB",
+    "lucro_liquido": 399
+  },
+  {
+    "produto_id": 91,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 15 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 92,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 15 Pro 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 93,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 15 Pro Max 256GB",
+    "lucro_liquido": 559
+  },
+  {
+    "produto_id": 94,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 16 128GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 95,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 16 256GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 96,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 16 Pro 128GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 97,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 16 Pro 256GB",
+    "lucro_liquido": 549
+  },
+  {
+    "produto_id": 98,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 16 Pro Max 256GB",
+    "lucro_liquido": 549
+  },
+  {
+    "produto_id": 99,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 17 256GB",
+    "lucro_liquido": 449
+  },
+  {
+    "produto_id": 100,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 17 Pro 256GB",
+    "lucro_liquido": 549
+  },
+  {
+    "produto_id": 101,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 17 Pro Max 256GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 102,
+    "condicao_produto": "SEMINOVO",
+    "produto_descricao": "iPhone 17 Pro Max 512GB",
+    "lucro_liquido": 890
+  },
+  {
+    "produto_id": 103,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 13 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 104,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 14 128GB",
+    "lucro_liquido": 440
+  },
+  {
+    "produto_id": 105,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 15 128GB",
+    "lucro_liquido": 440
+  },
+  {
+    "produto_id": 106,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16e 128GB",
+    "lucro_liquido": 440
+  },
+  {
+    "produto_id": 107,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16e 256GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 108,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16 128GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 109,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16 256GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 110,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17e 256GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 111,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17e 512GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 112,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 256GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 113,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 512GB",
+    "lucro_liquido": 640
+  },
+  {
+    "produto_id": 114,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone Air 256GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 115,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone Air 512GB",
+    "lucro_liquido": 640
+  },
+  {
+    "produto_id": 116,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 Pro 256GB",
+    "lucro_liquido": 690
+  },
+  {
+    "produto_id": 117,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 Pro 512GB",
+    "lucro_liquido": 890
+  },
+  {
+    "produto_id": 118,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 Pro 1TB",
+    "lucro_liquido": 690
+  },
+  {
+    "produto_id": 119,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 Pro Max 256GB",
+    "lucro_liquido": 690
+  },
+  {
+    "produto_id": 120,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 Pro Max 512GB",
+    "lucro_liquido": 790
+  },
+  {
+    "produto_id": 121,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 Pro Max 1TB",
+    "lucro_liquido": 890
+  },
+  {
+    "produto_id": 122,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 17 Pro Max 2TB",
+    "lucro_liquido": 1090
+  },
+  {
+    "produto_id": 123,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 14 Pro 128GB",
+    "lucro_liquido": 399
+  },
+  {
+    "produto_id": 124,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 14 Pro Max 128GB",
+    "lucro_liquido": 399
+  },
+  {
+    "produto_id": 125,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 15 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 126,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 15 Pro 128GB",
+    "lucro_liquido": 390
+  },
+  {
+    "produto_id": 127,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 15 Pro Max 256GB",
+    "lucro_liquido": 559
+  },
+  {
+    "produto_id": 128,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16 128GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 129,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16 256GB",
+    "lucro_liquido": 590
+  },
+  {
+    "produto_id": 130,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16 Pro 128GB",
+    "lucro_liquido": 490
+  },
+  {
+    "produto_id": 131,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16 Pro 256GB",
+    "lucro_liquido": 549
+  },
+  {
+    "produto_id": 132,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPhone 16 Pro Max 256GB",
+    "lucro_liquido": 549
+  }
+]
