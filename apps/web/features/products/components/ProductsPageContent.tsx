@@ -129,6 +129,30 @@ export function ProductsPageContent() {
             />
           </FilterSection>
 
+          <FilterSection title="Cor">
+            <SelectInput
+              label="Cor"
+              value={filters.colorId}
+              options={[
+                ['', 'Todas'],
+                ...references.colors.map((item) => [item.id, item.name ?? item.id]),
+              ]}
+              onChange={(value) => setFilters((current) => ({ ...current, colorId: value }))}
+            />
+          </FilterSection>
+
+          <FilterSection title="Capacidade">
+            <SelectInput
+              label="Capacidade"
+              value={filters.storageId}
+              options={[
+                ['', 'Todas'],
+                ...references.storages.map((item) => [item.id, item.displayName ?? item.id]),
+              ]}
+              onChange={(value) => setFilters((current) => ({ ...current, storageId: value }))}
+            />
+          </FilterSection>
+
           <FilterSection title="Status">
             <SelectInput
               label="Status"

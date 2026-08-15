@@ -17,6 +17,15 @@ import {
 import { useOffers } from '../hooks/useOffers';
 import { OfferListCard } from './OfferListCard';
 import { OffersToolbar } from './OffersToolbar';
+import {
+  getCanonicalCapacities,
+  getCanonicalCategory,
+  getCanonicalColors,
+  getCanonicalModel,
+  getCatalogFacetLabel,
+  normalizeCatalogFilterText,
+} from '@/features/price-radar/utils/brazil-radar-facets';
+import { PricingItem } from '@/features/pricing/types/pricing';
 
 const initialFilters = {
   search: '',
@@ -43,13 +52,14 @@ export function OffersPageContent() {
   );
 
   const filteredOffers = useMemo(() => {
-    const normalizedSearch = filters.search.trim().toLocaleLowerCase('pt-BR');
+    const normalizedSearch = normalizeCatalogFilterText(filters.search);
     const now = Date.now();
 
     const nextOffers = offers.offers.filter((offer) => {
       const product = offer.productId ? productsById.get(offer.productId) : undefined;
+      const productFacetSource = product ? toFacetSource(product) : undefined;
       const origin = offer.template?.productType || 'Precificacao';
-      const searchable = [
+      const searchable = normalizeCatalogFilterText([
         product?.productName,
         product?.model,
         product?.color,
@@ -58,15 +68,14 @@ export function OffersPageContent() {
         offer.status,
       ]
         .filter(Boolean)
-        .join(' ')
-        .toLocaleLowerCase('pt-BR');
+        .join(' '));
 
       return (
         (!normalizedSearch || searchable.includes(normalizedSearch)) &&
-        (!filters.category || product?.category === filters.category) &&
-        (!filters.model || product?.model === filters.model) &&
-        (!filters.color || product?.color === filters.color) &&
-        (!filters.capacity || product?.capacity === filters.capacity) &&
+        (!filters.category || productFacetSource?.category === filters.category) &&
+        (!filters.model || productFacetSource?.model === filters.model) &&
+        (!filters.color || productFacetSource?.colors.includes(filters.color)) &&
+        (!filters.capacity || productFacetSource?.capacities.includes(filters.capacity)) &&
         (!filters.origin || origin === filters.origin) &&
         (!filters.status || offer.status === filters.status) &&
         matchesDate(offer.createdAt, filters.date, now)
@@ -81,10 +90,17 @@ export function OffersPageContent() {
     });
   }, [filters, offers.offers, productsById, sort]);
 
-  const categories = useUnique(offers.pricingItems.map((item) => item.category));
-  const models = useUnique(offers.pricingItems.map((item) => item.model));
-  const colors = useUnique(offers.pricingItems.map((item) => item.color));
-  const capacities = useUnique(offers.pricingItems.map((item) => item.capacity));
+  const categories = useCatalogFacetOptions(offers.pricingItems, (item) => [toFacetSource(item).category]);
+  const models = useCatalogFacetOptions(offers.pricingItems, (item) => [toFacetSource(item).model]);
+  const colors = useCatalogFacetOptions(
+    offers.pricingItems,
+    (item) => toFacetSource(item).colors,
+    getCatalogFacetLabel,
+  );
+  const capacities = useCatalogFacetOptions(
+    offers.pricingItems,
+    (item) => toFacetSource(item).capacities,
+  );
   const origins = useUnique(
     offers.offers.map((offer) => offer.template?.productType || 'Precificacao'),
   );
@@ -208,14 +224,14 @@ export function OffersPageContent() {
           <FilterSelect
             title="Origem"
             value={filters.origin}
-            options={origins}
+            options={toFilterOptions(origins)}
             emptyLabel="Todas"
             onChange={(origin) => setFilters((current) => ({ ...current, origin }))}
           />
           <FilterSelect
             title="Status"
             value={filters.status}
-            options={statuses}
+            options={toFilterOptions(statuses)}
             emptyLabel="Todos"
             onChange={(status) => setFilters((current) => ({ ...current, status }))}
           />
@@ -327,7 +343,7 @@ function FilterSelect({
 }: {
   title: string;
   value: string;
-  options: string[];
+  options: FilterOption[];
   emptyLabel: string;
   onChange: (value: string) => void;
 }) {
@@ -336,7 +352,7 @@ function FilterSelect({
       <SelectInput
         label={title}
         value={value}
-        options={[['', emptyLabel], ...options.map((option) => [option, option])]}
+        options={[['', emptyLabel], ...options.map((option) => [option.value, option.label])]}
         onChange={onChange}
       />
     </FilterSection>
@@ -374,6 +390,38 @@ function SelectInput({
 
 function useUnique(values: string[]) {
   return useMemo(() => Array.from(new Set(values.filter(Boolean))).sort(), [values]);
+}
+
+function toFilterOptions(values: string[]): FilterOption[] {
+  return values.map((value) => ({ value, label: value }));
+}
+
+interface FilterOption {
+  value: string;
+  label: string;
+}
+
+function toFacetSource(item: PricingItem) {
+  return {
+    category: getCanonicalCategory(item),
+    model: getCanonicalModel(item),
+    colors: getCanonicalColors(item),
+    capacities: getCanonicalCapacities(item),
+  };
+}
+
+function useCatalogFacetOptions(
+  items: PricingItem[],
+  getValues: (item: PricingItem) => string[],
+  getLabel: (value: string) => string = (value) => value,
+) {
+  return useMemo(
+    () =>
+      Array.from(new Set(items.flatMap(getValues).filter(Boolean)))
+        .map((value) => ({ value, label: getLabel(value) }))
+        .sort((left, right) => left.label.localeCompare(right.label, 'pt-BR')),
+    [getLabel, getValues, items],
+  );
 }
 
 function matchesDate(value: string, filter: string, now: number) {

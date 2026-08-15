@@ -11,6 +11,13 @@ import {
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
   TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '../types/pricing';
+import {
+  getCanonicalCapacities,
+  getCanonicalCategory,
+  getCanonicalColors,
+  getCanonicalModel,
+  normalizeCatalogFilterText,
+} from '@/features/price-radar/utils/brazil-radar-facets';
 
 const initialFilters: PricingFilters = {
   productId: '',
@@ -64,7 +71,7 @@ export function usePricing() {
     setLoading(true);
     setError(null);
     try {
-      setItems(await listPricing(filters));
+      setItems(await listPricing(toPricingRequestFilters(filters)));
     } catch (pricingError) {
       setError(
         pricingError instanceof Error
@@ -85,7 +92,7 @@ export function usePricing() {
     setError(null);
     setSuccess(null);
     try {
-      setItems(await recalculatePricing(filters));
+      setItems(await recalculatePricing(toPricingRequestFilters(filters)));
       setSuccess('Precos recalculados dinamicamente.');
     } catch (pricingError) {
       setError(
@@ -132,7 +139,7 @@ export function usePricing() {
   }
 
   return {
-    items,
+    items: filterPricingItems(items, filters),
     filters,
     setFilters,
     loading,
@@ -144,4 +151,41 @@ export function usePricing() {
     generateOffer,
     generateTemporaryOffer,
   };
+}
+
+function toPricingRequestFilters(filters: PricingFilters): PricingFilters {
+  return {
+    ...filters,
+    search: '',
+    category: '',
+    model: '',
+    color: '',
+    capacity: '',
+  };
+}
+
+function filterPricingItems(items: PricingItem[], filters: PricingFilters) {
+  const normalizedSearch = normalizeCatalogFilterText(filters.search);
+  const minimum = filters.minPrice === '' ? Number.NEGATIVE_INFINITY : Number(filters.minPrice);
+  const maximum = filters.maxPrice === '' ? Number.POSITIVE_INFINITY : Number(filters.maxPrice);
+
+  return items.filter((item) => {
+    const searchable = normalizeCatalogFilterText(
+      `${item.productName} ${item.category} ${item.model} ${item.color} ${item.capacity}`,
+    );
+    const colors = getCanonicalColors(item);
+    const capacities = getCanonicalCapacities(item);
+
+    return (
+      (!normalizedSearch || searchable.includes(normalizedSearch)) &&
+      (!filters.category || getCanonicalCategory(item) === filters.category) &&
+      (!filters.model || getCanonicalModel(item) === filters.model) &&
+      (!filters.color || colors.includes(filters.color)) &&
+      (!filters.capacity || capacities.includes(filters.capacity)) &&
+      (!filters.productType || item.productType === filters.productType) &&
+      (!filters.status || item.status === filters.status) &&
+      ((filters.minPrice === '' && filters.maxPrice === '') ||
+        (item.salePrice !== null && item.salePrice >= minimum && item.salePrice <= maximum))
+    );
+  });
 }

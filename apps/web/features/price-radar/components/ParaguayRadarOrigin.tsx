@@ -29,6 +29,14 @@ import {
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
   TemporaryImportPricingRequest,
 } from '@/features/pricing/types/pricing';
+import {
+  getCanonicalCapacities,
+  getCanonicalCategory,
+  getCanonicalColors,
+  getCanonicalModel,
+  getCatalogFacetLabel,
+  normalizeCatalogFilterText,
+} from '../utils/brazil-radar-facets';
 
 type SortMode = 'lowest' | 'highest' | 'recent' | 'stores' | 'name';
 
@@ -105,11 +113,13 @@ export function ParaguayRadarOrigin() {
 
   const options = useMemo(
     () => ({
-      categories: uniqueValues(products.map((product) => product.category)),
+      categories: uniqueValues(products.map((product) => getCanonicalCategory(toFacetSource(product)))),
       brands: uniqueValues(products.map((product) => product.brand)),
-      models: uniqueValues(products.map((product) => product.model)),
-      colors: uniqueValues(products.map((product) => product.color)),
-      capacities: uniqueValues(products.map((product) => product.capacity)),
+      models: uniqueValues(products.map((product) => getCanonicalModel(toFacetSource(product)))),
+      colors: uniqueValues(products.flatMap((product) => getCanonicalColors(toFacetSource(product)))),
+      capacities: uniqueValues(
+        products.flatMap((product) => getCanonicalCapacities(toFacetSource(product))),
+      ),
       stores: uniqueValues(products.map((product) => product.store)),
       cities: uniqueValues(products.map((product) => product.city)),
       availabilities: uniqueValues(products.map((product) => product.availability)),
@@ -120,18 +130,22 @@ export function ParaguayRadarOrigin() {
   const filteredProducts = useMemo(() => {
     const minimum = Number(filters.minPrice) || 0;
     const maximum = Number(filters.maxPrice) || Number.POSITIVE_INFINITY;
-    const filtered = products.filter((product) =>
-      (!filters.category || product.category === filters.category) &&
-      (!filters.brand || product.brand === filters.brand) &&
-      (!filters.model || product.model === filters.model) &&
-      (!filters.color || product.color === filters.color) &&
-      (!filters.capacity || product.capacity === filters.capacity) &&
-      (!filters.store || product.store === filters.store) &&
-      (!filters.city || product.city === filters.city) &&
-      (!filters.availability || product.availability === filters.availability) &&
-      product.priceUsd >= minimum &&
-      product.priceUsd <= maximum,
-    );
+    const filtered = products.filter((product) => {
+      const source = toFacetSource(product);
+
+      return (
+        (!filters.category || getCanonicalCategory(source) === filters.category) &&
+        (!filters.brand || matchesFacetText(product.brand, filters.brand)) &&
+        (!filters.model || getCanonicalModel(source) === filters.model) &&
+        (!filters.color || getCanonicalColors(source).includes(filters.color)) &&
+        (!filters.capacity || getCanonicalCapacities(source).includes(filters.capacity)) &&
+        (!filters.store || matchesFacetText(product.store, filters.store)) &&
+        (!filters.city || matchesFacetText(product.city, filters.city)) &&
+        (!filters.availability || matchesFacetText(product.availability, filters.availability)) &&
+        product.priceUsd >= minimum &&
+        product.priceUsd <= maximum
+      );
+    });
 
     return filtered.sort((left, right) => {
       if (sort === 'highest') return right.priceUsd - left.priceUsd;
@@ -416,7 +430,11 @@ function ParaguayFilters({ filters, options, onChange }: { filters: typeof empty
         <FilterSection key={key} title={filterLabels[key]} defaultOpen={index < 3}>
           <select value={filters[key]} onChange={(event) => onChange({ ...filters, [key]: event.target.value })} className="field-control" aria-label={filterLabels[key]}>
             <option value="">Todos</option>
-            {options[optionKeys[key]]?.map((value) => <option key={value} value={value}>{value}</option>)}
+            {options[optionKeys[key]]?.map((value) => (
+              <option key={value} value={value}>
+                {key === 'color' ? getCatalogFacetLabel(value) : value}
+              </option>
+            ))}
           </select>
         </FilterSection>
       ))}
@@ -508,6 +526,22 @@ function toPlainText(value: unknown): string {
   }
 
   return '';
+}
+
+function toFacetSource(product: ImportProduct) {
+  return {
+    productName: product.name,
+    category: product.category,
+    model: product.model,
+    color: product.color,
+    capacity: product.capacity,
+    quality: product.availability,
+    productType: product.availability,
+  };
+}
+
+function matchesFacetText(value: string | undefined, selectedValue: string) {
+  return normalizeCatalogFilterText(value) === normalizeCatalogFilterText(selectedValue);
 }
 
 const filterLabels = { category: 'Categoria', brand: 'Marca', model: 'Modelo', color: 'Cor', capacity: 'Capacidade', store: 'Loja', city: 'Cidade', availability: 'Disponibilidade' };

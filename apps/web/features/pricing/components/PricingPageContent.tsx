@@ -16,6 +16,13 @@ import {
 import { usePricing } from '../hooks/usePricing';
 import { PricingProductCard } from './PricingProductCard';
 import { PricingToolbar } from './PricingToolbar';
+import {
+  getCanonicalCapacities,
+  getCanonicalCategory,
+  getCanonicalColors,
+  getCanonicalModel,
+  getCatalogFacetLabel,
+} from '@/features/price-radar/utils/brazil-radar-facets';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -41,10 +48,10 @@ export function PricingPageContent() {
   const pricing = usePricing();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const categories = useUnique(pricing.items.map((item) => item.category));
-  const models = useUnique(pricing.items.map((item) => item.model));
-  const colors = useUnique(pricing.items.map((item) => item.color));
-  const capacities = useUnique(pricing.items.map((item) => item.capacity));
+  const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
+  const models = useUnique(pricing.items.map((item) => getCanonicalModel(item)));
+  const colors = useUnique(pricing.items.flatMap((item) => getCanonicalColors(item)));
+  const capacities = useUnique(pricing.items.flatMap((item) => getCanonicalCapacities(item)));
   const types = useUnique(pricing.items.map((item) => item.productType));
   const statuses = useUnique(pricing.items.map((item) => item.status));
 
@@ -172,7 +179,7 @@ export function PricingPageContent() {
             <SelectInput
               label="Cor"
               value={pricing.filters.color}
-              options={[['', 'Todas'], ...toOptions(colors)]}
+              options={[['', 'Todas'], ...toOptions(colors, getCatalogFacetLabel)]}
               onChange={(value) => pricing.setFilters((current) => ({ ...current, color: value }))}
             />
           </FilterSection>
