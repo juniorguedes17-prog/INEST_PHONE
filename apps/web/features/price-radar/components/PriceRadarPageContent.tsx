@@ -876,18 +876,24 @@ function groupQuotesByProduct(quotes: PriceQuoteItem[]): BrazilRadarProduct[] {
     }
   });
 
-  return Array.from(grouped.values()).map((item) => ({
-    id: item.id,
-    name: item.name,
-    category: item.category,
-    model: item.model,
-    color: item.color,
-    capacity: item.capacity,
-    lowestCost: item.lowestCost,
-    supplierCount: item.supplierCount,
-    updatedAt: item.updatedAt,
-    referenceQuote: item.referenceQuote,
-  }));
+  return Array.from(grouped.values()).map((item) => {
+    // The card must describe the quote whose price was selected as the minimum.
+    // Keeping fields from the first quote mixed suppliers and prices in the UI.
+    const quote = item.referenceQuote;
+
+    return {
+      id: item.id,
+      name: quote.productName,
+      category: quote.category,
+      model: quote.model,
+      color: quote.color,
+      capacity: quote.capacity,
+      lowestCost: item.lowestCost,
+      supplierCount: item.supplierCount,
+      updatedAt: item.updatedAt,
+      referenceQuote: quote,
+    };
+  });
 }
 
 function openWhatsapp(quote: PriceQuoteItem) {

@@ -66,6 +66,9 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
         <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedores</p>
         <strong className="mt-1 block text-lg text-inest-text">{product.supplierCount}</strong>
         <span className="text-xs text-inest-muted">com cotacao valida</span>
+        <p className="mt-1 truncate text-xs font-bold text-inest-muted" title={product.referenceQuote.supplier.name}>
+          Menor cotacao: {product.referenceQuote.supplier.name}
+        </p>
       </div>
 
       <div className="min-w-0 sm:col-span-2 lg:col-span-1 lg:text-right">
@@ -74,6 +77,12 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
           {formatCurrency(product.lowestCost)}
         </strong>
         <span className="text-xs text-inest-muted">Atualizado {formatDateTime(product.updatedAt)}</span>
+        <p
+          className="mt-1 truncate text-xs font-bold text-inest-muted"
+          title={`Linha recebida: ${product.referenceQuote.notes}`}
+        >
+          Fonte: {product.referenceQuote.supplier.name}
+        </p>
         <div className="mt-2 grid grid-cols-2 gap-2 lg:flex lg:justify-end">
           <ActionButton variant="secondary" className="min-h-11 px-3" onClick={() => onView(product.referenceQuote)}>
             Visualizar

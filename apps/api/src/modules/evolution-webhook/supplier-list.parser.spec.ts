@@ -45,6 +45,31 @@ describe('supplier list parser', () => {
     expect(items[0]?.price).toBe(expectedPrice);
   });
 
+  it('preserva os valores por cor de uma lista de fornecedor', () => {
+    const items = parseSupplierListText(`
+      IPHONE
+      17 PRO MAX 256GB
+      SILVER R$ 7,150
+      LARANJA R$ 7,100
+      AZUL R$ 7,100
+    `);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ color: 'silver', price: 7150 }),
+        expect.objectContaining({ color: 'laranja', price: 7100 }),
+        expect.objectContaining({ color: 'azul', price: 7100 }),
+      ]),
+    );
+  });
+
+  it('preserva pontos como milhar quando a lista nao informa centavos', () => {
+    const items = parseSupplierListText('iPhone 17 Pro Max 256GB\nSilver R$ 7.200');
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.price).toBe(7200);
+  });
+
   it('nao interpreta a capacidade do produto como preco', () => {
     const items = parseSupplierListText('iPhone 17 Pro 256GB\nAzul');
 
