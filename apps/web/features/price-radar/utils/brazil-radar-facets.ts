@@ -27,6 +27,17 @@ export interface BrazilRadarFacets {
   priceMax: number;
 }
 
+export interface CatalogFacetSource {
+  productName?: string | null;
+  category?: string | null;
+  model?: string | null;
+  color?: string | null;
+  capacity?: string | null;
+  quality?: string | null;
+  productType?: string | null;
+  notes?: string | null;
+}
+
 export const emptyBrazilRadarFacetState: BrazilRadarFacetState = {
   categories: [],
   models: [],
@@ -71,7 +82,7 @@ export function isVisibleRadarQuote(quote: PriceQuoteItem) {
     quote.color,
     quote.capacity,
   ].join(' ');
-  const normalized = normalizeSearchText(searchable);
+  const normalized = normalizeCatalogFilterText(searchable);
 
   return !(
     /\bhomologacao\b|\bteste?s?\b|\bdummy\b|\bmock\b/.test(normalized) ||
@@ -131,8 +142,10 @@ export function countActiveBrazilRadarFacets(filters: BrazilRadarFacetState) {
   );
 }
 
-function getCanonicalCategory(quote: PriceQuoteItem) {
-  const text = normalizeSearchText(`${quote.category} ${quote.productName} ${quote.model}`);
+export function getCanonicalCategory(source: CatalogFacetSource) {
+  const text = normalizeCatalogFilterText(
+    `${source.category ?? ''} ${source.productName ?? ''} ${source.model ?? ''}`,
+  );
 
   if (/\biphone\b/.test(text)) return 'iPhone';
   if (/\bipad\b/.test(text)) return 'iPad';
@@ -144,8 +157,8 @@ function getCanonicalCategory(quote: PriceQuoteItem) {
   return 'Eletronicos';
 }
 
-function getCanonicalModel(quote: PriceQuoteItem) {
-  const raw = normalizeSearchText(`${quote.model} ${quote.productName}`);
+export function getCanonicalModel(source: CatalogFacetSource) {
+  const raw = normalizeCatalogFilterText(`${source.model ?? ''} ${source.productName ?? ''}`);
 
   const iphone = raw.match(/\biphone\s*(\d{1,2})\s*(pro\s*max|promax|pro|max|plus|air|e)?\b/);
   if (iphone) {
@@ -206,8 +219,8 @@ function getCanonicalModel(quote: PriceQuoteItem) {
   );
 }
 
-function getCanonicalColors(quote: PriceQuoteItem) {
-  const text = normalizeSearchText(quote.color);
+export function getCanonicalColors(source: CatalogFacetSource) {
+  const text = normalizeCatalogFilterText(source.color ?? '');
   const colors = colorDefinitions
     .filter((definition) => {
       if (definition.value === 'azul' && containsTerm(text, 'deep blue')) return false;
@@ -220,14 +233,18 @@ function getCanonicalColors(quote: PriceQuoteItem) {
   return fallback ? [fallback] : [];
 }
 
-function getCanonicalCapacities(quote: PriceQuoteItem) {
-  const text = normalizeSearchText(`${quote.capacity} ${quote.model} ${quote.productName}`)
+export function getCanonicalCapacities(source: CatalogFacetSource) {
+  const text = normalizeCatalogFilterText(
+    `${source.capacity ?? ''} ${source.model ?? ''} ${source.productName ?? ''}`,
+  )
     .replace(/(\d+)\s*(gb|tb)/g, '$1$2');
   return capacityOrder.filter((capacity) => new RegExp(`\\b${capacity.toLowerCase()}\\b`).test(text));
 }
 
-function getCanonicalCondition(quote: PriceQuoteItem) {
-  const text = normalizeSearchText(`${quote.quality} ${quote.productType} ${quote.productName} ${quote.notes}`);
+export function getCanonicalCondition(source: CatalogFacetSource) {
+  const text = normalizeCatalogFilterText(
+    `${source.quality ?? ''} ${source.productType ?? ''} ${source.productName ?? ''} ${source.notes ?? ''}`,
+  );
   if (/\bcpo\b|certified pre owned|refurbished/.test(text)) return 'CPO';
   if (/seminovo|semi novo|usado|vitrine|open box|swap/.test(text)) return 'Seminovo';
   return 'Novo';
@@ -271,15 +288,20 @@ function normalizeIphoneVariant(value: string) {
   return '';
 }
 
-function normalizeSearchText(value: string) {
-  return value
+export function normalizeCatalogFilterText(value: string | null | undefined) {
+  return (value ?? '')
+    .toString()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, ' ')
     .replace(/[|_/()[\]{}:;,+*]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
-    .toLowerCase();
+    .toLowerCase() ?? '';
+}
+
+export function getCatalogFacetLabel(value: string) {
+  return colorDefinitions.find((color) => color.value === value)?.label ?? value;
 }
 
 function containsTerm(text: string, term: string) {
