@@ -1,3 +1,8 @@
+import {
+  canonicalModelRegistry,
+  type CanonicalModelRegistryEntry,
+} from './canonical-model-registry';
+
 export interface CanonicalProductSource {
   productDescription?: string | null;
   productName?: string | null;
@@ -14,6 +19,9 @@ export interface CanonicalProductIdentity {
   canonicalCategory: string;
   canonicalModelKey: string;
   canonicalModelLabel: string;
+  canonicalModelMatched: boolean;
+  canonicalModelConfidence: number;
+  canonicalModelMatchMethod: 'exact_alias' | 'deterministic' | 'unclassified';
   canonicalCondition: string;
   canonicalRam: string | null;
   canonicalStorage: string | null;
@@ -45,11 +53,6 @@ export const canonicalColorAliases = [
   { value: 'deserto', label: 'Titanio Deserto', swatch: '#c6a477', terms: ['desert', 'deserto'] },
 ] as const;
 
-const promotionTerms = new Set([
-  'atencao', 'atualizado', 'atualizada', 'bom', 'dia', 'estoque', 'fire', 'imperdivel',
-  'lista', 'oferta', 'ofertas', 'promocao', 'promocoes', 'somente', 'ultima', 'chamada',
-]);
-
 export function normalizeCanonicalProductIdentity(
   input: CanonicalProductSource | string,
 ): CanonicalProductIdentity {
@@ -76,25 +79,29 @@ export function normalizeCanonicalProductIdentity(
       .filter(Boolean)
       .join(' '),
   );
-  const canonicalCategory = resolveCategory(identityText);
-  const canonicalRam = resolveRam(attributeText, canonicalCategory);
-  const canonicalStorage = resolveStorage(attributeText, canonicalRam);
-  const canonicalScreen = resolveScreen(identityText, canonicalCategory);
-  const canonicalConnectivity = resolveConnectivity(attributeText);
+  const inferredCategory = resolveCategory(identityText);
+  const canonicalScreen = resolveScreen(identityText, inferredCategory);
   const canonicalChip = resolveChip(identityText);
-  const canonicalColor = resolveColor(normalizeCanonicalText(source.color || attributeText));
-  const canonicalCondition = resolveCondition(attributeText);
-  const canonicalModelLabel = resolveModelLabel({
+  const modelResolution = resolveCanonicalModel({
     text: identityText,
-    category: canonicalCategory,
+    category: inferredCategory,
     screen: canonicalScreen,
     chip: canonicalChip,
   });
+  const canonicalCategory = modelResolution.entry?.category ?? inferredCategory;
+  const canonicalRam = resolveRam(attributeText, canonicalCategory);
+  const canonicalStorage = resolveStorage(attributeText, canonicalRam);
+  const canonicalConnectivity = resolveConnectivity(attributeText);
+  const canonicalColor = resolveColor(normalizeCanonicalText(source.color || attributeText));
+  const canonicalCondition = resolveCondition(attributeText);
 
   return {
     canonicalCategory,
-    canonicalModelKey: toCanonicalKey(canonicalModelLabel),
-    canonicalModelLabel,
+    canonicalModelKey: modelResolution.entry?.key ?? '',
+    canonicalModelLabel: modelResolution.entry?.label ?? '',
+    canonicalModelMatched: Boolean(modelResolution.entry),
+    canonicalModelConfidence: modelResolution.confidence,
+    canonicalModelMatchMethod: modelResolution.matchMethod,
     canonicalCondition,
     canonicalRam,
     canonicalStorage,
@@ -114,12 +121,72 @@ export function normalizeCanonicalText(value: string | null | undefined) {
     .replace(/\*|~|`/g, ' ')
     .replace(/\b\d{1,2}[\s/.-]+\d{1,2}[\s/.-]+20\d{2}\b/g, ' ')
     .replace(/\br\$?\s*\d[\d.,]*\b|\$\s*\d[\d.,]*/g, ' ')
-    .replace(/[|_()[\]{}:;,+]/g, ' ')
+    .replace(/[|_()[\]{}:;,+-]/g, ' ')
     .replace(/\b(\d+)\s*(gb|tb|mm)\b/g, '$1$2')
     .replace(/\b(\d+(?:\.\d+)?)\s*(?:inch|inches|polegadas?)\b/g, '$1inch')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+interface CanonicalModelResolution {
+  entry: CanonicalModelRegistryEntry | null;
+  confidence: number;
+  matchMethod: CanonicalProductIdentity['canonicalModelMatchMethod'];
+}
+
+function resolveCanonicalModel({
+  text,
+  category,
+  screen,
+  chip,
+}: {
+  text: string;
+  category: string;
+  screen: string | null;
+  chip: string | null;
+}): CanonicalModelResolution {
+  const exactAlias = resolveRegistryAlias(text);
+  if (exactAlias === 'conflict') {
+    return { entry: null, confidence: 0, matchMethod: 'unclassified' };
+  }
+  if (exactAlias) {
+    return { entry: exactAlias, confidence: 1, matchMethod: 'exact_alias' };
+  }
+
+  const deterministicLabel = deriveDeterministicModelLabel({ text, category, screen, chip });
+  const deterministicEntry = canonicalModelRegistry.find(
+    (entry) => normalizeCanonicalText(entry.label) === normalizeCanonicalText(deterministicLabel),
+  );
+
+  if (deterministicEntry) {
+    return { entry: deterministicEntry, confidence: 0.95, matchMethod: 'deterministic' };
+  }
+
+  return { entry: null, confidence: 0, matchMethod: 'unclassified' };
+}
+
+function resolveRegistryAlias(text: string): CanonicalModelRegistryEntry | 'conflict' | null {
+  const matches = canonicalModelRegistry.flatMap((entry) =>
+    entry.aliases
+      .map(normalizeCanonicalText)
+      .filter((alias) => alias && containsPhrase(text, alias))
+      .map((alias) => ({ entry, score: alias.length })),
+  );
+
+  if (!matches.length) return null;
+
+  const categories = new Set(matches.map(({ entry }) => entry.category));
+  if (categories.size > 1) return 'conflict';
+
+  const bestScore = Math.max(...matches.map(({ score }) => score));
+  const bestEntries = new Map(
+    matches
+      .filter(({ score }) => score === bestScore)
+      .map(({ entry }) => [entry.key, entry]),
+  );
+
+  return bestEntries.size === 1 ? ([...bestEntries.values()][0] ?? null) : 'conflict';
 }
 
 function firstMeaningfulText(...values: Array<string | null | undefined>) {
@@ -139,7 +206,7 @@ function resolveCategory(text: string) {
   return 'Eletronicos';
 }
 
-function resolveModelLabel({
+function deriveDeterministicModelLabel({
   text,
   category,
   screen,
@@ -206,23 +273,7 @@ function resolveModelLabel({
   if (/\bmagic\s*keyboard\b/.test(text)) return 'Magic Keyboard';
   if (/\bear\s*pods?\b|\bearpods?\b/.test(text)) return 'EarPods';
 
-  return buildProvisionalModelLabel(text);
-}
-
-function buildProvisionalModelLabel(text: string) {
-  const colorTerms = canonicalColorAliases.flatMap((alias) => alias.terms);
-  const removableTerms = new Set([
-    ...promotionTerms,
-    'americano', 'americana', 'anatel', 'cellular', 'esim', 'gps', 'jp', 'lla', 'wifi',
-    'ram', 'ssd', 'cpu', 'gpu', ...colorTerms.flatMap((term) => term.split(' ')),
-  ]);
-  const tokens = text
-    .replace(/\b\d+(?:gb|tb|mm|inch)\b/g, ' ')
-    .replace(/\b\d+\s*\/\s*\d+\b/g, ' ')
-    .split(' ')
-    .filter((token) => token && !removableTerms.has(token) && !/^\d[\d.,]*$/.test(token));
-  const compact = collapseRepeatedSequence(tokens).join(' ');
-  return toProductTitleCase(compact);
+  return '';
 }
 
 function resolveRam(text: string, category: string) {
@@ -306,37 +357,8 @@ function watchSize(value: string | undefined, fallback: string | null) {
   return value ? `${value}mm` : fallback?.endsWith('mm') ? fallback : null;
 }
 
-function toCanonicalKey(value: string) {
-  return normalizeCanonicalText(value)
-    .replace(/["”]/g, ' inch ')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
-}
-
-function collapseRepeatedSequence(tokens: string[]) {
-  for (let size = Math.floor(tokens.length / 2); size > 0; size -= 1) {
-    if (tokens.length !== size * 2) continue;
-    if (tokens.slice(0, size).every((token, index) => token === tokens[index + size])) {
-      return tokens.slice(0, size);
-    }
-  }
-  return tokens.filter((token, index) => token !== tokens[index - 1]);
-}
-
 function joinLabel(...parts: Array<string | null | undefined>) {
   return parts.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-}
-
-function toProductTitleCase(value: string) {
-  return value
-    .split(' ')
-    .filter(Boolean)
-    .map(titleWord)
-    .join(' ')
-    .replace(/\bIphone\b/g, 'iPhone')
-    .replace(/\bIpad\b/g, 'iPad')
-    .replace(/\bMacbook\b/g, 'MacBook')
-    .replace(/\bAirpods\b/g, 'AirPods');
 }
 
 function titleWord(value: string) {
@@ -346,6 +368,10 @@ function titleWord(value: string) {
 
 function containsTerm(text: string, term: string) {
   return new RegExp(`(?:^|\\s)${escapeRegExp(term)}(?:$|\\s)`).test(text);
+}
+
+function containsPhrase(text: string, phrase: string) {
+  return new RegExp(`(?:^|\\s)${escapeRegExp(phrase)}(?:$|\\s)`).test(text);
 }
 
 function escapeRegExp(value: string) {

@@ -135,7 +135,11 @@ export function buildCanonicalModelFacetOptions<T extends CatalogFacetSource>(it
   const models = new Map<string, FacetOption>();
   items.forEach((item) => {
     const identity = normalizeCanonicalProductIdentity(item);
-    if (!identity.canonicalModelKey || !identity.canonicalModelLabel) return;
+    if (
+      !identity.canonicalModelMatched
+      || !identity.canonicalModelKey
+      || !identity.canonicalModelLabel
+    ) return;
     const current = models.get(identity.canonicalModelKey);
     models.set(identity.canonicalModelKey, {
       value: identity.canonicalModelKey,
