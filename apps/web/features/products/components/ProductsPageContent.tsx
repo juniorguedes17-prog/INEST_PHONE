@@ -323,7 +323,13 @@ function ProductFormModal({
   }
 
   return (
-    <Modal open={open} title={product ? 'Editar produto' : 'Novo produto'} onClose={onClose}>
+    <Modal
+      open={open}
+      title={product ? 'Editar produto' : 'Novo produto'}
+      onClose={onClose}
+      dialogClassName="max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
+      contentClassName="min-h-0 flex-1 overflow-y-auto pr-1"
+    >
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <SelectInput
           label="Categoria"
