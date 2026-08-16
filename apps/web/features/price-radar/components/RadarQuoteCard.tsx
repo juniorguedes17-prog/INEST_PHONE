@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { ActionButton, InfoTag, StatusBadge } from '@/components/shared';
+import { getProductCardPresentation } from '@/utils/product-card-presentation';
 import { PriceQuoteItem } from '../types/price-radar';
 
 interface RadarQuoteCardProps {
@@ -29,7 +30,13 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
   onSupplier,
   onHide,
 }: RadarQuoteCardProps) {
-  const isRecent = Date.now() - new Date(quote.updatedAt).getTime() < 24 * 60 * 60 * 1000;
+  const presentation = getProductCardPresentation({
+    canonicalDescription: quote.productDescription,
+    rawDescription: quote.productName,
+    condition: quote.quality,
+    capacity: quote.capacity,
+    color: quote.color,
+  });
 
   return (
     <article
@@ -40,7 +47,7 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
       }`}
     >
       <label className="grid h-8 w-8 place-items-center" title="Selecionar produto">
-        <span className="sr-only">Selecionar {quote.productName}</span>
+        <span className="sr-only">Selecionar {presentation.title}</span>
         <input
           type="checkbox"
           checked={selected}
@@ -55,19 +62,16 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
 
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
-          <h3 className="line-clamp-1 text-base font-black text-inest-text">{quote.productName}</h3>
+          <h3 className="line-clamp-2 text-base font-black text-inest-text">{presentation.title}</h3>
           <StatusBadge tone={quote.status === 'hidden' ? 'gray' : 'green'}>
-            {quote.status === 'hidden' ? 'Ocultado' : quote.quality || 'Valido'}
+            {quote.status === 'hidden' ? 'Ocultado' : 'Valido'}
           </StatusBadge>
-          {isRecent ? <StatusBadge tone="blue">Atualizado agora</StatusBadge> : null}
           {favorite ? <StatusBadge tone="amber">Favorito</StatusBadge> : null}
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {[quote.category, quote.model, quote.color, quote.capacity, quote.productType]
-            .filter(Boolean)
-            .map((tag) => (
-              <InfoTag key={tag}>{tag}</InfoTag>
-            ))}
+          {presentation.attributes.map((tag) => (
+            <InfoTag key={tag}>{tag}</InfoTag>
+          ))}
         </div>
         {quote.inconsistencies.length ? (
           <p className="mt-1.5 text-xs font-bold text-amber-700">Pendente de revisao</p>
@@ -77,10 +81,8 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
       <div className="min-w-0">
         <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
         <strong className="mt-0.5 block truncate text-sm text-inest-text">{quote.supplier.name}</strong>
-        <p className="mt-1 truncate text-xs text-inest-muted">
-          {quote.city || quote.supplier.source || 'Local nao informado'}
-        </p>
-        <InfoTag className="mt-2">{quote.deliveryTime || 'Prazo nao informado'}</InfoTag>
+        {quote.city || quote.supplier.source ? <p className="mt-1 truncate text-xs text-inest-muted">{quote.city || quote.supplier.source}</p> : null}
+        {quote.deliveryTime ? <InfoTag className="mt-2">{quote.deliveryTime}</InfoTag> : null}
       </div>
 
       <div className="flex min-w-0 flex-col items-start gap-1 md:items-end">

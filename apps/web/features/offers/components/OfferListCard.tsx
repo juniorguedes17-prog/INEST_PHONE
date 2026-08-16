@@ -1,5 +1,6 @@
 import { memo } from 'react';
 import { ActionButton, InfoTag, StatusBadge } from '@/components/shared';
+import { getProductCardPresentation } from '@/utils/product-card-presentation';
 import { OfferItem } from '../types/offers';
 import { PricingItem } from '@/features/pricing/types/pricing';
 
@@ -20,6 +21,14 @@ export const OfferListCard = memo(function OfferListCard({
   onShare,
   onDelete,
 }: OfferListCardProps) {
+  const presentation = getProductCardPresentation({
+    canonicalDescription: product?.profitProductDescription,
+    rawDescription: product?.productName,
+    condition: product?.profitCondition,
+    capacity: product?.capacity,
+    color: product?.color,
+  });
+
   return (
     <article className="grid w-full gap-3 rounded-xl border border-inest-line bg-white p-3 shadow-card transition-colors hover:border-slate-300 hover:bg-slate-50/60 focus-within:ring-2 focus-within:ring-inest-blue/30 lg:grid-cols-[64px_minmax(220px,1fr)_160px_180px] lg:items-center">
       <div
@@ -32,12 +41,12 @@ export const OfferListCard = memo(function OfferListCard({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
-            {product?.productName || 'Produto da oferta'}
+            {product ? presentation.title : 'Produto da oferta'}
           </h3>
           <StatusBadge tone={statusTone(offer.status)}>{translateStatus(offer.status)}</StatusBadge>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {[product?.model, product?.color, product?.capacity].filter(Boolean).map((tag) => (
+          {presentation.attributes.map((tag) => (
             <InfoTag key={tag}>{tag}</InfoTag>
           ))}
         </div>

@@ -1,10 +1,12 @@
 import { memo } from 'react';
 import { ActionButton, InfoTag, StatusBadge } from '@/components/shared';
+import { getProductCardPresentation } from '@/utils/product-card-presentation';
 import { PriceQuoteItem } from '../types/price-radar';
 
 export interface BrazilRadarProduct {
   id: string;
   name: string;
+  productDescription?: string | null;
   category: string;
   model: string;
   color: string;
@@ -32,6 +34,14 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
   onSupplier,
   onSendToPricing,
 }: BrazilRadarProductCardProps) {
+  const presentation = getProductCardPresentation({
+    canonicalDescription: product.productDescription,
+    rawDescription: product.name,
+    condition: product.referenceQuote.quality,
+    capacity: product.capacity,
+    color: product.color,
+  });
+
   return (
     <article
       className={`relative grid min-w-0 gap-3 rounded-xl border bg-white p-3 shadow-card transition-colors focus-within:ring-2 focus-within:ring-inest-blue/30 sm:grid-cols-[72px_minmax(0,1fr)] lg:grid-cols-[28px_72px_minmax(220px,1fr)_160px_190px] lg:items-center ${
@@ -39,7 +49,7 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
       }`}
     >
       <label className="absolute grid min-h-11 min-w-11 place-items-center sm:static" title="Selecionar produto">
-        <span className="sr-only">Selecionar {product.name}</span>
+        <span className="sr-only">Selecionar {presentation.title}</span>
         <input
           type="checkbox"
           checked={selected}
@@ -54,23 +64,23 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
 
       <div className="min-w-0 sm:col-span-1 lg:col-span-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <h3 className="line-clamp-2 text-base font-black text-inest-text">{product.name}</h3>
+          <h3 className="line-clamp-2 text-base font-black text-inest-text">{presentation.title}</h3>
           <StatusBadge tone="green">Brasil</StatusBadge>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {[product.model, product.color, product.capacity].filter(Boolean).map((tag) => (
+          {presentation.attributes.map((tag) => (
             <InfoTag key={tag}>{tag}</InfoTag>
           ))}
         </div>
       </div>
 
       <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-        <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedores</p>
-        <strong className="mt-1 block text-lg text-inest-text">{product.supplierCount}</strong>
-        <span className="text-xs text-inest-muted">com cotacao valida</span>
-        <p className="mt-1 truncate text-xs font-bold text-inest-muted" title={product.referenceQuote.supplier.name}>
-          Menor cotacao: {product.referenceQuote.supplier.name}
-        </p>
+        <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
+        <strong className="mt-1 block truncate text-sm text-inest-text" title={product.referenceQuote.supplier.name}>
+          {product.referenceQuote.supplier.name}
+        </strong>
+        {product.referenceQuote.city ? <p className="mt-1 truncate text-xs text-inest-muted">{product.referenceQuote.city}</p> : null}
+        {product.supplierCount > 1 ? <span className="mt-1 block text-xs text-inest-muted">{product.supplierCount} fornecedores na comparacao</span> : null}
       </div>
 
       <div className="min-w-0 sm:col-span-2 lg:col-span-1 lg:text-right">
@@ -79,12 +89,6 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
           {formatCurrency(product.lowestCost)}
         </strong>
         <span className="text-xs text-inest-muted">Atualizado {formatDateTime(product.updatedAt)}</span>
-        <p
-          className="mt-1 truncate text-xs font-bold text-inest-muted"
-          title={`Linha recebida: ${product.referenceQuote.notes}`}
-        >
-          Fonte: {product.referenceQuote.supplier.name}
-        </p>
         <div className="mt-2 grid grid-cols-2 gap-2 lg:flex lg:justify-end">
           <ActionButton variant="secondary" className="min-h-11 px-3" onClick={() => onView(product.referenceQuote)}>
             Visualizar

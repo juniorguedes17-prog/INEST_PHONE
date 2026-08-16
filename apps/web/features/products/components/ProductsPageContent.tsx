@@ -16,6 +16,7 @@ import {
 import { useProducts } from '../hooks/useProducts';
 import { ProductFormPayload, ProductItem } from '../types/products';
 import { ProductFacetsDrawer } from '@/features/price-radar/components/ProductFacetsDrawer';
+import { getProductCardPresentation } from '@/utils/product-card-presentation';
 
 const productTypes = [
   ['IPHONE_SEALED', 'Novo'],
@@ -123,19 +124,18 @@ export function ProductsPageContent() {
                     title={getProductTitle(product)}
                     status={translateStatus(product.status)}
                     tags={
-                      [
-                        product.category?.name,
-                        product.model?.name,
-                        product.color?.name,
-                        product.storage?.displayName,
-                        translateType(product.productType),
-                      ].filter(Boolean) as string[]
+                      getProductCardPresentation({
+                        canonicalDescription: product.productDescription,
+                        rawDescription: getProductTitle(product),
+                        capacity: product.storage?.displayName,
+                        color: product.color?.name,
+                      }).attributes
                     }
-                    meta={product.criticalNotes ?? 'Produto cadastrado no catalogo mestre.'}
+                    meta={product.criticalNotes ?? undefined}
                     supplier={{
                       name: 'Catalogo iNest',
                       location: 'Fonte oficial',
-                      delivery: product.qualityGrade ?? 'Sem grade',
+                      delivery: product.qualityGrade ?? undefined,
                     }}
                     price="Catalogo"
                     actions={[
@@ -187,27 +187,23 @@ export function ProductsPageContent() {
 }
 
 function getProductTitle(product: ProductItem) {
-  const officialDescription = product.productDescription?.trim();
-  if (officialDescription) {
-    return officialDescription;
-  }
-
-  return [
-    product.category?.name,
-    product.model?.name,
-    product.storage?.displayName,
-    product.color?.name,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  return getProductCardPresentation({
+    canonicalDescription: product.productDescription,
+    rawDescription: [
+      product.category?.name,
+      product.model?.name,
+      product.storage?.displayName,
+      product.color?.name,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    capacity: product.storage?.displayName,
+    color: product.color?.name,
+  }).title;
 }
 
 function translateStatus(status: string) {
   return statuses.find(([value]) => value === status)?.[1] ?? status;
-}
-
-function translateType(type: string) {
-  return productTypes.find(([value]) => value === type)?.[1] ?? type;
 }
 
 function referenceGroup(

@@ -22,6 +22,7 @@ import {
   getCatalogFacetLabel,
 } from '@/features/price-radar/utils/brazil-radar-facets';
 import { ProductFacetsDrawer, buildFacetOptions } from '@/features/price-radar/components/ProductFacetsDrawer';
+import { getProductCardPresentation } from '@/utils/product-card-presentation';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -282,6 +283,14 @@ function TemporaryImportPricingCard({
   generating: boolean;
   onGenerateOffer: () => void;
 }) {
+  const presentation = getProductCardPresentation({
+    canonicalDescription: item.profit.productDescription,
+    rawDescription: item.product.name,
+    condition: item.profit.condition,
+    capacity: item.product.capacity,
+    color: item.product.color,
+  });
+
   return (
     <article className="grid w-full gap-3 rounded-xl border border-blue-200 bg-white p-3 shadow-card md:grid-cols-[64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
       <div className="grid h-16 w-16 place-items-center rounded-lg bg-blue-50 font-display text-lg font-black text-inest-blue">
@@ -290,22 +299,17 @@ function TemporaryImportPricingCard({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
-            {item.product.name}
+            {presentation.title}
           </h3>
           <StatusBadge tone="blue">Paraguai</StatusBadge>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
-          {[item.product.category, item.product.model, item.product.color, item.product.capacity]
-            .filter(Boolean)
-            .map((tag) => (
+          {presentation.attributes.map((tag) => (
               <StatusBadge key={tag} tone="gray">
                 {tag}
               </StatusBadge>
             ))}
         </div>
-        <p className="mt-1.5 text-xs text-inest-muted">
-          Lucro por modelo: {item.profit.condition} - {item.profit.productDescription}
-        </p>
       </div>
       <div className="min-w-0">
         <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>

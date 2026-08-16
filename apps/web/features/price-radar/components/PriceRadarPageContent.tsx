@@ -593,6 +593,7 @@ function groupQuotesByProduct(quotes: PriceQuoteItem[]): BrazilRadarProduct[] {
       grouped.set(quote.productId, {
         id: quote.productId,
         name: quote.productName,
+        productDescription: quote.productDescription,
         category: quote.category,
         model: quote.model,
         color: quote.color,
@@ -627,6 +628,7 @@ function groupQuotesByProduct(quotes: PriceQuoteItem[]): BrazilRadarProduct[] {
     return {
       id: item.id,
       name: quote.productName,
+      productDescription: quote.productDescription,
       category: quote.category,
       model: quote.model,
       color: quote.color,

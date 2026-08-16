@@ -35,6 +35,7 @@ import {
   getCatalogFacetLabel,
   normalizeCatalogFilterText,
 } from '../utils/brazil-radar-facets';
+import { getProductCardPresentation } from '@/utils/product-card-presentation';
 
 type SortMode = 'lowest' | 'highest' | 'recent' | 'stores' | 'name';
 
@@ -368,32 +369,36 @@ export function ParaguayRadarOrigin() {
 }
 
 function ParaguayProductCard({ product, selected, onSelect, onCalculate }: { product: ImportProduct; selected: boolean; onSelect: (checked: boolean) => void; onCalculate: () => void }) {
+  const presentation = getProductCardPresentation({
+    rawDescription: product.name,
+    condition: product.availability,
+    capacity: product.capacity,
+    color: product.color,
+  });
+
   return (
     <article className={`grid min-w-0 gap-3 rounded-xl border bg-white p-3 shadow-card transition sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-center ${selected ? 'border-inest-blue ring-2 ring-blue-100' : 'border-inest-line hover:border-blue-200'}`}>
       <div
         className="aspect-square w-full max-w-[88px] rounded-lg border border-inest-line bg-contain bg-center bg-no-repeat"
         style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
         role="img"
-        aria-label={`Imagem de ${product.name}`}
+        aria-label={`Imagem de ${presentation.title}`}
       />
       <div className="min-w-0">
         <div className="flex min-w-0 items-start gap-2">
-          <input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-inest-blue" aria-label={`Selecionar ${product.name}`} />
+          <input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-inest-blue" aria-label={`Selecionar ${presentation.title}`} />
           <div className="min-w-0">
-            <h3 className="text-sm font-extrabold text-inest-text sm:text-base">{product.name}</h3>
+            <h3 className="text-sm font-extrabold text-inest-text sm:text-base">{presentation.title}</h3>
             <div className="mt-1 flex flex-wrap gap-1.5">
               <StatusBadge tone="blue">PY</StatusBadge>
-              {product.category ? <StatusBadge tone="gray">{product.category}</StatusBadge> : null}
-              {product.capacity ? <StatusBadge tone="gray">{product.capacity}</StatusBadge> : null}
-              {product.color ? <StatusBadge tone="gray">{product.color}</StatusBadge> : null}
+              {presentation.attributes.map((attribute) => <StatusBadge key={attribute} tone="gray">{attribute}</StatusBadge>)}
             </div>
           </div>
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">
-          <Info label="Loja" value={product.store || 'Nao informada'} />
-          <Info label="Cidade" value={product.city || 'Nao informada'} />
-          <Info label="Lojas" value={String(product.storeCount ?? product.offerCount ?? 0)} />
-          <Info label="Consulta" value={product.consultedAt ? formatDateTime(product.consultedAt) : 'Agora'} />
+          {product.store ? <Info label="Fornecedor" value={product.store} /> : null}
+          {product.city ? <Info label="Cidade" value={product.city} /> : null}
+          {product.consultedAt ? <Info label="Atualizado" value={formatDateTime(product.consultedAt)} /> : null}
         </dl>
       </div>
       <div className="grid gap-2 sm:min-w-44 sm:text-right">
