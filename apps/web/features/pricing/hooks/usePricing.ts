@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { generateOfferDraft, listPricing, recalculatePricing } from '../services/pricing-service';
+import {
+  calculateBrazilRadarQuotePricing,
+  generateOfferDraft,
+  listPricing,
+  recalculatePricing,
+} from '../services/pricing-service';
 import {
   BrazilRadarQuotePricing,
   BRAZIL_RADAR_PRICING_STORAGE_KEY,
@@ -20,6 +25,14 @@ import {
   getCanonicalModelKey,
   normalizeCatalogFilterText,
 } from '@/features/price-radar/utils/brazil-radar-facets';
+import {
+  createProduct,
+  getProduct,
+  getProductReferences,
+  listProducts,
+  updateProduct,
+} from '@/features/products/services/products-service';
+import { emptyProductFilters, resolveProfitRegistration } from '../utils/profit-registration';
 
 const initialFilters: PricingFilters = {
   productId: '',
@@ -174,6 +187,78 @@ export function usePricing() {
     });
   }
 
+  async function registerBrazilRadarProfit(netProfit: string) {
+    if (!brazilRadarPricing) {
+      throw new Error('A cotacao do Radar Brasil nao esta disponivel para cadastro do lucro.');
+    }
+
+    setSaving(true);
+    setSuccess(null);
+    try {
+      const catalogProduct = brazilRadarPricing.catalogProductId
+        ? await getProduct(brazilRadarPricing.catalogProductId)
+        : null;
+      const [products, references] = catalogProduct
+        ? [[], { categories: [], models: [], colors: [], storages: [] }]
+        : await Promise.all([listProducts(emptyProductFilters), getProductReferences()]);
+      const registration = resolveProfitRegistration({
+        item: brazilRadarPricing,
+        netProfit,
+        products,
+        references,
+        catalogProduct,
+      });
+
+      if (registration.action === 'incomplete') {
+        throw new Error(registration.message);
+      }
+
+      if (registration.action === 'update') {
+        await updateProduct(registration.productId, registration.payload);
+      } else {
+        await createProduct(registration.payload).catch(async (createError) => {
+          if (
+            !(createError instanceof Error) ||
+            !/ja existe|conflit|duplicad/i.test(createError.message)
+          ) {
+            throw createError;
+          }
+
+          const productsAfterConflict = await listProducts(emptyProductFilters);
+          const retry = resolveProfitRegistration({
+            item: brazilRadarPricing,
+            netProfit,
+            products: productsAfterConflict,
+            references,
+          });
+
+          if (retry.action === 'update') {
+            await updateProduct(retry.productId, retry.payload);
+            return;
+          }
+
+          throw createError;
+        });
+      }
+
+      const recalculated = await calculateBrazilRadarQuotePricing({
+        sourceQuoteId: brazilRadarPricing.sourceQuoteId,
+      });
+      setBrazilRadarPricing(recalculated);
+
+      if (recalculated.calculationStatus !== 'ready') {
+        throw new Error(
+          recalculated.calculationError ??
+            'O Lucro Liquido foi salvo, mas a cotacao ainda nao pode ser recalculada.',
+        );
+      }
+
+      setSuccess('Lucro Liquido salvo e cotacao recalculada.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function sendOfferDraft(draft: OfferDraft) {
     window.sessionStorage.setItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
     router.push(draft.route);
@@ -193,6 +278,7 @@ export function usePricing() {
     generateOffer,
     generateTemporaryOffer,
     generateBrazilRadarOffer,
+    registerBrazilRadarProfit,
   };
 }
 

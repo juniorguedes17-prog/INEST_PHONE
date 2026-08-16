@@ -37,6 +37,11 @@ export async function listProducts(filters: ProductFilters): Promise<ProductItem
   return parseResponse<ProductItem[]>(response);
 }
 
+export async function getProduct(id: string): Promise<ProductItem> {
+  const response = await authenticatedFetch(`${env.apiUrl}/products/${id}`);
+  return parseResponse<ProductItem>(response);
+}
+
 export async function getProductReferences(): Promise<ProductReferences> {
   const response = await authenticatedFetch(`${env.apiUrl}/products/references`);
   return parseResponse<ProductReferences>(response);

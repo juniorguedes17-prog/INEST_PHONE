@@ -7,6 +7,7 @@ import {
   ErrorState,
   KpiCard,
   LoadingState,
+  Modal,
   PageHeader,
   Pagination,
   StatusBadge,
@@ -49,6 +50,9 @@ export function PricingPageContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [profitModalOpen, setProfitModalOpen] = useState(false);
+  const [profitValue, setProfitValue] = useState('');
+  const [profitModalError, setProfitModalError] = useState<string | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
   const models = useMemo(
     () => buildCanonicalModelFacetOptions(pricing.items),
@@ -106,6 +110,26 @@ export function PricingPageContent() {
   function clearFilters() {
     pricing.setFilters(initialFilters);
     setPage(1);
+  }
+
+  function openProfitModal() {
+    setProfitValue('');
+    setProfitModalError(null);
+    setProfitModalOpen(true);
+  }
+
+  async function saveMissingProfit() {
+    setProfitModalError(null);
+    try {
+      await pricing.registerBrazilRadarProfit(profitValue);
+      setProfitModalOpen(false);
+    } catch (profitError) {
+      setProfitModalError(
+        profitError instanceof Error
+          ? profitError.message
+          : 'Nao foi possivel salvar o Lucro Liquido.',
+      );
+    }
   }
 
   return (
@@ -187,6 +211,7 @@ export function PricingPageContent() {
                         item={pricing.brazilRadarPricing}
                         generating={pricing.saving}
                         onGenerateOffer={pricing.generateBrazilRadarOffer}
+                        onRegisterProfit={openProfitModal}
                       />
                     ) : null}
                     {pricing.temporaryImportPricing ? (
@@ -283,6 +308,17 @@ export function PricingPageContent() {
         onClear={clearFilters}
         onClose={() => setFiltersOpen(false)}
       />
+
+      <MissingProfitModal
+        open={profitModalOpen}
+        item={pricing.brazilRadarPricing}
+        value={profitValue}
+        error={profitModalError}
+        saving={pricing.saving}
+        onChange={setProfitValue}
+        onClose={() => setProfitModalOpen(false)}
+        onSave={() => void saveMissingProfit()}
+      />
     </div>
   );
 }
@@ -291,10 +327,12 @@ function BrazilRadarQuotePricingCard({
   item,
   generating,
   onGenerateOffer,
+  onRegisterProfit,
 }: {
   item: NonNullable<ReturnType<typeof usePricing>['brazilRadarPricing']>;
   generating: boolean;
   onGenerateOffer: () => void;
+  onRegisterProfit: () => void;
 }) {
   const presentation = getProductCardPresentation({
     canonicalDescription: item.profit.productDescription,
@@ -365,8 +403,102 @@ function BrazilRadarQuotePricingCard({
             {generating ? 'Preparando...' : 'Gerar Oferta'}
           </ActionButton>
         ) : null}
+        {item.calculationStatus === 'missing_profit' ? (
+          <ActionButton
+            variant="primary"
+            className="mt-1 h-9 px-3 text-xs"
+            disabled={generating}
+            onClick={onRegisterProfit}
+          >
+            Cadastrar lucro
+          </ActionButton>
+        ) : null}
       </div>
     </article>
+  );
+}
+
+function MissingProfitModal({
+  open,
+  item,
+  value,
+  error,
+  saving,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  item: ReturnType<typeof usePricing>['brazilRadarPricing'];
+  value: string;
+  error: string | null;
+  saving: boolean;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  if (!item) return null;
+
+  return (
+    <Modal
+      open={open}
+      title="Cadastrar lucro liquido"
+      onClose={onClose}
+      dialogClassName="max-h-[calc(100vh-2rem)] max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
+      contentClassName="min-h-0 flex-1 overflow-y-auto pr-1"
+      footer={
+        <>
+          <ActionButton variant="secondary" disabled={saving} onClick={onClose}>
+            Cancelar
+          </ActionButton>
+          <ActionButton type="submit" form="missing-profit-form" disabled={saving}>
+            {saving ? 'Salvando...' : 'Salvar e recalcular'}
+          </ActionButton>
+        </>
+      }
+    >
+      <form
+        id="missing-profit-form"
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave();
+        }}
+      >
+        <div className="grid gap-3 rounded-xl border border-inest-line bg-inest-soft p-4 text-sm">
+          <div>
+            <span className="block text-xs font-black uppercase text-inest-muted">Produto</span>
+            <strong className="mt-1 block text-inest-text">{item.profit.productDescription}</strong>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <span className="block text-xs font-black uppercase text-inest-muted">Condicao</span>
+              <strong className="mt-1 block text-inest-text">{item.product.condition}</strong>
+            </div>
+            {item.product.capacity ? (
+              <div>
+                <span className="block text-xs font-black uppercase text-inest-muted">Capacidade</span>
+                <strong className="mt-1 block text-inest-text">{item.product.capacity}</strong>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-bold text-inest-muted">Lucro liquido</span>
+          <input
+            autoFocus
+            required
+            inputMode="decimal"
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Ex.: 1.090,00"
+            className="field-control"
+          />
+        </label>
+        {error ? <p className="text-sm font-bold text-red-700" role="alert">{error}</p> : null}
+      </form>
+    </Modal>
   );
 }
 
