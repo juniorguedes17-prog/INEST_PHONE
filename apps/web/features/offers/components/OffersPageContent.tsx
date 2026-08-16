@@ -6,8 +6,6 @@ import {
   ActionButton,
   EmptyState,
   ErrorState,
-  FilterSection,
-  FilterSidebar,
   LoadingState,
   PageHeader,
   Pagination,
@@ -25,6 +23,7 @@ import {
   getCatalogFacetLabel,
   normalizeCatalogFilterText,
 } from '@/features/price-radar/utils/brazil-radar-facets';
+import { ProductFacetsDrawer } from '@/features/price-radar/components/ProductFacetsDrawer';
 import { PricingItem } from '@/features/pricing/types/pricing';
 
 const initialFilters = {
@@ -45,6 +44,7 @@ export function OffersPageContent() {
   const [sort, setSort] = useState('recent');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const productsById = useMemo(
     () => new Map(offers.pricingItems.map((item) => [item.productId, item])),
@@ -105,6 +105,9 @@ export function OffersPageContent() {
     offers.offers.map((offer) => offer.template?.productType || 'Precificacao'),
   );
   const statuses = useUnique(offers.offers.map((offer) => offer.status));
+  const activeFilterCount = Object.entries(filters).filter(
+    ([key, value]) => key !== 'search' && Boolean(value),
+  ).length;
   const totalPages = Math.max(1, Math.ceil(filteredOffers.length / pageSize));
   const paginatedOffers = useMemo(
     () => filteredOffers.slice((page - 1) * pageSize, page * pageSize),
@@ -139,10 +142,12 @@ export function OffersPageContent() {
         total={filteredOffers.length}
         sort={sort}
         pageSize={pageSize}
+        activeFilterCount={activeFilterCount}
         onSearchChange={(search) => setFilters((current) => ({ ...current, search }))}
         onClear={clearFilters}
         onSortChange={setSort}
         onPageSizeChange={setPageSize}
+        onOpenFilters={() => setFiltersOpen(true)}
       />
 
       {offers.temporaryOffer ? (
@@ -191,65 +196,7 @@ export function OffersPageContent() {
         </div>
       </SettingsCard>
 
-      <section className="grid min-h-[calc(100vh-330px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="Filtros" title="Ofertas">
-          <FilterSelect
-            title="Categoria"
-            value={filters.category}
-            options={categories}
-            emptyLabel="Todas"
-            onChange={(category) => setFilters((current) => ({ ...current, category }))}
-          />
-          <FilterSelect
-            title="Modelo"
-            value={filters.model}
-            options={models}
-            emptyLabel="Todos"
-            onChange={(model) => setFilters((current) => ({ ...current, model }))}
-          />
-          <FilterSelect
-            title="Cor"
-            value={filters.color}
-            options={colors}
-            emptyLabel="Todas"
-            onChange={(color) => setFilters((current) => ({ ...current, color }))}
-          />
-          <FilterSelect
-            title="Capacidade"
-            value={filters.capacity}
-            options={capacities}
-            emptyLabel="Todas"
-            onChange={(capacity) => setFilters((current) => ({ ...current, capacity }))}
-          />
-          <FilterSelect
-            title="Origem"
-            value={filters.origin}
-            options={toFilterOptions(origins)}
-            emptyLabel="Todas"
-            onChange={(origin) => setFilters((current) => ({ ...current, origin }))}
-          />
-          <FilterSelect
-            title="Status"
-            value={filters.status}
-            options={toFilterOptions(statuses)}
-            emptyLabel="Todos"
-            onChange={(status) => setFilters((current) => ({ ...current, status }))}
-          />
-          <FilterSection title="Data">
-            <SelectInput
-              label="Periodo"
-              value={filters.date}
-              options={[
-                ['', 'Todas as datas'],
-                ['today', 'Hoje'],
-                ['7days', 'Ultimos 7 dias'],
-                ['30days', 'Ultimos 30 dias'],
-              ]}
-              onChange={(date) => setFilters((current) => ({ ...current, date }))}
-            />
-          </FilterSection>
-        </FilterSidebar>
-
+      <section className="min-h-[calc(100vh-330px)]">
         <div className="grid min-h-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
             <div className="grid gap-3">
@@ -330,32 +277,51 @@ export function OffersPageContent() {
           </aside>
         </div>
       </section>
-    </div>
-  );
-}
 
-function FilterSelect({
-  title,
-  value,
-  options,
-  emptyLabel,
-  onChange,
-}: {
-  title: string;
-  value: string;
-  options: FilterOption[];
-  emptyLabel: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <FilterSection title={title}>
-      <SelectInput
-        label={title}
-        value={value}
-        options={[['', emptyLabel], ...options.map((option) => [option.value, option.label])]}
-        onChange={onChange}
+      <ProductFacetsDrawer
+        open={filtersOpen}
+        ariaLabel="Filtros de ofertas"
+        resultCount={filteredOffers.length}
+        categories={offerFilterGroup('Categoria', categories, filters.category, (category) =>
+          setFilters((current) => ({ ...current, category })),
+        )}
+        models={{
+          ...offerFilterGroup('Modelo', models, filters.model, (model) =>
+            setFilters((current) => ({ ...current, model })),
+          ),
+          collapsible: true,
+        }}
+        colors={offerFilterGroup('Cor', colors, filters.color, (color) =>
+          setFilters((current) => ({ ...current, color })),
+        )}
+        capacities={offerFilterGroup(
+          'Armazenamento / Capacidade',
+          capacities,
+          filters.capacity,
+          (capacity) => setFilters((current) => ({ ...current, capacity })),
+        )}
+        additionalGroups={[
+          offerFilterGroup('Origem', toFilterOptions(origins), filters.origin, (origin) =>
+            setFilters((current) => ({ ...current, origin })),
+          ),
+          offerFilterGroup('Status', toFilterOptions(statuses), filters.status, (status) =>
+            setFilters((current) => ({ ...current, status })),
+          ),
+          offerFilterGroup(
+            'Periodo',
+            [
+              { value: 'today', label: 'Hoje' },
+              { value: '7days', label: 'Ultimos 7 dias' },
+              { value: '30days', label: 'Ultimos 30 dias' },
+            ],
+            filters.date,
+            (date) => setFilters((current) => ({ ...current, date })),
+          ),
+        ]}
+        onClear={clearFilters}
+        onClose={() => setFiltersOpen(false)}
       />
-    </FilterSection>
+    </div>
   );
 }
 
@@ -399,6 +365,20 @@ function toFilterOptions(values: string[]): FilterOption[] {
 interface FilterOption {
   value: string;
   label: string;
+}
+
+function offerFilterGroup(
+  title: string,
+  options: FilterOption[],
+  value: string,
+  onChange: (value: string) => void,
+) {
+  return {
+    title,
+    options: options.map((option) => ({ ...option, count: 1 })),
+    selected: value ? [value] : [],
+    onToggle: (nextValue: string) => onChange(nextValue === value ? '' : nextValue),
+  };
 }
 
 function toFacetSource(item: PricingItem) {

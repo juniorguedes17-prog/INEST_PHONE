@@ -7,12 +7,14 @@ interface PricingToolbarProps {
   sort: string;
   sortOptions: string[][];
   pageSize: number;
+  activeFilterCount: number;
   recalculating: boolean;
   onSearchChange: (value: string) => void;
   onRecalculate: () => void;
   onClear: () => void;
   onSortChange: (value: string) => void;
   onPageSizeChange: (value: number) => void;
+  onOpenFilters: () => void;
 }
 
 export function PricingToolbar({
@@ -22,12 +24,14 @@ export function PricingToolbar({
   sort,
   sortOptions,
   pageSize,
+  activeFilterCount,
   recalculating,
   onSearchChange,
   onRecalculate,
   onClear,
   onSortChange,
   onPageSizeChange,
+  onOpenFilters,
 }: PricingToolbarProps) {
   return (
     <section
@@ -69,6 +73,9 @@ export function PricingToolbar({
           />
           <ActionButton variant="secondary" onClick={onRecalculate} disabled={recalculating}>
             {recalculating ? 'Recalculando...' : 'Recalcular'}
+          </ActionButton>
+          <ActionButton variant="secondary" onClick={onOpenFilters}>
+            {activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}
           </ActionButton>
           <ActionButton variant="ghost" onClick={onClear}>
             Limpar

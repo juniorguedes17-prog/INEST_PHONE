@@ -5,8 +5,6 @@ import {
   ActionButton,
   EmptyState,
   ErrorState,
-  FilterSection,
-  FilterSidebar,
   KpiCard,
   LoadingState,
   PageHeader,
@@ -23,6 +21,7 @@ import {
   getCanonicalModel,
   getCatalogFacetLabel,
 } from '@/features/price-radar/utils/brazil-radar-facets';
+import { ProductFacetsDrawer, buildFacetOptions } from '@/features/price-radar/components/ProductFacetsDrawer';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -48,12 +47,20 @@ export function PricingPageContent() {
   const pricing = usePricing();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
   const models = useUnique(pricing.items.map((item) => getCanonicalModel(item)));
   const colors = useUnique(pricing.items.flatMap((item) => getCanonicalColors(item)));
   const capacities = useUnique(pricing.items.flatMap((item) => getCanonicalCapacities(item)));
   const types = useUnique(pricing.items.map((item) => item.productType));
   const statuses = useUnique(pricing.items.map((item) => item.status));
+  const activeFilterCount = Object.entries(pricing.filters).filter(
+    ([key, value]) => key !== 'search' && key !== 'sort' && Boolean(value),
+  ).length;
+  const priceBounds = useMemo(
+    () => getPriceBounds(pricing.items.map((item) => item.salePrice ?? item.costProduct)),
+    [pricing.items],
+  );
 
   const metrics = useMemo(() => {
     const total = pricing.items.length;
@@ -115,12 +122,14 @@ export function PricingPageContent() {
         sort={pricing.filters.sort}
         sortOptions={sortOptions}
         pageSize={pageSize}
+        activeFilterCount={activeFilterCount}
         recalculating={pricing.saving}
         onSearchChange={(value) => pricing.setFilters((current) => ({ ...current, search: value }))}
         onRecalculate={() => void pricing.recalculate()}
         onClear={clearFilters}
         onSortChange={(value) => pricing.setFilters((current) => ({ ...current, sort: value }))}
         onPageSizeChange={setPageSize}
+        onOpenFilters={() => setFiltersOpen(true)}
       />
 
       <section
@@ -153,90 +162,7 @@ export function PricingPageContent() {
         />
       </section>
 
-      <section className="grid min-h-[calc(100vh-330px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="Filtros" title="Precificacao">
-          <FilterSection title="Categoria">
-            <SelectInput
-              label="Categoria"
-              value={pricing.filters.category}
-              options={[['', 'Todas'], ...toOptions(categories)]}
-              onChange={(value) =>
-                pricing.setFilters((current) => ({ ...current, category: value }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Modelo">
-            <SelectInput
-              label="Modelo"
-              value={pricing.filters.model}
-              options={[['', 'Todos'], ...toOptions(models)]}
-              onChange={(value) => pricing.setFilters((current) => ({ ...current, model: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Cor">
-            <SelectInput
-              label="Cor"
-              value={pricing.filters.color}
-              options={[['', 'Todas'], ...toOptions(colors, getCatalogFacetLabel)]}
-              onChange={(value) => pricing.setFilters((current) => ({ ...current, color: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Capacidade">
-            <SelectInput
-              label="Capacidade"
-              value={pricing.filters.capacity}
-              options={[['', 'Todas'], ...toOptions(capacities)]}
-              onChange={(value) =>
-                pricing.setFilters((current) => ({ ...current, capacity: value }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Tipo">
-            <SelectInput
-              label="Tipo"
-              value={pricing.filters.productType}
-              options={[['', 'Todos'], ...toOptions(types)]}
-              onChange={(value) =>
-                pricing.setFilters((current) => ({ ...current, productType: value }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Status">
-            <SelectInput
-              label="Status"
-              value={pricing.filters.status}
-              options={[['', 'Todos'], ...toOptions(statuses, translateStatus)]}
-              onChange={(value) => pricing.setFilters((current) => ({ ...current, status: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Faixa de preco">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
-              <TextInput
-                label="Minimo"
-                type="number"
-                value={pricing.filters.minPrice}
-                onChange={(value) =>
-                  pricing.setFilters((current) => ({ ...current, minPrice: value }))
-                }
-              />
-              <TextInput
-                label="Maximo"
-                type="number"
-                value={pricing.filters.maxPrice}
-                onChange={(value) =>
-                  pricing.setFilters((current) => ({ ...current, maxPrice: value }))
-                }
-              />
-            </div>
-          </FilterSection>
-        </FilterSidebar>
-
+      <section className="min-h-[calc(100vh-330px)]">
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
           <div className="grid gap-3">
             {pricing.loading ? <LoadingState /> : null}
@@ -284,6 +210,65 @@ export function PricingPageContent() {
           ) : null}
         </div>
       </section>
+
+      <ProductFacetsDrawer
+        open={filtersOpen}
+        ariaLabel="Filtros da Precificacao"
+        resultCount={pricing.items.length}
+        categories={singleFilterGroup(
+          'Categoria',
+          buildFacetOptions(categories),
+          pricing.filters.category,
+          (category) => pricing.setFilters((current) => ({ ...current, category })),
+        )}
+        models={{
+          ...singleFilterGroup(
+            'Modelo',
+            buildFacetOptions(models),
+            pricing.filters.model,
+            (model) => pricing.setFilters((current) => ({ ...current, model })),
+          ),
+          collapsible: true,
+        }}
+        colors={singleFilterGroup(
+          'Cor',
+          buildFacetOptions(colors, getCatalogFacetLabel),
+          pricing.filters.color,
+          (color) => pricing.setFilters((current) => ({ ...current, color })),
+        )}
+        capacities={singleFilterGroup(
+          'Armazenamento / Capacidade',
+          buildFacetOptions(capacities),
+          pricing.filters.capacity,
+          (capacity) => pricing.setFilters((current) => ({ ...current, capacity })),
+        )}
+        additionalGroups={[
+          singleFilterGroup(
+            'Tipo',
+            buildFacetOptions(types),
+            pricing.filters.productType,
+            (productType) => pricing.setFilters((current) => ({ ...current, productType })),
+          ),
+          singleFilterGroup(
+            'Status',
+            buildFacetOptions(statuses, translateStatus),
+            pricing.filters.status,
+            (status) => pricing.setFilters((current) => ({ ...current, status })),
+          ),
+        ]}
+        price={{
+          min: priceBounds.min,
+          max: priceBounds.max,
+          minValue: pricing.filters.minPrice,
+          maxValue: pricing.filters.maxPrice,
+          onMinChange: (minPrice) =>
+            pricing.setFilters((current) => ({ ...current, minPrice })),
+          onMaxChange: (maxPrice) =>
+            pricing.setFilters((current) => ({ ...current, maxPrice })),
+        }}
+        onClear={clearFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
     </div>
   );
 }
@@ -349,8 +334,28 @@ function useUnique(values: string[]) {
   return useMemo(() => Array.from(new Set(values.filter(Boolean))).sort(), [values]);
 }
 
-function toOptions(values: string[], label = (value: string) => value) {
-  return values.map((value) => [value, label(value)]);
+function singleFilterGroup(
+  title: string,
+  options: ReturnType<typeof buildFacetOptions>,
+  value: string,
+  onChange: (value: string) => void,
+) {
+  return {
+    title,
+    options,
+    selected: value ? [value] : [],
+    onToggle: (nextValue: string) => onChange(nextValue === value ? '' : nextValue),
+  };
+}
+
+function getPriceBounds(values: Array<number | null>) {
+  const validValues = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
+  );
+  return {
+    min: validValues.length ? Math.min(...validValues) : 0,
+    max: validValues.length ? Math.max(...validValues) : 0,
+  };
 }
 
 function translateStatus(status: string) {
@@ -381,57 +386,4 @@ function formatDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
-}
-
-function TextInput({
-  label,
-  value,
-  onChange,
-  type = 'text',
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="field-control"
-      />
-    </label>
-  );
-}
-
-function SelectInput({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[][];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="field-control"
-      >
-        {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
 }

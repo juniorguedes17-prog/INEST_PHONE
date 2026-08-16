@@ -5,10 +5,12 @@ interface OffersToolbarProps {
   total: number;
   sort: string;
   pageSize: number;
+  activeFilterCount: number;
   onSearchChange: (value: string) => void;
   onClear: () => void;
   onSortChange: (value: string) => void;
   onPageSizeChange: (value: number) => void;
+  onOpenFilters: () => void;
 }
 
 export function OffersToolbar({
@@ -16,10 +18,12 @@ export function OffersToolbar({
   total,
   sort,
   pageSize,
+  activeFilterCount,
   onSearchChange,
   onClear,
   onSortChange,
   onPageSizeChange,
+  onOpenFilters,
 }: OffersToolbarProps) {
   return (
     <section
@@ -59,6 +63,9 @@ export function OffersToolbar({
             ]}
             onChange={(value) => onPageSizeChange(Number(value))}
           />
+          <ActionButton variant="secondary" onClick={onOpenFilters}>
+            {activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}
+          </ActionButton>
           <ActionButton variant="ghost" onClick={onClear}>
             Limpar filtros
           </ActionButton>

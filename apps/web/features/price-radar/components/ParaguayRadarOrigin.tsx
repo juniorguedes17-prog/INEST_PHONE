@@ -4,11 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ActionButton,
-  Drawer,
   EmptyState,
   ErrorState,
-  FilterSection,
-  FilterSidebar,
   KpiCard,
   LoadingState,
   Modal,
@@ -16,6 +13,7 @@ import {
   SearchInput,
   StatusBadge,
 } from '@/components/shared';
+import { ProductFacetsDrawer, buildFacetOptions } from './ProductFacetsDrawer';
 import {
   calculateImportCost,
   searchImportProducts,
@@ -169,9 +167,8 @@ export function ParaguayRadarOrigin() {
     namedSupplierCount,
     ...filteredProducts.map((product) => product.storeCount ?? product.offerCount ?? 0),
   );
-  const filterContent = (
-    <ParaguayFilters filters={filters} options={options} onChange={setFilters} />
-  );
+  const priceBounds = getPriceBounds(products.map((product) => product.priceUsd));
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   async function calculate(product?: ImportProduct) {
     const target = product ?? (selectedIds.size === 1 ? selectedProduct : undefined);
@@ -229,8 +226,8 @@ export function ParaguayRadarOrigin() {
             aria-label="Pesquisar produtos no Compras Paraguai"
           />
           <div className="grid grid-cols-2 gap-2 sm:flex">
-            <ActionButton variant="secondary" className="min-h-11 lg:hidden" onClick={() => setFiltersOpen(true)}>
-              Filtros
+            <ActionButton variant="secondary" className="min-h-11" onClick={() => setFiltersOpen(true)}>
+              {activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}
             </ActionButton>
             <ActionButton variant="secondary" className="min-h-11" onClick={clearFilters}>
               Limpar
@@ -278,11 +275,7 @@ export function ParaguayRadarOrigin() {
         />
       ) : null}
 
-      <section className="grid min-w-0 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="PY" title="Filtros" className="hidden max-h-[calc(100vh-240px)] lg:block">
-          {filterContent}
-        </FilterSidebar>
-
+      <section className="min-w-0">
         <div className="min-w-0">
           <div className="mb-3 grid gap-2 rounded-xl border border-inest-line bg-white p-3 shadow-card sm:grid-cols-[1fr_auto_auto] sm:items-center">
             <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-inest-text">
@@ -350,13 +343,19 @@ export function ParaguayRadarOrigin() {
         </div>
       </section>
 
-      <Drawer open={filtersOpen} title="Filtros - Paraguai" onClose={() => setFiltersOpen(false)}>
-        <div className="grid gap-3">
-          {filterContent}
-          <ActionButton variant="secondary" className="min-h-11" onClick={clearFilters}>Limpar filtros</ActionButton>
-          <ActionButton className="min-h-11" onClick={() => setFiltersOpen(false)}>Ver resultados</ActionButton>
-        </div>
-      </Drawer>
+      <ProductFacetsDrawer
+        open={filtersOpen}
+        ariaLabel="Filtros do Radar Paraguai"
+        resultCount={filteredProducts.length}
+        categories={singleGroup('Categoria', buildFacetOptions(options.categories), filters.category, (category) => setFilters((current) => ({ ...current, category })))}
+        models={{ ...singleGroup('Modelo', buildFacetOptions(options.models), filters.model, (model) => setFilters((current) => ({ ...current, model }))), collapsible: true }}
+        colors={singleGroup('Cor', buildFacetOptions(options.colors, getCatalogFacetLabel), filters.color, (color) => setFilters((current) => ({ ...current, color })))}
+        capacities={singleGroup('Armazenamento / Capacidade', buildFacetOptions(options.capacities), filters.capacity, (capacity) => setFilters((current) => ({ ...current, capacity })))}
+        additionalGroups={[singleGroup('Marca', buildFacetOptions(options.brands), filters.brand, (brand) => setFilters((current) => ({ ...current, brand }))), singleGroup('Loja / Fornecedor', buildFacetOptions(options.stores), filters.store, (store) => setFilters((current) => ({ ...current, store }))), singleGroup('Cidade', buildFacetOptions(options.cities), filters.city, (city) => setFilters((current) => ({ ...current, city }))), singleGroup('Disponibilidade', buildFacetOptions(options.availabilities), filters.availability, (availability) => setFilters((current) => ({ ...current, availability })))]}
+        price={{ min: priceBounds.min, max: priceBounds.max, minValue: filters.minPrice, maxValue: filters.maxPrice, currencyLabel: 'USD', onMinChange: (minPrice) => setFilters((current) => ({ ...current, minPrice })), onMaxChange: (maxPrice) => setFilters((current) => ({ ...current, maxPrice })) }}
+        onClear={clearFilters}
+        onClose={() => setFiltersOpen(false)}
+      />
 
       <CalculationModal
         calculation={calculation}
@@ -412,40 +411,13 @@ function ParaguayProductCard({ product, selected, onSelect, onCalculate }: { pro
   );
 }
 
-function ParaguayFilters({ filters, options, onChange }: { filters: typeof emptyFilters; options: Record<string, string[]>; onChange: (filters: typeof emptyFilters) => void }) {
-  const optionKeys: Record<keyof Pick<typeof emptyFilters, 'category' | 'brand' | 'model' | 'color' | 'capacity' | 'store' | 'city' | 'availability'>, string> = {
-    category: 'categories',
-    brand: 'brands',
-    model: 'models',
-    color: 'colors',
-    capacity: 'capacities',
-    store: 'stores',
-    city: 'cities',
-    availability: 'availabilities',
-  };
+function singleGroup(title: string, options: ReturnType<typeof buildFacetOptions>, value: string, onChange: (value: string) => void) {
+  return { title, options, selected: value ? [value] : [], onToggle: (nextValue: string) => onChange(value === nextValue ? '' : nextValue) };
+}
 
-  return (
-    <>
-      {(['category', 'brand', 'model', 'color', 'capacity', 'store', 'city', 'availability'] as const).map((key, index) => (
-        <FilterSection key={key} title={filterLabels[key]} defaultOpen={index < 3}>
-          <select value={filters[key]} onChange={(event) => onChange({ ...filters, [key]: event.target.value })} className="field-control" aria-label={filterLabels[key]}>
-            <option value="">Todos</option>
-            {options[optionKeys[key]]?.map((value) => (
-              <option key={value} value={value}>
-                {key === 'color' ? getCatalogFacetLabel(value) : value}
-              </option>
-            ))}
-          </select>
-        </FilterSection>
-      ))}
-      <FilterSection title="Faixa de preco" defaultOpen={false}>
-        <div className="grid grid-cols-2 gap-2">
-          <input type="number" min="0" value={filters.minPrice} onChange={(event) => onChange({ ...filters, minPrice: event.target.value })} className="field-control" placeholder="Minimo" aria-label="Preco minimo em dolar" />
-          <input type="number" min="0" value={filters.maxPrice} onChange={(event) => onChange({ ...filters, maxPrice: event.target.value })} className="field-control" placeholder="Maximo" aria-label="Preco maximo em dolar" />
-        </div>
-      </FilterSection>
-    </>
-  );
+function getPriceBounds(values: number[]) {
+  const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
+  return { min: valid.length ? Math.floor(Math.min(...valid)) : 0, max: valid.length ? Math.ceil(Math.max(...valid)) : 1 };
 }
 
 function CalculationModal({
@@ -544,7 +516,6 @@ function matchesFacetText(value: string | undefined, selectedValue: string) {
   return normalizeCatalogFilterText(value) === normalizeCatalogFilterText(selectedValue);
 }
 
-const filterLabels = { category: 'Categoria', brand: 'Marca', model: 'Modelo', color: 'Cor', capacity: 'Capacidade', store: 'Loja', city: 'Cidade', availability: 'Disponibilidade' };
 function Info({ label, value }: { label: string; value: string }) { return <div className="min-w-0"><dt className="font-bold text-inest-muted">{label}</dt><dd className="truncate font-bold text-inest-text" title={value}>{value}</dd></div>; }
 function Cost({ label, value }: { label: string; value: number }) { return <div className="rounded-lg border border-inest-line p-3"><dt className="text-inest-muted">{label}</dt><dd className="font-extrabold text-inest-text">{formatBrl(value)}</dd></div>; }
 function uniqueValues(values: Array<string | undefined>) { return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b)); }

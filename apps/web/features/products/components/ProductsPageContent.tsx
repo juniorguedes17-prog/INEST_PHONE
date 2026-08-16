@@ -5,17 +5,17 @@ import {
   ActionButton,
   EmptyState,
   ErrorState,
-  FilterSection,
-  FilterSidebar,
   ListHeader,
   LoadingState,
   Modal,
   PageHeader,
   ProductCard,
+  SearchInput,
   StatusBadge,
 } from '@/components/shared';
 import { useProducts } from '../hooks/useProducts';
 import { ProductFormPayload, ProductItem } from '../types/products';
+import { ProductFacetsDrawer } from '@/features/price-radar/components/ProductFacetsDrawer';
 
 const productTypes = [
   ['IPHONE_SEALED', 'Novo'],
@@ -52,6 +52,8 @@ export function ProductsPageContent() {
   } = useProducts();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilterCount = Object.entries(filters).filter(([key, value]) => key !== 'search' && Boolean(value)).length;
 
   const initialForm = useMemo<ProductFormPayload>(
     () => ({
@@ -93,85 +95,11 @@ export function ProductsPageContent() {
 
       {error ? <ErrorState title="Atencao" description={error} /> : null}
 
-      <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)]">
-        <FilterSidebar eyebrow="Catalogo" title="Filtros">
-          <FilterSection title="Busca">
-            <TextInput
-              label="Pesquisar"
-              value={filters.search}
-              onChange={(value) => setFilters((current) => ({ ...current, search: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Categoria">
-            <SelectInput
-              label="Categoria"
-              value={filters.categoryId}
-              options={[
-                ['', 'Todas'],
-                ...references.categories.map((item) => [item.id, item.name ?? item.id]),
-              ]}
-              onChange={(value) =>
-                setFilters((current) => ({ ...current, categoryId: value, modelId: '' }))
-              }
-            />
-          </FilterSection>
-
-          <FilterSection title="Modelo">
-            <SelectInput
-              label="Modelo"
-              value={filters.modelId}
-              options={[
-                ['', 'Todos'],
-                ...filteredModels.map((item) => [item.id, item.name ?? item.id]),
-              ]}
-              onChange={(value) => setFilters((current) => ({ ...current, modelId: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Cor">
-            <SelectInput
-              label="Cor"
-              value={filters.colorId}
-              options={[
-                ['', 'Todas'],
-                ...references.colors.map((item) => [item.id, item.name ?? item.id]),
-              ]}
-              onChange={(value) => setFilters((current) => ({ ...current, colorId: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Capacidade">
-            <SelectInput
-              label="Capacidade"
-              value={filters.storageId}
-              options={[
-                ['', 'Todas'],
-                ...references.storages.map((item) => [item.id, item.displayName ?? item.id]),
-              ]}
-              onChange={(value) => setFilters((current) => ({ ...current, storageId: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Status">
-            <SelectInput
-              label="Status"
-              value={filters.status}
-              options={[['', 'Todos'], ...statuses]}
-              onChange={(value) => setFilters((current) => ({ ...current, status: value }))}
-            />
-          </FilterSection>
-
-          <FilterSection title="Tipo">
-            <SelectInput
-              label="Tipo"
-              value={filters.productType}
-              options={[['', 'Todos'], ...productTypes]}
-              onChange={(value) => setFilters((current) => ({ ...current, productType: value }))}
-            />
-          </FilterSection>
-        </FilterSidebar>
-
+      <section className="min-h-[calc(100vh-220px)]">
+        <div className="mb-3 flex flex-col gap-2 rounded-xl border border-inest-line bg-white p-3 shadow-card sm:flex-row sm:items-center">
+          <SearchInput value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Pesquisar produto" aria-label="Pesquisar produtos" className="min-w-0 flex-1" />
+          <ActionButton variant="secondary" onClick={() => setFiltersOpen(true)}>{activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}</ActionButton>
+        </div>
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
           <ListHeader
             sticky
@@ -229,6 +157,19 @@ export function ProductsPageContent() {
         </div>
       </section>
 
+      <ProductFacetsDrawer
+        open={filtersOpen}
+        ariaLabel="Filtros de produtos"
+        resultCount={products.length}
+        categories={referenceGroup('Categoria', references.categories, filters.categoryId, (categoryId) => setFilters((current) => ({ ...current, categoryId, modelId: '' })))}
+        models={{ ...referenceGroup('Modelo', filteredModels, filters.modelId, (modelId) => setFilters((current) => ({ ...current, modelId }))), collapsible: true }}
+        colors={referenceGroup('Cor', references.colors, filters.colorId, (colorId) => setFilters((current) => ({ ...current, colorId })))}
+        capacities={referenceGroup('Armazenamento / Capacidade', references.storages, filters.storageId, (storageId) => setFilters((current) => ({ ...current, storageId })))}
+        additionalGroups={[pairGroup('Tipo', productTypes, filters.productType, (productType) => setFilters((current) => ({ ...current, productType }))), pairGroup('Status', statuses, filters.status, (status) => setFilters((current) => ({ ...current, status })))]}
+        onClear={() => setFilters((current) => ({ ...current, search: '', categoryId: '', modelId: '', colorId: '', storageId: '', productType: '', status: '' }))}
+        onClose={() => setFiltersOpen(false)}
+      />
+
       <ProductFormModal
         open={modalOpen}
         product={editingProduct}
@@ -267,6 +208,46 @@ function translateStatus(status: string) {
 
 function translateType(type: string) {
   return productTypes.find(([value]) => value === type)?.[1] ?? type;
+}
+
+function referenceGroup(
+  title: string,
+  items: Array<{ id?: string; name?: string | null; displayName?: string | null }>,
+  value: string,
+  onChange: (value: string) => void,
+) {
+  return {
+    title,
+    options: items
+      .filter((item): item is { id: string; name?: string | null; displayName?: string | null } => Boolean(item.id))
+      .map((item) => ({
+        value: item.id,
+        label: item.displayName ?? item.name ?? item.id,
+        count: 1,
+      })),
+    selected: value ? [value] : [],
+    onToggle: (nextValue: string) => onChange(nextValue === value ? '' : nextValue),
+  };
+}
+
+function pairGroup(
+  title: string,
+  items: string[][],
+  value: string,
+  onChange: (value: string) => void,
+) {
+  return {
+    title,
+    options: items
+      .filter(([optionValue]) => Boolean(optionValue))
+      .map(([optionValue, label]) => ({
+        value: optionValue ?? '',
+        label: label ?? optionValue ?? '',
+        count: 1,
+      })),
+    selected: value ? [value] : [],
+    onToggle: (nextValue: string) => onChange(nextValue === value ? '' : nextValue),
+  };
 }
 
 interface ProductFormModalProps {
