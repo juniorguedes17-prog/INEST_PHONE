@@ -157,6 +157,7 @@ export class PriceRadarRepository {
         profitCondition: { not: null },
       },
       select: {
+        id: true,
         productDescription: true,
         normalizedDescription: true,
         profitCondition: true,
@@ -167,6 +168,7 @@ export class PriceRadarRepository {
       product.productDescription && product.normalizedDescription && product.profitCondition
         ? [
             {
+              id: product.id,
               productDescription: product.productDescription,
               normalizedDescription: product.normalizedDescription,
               profitCondition: product.profitCondition,

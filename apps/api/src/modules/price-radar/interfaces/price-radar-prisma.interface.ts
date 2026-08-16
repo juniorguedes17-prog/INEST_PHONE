@@ -54,6 +54,7 @@ export interface AutomatedPriceQuoteRecord {
 }
 
 export interface CatalogProductDescriptionRecord {
+  id: string;
   productDescription: string;
   normalizedDescription: string;
   profitCondition: string;

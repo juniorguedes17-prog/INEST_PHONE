@@ -48,6 +48,7 @@ describe('PriceRadarService automated quotes', () => {
       listAutomatedQuotes: vi.fn().mockResolvedValue(automatedRecords),
       listActiveCatalogDescriptions: vi.fn().mockResolvedValue([
         {
+          id: '11111111-1111-4111-8111-111111111111',
           productDescription: 'iPhone 17 256GB',
           normalizedDescription: 'iphone 17 256gb',
           profitCondition: 'NOVO',
@@ -66,7 +67,17 @@ describe('PriceRadarService automated quotes', () => {
     expect(quotes.find((quote) => quote.id === 'evolution:a')?.productDescription).toBe(
       'iPhone 17 256GB',
     );
+    expect(quotes.find((quote) => quote.id === 'evolution:a')).toMatchObject({
+      source: 'BRAZIL_RADAR',
+      sourceQuoteId: 'a',
+      catalogProductId: '11111111-1111-4111-8111-111111111111',
+      productId: '11111111-1111-4111-8111-111111111111',
+    });
     expect(quotes.find((quote) => quote.id === 'evolution:unknown')).toMatchObject({
+      source: 'BRAZIL_RADAR',
+      sourceQuoteId: 'unknown',
+      catalogProductId: null,
+      productId: null,
       productName: 'Produto XYZ 512GB',
       productDescription: undefined,
       costProduct: 900,

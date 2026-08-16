@@ -35,9 +35,47 @@ export interface PricingSystemConfigurationRecord {
   scope?: string | null;
 }
 
+export interface PricingBrazilRadarQuoteRecord {
+  id: string;
+  productName: string;
+  normalizedName: string;
+  category?: string | null;
+  model?: string | null;
+  capacity?: string | null;
+  color?: string | null;
+  condition?: string | null;
+  price: number | string;
+  rawLine: string;
+  createdAt: Date;
+  currentList: {
+    updatedAt: Date;
+    receivedAt: Date;
+    supplierContact: {
+      id: string;
+      supplierName: string;
+      whatsappNumber: string;
+      address?: string | null;
+    };
+  };
+}
+
+export interface PricingCatalogProductRecord {
+  id: string;
+  profitProductId?: number | null;
+  productDescription?: string | null;
+  normalizedDescription?: string | null;
+  productType: string;
+}
+
 export interface PricingPrismaClient {
   priceHistory: {
     findMany(args?: unknown): Promise<PricingPriceHistoryRecord[]>;
+  };
+  supplierCurrentListItem: {
+    findUnique(args: unknown): Promise<PricingBrazilRadarQuoteRecord | null>;
+  };
+  product: {
+    findFirst(args: unknown): Promise<PricingCatalogProductRecord | null>;
   };
   systemConfiguration: {
     findMany(args?: unknown): Promise<PricingSystemConfigurationRecord[]>;

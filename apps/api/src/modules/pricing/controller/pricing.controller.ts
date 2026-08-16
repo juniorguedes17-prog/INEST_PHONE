@@ -4,6 +4,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
+  BrazilRadarQuotePricingDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
   TemporaryImportPricingDto,
@@ -52,5 +53,11 @@ export class PricingController {
   @ApiOperation({ summary: 'Calcula precificacao temporaria para um item do Radar Paraguai.' })
   calculateTemporaryImport(@Body() dto: TemporaryImportPricingDto) {
     return this.pricingService.calculateTemporaryImport(dto);
+  }
+
+  @Post('radar-quote')
+  @ApiOperation({ summary: 'Prepara uma cotacao do Radar Brasil para Precificacao.' })
+  calculateBrazilRadarQuote(@Body() dto: BrazilRadarQuotePricingDto) {
+    return this.pricingService.calculateBrazilRadarQuote(dto);
   }
 }

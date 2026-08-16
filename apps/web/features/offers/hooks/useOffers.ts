@@ -93,6 +93,11 @@ export function useOffers(initialProductId?: string | null) {
     if (!template) return;
 
     const payload = temporaryOfferDraft.payload;
+    const draftIdentity = payload.productId ?? payload.sourceQuoteId;
+    if (!draftIdentity) {
+      setError('Oferta preparada sem identificador de origem.');
+      return;
+    }
     const offerPrice = formatCurrency(payload.offerPrice);
     const message = renderOfferMessage(template.content, {
       produto: payload.productName,
@@ -106,7 +111,7 @@ export function useOffers(initialProductId?: string | null) {
     });
 
     const preparedOffer: OfferItem = {
-      id: payload.productId,
+      id: draftIdentity,
       template,
       message,
       status: 'DRAFT',
@@ -117,7 +122,7 @@ export function useOffers(initialProductId?: string | null) {
       createdAt: new Date().toISOString(),
     };
 
-    setSelectedProductId(payload.productId);
+    setSelectedProductId(payload.productId ?? '');
     setSelectedTemplateId(template.id);
     setTemporaryOffer(preparedOffer);
     setCurrentOffer(preparedOffer);

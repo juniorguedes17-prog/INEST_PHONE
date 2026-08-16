@@ -1,6 +1,8 @@
 import { env } from '@/lib/env';
 import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
+  BrazilRadarQuotePricing,
+  BrazilRadarQuotePricingRequest,
   OfferDraft,
   PricingFilters,
   PricingItem,
@@ -65,4 +67,15 @@ export async function calculateTemporaryImportPricing(
     body: JSON.stringify(payload),
   });
   return parseResponse<TemporaryImportPricing>(response);
+}
+
+export async function calculateBrazilRadarQuotePricing(
+  payload: BrazilRadarQuotePricingRequest,
+): Promise<BrazilRadarQuotePricing> {
+  const response = await authenticatedFetch(`${env.apiUrl}/pricing/radar-quote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<BrazilRadarQuotePricing>(response);
 }

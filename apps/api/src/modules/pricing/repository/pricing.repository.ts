@@ -20,6 +20,35 @@ export class PricingRepository {
     });
   }
 
+  findBrazilRadarQuote(sourceQuoteId: string) {
+    return this.prisma.supplierCurrentListItem.findUnique({
+      where: { id: sourceQuoteId },
+      include: {
+        currentList: {
+          include: { supplierContact: true },
+        },
+      },
+    });
+  }
+
+  findActiveCatalogProduct(condition: string, normalizedDescription: string) {
+    return this.prisma.product.findFirst({
+      where: {
+        active: true,
+        deletedAt: null,
+        profitCondition: condition,
+        normalizedDescription,
+      },
+      select: {
+        id: true,
+        profitProductId: true,
+        productDescription: true,
+        normalizedDescription: true,
+        productType: true,
+      },
+    });
+  }
+
   listPricingConfigurations() {
     return this.prisma.systemConfiguration.findMany({
       where: {

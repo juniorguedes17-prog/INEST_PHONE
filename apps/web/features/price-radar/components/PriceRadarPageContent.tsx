@@ -15,6 +15,8 @@ import {
 } from '@/components/shared';
 import { listProducts } from '@/features/products/services/products-service';
 import { ProductItem } from '@/features/products/types/products';
+import { calculateBrazilRadarQuotePricing } from '@/features/pricing/services/pricing-service';
+import { BRAZIL_RADAR_PRICING_STORAGE_KEY } from '@/features/pricing/types/pricing';
 import { listSuppliers } from '@/features/suppliers/services/suppliers-service';
 import { SupplierItem } from '@/features/suppliers/types/suppliers';
 import { usePriceRadar } from '../hooks/usePriceRadar';
@@ -57,6 +59,7 @@ export function PriceRadarPageContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadReferences() {
@@ -179,8 +182,33 @@ export function PriceRadarPageContent() {
     });
   }
 
-  function sendToPricing(quote: PriceQuoteItem) {
-    router.push(`/pricing?productId=${encodeURIComponent(quote.productId)}`);
+  async function sendToPricing(quote: PriceQuoteItem) {
+    setHandoffError(null);
+    try {
+      if (quote.source !== 'BRAZIL_RADAR') {
+        if (!quote.productId) {
+          throw new Error('Produto do catalogo nao identificado para Precificacao.');
+        }
+        router.push(`/pricing?productId=${encodeURIComponent(quote.productId)}`);
+        return;
+      }
+
+      if (!quote.sourceQuoteId) {
+        throw new Error('Cotacao do Radar Brasil sem identificador de origem.');
+      }
+      const prepared = await calculateBrazilRadarQuotePricing({
+        sourceQuoteId: quote.sourceQuoteId,
+      });
+      window.sessionStorage.setItem(
+        BRAZIL_RADAR_PRICING_STORAGE_KEY,
+        JSON.stringify(prepared),
+      );
+      router.push('/pricing?source=br-radar');
+    } catch (error) {
+      setHandoffError(
+        error instanceof Error ? error.message : 'Nao foi possivel enviar a cotacao para Precificacao.',
+      );
+    }
   }
 
   return (
@@ -215,6 +243,9 @@ export function PriceRadarPageContent() {
 
       {origin === 'brasil' && radar.error ? (
         <ErrorState title="Atencao" description={radar.error} />
+      ) : null}
+      {origin === 'brasil' && handoffError ? (
+        <ErrorState title="Atencao" description={handoffError} />
       ) : null}
 
       <RadarOriginTabs
@@ -360,7 +391,7 @@ export function PriceRadarPageContent() {
                       setQuoteModalOpen(true);
                     }}
                     onSupplier={openWhatsapp}
-                    onSendToPricing={sendToPricing}
+                    onSendToPricing={(quote) => void sendToPricing(quote)}
                   />
                 ))
               : null}

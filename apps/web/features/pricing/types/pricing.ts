@@ -51,9 +51,10 @@ export interface OfferDraft {
   targetModule: string;
   route: string;
   productType?: string;
-  source?: 'pricing' | 'temporary-import';
+  source?: 'pricing' | 'temporary-import' | 'radar-quote';
   payload: {
-    productId: string;
+    productId: string | null;
+    sourceQuoteId?: string;
     productName: string;
     color: string;
     capacity: string;
@@ -62,6 +63,50 @@ export interface OfferDraft {
     deliveryTime: string;
     warranty: string;
   };
+}
+
+export interface BrazilRadarQuotePricingRequest {
+  sourceQuoteId: string;
+}
+
+export interface BrazilRadarQuotePricing {
+  temporary: true;
+  origin: 'BR';
+  source: 'BRAZIL_RADAR';
+  sourceQuoteId: string;
+  catalogProductId: string | null;
+  product: {
+    id: string | null;
+    name: string;
+    category: string;
+    model: string;
+    capacity: string;
+    color: string;
+    supplier: string;
+    city: string;
+    condition: 'NOVO' | 'SEMINOVO' | 'CPO';
+  };
+  costProduct: number;
+  pricingCosts: {
+    fixedCost: number;
+    freight: number;
+    paymentFee: number;
+    offerIncrement: number;
+  };
+  desiredNetProfit: number | null;
+  margin: number | null;
+  salePrice: number | null;
+  offerPrice: number | null;
+  profit: {
+    source: string;
+    condition: 'NOVO' | 'SEMINOVO' | 'CPO';
+    productDescription: string;
+    recordId: string | null;
+    updatedAt: string;
+  };
+  calculationStatus: 'ready' | 'missing_profit' | 'duplicate_profit';
+  calculationError: string | null;
+  offerDraft: OfferDraft | null;
 }
 
 export interface TemporaryImportPricingRequest {
@@ -137,4 +182,5 @@ export interface TemporaryImportPricing {
 }
 
 export const TEMPORARY_IMPORT_PRICING_STORAGE_KEY = 'inest.temporary-import-pricing';
+export const BRAZIL_RADAR_PRICING_STORAGE_KEY = 'inest.brazil-radar-pricing';
 export const TEMPORARY_OFFER_DRAFT_STORAGE_KEY = 'inest.temporary-offer-draft';

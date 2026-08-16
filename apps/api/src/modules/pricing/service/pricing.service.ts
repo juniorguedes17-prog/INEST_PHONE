@@ -2,12 +2,16 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { SettingsService } from '../../settings/service/settings.service';
 import {
+  BrazilRadarQuotePricingDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
   TemporaryImportPricingDto,
   UpdateModelProfitDto,
 } from '../dto/pricing.dto';
-import { PricingPriceHistoryRecord } from '../interfaces/pricing-prisma.interface';
+import {
+  PricingBrazilRadarQuoteRecord,
+  PricingPriceHistoryRecord,
+} from '../interfaces/pricing-prisma.interface';
 import { ProfitCondition, ProfitSheetCatalog } from '../interfaces/profit-sheet.interface';
 import {
   lookupProfit,
@@ -212,16 +216,13 @@ export class PricingService {
       );
     }
 
-    const costProduct = dto.totalCost;
-    const fixedCost = toNumber(settings.financial.globalFixedCost);
-    const freight = toNumber(settings.financial.defaultFreight);
-    const paymentFee = toNumber(settings.financial.defaultPaymentFee);
     const desiredNetProfit = profitLookup.record.netProfit;
-    const salePrice = costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
-    const offerIncrement = toNumber(
-      pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
+    const calculation = this.calculateExternalPricing(
+      dto.totalCost,
+      desiredNetProfit,
+      settings,
+      pricingConfigurations,
     );
-    const offerPrice = salePrice + offerIncrement;
     const productName = dto.productName.trim();
 
     return {
@@ -249,18 +250,18 @@ export class PricingService {
         brazilDispatch: dto.brazilDispatch,
         invoiceTax: dto.invoiceTax,
         correiosLabel: dto.correiosLabel,
-        totalCost: costProduct,
+        totalCost: dto.totalCost,
       },
       pricingCosts: {
-        fixedCost,
-        freight,
-        paymentFee,
-        offerIncrement,
+        fixedCost: calculation.fixedCost,
+        freight: calculation.freight,
+        paymentFee: calculation.paymentFee,
+        offerIncrement: calculation.offerIncrement,
       },
       desiredNetProfit,
-      margin: desiredNetProfit / salePrice,
-      salePrice,
-      offerPrice,
+      margin: calculation.margin,
+      salePrice: calculation.salePrice,
+      offerPrice: calculation.offerPrice,
       profit: {
         source: 'native_product_catalog',
         condition: profitCondition,
@@ -272,17 +273,173 @@ export class PricingService {
         targetModule: 'offers',
         route: '/offers',
         payload: {
-          productId: `temporary-py-${dto.productId}`,
+          productId: null,
+          sourceQuoteId: `temporary-py-${dto.productId}`,
           productName,
           color: dto.color ?? '',
           capacity: dto.capacity ?? '',
-          salePrice,
-          offerPrice,
+          salePrice: calculation.salePrice,
+          offerPrice: calculation.offerPrice,
           deliveryTime: '',
           warranty: 'Garantia padrao iNest Phone',
         },
       },
     };
+  }
+
+  async calculateBrazilRadarQuote(dto: BrazilRadarQuotePricingDto) {
+    const quote = await this.pricingRepository.findBrazilRadarQuote(dto.sourceQuoteId);
+    if (!quote) {
+      throw new NotFoundException('Cotacao do Radar Brasil nao encontrada.');
+    }
+
+    const profitCondition = this.resolveBrazilRadarProfitCondition(quote.condition);
+    const quoteDescription = this.getBrazilRadarProfitDescription(quote);
+    const normalizedDescription = normalizeProfitProductDescription(quoteDescription);
+    const [settings, pricingConfigurations, profitCatalog, catalogProduct] = await Promise.all([
+      this.settingsService.getSettings(),
+      this.pricingRepository.listPricingConfigurations(),
+      this.profitProvider.getCatalog(),
+      this.pricingRepository.findActiveCatalogProduct(profitCondition, normalizedDescription),
+    ]);
+    const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
+    const profitLookup = this.findProfit(
+      profitCatalog,
+      catalogProduct?.profitProductId,
+      profitCondition,
+      profitProductDescription,
+    );
+    const desiredNetProfit = profitLookup.status === 'found' ? profitLookup.record.netProfit : null;
+    const calculation = this.calculateExternalPricing(
+      toNumber(quote.price),
+      desiredNetProfit,
+      settings,
+      pricingConfigurations,
+    );
+    const calculationStatus =
+      profitLookup.status === 'found'
+        ? ('ready' as const)
+        : profitLookup.status === 'duplicate'
+          ? ('duplicate_profit' as const)
+          : ('missing_profit' as const);
+    const calculationError =
+      profitLookup.status === 'not_found'
+        ? 'Lucro Liquido nao cadastrado para este produto e condicao.'
+        : profitLookup.status === 'duplicate'
+          ? 'Cadastro duplicado de Lucro Liquido para este produto e condicao.'
+          : null;
+    const contact = quote.currentList.supplierContact;
+    const productName = catalogProduct?.productDescription?.trim() || quote.productName.trim();
+
+    return {
+      temporary: true,
+      origin: 'BR' as const,
+      source: 'BRAZIL_RADAR' as const,
+      sourceQuoteId: quote.id,
+      catalogProductId: catalogProduct?.id ?? null,
+      product: {
+        id: catalogProduct?.id ?? null,
+        name: productName,
+        category: quote.category ?? '',
+        model: quote.model ?? quote.productName,
+        capacity: quote.capacity ?? '',
+        color: quote.color ?? '',
+        supplier: contact.supplierName,
+        city: contact.address ?? '',
+        condition: profitCondition,
+      },
+      costProduct: toNumber(quote.price),
+      pricingCosts: {
+        fixedCost: calculation.fixedCost,
+        freight: calculation.freight,
+        paymentFee: calculation.paymentFee,
+        offerIncrement: calculation.offerIncrement,
+      },
+      desiredNetProfit,
+      margin: calculation.margin,
+      salePrice: calculation.salePrice,
+      offerPrice: calculation.offerPrice,
+      profit: {
+        source: profitLookup.status === 'found' ? 'native_product_catalog' : 'unavailable',
+        condition: profitCondition,
+        productDescription: profitProductDescription,
+        recordId: profitLookup.status === 'found' ? profitLookup.record.productId : null,
+        updatedAt: profitCatalog.fetchedAt,
+      },
+      calculationStatus,
+      calculationError,
+      offerDraft:
+        calculationStatus === 'ready' &&
+        calculation.salePrice !== null &&
+        calculation.offerPrice !== null
+          ? {
+              targetModule: 'offers',
+              route: '/offers',
+              payload: {
+                productId: catalogProduct?.id ?? null,
+                sourceQuoteId: quote.id,
+                productName,
+                color: quote.color ?? '',
+                capacity: quote.capacity ?? '',
+                salePrice: calculation.salePrice,
+                offerPrice: calculation.offerPrice,
+                deliveryTime: '',
+                warranty: 'Garantia padrao iNest Phone',
+              },
+            }
+          : null,
+    };
+  }
+
+  private calculateExternalPricing(
+    costProduct: number,
+    desiredNetProfit: number | null,
+    settings: Awaited<ReturnType<SettingsService['getSettings']>>,
+    pricingConfigurations: Awaited<
+      ReturnType<PricingRepository['listPricingConfigurations']>
+    >,
+  ) {
+    const fixedCost = toNumber(settings.financial.globalFixedCost);
+    const freight = toNumber(settings.financial.defaultFreight);
+    const paymentFee = toNumber(settings.financial.defaultPaymentFee);
+    const offerIncrement = toNumber(
+      pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
+    );
+    const salePrice =
+      desiredNetProfit === null
+        ? null
+        : costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
+    const offerPrice = salePrice === null ? null : salePrice + offerIncrement;
+
+    return {
+      fixedCost,
+      freight,
+      paymentFee,
+      offerIncrement,
+      salePrice,
+      offerPrice,
+      margin:
+        salePrice !== null && desiredNetProfit !== null ? desiredNetProfit / salePrice : null,
+    };
+  }
+
+  private resolveBrazilRadarProfitCondition(condition?: string | null): ProfitCondition {
+    const normalized = condition?.trim().toUpperCase();
+    if (normalized === 'CPO') return 'CPO';
+    if (normalized === 'SEMINOVO' || normalized === 'USADO' || normalized === 'VITRINE') {
+      return 'SEMINOVO';
+    }
+    return 'NOVO';
+  }
+
+  private getBrazilRadarProfitDescription(quote: PricingBrazilRadarQuoteRecord) {
+    const base = (quote.model || quote.productName).trim();
+    const capacity = quote.capacity?.trim();
+    if (!capacity) return base;
+
+    const normalizedBase = normalizeProfitProductDescription(base);
+    const normalizedCapacity = normalizeProfitProductDescription(capacity);
+    return normalizedBase.includes(normalizedCapacity) ? base : `${base} ${capacity}`;
   }
 
   private findProfit(

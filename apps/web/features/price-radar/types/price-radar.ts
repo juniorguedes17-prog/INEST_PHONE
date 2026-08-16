@@ -9,7 +9,10 @@ export interface PriceRadarSupplier {
 
 export interface PriceQuoteItem {
   id: string;
-  productId: string;
+  source?: 'CATALOG' | 'BRAZIL_RADAR';
+  sourceQuoteId?: string;
+  catalogProductId?: string | null;
+  productId: string | null;
   supplierId: string;
   productName: string;
   productDescription?: string | null;

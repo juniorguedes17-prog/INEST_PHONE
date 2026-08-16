@@ -81,6 +81,12 @@ export class GenerateOfferDraftDto {
   productId!: string;
 }
 
+export class BrazilRadarQuotePricingDto {
+  @ApiProperty()
+  @IsUUID()
+  sourceQuoteId!: string;
+}
+
 export class TemporaryImportPricingDto {
   @ApiProperty()
   @IsString()

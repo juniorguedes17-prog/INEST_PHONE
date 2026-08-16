@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { generateOfferDraft, listPricing, recalculatePricing } from '../services/pricing-service';
 import {
+  BrazilRadarQuotePricing,
+  BRAZIL_RADAR_PRICING_STORAGE_KEY,
   OfferDraft,
   PricingFilters,
   PricingItem,
@@ -44,6 +46,8 @@ export function usePricing() {
   const [success, setSuccess] = useState<string | null>(null);
   const [temporaryImportPricing, setTemporaryImportPricing] =
     useState<TemporaryImportPricing | null>(null);
+  const [brazilRadarPricing, setBrazilRadarPricing] =
+    useState<BrazilRadarQuotePricing | null>(null);
 
   useEffect(() => {
     const stored = window.sessionStorage.getItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY);
@@ -59,8 +63,29 @@ export function usePricing() {
   }, [pathname]);
 
   useEffect(() => {
+    const stored = window.sessionStorage.getItem(BRAZIL_RADAR_PRICING_STORAGE_KEY);
+    if (!stored) return;
+
+    window.sessionStorage.removeItem(BRAZIL_RADAR_PRICING_STORAGE_KEY);
+    try {
+      const prepared = JSON.parse(stored) as BrazilRadarQuotePricing;
+      setBrazilRadarPricing(prepared);
+      if (prepared.calculationStatus === 'ready') {
+        setSuccess('Cotacao do Radar Brasil carregada.');
+      }
+    } catch {
+      setError('Nao foi possivel carregar a cotacao do Radar Brasil.');
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     const productId = new URLSearchParams(window.location.search).get('productId');
     if (!productId) return;
+
+    if (!isUuid(productId)) {
+      setError('Identificador de produto invalido. Retorne ao Radar e envie a cotacao novamente.');
+      return;
+    }
 
     setFilters((current) =>
       current.productId === productId ? current : { ...current, productId },
@@ -133,6 +158,22 @@ export function usePricing() {
     sendOfferDraft({ ...temporaryImportPricing.offerDraft, productType, source: 'temporary-import' });
   }
 
+  function generateBrazilRadarOffer() {
+    if (!brazilRadarPricing?.offerDraft) return;
+    const isIphone = /iphone/i.test(brazilRadarPricing.product.name);
+    const productType = isIphone
+      ? brazilRadarPricing.profit.condition === 'NOVO'
+        ? 'IPHONE_SEALED'
+        : 'IPHONE_USED'
+      : 'ACCESSORY';
+
+    sendOfferDraft({
+      ...brazilRadarPricing.offerDraft,
+      productType,
+      source: 'radar-quote',
+    });
+  }
+
   function sendOfferDraft(draft: OfferDraft) {
     window.sessionStorage.setItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
     router.push(draft.route);
@@ -147,10 +188,18 @@ export function usePricing() {
     error,
     success,
     temporaryImportPricing,
+    brazilRadarPricing,
     recalculate,
     generateOffer,
     generateTemporaryOffer,
+    generateBrazilRadarOffer,
   };
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function toPricingRequestFilters(filters: PricingFilters): PricingFilters {

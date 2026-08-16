@@ -224,7 +224,10 @@ export class PriceRadarService {
   }
 
   private applyPostFilters(
-    quotes: ReturnType<PriceRadarService['toResponse']>[],
+    quotes: Array<
+      | ReturnType<PriceRadarService['toResponse']>
+      | ReturnType<PriceRadarService['toAutomatedResponse']>
+    >,
     query: PriceRadarQueryDto,
   ) {
     const filtered = quotes.filter((quote) => {
@@ -281,6 +284,9 @@ export class PriceRadarService {
 
     return {
       id: record.id,
+      source: 'CATALOG' as const,
+      sourceQuoteId: record.id,
+      catalogProductId: record.productId,
       productId: record.productId,
       supplierId: record.supplierId,
       productName: productName || 'Produto nao identificado',
@@ -312,14 +318,20 @@ export class PriceRadarService {
     };
   }
 
-  private toAutomatedResponse(record: AutomatedPriceQuoteRecord, productDescription?: string) {
+  private toAutomatedResponse(
+    record: AutomatedPriceQuoteRecord,
+    catalogProduct?: CatalogProductDescriptionRecord,
+  ) {
     const contact = record.currentList.supplierContact;
     return {
       id: `evolution:${record.id}`,
-      productId: `evolution:${record.normalizedName}`,
+      source: 'BRAZIL_RADAR' as const,
+      sourceQuoteId: record.id,
+      catalogProductId: catalogProduct?.id ?? null,
+      productId: catalogProduct?.id ?? null,
       supplierId: `evolution:${contact.id}`,
       productName: record.productName,
-      productDescription,
+      productDescription: catalogProduct?.productDescription,
       category: record.category ?? '',
       model: record.model ?? record.productName,
       color: record.color ?? '',
@@ -351,7 +363,7 @@ export class PriceRadarService {
     return new Map(
       records.map((record) => [
         `${record.profitCondition}:${record.normalizedDescription}`,
-        record.productDescription,
+        record,
       ]),
     );
   }
