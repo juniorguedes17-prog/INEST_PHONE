@@ -84,7 +84,7 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
       </div>
 
       <div className="min-w-0 sm:col-span-2 lg:col-span-1 lg:text-right">
-        <span className="text-[10px] font-black uppercase text-inest-muted">Menor custo encontrado</span>
+        <span className="text-[10px] font-black uppercase text-inest-muted">Custo informado</span>
         <strong className="mt-1 block font-display text-2xl font-black text-inest-text">
           {formatCurrency(product.lowestCost)}
         </strong>

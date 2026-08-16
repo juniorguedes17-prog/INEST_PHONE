@@ -143,6 +143,13 @@ describe('EvolutionWebhookService', () => {
     );
     expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          items: expect.objectContaining({ deleteMany: {} }),
+        }),
+      }),
+    );
   });
 
   it('aceita mensagem de grupo somente pelo participante fornecedor cadastrado', async () => {

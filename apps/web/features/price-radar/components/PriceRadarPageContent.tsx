@@ -108,7 +108,7 @@ export function PriceRadarPageContent() {
     [facetFilters],
   );
 
-  const groupedProducts = useMemo(() => groupQuotesByProduct(filteredQuotes), [filteredQuotes]);
+  const groupedProducts = useMemo(() => toBrazilRadarProducts(filteredQuotes), [filteredQuotes]);
   const totalPages = Math.max(1, Math.ceil(groupedProducts.length / pageSize));
   const visibleProducts = useMemo(
     () => groupedProducts.slice((page - 1) * pageSize, page * pageSize),
@@ -584,61 +584,20 @@ function createEmptyFacetFilters(): BrazilRadarFacetState {
   };
 }
 
-function groupQuotesByProduct(quotes: PriceQuoteItem[]): BrazilRadarProduct[] {
-  const grouped = new Map<string, BrazilRadarProduct & { supplierIds: Set<string> }>();
-
-  quotes.forEach((quote) => {
-    const current = grouped.get(quote.productId);
-    if (!current) {
-      grouped.set(quote.productId, {
-        id: quote.productId,
-        name: quote.productName,
-        productDescription: quote.productDescription,
-        category: quote.category,
-        model: quote.model,
-        color: quote.color,
-        capacity: quote.capacity,
-        lowestCost: quote.costProduct,
-        supplierCount: 1,
-        supplierIds: new Set([quote.supplier.id]),
-        updatedAt: quote.updatedAt,
-        referenceQuote: quote,
-      });
-      return;
-    }
-
-    current.supplierIds.add(quote.supplier.id);
-    current.supplierCount = current.supplierIds.size;
-
-    if (quote.costProduct < current.lowestCost) {
-      current.lowestCost = quote.costProduct;
-      current.referenceQuote = quote;
-    }
-
-    if (new Date(quote.updatedAt) > new Date(current.updatedAt)) {
-      current.updatedAt = quote.updatedAt;
-    }
-  });
-
-  return Array.from(grouped.values()).map((item) => {
-    // The card must describe the quote whose price was selected as the minimum.
-    // Keeping fields from the first quote mixed suppliers and prices in the UI.
-    const quote = item.referenceQuote;
-
-    return {
-      id: item.id,
-      name: quote.productName,
-      productDescription: quote.productDescription,
-      category: quote.category,
-      model: quote.model,
-      color: quote.color,
-      capacity: quote.capacity,
-      lowestCost: item.lowestCost,
-      supplierCount: item.supplierCount,
-      updatedAt: item.updatedAt,
-      referenceQuote: quote,
-    };
-  });
+function toBrazilRadarProducts(quotes: PriceQuoteItem[]): BrazilRadarProduct[] {
+  return quotes.map((quote) => ({
+    id: quote.id,
+    name: quote.productName,
+    productDescription: quote.productDescription,
+    category: quote.category,
+    model: quote.model,
+    color: quote.color,
+    capacity: quote.capacity,
+    lowestCost: quote.costProduct,
+    supplierCount: 1,
+    updatedAt: quote.updatedAt,
+    referenceQuote: quote,
+  }));
 }
 
 function openWhatsapp(quote: PriceQuoteItem) {

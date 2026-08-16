@@ -1,6 +1,6 @@
 import { ParsedSupplierListItem } from './evolution-webhook.types';
 
-const PRODUCT_MARKERS = /\b(iphone|ipad|mac\s?book|macbook|mac\s?mini|imac|watch|airpods|air\s?pods|airtag|pencil|magic\s?mouse|earpods)\b/i;
+const PRODUCT_MARKERS = /\b(iph(?:one)?\s*\d|ipad|mac\s?book|macbook|mac\s?mini|imac|watch|airpods|air\s?pods|airtag|pencil|magic\s?mouse|earpods)\b/i;
 const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`;
 const MONEY_VALUE = String.raw`\d(?:[\d.,]|\s(?=\d{3}(?:\D|$)))*`;
 const PRICE_PREFIX = new RegExp(`${CURRENCY_MARKER}\\s*(${MONEY_VALUE})`, 'iu');
@@ -57,14 +57,14 @@ export function parseSupplierListText(content: string): ParsedSupplierListItem[]
       activeCondition = 'SEMINOVO';
     }
 
-    if (PRODUCT_MARKERS.test(line) || isImplicitProductHeading(line, activeCategory)) {
+    if (isProductHeading(line, activeCategory)) {
       currentProduct = withCategoryPrefix(removePrice(line), activeCategory);
     }
 
     const price = extractPrice(line);
     if (price === null || !currentProduct) continue;
 
-    const productName = removePrice(currentProduct);
+    const productName = canonicalizeProductName(removePrice(currentProduct));
     const color = extractColor(line) ?? extractColor(productName);
     const nameWithoutColor = color ? removeColor(productName, color) : productName;
     const normalizedName = normalizeProductText(nameWithoutColor);
@@ -90,7 +90,20 @@ export function parseSupplierListText(content: string): ParsedSupplierListItem[]
 
 function isCategoryHeading(value: string, category: string | null) {
   if (!category) return false;
-  return !hasPrice(value) && !/\b\d+\s*(?:gb|tb|mm|inch|in)\b/i.test(value) && value.length < 60;
+  return !hasPrice(value) && !/\b\d+\b/.test(value) && value.length < 60;
+}
+
+function isProductHeading(value: string, category: string | null) {
+  const candidate = removePrice(value);
+  if (!candidate || isNonProductText(candidate)) return false;
+
+  if (hasPrice(value) && detectCategory(candidate)) return true;
+
+  if (PRODUCT_MARKERS.test(candidate) || isImplicitProductHeading(candidate, category)) {
+    return true;
+  }
+
+  return hasPrice(value) ? isUnknownProductQuote(candidate) : isUnknownProductHeading(candidate);
 }
 
 function isImplicitProductHeading(value: string, category: string | null) {
@@ -99,17 +112,41 @@ function isImplicitProductHeading(value: string, category: string | null) {
   return /\b(?:1[3-7]|17e|ultra\s?\d|s\d+|se\s?\d)\b/i.test(value);
 }
 
+function isUnknownProductHeading(value: string) {
+  if (extractColor(value) || isNonProductText(value)) return false;
+  const words = normalizeProductText(value).split(' ').filter(Boolean);
+  return words.length >= 2 && hasTechnicalSpecifier(value);
+}
+
+function isUnknownProductQuote(value: string) {
+  if (extractColor(value) || isNonProductText(value)) return false;
+  const words = normalizeProductText(value).split(' ').filter(Boolean);
+  return words.length >= 2 && (hasTechnicalSpecifier(value) || words.length >= 3);
+}
+
+function hasTechnicalSpecifier(value: string) {
+  return /\b\d+\s*(?:gb|tb|ram|mm|inch|in|polegadas?|w)\b|\b\d+\s*\/\s*\d+\b/i.test(
+    value,
+  );
+}
+
+function isNonProductText(value: string) {
+  return /\b(?:atencao|atencao|garantia|correios|transportadora|nota fiscal|pagamento|conta|horario|obrigado|boas vendas|lista atualizada|disponivel|estoque)\b/i.test(
+    value,
+  );
+}
+
 function withCategoryPrefix(value: string, category: string | null) {
   if (!category || detectCategory(value)) return value;
   return `${category} ${value}`;
 }
 
 export function normalizeProductText(value: string): string {
-  return value
+  return canonicalizeProductName(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/\b(?:apple|original|lacrado|esim|wifi|w\/?|garantia|anatel|lla|jp|hn)\b/g, ' ')
+    .replace(/\b(?:apple|original|lacrado|garantia)\b/g, ' ')
     .replace(/(\d+)\s*(gb|tb|ram|inch|in|polegadas?)/g, '$1$2')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim()
@@ -122,6 +159,62 @@ function cleanLine(line: string) {
     .replace(/[*_~]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function canonicalizeProductName(value: string) {
+  const withoutDecorations = value
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/[•|_~*]+/g, ' ')
+    .replace(/\b(?:oferta|promocao|promocao|disponivel|estoque|lista atualizada)\b/gi, ' ')
+    .replace(/\b(?:cpo|refurbished|pre[-\s]?owned|seminovo|semi\s?novo|usado|vitrine|open box)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s:;,.\-–—]+|[\s:;,.\-–—]+$/g, '')
+    .replace(/\biph(?:one)?\s*(?=\d)/gi, 'iPhone ')
+    .replace(/\bair\s*pods\b/gi, 'AirPods')
+    .replace(/\bmac\s*book\b/gi, 'MacBook')
+    .replace(/\bmac\s*mini\b/gi, 'Mac Mini')
+    .replace(/\bipad\b/gi, 'iPad')
+    .replace(/\bimac\b/gi, 'iMac')
+    .replace(/\bapple\s*watch\b/gi, 'Apple Watch')
+    .replace(/\b(\d+)\s*(gb|tb|ram|mm)\b/gi, (_, value: string, unit: string) => `${value}${unit.toUpperCase()}`)
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:inch|in|polegadas?)\b/gi, '$1"')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return withoutDecorations
+    .split(' ')
+    .filter(Boolean)
+    .map((token) => formatProductToken(token))
+    .join(' ');
+}
+
+function formatProductToken(token: string) {
+  const lower = token.toLowerCase();
+  const known = new Map([
+    ['iphone', 'iPhone'],
+    ['ipad', 'iPad'],
+    ['imac', 'iMac'],
+    ['macbook', 'MacBook'],
+    ['airpods', 'AirPods'],
+    ['usb-c', 'USB-C'],
+    ['usb', 'USB'],
+    ['wifi', 'Wi-Fi'],
+    ['e-sim', 'eSIM'],
+    ['esim', 'eSIM'],
+    ['gps', 'GPS'],
+    ['cellular', 'Cellular'],
+    ['ram', 'RAM'],
+    ['ssd', 'SSD'],
+    ['anc', 'ANC'],
+    ['cpo', 'CPO'],
+  ]);
+  const canonical = known.get(lower);
+  if (canonical) return canonical;
+  if (/^m\d+(?:pro|max)?$/i.test(token)) return token.toUpperCase();
+  if (/^\d+(?:gb|tb|ram|mm)$/i.test(token)) return token.toUpperCase();
+  if (/^\d+(?:\.\d+)?"$/.test(token)) return token;
+  if (/^[a-z]+$/i.test(token)) return `${token.charAt(0).toUpperCase()}${token.slice(1).toLowerCase()}`;
+  return token;
 }
 
 function removePrice(value: string) {
@@ -189,7 +282,7 @@ function toPositiveNumber(value: string) {
 }
 
 function detectCategory(value: string): string | null {
-  if (/iphone/i.test(value)) return 'iPhone';
+  if (/\biphones?\b|\biph(?:one)?\s*\d/i.test(value)) return 'iPhone';
   if (/ipad/i.test(value)) return 'iPad';
   if (/mac\s?book|macbook/i.test(value)) return 'MacBook';
   if (/mac\s?mini/i.test(value)) return 'Mac Mini';
@@ -206,7 +299,7 @@ function extractModel(value: string): string | null {
 }
 
 function extractCapacity(value: string): string | null {
-  const match = value.match(/\b(\d+)\s*(GB|TB)\b/i);
+  const match = [...value.matchAll(/\b(\d+)\s*(GB|TB)\b/gi)].at(-1);
   return match?.[1] && match[2] ? `${match[1]}${match[2].toUpperCase()}` : null;
 }
 
