@@ -66,3 +66,10 @@ export async function deleteProduct(id: string): Promise<ProductItem> {
   });
   return parseResponse<ProductItem>(response);
 }
+
+export async function setProductActive(id: string, active: boolean): Promise<ProductItem> {
+  const response = await authenticatedFetch(`${env.apiUrl}/products/${id}/${active ? 'activate' : 'deactivate'}`, {
+    method: 'PATCH',
+  });
+  return parseResponse<ProductItem>(response);
+}

@@ -10,6 +10,7 @@ import {
   UpsertStorageDto,
 } from '../dto/product.dto';
 import { ProductRecord, ProductsPrismaClient } from '../interfaces/products-prisma.interface';
+import { normalizeProfitProductDescription } from '../../pricing/providers/google-sheets-profit.provider';
 
 @Injectable()
 export class ProductsRepository {
@@ -47,8 +48,26 @@ export class ProductsRepository {
   }
 
   createProduct(dto: CreateProductDto, userId?: string) {
+    return this.createManualProfitProduct(dto, userId);
+  }
+
+  async createManualProfitProduct(dto: CreateProductDto, userId?: string) {
+    const latestProfitProduct = await this.prisma.product.findFirst({
+      where: { profitProductId: { not: null } },
+      orderBy: { profitProductId: 'desc' },
+      select: { profitProductId: true },
+    });
+
     return this.prisma.product.create({
-      data: { ...dto, status: dto.status ?? 'ACTIVE', createdBy: userId, updatedBy: userId },
+      data: {
+        ...dto,
+        profitProductId: (latestProfitProduct?.profitProductId ?? 0) + 1,
+        normalizedDescription: normalizeProfitProductDescription(dto.productDescription),
+        status: dto.status ?? 'ACTIVE',
+        active: true,
+        createdBy: userId,
+        updatedBy: userId,
+      },
       include: this.include,
     });
   }
@@ -56,7 +75,11 @@ export class ProductsRepository {
   updateProduct(id: string, dto: UpdateProductDto, userId?: string) {
     return this.prisma.product.update({
       where: { id },
-      data: { ...dto, updatedBy: userId },
+      data: {
+        ...dto,
+        normalizedDescription: normalizeProfitProductDescription(dto.productDescription),
+        updatedBy: userId,
+      },
       include: this.include,
     });
   }
@@ -64,7 +87,7 @@ export class ProductsRepository {
   softDeleteProduct(id: string, userId?: string) {
     return this.prisma.product.update({
       where: { id },
-      data: { deletedAt: new Date(), status: 'INACTIVE', updatedBy: userId },
+      data: { deletedAt: new Date(), status: 'INACTIVE', active: false, updatedBy: userId },
       include: this.include,
     });
   }
@@ -72,7 +95,7 @@ export class ProductsRepository {
   setStatus(id: string, status: 'ACTIVE' | 'INACTIVE', userId?: string) {
     return this.prisma.product.update({
       where: { id },
-      data: { status, updatedBy: userId },
+      data: { status, active: status === 'ACTIVE', updatedBy: userId },
       include: this.include,
     });
   }
@@ -106,6 +129,17 @@ export class ProductsRepository {
 
   findStorage(id: string) {
     return this.prisma.productStorage.findUnique({ where: { id } });
+  }
+
+  findProfitIdentity(condition: string, normalizedDescription: string, excludedId?: string) {
+    return this.prisma.product.findFirst({
+      where: {
+        profitCondition: condition,
+        normalizedDescription,
+        ...(excludedId ? { id: { not: excludedId } } : {}),
+      },
+      include: this.include,
+    });
   }
 
   createCategory(dto: UpsertCategoryDto) {

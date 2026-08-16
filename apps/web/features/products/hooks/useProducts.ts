@@ -6,6 +6,7 @@ import {
   deleteProduct,
   getProductReferences,
   listProducts,
+  setProductActive,
   updateProduct,
 } from '../services/products-service';
 import {
@@ -120,6 +121,23 @@ export function useProducts() {
     }
   }
 
+  async function setActive(id: string, active: boolean) {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await setProductActive(id, active);
+      setSuccess(active ? 'Produto ativado com sucesso.' : 'Produto desativado com sucesso.');
+      await load();
+    } catch (productError) {
+      setError(
+        productError instanceof Error ? productError.message : 'Nao foi possivel atualizar o produto.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return {
     products,
     allProducts,
@@ -133,6 +151,7 @@ export function useProducts() {
     success,
     save,
     remove,
+    setActive,
   };
 }
 

@@ -1,5 +1,8 @@
+import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+
+const PRODUCT_CONDITIONS = ['NOVO', 'SEMINOVO', 'CPO'] as const;
 
 export class ProductQueryDto {
   @ApiPropertyOptional()
@@ -93,6 +96,21 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   criticalNotes?: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  productDescription!: string;
+
+  @ApiProperty()
+  @IsIn(PRODUCT_CONDITIONS)
+  profitCondition!: (typeof PRODUCT_CONDITIONS)[number];
+
+  @ApiProperty()
+  @Transform(({ value }) => parseBrazilianDecimal(value))
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  netProfit!: number;
 }
 
 export class UpdateProductDto extends CreateProductDto {}
@@ -152,4 +170,20 @@ export class UpsertStorageDto {
   @ApiProperty()
   @IsString()
   displayName!: string;
+}
+
+export function parseBrazilianDecimal(value: unknown) {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return value;
+
+  const normalized = value.trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+  if (!normalized) return Number.NaN;
+
+  const hasComma = normalized.includes(',');
+  const numeric = hasComma
+    ? normalized.replace(/\./g, '').replace(',', '.')
+    : normalized.split('.').at(-1)?.length === 3
+      ? normalized.replace(/\./g, '')
+      : normalized;
+  return Number(numeric);
 }

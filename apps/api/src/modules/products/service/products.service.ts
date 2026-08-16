@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
   CreateProductDto,
@@ -11,6 +11,7 @@ import {
 } from '../dto/product.dto';
 import { ProductsRepository } from '../repository/products.repository';
 import { ensureExists } from '../validators/products.validators';
+import { normalizeProfitProductDescription } from '../../pricing/providers/google-sheets-profit.provider';
 
 @Injectable()
 export class ProductsService {
@@ -28,6 +29,7 @@ export class ProductsService {
 
   async create(dto: CreateProductDto, user?: AuthenticatedUser) {
     await this.validateReferences(dto);
+    await this.ensureUniqueProfitIdentity(dto);
     const product = await this.productsRepository.createProduct(dto, user?.id);
     await this.productsRepository.createAuditLog({
       userId: user?.id,
@@ -43,6 +45,7 @@ export class ProductsService {
     const oldValue = await this.productsRepository.findProduct(id);
     ensureExists(oldValue, 'Produto nao encontrado.');
     await this.validateReferences(dto);
+    await this.ensureUniqueProfitIdentity(dto, id);
     const product = await this.productsRepository.updateProduct(id, dto, user?.id);
     await this.productsRepository.createAuditLog({
       userId: user?.id,
@@ -152,6 +155,18 @@ export class ProductsService {
 
     if (model && 'categoryId' in model && model.categoryId !== dto.categoryId) {
       throw new NotFoundException('Modelo nao pertence a categoria informada.');
+    }
+  }
+
+  private async ensureUniqueProfitIdentity(dto: CreateProductDto | UpdateProductDto, excludedId?: string) {
+    const normalizedDescription = normalizeProfitProductDescription(dto.productDescription);
+    const existing = await this.productsRepository.findProfitIdentity(
+      dto.profitCondition,
+      normalizedDescription,
+      excludedId,
+    );
+    if (existing) {
+      throw new ConflictException('Ja existe um produto cadastrado para esta descricao e condicao.');
     }
   }
 }

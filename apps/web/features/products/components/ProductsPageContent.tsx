@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   ActionButton,
   EmptyState,
@@ -45,13 +45,13 @@ export function ProductsPageContent() {
     references,
     filters,
     setFilters,
-    filteredModels,
     loading,
     saving,
     error,
     success,
     save,
     remove,
+    setActive,
   } = useProducts();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
@@ -62,19 +62,24 @@ export function ProductsPageContent() {
     [allProducts],
   );
 
-  const initialForm = useMemo<ProductFormPayload>(
-    () => ({
-      categoryId: editingProduct?.categoryId ?? references.categories[0]?.id ?? '',
-      modelId: editingProduct?.modelId ?? filteredModels[0]?.id ?? '',
+  const initialForm = useMemo<ProductFormPayload>(() => {
+    const categoryId = editingProduct?.categoryId ?? references.categories[0]?.id ?? '';
+    const firstModel = references.models.find((model) => model.categoryId === categoryId);
+
+    return {
+      categoryId,
+      modelId: editingProduct?.modelId ?? firstModel?.id ?? '',
       colorId: editingProduct?.colorId ?? '',
       storageId: editingProduct?.storageId ?? '',
       productType: editingProduct?.productType ?? 'IPHONE_SEALED',
       status: editingProduct?.status ?? 'ACTIVE',
       qualityGrade: editingProduct?.qualityGrade ?? '',
       criticalNotes: editingProduct?.criticalNotes ?? '',
-    }),
-    [editingProduct, filteredModels, references.categories],
-  );
+      productDescription: editingProduct?.productDescription ?? '',
+      profitCondition: editingProduct?.profitCondition ?? 'NOVO',
+      netProfit: formatProfitForInput(editingProduct?.netProfit),
+    };
+  }, [editingProduct, references.categories, references.models]);
 
   function openCreateModal() {
     setEditingProduct(null);
@@ -143,7 +148,7 @@ export function ProductsPageContent() {
                       location: 'Fonte oficial',
                       delivery: product.qualityGrade ?? undefined,
                     }}
-                    price="Catalogo"
+                    price={formatCurrency(product.netProfit)}
                     actions={[
                       {
                         label: 'Editar',
@@ -154,6 +159,11 @@ export function ProductsPageContent() {
                         label: 'Remover',
                         variant: 'danger',
                         onClick: () => void remove(product.id),
+                      },
+                      {
+                        label: product.active === false ? 'Ativar' : 'Desativar',
+                        variant: 'secondary',
+                        onClick: () => void setActive(product.id, product.active === false),
                       },
                     ]}
                   />
@@ -294,6 +304,14 @@ function ProductFormModal({
   onSave,
 }: ProductFormModalProps) {
   const [form, setForm] = useState(initialForm);
+  const availableModels = useMemo(
+    () => references.models.filter((item) => item.categoryId === form.categoryId),
+    [form.categoryId, references.models],
+  );
+
+  useEffect(() => {
+    setForm(initialForm);
+  }, [initialForm]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -311,12 +329,41 @@ function ProductFormModal({
           label="Categoria"
           value={form.categoryId}
           options={references.categories.map((item) => [item.id, item.name ?? item.id])}
-          onChange={(value) => setForm((current) => ({ ...current, categoryId: value }))}
+          onChange={(value) => setForm((current) => ({
+            ...current,
+            categoryId: value,
+            modelId: references.models.some((item) => item.id === current.modelId && item.categoryId === value)
+              ? current.modelId
+              : references.models.find((item) => item.categoryId === value)?.id ?? '',
+          }))}
         />
+        <TextInput
+          label="Descricao do produto"
+          value={form.productDescription}
+          onChange={(value) => setForm((current) => ({ ...current, productDescription: value }))}
+          required
+        />
+        <div className="grid gap-4 md:grid-cols-2">
+          <SelectInput
+            label="Condicao"
+            value={form.profitCondition}
+            options={[
+              ['NOVO', 'Novo'],
+              ['SEMINOVO', 'Seminovo'],
+              ['CPO', 'CPO'],
+            ]}
+            onChange={(value) => setForm((current) => ({ ...current, profitCondition: value as ProductFormPayload['profitCondition'] }))}
+          />
+          <NumberInput
+            label="Lucro liquido"
+            value={form.netProfit}
+            onChange={(value) => setForm((current) => ({ ...current, netProfit: value }))}
+          />
+        </div>
         <SelectInput
           label="Modelo"
           value={form.modelId}
-          options={references.models.map((item) => [item.id, item.name ?? item.id])}
+          options={availableModels.map((item) => [item.id, item.name ?? item.id])}
           onChange={(value) => setForm((current) => ({ ...current, modelId: value }))}
         />
         <div className="grid gap-4 md:grid-cols-2">
@@ -380,10 +427,12 @@ function TextInput({
   label,
   value,
   onChange,
+  required = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -391,6 +440,7 @@ function TextInput({
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        required={required}
         className="field-control"
       />
     </label>
@@ -417,6 +467,43 @@ function TextArea({
       />
     </label>
   );
+}
+
+function NumberInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
+      <input
+        inputMode="decimal"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        required
+        className="field-control"
+      />
+    </label>
+  );
+}
+
+function formatCurrency(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount)
+    ? amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+    : 'Nao informado';
+}
+
+function formatProfitForInput(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount)
+    ? amount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : '';
 }
 
 function SelectInput({

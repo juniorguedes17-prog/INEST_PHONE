@@ -10,7 +10,11 @@ export interface ProductReference {
 
 export interface ProductItem {
   id: string;
+  profitProductId?: number | null;
   productDescription?: string | null;
+  profitCondition?: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
+  netProfit?: number | string | null;
+  active?: boolean;
   categoryId: string;
   modelId: string;
   colorId?: string | null;
@@ -41,6 +45,9 @@ export interface ProductFormPayload {
   status: string;
   qualityGrade?: string;
   criticalNotes?: string;
+  productDescription: string;
+  profitCondition: 'NOVO' | 'SEMINOVO' | 'CPO';
+  netProfit: string;
 }
 
 export interface ProductFilters {

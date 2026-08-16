@@ -1,6 +1,11 @@
 export interface ProductRecord {
   id: string;
+  profitProductId?: number | null;
   productDescription?: string | null;
+  normalizedDescription?: string | null;
+  profitCondition?: string | null;
+  netProfit?: number | string | null;
+  active?: boolean;
   categoryId: string;
   modelId: string;
   colorId?: string | null;
@@ -21,6 +26,7 @@ export interface ProductsPrismaClient {
   product: {
     findMany(args?: unknown): Promise<ProductRecord[]>;
     findUnique(args: unknown): Promise<ProductRecord | null>;
+    findFirst(args: unknown): Promise<ProductRecord | null>;
     create(args: unknown): Promise<ProductRecord>;
     update(args: unknown): Promise<ProductRecord>;
   };
