@@ -15,10 +15,10 @@ import { usePricing } from '../hooks/usePricing';
 import { PricingProductCard } from './PricingProductCard';
 import { PricingToolbar } from './PricingToolbar';
 import {
+  buildCanonicalModelFacetOptions,
   getCanonicalCapacities,
   getCanonicalCategory,
   getCanonicalColors,
-  getCanonicalModel,
   getCatalogFacetLabel,
 } from '@/features/price-radar/utils/brazil-radar-facets';
 import { ProductFacetsDrawer, buildFacetOptions } from '@/features/price-radar/components/ProductFacetsDrawer';
@@ -50,7 +50,10 @@ export function PricingPageContent() {
   const [pageSize, setPageSize] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
-  const models = useUnique(pricing.items.map((item) => getCanonicalModel(item)));
+  const models = useMemo(
+    () => buildCanonicalModelFacetOptions(pricing.items),
+    [pricing.items],
+  );
   const colors = useUnique(pricing.items.flatMap((item) => getCanonicalColors(item)));
   const capacities = useUnique(pricing.items.flatMap((item) => getCanonicalCapacities(item)));
   const types = useUnique(pricing.items.map((item) => item.productType));
@@ -225,7 +228,7 @@ export function PricingPageContent() {
         models={{
           ...singleFilterGroup(
             'Modelo',
-            buildFacetOptions(models),
+            models,
             pricing.filters.model,
             (model) => pricing.setFilters((current) => ({ ...current, model })),
           ),

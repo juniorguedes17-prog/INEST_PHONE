@@ -16,6 +16,7 @@ import {
 import { useProducts } from '../hooks/useProducts';
 import { ProductFormPayload, ProductItem } from '../types/products';
 import { ProductFacetsDrawer } from '@/features/price-radar/components/ProductFacetsDrawer';
+import { buildCanonicalModelFacetOptions } from '@/features/price-radar/utils/brazil-radar-facets';
 import { getProductCardPresentation } from '@/utils/product-card-presentation';
 
 const productTypes = [
@@ -40,6 +41,7 @@ const statuses = [
 export function ProductsPageContent() {
   const {
     products,
+    allProducts,
     references,
     filters,
     setFilters,
@@ -55,6 +57,10 @@ export function ProductsPageContent() {
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => key !== 'search' && Boolean(value)).length;
+  const modelOptions = useMemo(
+    () => buildCanonicalModelFacetOptions(allProducts.map(toProductFacetSource)),
+    [allProducts],
+  );
 
   const initialForm = useMemo<ProductFormPayload>(
     () => ({
@@ -162,7 +168,16 @@ export function ProductsPageContent() {
         ariaLabel="Filtros de produtos"
         resultCount={products.length}
         categories={referenceGroup('Categoria', references.categories, filters.categoryId, (categoryId) => setFilters((current) => ({ ...current, categoryId, modelId: '' })))}
-        models={{ ...referenceGroup('Modelo', filteredModels, filters.modelId, (modelId) => setFilters((current) => ({ ...current, modelId }))), collapsible: true }}
+        models={{
+          title: 'Modelo',
+          options: modelOptions,
+          selected: filters.modelId ? [filters.modelId] : [],
+          onToggle: (modelId) => setFilters((current) => ({
+            ...current,
+            modelId: modelId === current.modelId ? '' : modelId,
+          })),
+          collapsible: true,
+        }}
         colors={referenceGroup('Cor', references.colors, filters.colorId, (colorId) => setFilters((current) => ({ ...current, colorId })))}
         capacities={referenceGroup('Armazenamento / Capacidade', references.storages, filters.storageId, (storageId) => setFilters((current) => ({ ...current, storageId })))}
         additionalGroups={[pairGroup('Tipo', productTypes, filters.productType, (productType) => setFilters((current) => ({ ...current, productType }))), pairGroup('Status', statuses, filters.status, (status) => setFilters((current) => ({ ...current, status })))]}
@@ -200,6 +215,19 @@ function getProductTitle(product: ProductItem) {
     capacity: product.storage?.displayName,
     color: product.color?.name,
   }).title;
+}
+
+function toProductFacetSource(product: ProductItem) {
+  return {
+    productDescription: product.productDescription,
+    category: product.category?.name,
+    model: product.model?.name,
+    color: product.color?.name,
+    capacity: product.storage?.displayName,
+    quality: product.qualityGrade,
+    productType: product.productType,
+    notes: product.criticalNotes,
+  };
 }
 
 function translateStatus(status: string) {

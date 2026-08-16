@@ -14,6 +14,7 @@ import {
   ProductItem,
   ProductReferences,
 } from '../types/products';
+import { getCanonicalModelKey } from '@/features/price-radar/utils/brazil-radar-facets';
 
 const initialFilters: ProductFilters = {
   search: '',
@@ -26,7 +27,7 @@ const initialFilters: ProductFilters = {
 };
 
 export function useProducts() {
-  const [products, setProducts] = useState<ProductItem[]>([]);
+  const [allProducts, setAllProducts] = useState<ProductItem[]>([]);
   const [references, setReferences] = useState<ProductReferences>({
     categories: [],
     models: [],
@@ -44,10 +45,10 @@ export function useProducts() {
     setError(null);
     try {
       const [nextProducts, nextReferences] = await Promise.all([
-        listProducts(filters),
+        listProducts({ ...filters, modelId: '' }),
         getProductReferences(),
       ]);
-      setProducts(nextProducts);
+      setAllProducts(nextProducts);
       setReferences(nextReferences);
     } catch (productError) {
       setError(
@@ -70,6 +71,14 @@ export function useProducts() {
         ? references.models.filter((model) => model.categoryId === filters.categoryId)
         : references.models,
     [filters.categoryId, references.models],
+  );
+
+  const products = useMemo(
+    () =>
+      filters.modelId
+        ? allProducts.filter((product) => getCanonicalModelKey(toFacetSource(product)) === filters.modelId)
+        : allProducts,
+    [allProducts, filters.modelId],
   );
 
   async function save(payload: ProductFormPayload, id?: string) {
@@ -113,6 +122,7 @@ export function useProducts() {
 
   return {
     products,
+    allProducts,
     references,
     filters,
     setFilters,
@@ -123,5 +133,18 @@ export function useProducts() {
     success,
     save,
     remove,
+  };
+}
+
+function toFacetSource(product: ProductItem) {
+  return {
+    productDescription: product.productDescription,
+    category: product.category?.name,
+    model: product.model?.name,
+    color: product.color?.name,
+    capacity: product.storage?.displayName,
+    quality: product.qualityGrade,
+    productType: product.productType,
+    notes: product.criticalNotes,
   };
 }

@@ -15,7 +15,7 @@ import {
   getCanonicalCapacities,
   getCanonicalCategory,
   getCanonicalColors,
-  getCanonicalModel,
+  getCanonicalModelKey,
   normalizeCatalogFilterText,
 } from '@/features/price-radar/utils/brazil-radar-facets';
 
@@ -179,7 +179,7 @@ function filterPricingItems(items: PricingItem[], filters: PricingFilters) {
     return (
       (!normalizedSearch || searchable.includes(normalizedSearch)) &&
       (!filters.category || getCanonicalCategory(item) === filters.category) &&
-      (!filters.model || getCanonicalModel(item) === filters.model) &&
+      (!filters.model || getCanonicalModelKey(item) === filters.model) &&
       (!filters.color || colors.includes(filters.color)) &&
       (!filters.capacity || capacities.includes(filters.capacity)) &&
       (!filters.productType || item.productType === filters.productType) &&

@@ -16,10 +16,11 @@ import { useOffers } from '../hooks/useOffers';
 import { OfferListCard } from './OfferListCard';
 import { OffersToolbar } from './OffersToolbar';
 import {
+  buildCanonicalModelFacetOptions,
   getCanonicalCapacities,
   getCanonicalCategory,
   getCanonicalColors,
-  getCanonicalModel,
+  getCanonicalModelKey,
   getCatalogFacetLabel,
   normalizeCatalogFilterText,
 } from '@/features/price-radar/utils/brazil-radar-facets';
@@ -73,7 +74,7 @@ export function OffersPageContent() {
       return (
         (!normalizedSearch || searchable.includes(normalizedSearch)) &&
         (!filters.category || productFacetSource?.category === filters.category) &&
-        (!filters.model || productFacetSource?.model === filters.model) &&
+        (!filters.model || productFacetSource?.modelKey === filters.model) &&
         (!filters.color || productFacetSource?.colors.includes(filters.color)) &&
         (!filters.capacity || productFacetSource?.capacities.includes(filters.capacity)) &&
         (!filters.origin || origin === filters.origin) &&
@@ -91,7 +92,10 @@ export function OffersPageContent() {
   }, [filters, offers.offers, productsById, sort]);
 
   const categories = useCatalogFacetOptions(offers.pricingItems, (item) => [toFacetSource(item).category]);
-  const models = useCatalogFacetOptions(offers.pricingItems, (item) => [toFacetSource(item).model]);
+  const models = useMemo(
+    () => buildCanonicalModelFacetOptions(offers.pricingItems),
+    [offers.pricingItems],
+  );
   const colors = useCatalogFacetOptions(
     offers.pricingItems,
     (item) => toFacetSource(item).colors,
@@ -365,6 +369,7 @@ function toFilterOptions(values: string[]): FilterOption[] {
 interface FilterOption {
   value: string;
   label: string;
+  count?: number;
 }
 
 function offerFilterGroup(
@@ -375,7 +380,7 @@ function offerFilterGroup(
 ) {
   return {
     title,
-    options: options.map((option) => ({ ...option, count: 1 })),
+    options: options.map((option) => ({ ...option, count: option.count ?? 1 })),
     selected: value ? [value] : [],
     onToggle: (nextValue: string) => onChange(nextValue === value ? '' : nextValue),
   };
@@ -384,7 +389,7 @@ function offerFilterGroup(
 function toFacetSource(item: PricingItem) {
   return {
     category: getCanonicalCategory(item),
-    model: getCanonicalModel(item),
+    modelKey: getCanonicalModelKey(item),
     colors: getCanonicalColors(item),
     capacities: getCanonicalCapacities(item),
   };

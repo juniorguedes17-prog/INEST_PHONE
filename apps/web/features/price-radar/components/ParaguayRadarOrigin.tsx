@@ -28,10 +28,11 @@ import {
   TemporaryImportPricingRequest,
 } from '@/features/pricing/types/pricing';
 import {
+  buildCanonicalModelFacetOptions,
   getCanonicalCapacities,
   getCanonicalCategory,
   getCanonicalColors,
-  getCanonicalModel,
+  getCanonicalModelKey,
   getCatalogFacetLabel,
   normalizeCatalogFilterText,
 } from '../utils/brazil-radar-facets';
@@ -114,7 +115,7 @@ export function ParaguayRadarOrigin() {
     () => ({
       categories: uniqueValues(products.map((product) => getCanonicalCategory(toFacetSource(product)))),
       brands: uniqueValues(products.map((product) => product.brand)),
-      models: uniqueValues(products.map((product) => getCanonicalModel(toFacetSource(product)))),
+      models: buildCanonicalModelFacetOptions(products.map(toFacetSource)),
       colors: uniqueValues(products.flatMap((product) => getCanonicalColors(toFacetSource(product)))),
       capacities: uniqueValues(
         products.flatMap((product) => getCanonicalCapacities(toFacetSource(product))),
@@ -135,7 +136,7 @@ export function ParaguayRadarOrigin() {
       return (
         (!filters.category || getCanonicalCategory(source) === filters.category) &&
         (!filters.brand || matchesFacetText(product.brand, filters.brand)) &&
-        (!filters.model || getCanonicalModel(source) === filters.model) &&
+        (!filters.model || getCanonicalModelKey(source) === filters.model) &&
         (!filters.color || getCanonicalColors(source).includes(filters.color)) &&
         (!filters.capacity || getCanonicalCapacities(source).includes(filters.capacity)) &&
         (!filters.store || matchesFacetText(product.store, filters.store)) &&
@@ -349,7 +350,7 @@ export function ParaguayRadarOrigin() {
         ariaLabel="Filtros do Radar Paraguai"
         resultCount={filteredProducts.length}
         categories={singleGroup('Categoria', buildFacetOptions(options.categories), filters.category, (category) => setFilters((current) => ({ ...current, category })))}
-        models={{ ...singleGroup('Modelo', buildFacetOptions(options.models), filters.model, (model) => setFilters((current) => ({ ...current, model }))), collapsible: true }}
+        models={{ ...singleGroup('Modelo', options.models, filters.model, (model) => setFilters((current) => ({ ...current, model }))), collapsible: true }}
         colors={singleGroup('Cor', buildFacetOptions(options.colors, getCatalogFacetLabel), filters.color, (color) => setFilters((current) => ({ ...current, color })))}
         capacities={singleGroup('Armazenamento / Capacidade', buildFacetOptions(options.capacities), filters.capacity, (capacity) => setFilters((current) => ({ ...current, capacity })))}
         additionalGroups={[singleGroup('Marca', buildFacetOptions(options.brands), filters.brand, (brand) => setFilters((current) => ({ ...current, brand }))), singleGroup('Loja / Fornecedor', buildFacetOptions(options.stores), filters.store, (store) => setFilters((current) => ({ ...current, store }))), singleGroup('Cidade', buildFacetOptions(options.cities), filters.city, (city) => setFilters((current) => ({ ...current, city }))), singleGroup('Disponibilidade', buildFacetOptions(options.availabilities), filters.availability, (availability) => setFilters((current) => ({ ...current, availability })))]}
