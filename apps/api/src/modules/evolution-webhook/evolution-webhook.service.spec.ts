@@ -9,7 +9,9 @@ function createService() {
     supplierCurrentList: { upsert: vi.fn().mockResolvedValue({}) },
   };
   const prisma = {
-    $transaction: vi.fn((callback: (client: typeof transaction) => unknown) => callback(transaction)),
+    $transaction: vi.fn((callback: (client: typeof transaction) => unknown) =>
+      callback(transaction),
+    ),
     supplierCurrentList: {
       findMany: vi.fn().mockResolvedValue([]),
       update: vi.fn().mockResolvedValue({}),
@@ -27,7 +29,11 @@ function createService() {
   };
 
   return {
-    service: new EvolutionWebhookService(config as never, prisma as never, supplierContacts as never),
+    service: new EvolutionWebhookService(
+      config as never,
+      prisma as never,
+      supplierContacts as never,
+    ),
     prisma,
     transaction,
     supplierContacts,
@@ -65,20 +71,16 @@ describe('EvolutionWebhookService', () => {
       expect.objectContaining({
         where: { id: 'current-list-id' },
         data: expect.objectContaining({
-          items: expect.objectContaining({
-            update: [
-              {
-                where: { id: 'current-list-item-id' },
-                data: { price: 6150 },
-              },
-            ],
-          }),
+          items: {
+            deleteMany: {},
+            create: [expect.objectContaining({ price: 6150 })],
+          },
         }),
       }),
     );
   });
 
-  it('nunca exclui itens existentes ao reprocessar uma lista', async () => {
+  it('remove itens stale e substitui o reparo pelo snapshot atual do parser', async () => {
     const { service, prisma } = createService();
     prisma.supplierCurrentList.findMany.mockResolvedValue([
       {
@@ -120,10 +122,77 @@ describe('EvolutionWebhookService', () => {
     expect(prisma.supplierCurrentList.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
-          items: expect.not.objectContaining({ deleteMany: expect.anything() }),
+          items: {
+            deleteMany: {},
+            create: [
+              expect.objectContaining({
+                normalizedName: 'iphone 17 pro 256gb',
+                price: 6150,
+              }),
+            ],
+          },
         },
       }),
     );
+  });
+
+  it('nao regrava um snapshot equivalente durante o repair', async () => {
+    const { service, prisma } = createService();
+    prisma.supplierCurrentList.findMany.mockResolvedValue([
+      {
+        id: 'current-list-id',
+        rawContent: 'iPhone 17 Pro 256GB\nAzul R$ 6.150',
+        items: [
+          {
+            id: 'current-list-item-id',
+            productName: 'iPhone 17 Pro 256GB',
+            normalizedName: 'iphone 17 pro 256gb',
+            category: 'iPhone',
+            model: 'iPhone 17 Pro 256GB',
+            capacity: '256GB',
+            color: 'azul',
+            condition: 'NOVO',
+            price: { toString: () => '6150' },
+            availability: null,
+            rawLine: 'Azul R$ 6.150',
+          },
+        ],
+      },
+    ]);
+
+    await service.onModuleInit();
+    await service.onModuleInit();
+
+    expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
+  });
+
+  it('preserva a lista atual quando o rawContent nao produz snapshot valido', async () => {
+    const { service, prisma } = createService();
+    prisma.supplierCurrentList.findMany.mockResolvedValue([
+      {
+        id: 'current-list-id',
+        rawContent: 'Bom dia, lista em breve.',
+        items: [
+          {
+            id: 'current-list-item-id',
+            productName: 'Produto valido',
+            normalizedName: 'produto valido',
+            category: null,
+            model: 'Produto valido',
+            capacity: null,
+            color: null,
+            condition: 'NOVO',
+            price: { toString: () => '1000' },
+            availability: null,
+            rawLine: 'Produto valido R$ 1.000',
+          },
+        ],
+      },
+    ]);
+
+    await service.onModuleInit();
+
+    expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
   });
 
   it('aceita evento do fornecedor ativo e substitui a lista atual em uma transacao', async () => {
@@ -150,6 +219,54 @@ describe('EvolutionWebhookService', () => {
         }),
       }),
     );
+  });
+
+  it('publica somente os itens da nova mensagem no snapshot atual do fornecedor', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-snapshot', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: {
+          conversation: 'Produto A 128GB R$ 1.100\nProduto C 256GB R$ 3.000',
+        },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          items: {
+            deleteMany: {},
+            create: [
+              expect.objectContaining({ normalizedName: 'produto a 128gb', price: 1100 }),
+              expect.objectContaining({ normalizedName: 'produto c 256gb', price: 3000 }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('preserva o snapshot atual quando a nova mensagem nao produz lista valida', async () => {
+    const { service, transaction } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-invalid', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'Bom dia, nova lista em breve.' },
+      },
+    });
+
+    expect(result).toEqual({
+      accepted: false,
+      ignored: true,
+      reason: 'invalid_or_empty_snapshot',
+    });
+    expect(transaction.evolutionWebhookReceipt.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
   });
 
   it('aceita mensagem de grupo somente pelo participante fornecedor cadastrado', async () => {

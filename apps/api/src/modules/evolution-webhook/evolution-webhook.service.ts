@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
-import { parseSupplierListText } from './supplier-list.parser';
+import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
 import { EvolutionMessage } from './evolution-webhook.types';
 
 @Injectable()
@@ -24,21 +24,22 @@ export class EvolutionWebhookService implements OnModuleInit {
 
     for (const currentList of currentLists) {
       const parsedItems = parseSupplierListText(currentList.rawContent);
-      if (parsedItems.length === 0) {
-        this.logger.warn(`Lista atual preservada: lista=${currentList.id} sem itens reconhecidos.`);
+      if (!isValidParsedSupplierListSnapshot(parsedItems)) {
+        this.logger.warn(
+          `Lista atual preservada: lista=${currentList.id} snapshot invalido ou vazio.`,
+        );
         continue;
       }
 
-      const repair = getCurrentListRepair(currentList.items, parsedItems);
-      if (repair.updates.length === 0 && repair.creates.length === 0) continue;
+      if (hasEquivalentSnapshot(currentList.items, parsedItems)) continue;
 
       try {
         await this.prisma.supplierCurrentList.update({
           where: { id: currentList.id },
           data: {
             items: {
-              update: repair.updates,
-              create: repair.creates,
+              deleteMany: {},
+              create: parsedItems,
             },
           },
         });
@@ -49,7 +50,9 @@ export class EvolutionWebhookService implements OnModuleInit {
     }
 
     if (updated > 0) {
-      this.logger.log(`Listas atuais reprocessadas: atualizadas=${updated} total=${currentLists.length}.`);
+      this.logger.log(
+        `Listas atuais reprocessadas: atualizadas=${updated} total=${currentLists.length}.`,
+      );
     }
   }
 
@@ -88,9 +91,11 @@ export class EvolutionWebhookService implements OnModuleInit {
 
     const text = message.text;
     const items = parseSupplierListText(text);
-    if (items.length === 0) {
-      this.logger.warn(`Lista ignorada para fornecedor ${supplier.id}: nenhum item com preco foi localizado.`);
-      return { accepted: false, ignored: true, reason: 'no_price_items' };
+    if (!isValidParsedSupplierListSnapshot(items)) {
+      this.logger.warn(
+        `Lista ignorada para fornecedor ${supplier.id}: nenhum item com preco foi localizado.`,
+      );
+      return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
 
     try {
@@ -215,10 +220,7 @@ function getEvent(records: Record<string, unknown>[]) {
   return '';
 }
 
-function getRemoteJid(
-  records: Record<string, unknown>[],
-  key: Record<string, unknown> | null,
-) {
+function getRemoteJid(records: Record<string, unknown>[], key: Record<string, unknown> | null) {
   const candidates = [
     key?.remoteJid,
     key?.remoteJidAlt,
@@ -249,17 +251,8 @@ function getSenderJid(
     record.remoteJidAlt,
   ]);
   const candidates = isGroupWhatsappJid(remoteJid)
-    ? [
-        key?.participant,
-        key?.participantAlt,
-        key?.participantPn,
-        ...recordValues,
-      ]
-    : [
-        remoteJid,
-        key?.remoteJidAlt,
-        ...recordValues,
-      ];
+    ? [key?.participant, key?.participantAlt, key?.participantPn, ...recordValues]
+    : [remoteJid, key?.remoteJidAlt, ...recordValues];
 
   for (const candidate of candidates) {
     const jid = toWhatsappJid(candidate);
@@ -291,7 +284,8 @@ function getText(message: unknown): string | null {
     isRecord(message.documentMessage) ? message.documentMessage.caption : undefined,
   ];
   const text = candidates.find(
-    (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0,
+    (candidate): candidate is string =>
+      typeof candidate === 'string' && candidate.trim().length > 0,
   );
   return text?.trim() ?? null;
 }
@@ -318,9 +312,8 @@ function isDuplicateReceiptError(error: unknown) {
   return isRecord(error) && error.code === 'P2002';
 }
 
-function getCurrentListRepair(
+function hasEquivalentSnapshot(
   storedItems: Array<{
-    id: string;
     productName: string;
     normalizedName: string;
     category: string | null;
@@ -334,32 +327,38 @@ function getCurrentListRepair(
   }>,
   parsedItems: ReturnType<typeof parseSupplierListText>,
 ) {
-  const storedBySource = new Map(storedItems.map((item) => [sourceKey(item), item]));
-  const storedRawLines = new Set(storedItems.map((item) => normalizedRawLine(item.rawLine)));
-  const updates: Array<{ where: { id: string }; data: { price: number } }> = [];
-  const creates: ReturnType<typeof parseSupplierListText> = [];
-
-  for (const parsedItem of parsedItems) {
-    const existing = storedBySource.get(sourceKey(parsedItem));
-    if (existing) {
-      if (Number(existing.price.toString()) !== parsedItem.price) {
-        updates.push({ where: { id: existing.id }, data: { price: parsedItem.price } });
-      }
-      continue;
-    }
-
-    // A linha e o produto precisam ser novos. Se ja houver uma linha com outro produto,
-    // ela permanece intacta e aguarda uma lista nova em vez de criar uma duplicidade ambigua.
-    if (!storedRawLines.has(normalizedRawLine(parsedItem.rawLine))) {
-      creates.push(parsedItem);
-    }
-  }
-
-  return { updates, creates };
+  const storedSnapshot = storedItems.map(snapshotKey).sort();
+  const parsedSnapshot = parsedItems.map(snapshotKey).sort();
+  return (
+    storedSnapshot.length === parsedSnapshot.length &&
+    storedSnapshot.every((value, index) => value === parsedSnapshot[index])
+  );
 }
 
-function sourceKey(item: { rawLine: string; normalizedName: string; color: string | null }) {
-  return `${normalizedRawLine(item.rawLine)}|${item.normalizedName}|${item.color ?? ''}`;
+function snapshotKey(item: {
+  productName: string;
+  normalizedName: string;
+  category: string | null;
+  model: string | null;
+  capacity: string | null;
+  color: string | null;
+  condition: string | null;
+  price: number | { toString(): string };
+  availability: string | null;
+  rawLine: string;
+}) {
+  return JSON.stringify([
+    item.productName,
+    item.normalizedName,
+    item.category,
+    item.model,
+    item.capacity,
+    item.color,
+    item.condition,
+    Number(item.price.toString()),
+    item.availability,
+    normalizedRawLine(item.rawLine),
+  ]);
 }
 
 function normalizedRawLine(value: string) {
