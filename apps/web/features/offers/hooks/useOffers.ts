@@ -1,10 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   deleteOffer,
   duplicateOffer,
-  generateOffer,
   listOfferProducts,
   listOffers,
   listTemplates,
@@ -19,29 +18,24 @@ import {
   TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '@/features/pricing/types/pricing';
 import {
-  findTemplateForProductType,
   PreparedTemporaryOffer,
   TemporaryOfferItem,
   prepareConsolidatedTemporaryOffers,
   prepareTemporaryOffer,
 } from '../utils/temporary-offer-consolidation';
 
-export function useOffers(initialProductId?: string | null) {
+export function useOffers() {
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
   const [templates, setTemplates] = useState<CommercialTemplate[]>([]);
   const [offers, setOffers] = useState<OfferItem[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState(initialProductId ?? '');
-  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [currentOffer, setCurrentOffer] = useState<OfferItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [temporaryOfferDrafts, setTemporaryOfferDrafts] = useState<OfferDraft[]>([]);
-  const [temporaryOffer, setTemporaryOffer] = useState<OfferItem | null>(null);
   const [consolidatedTemporaryOffers, setConsolidatedTemporaryOffers] = useState<TemporaryOfferItem[]>([]);
   const [temporaryOfferFailedCount, setTemporaryOfferFailedCount] = useState(0);
-  const hasIncomingDraft = useRef(false);
 
   useEffect(() => {
     const storedDraft = window.sessionStorage.getItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
@@ -49,7 +43,6 @@ export function useOffers(initialProductId?: string | null) {
 
     window.sessionStorage.removeItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
     try {
-      hasIncomingDraft.current = true;
       const prepared = JSON.parse(storedDraft) as OfferDraft | OfferDraftBatchStorage;
       const batch = toOfferDraftBatch(prepared);
       setTemporaryOfferDrafts(batch.drafts);
@@ -71,16 +64,6 @@ export function useOffers(initialProductId?: string | null) {
       setPricingItems(nextProducts);
       setTemplates(nextTemplates);
       setOffers(nextOffers);
-      const nextProductId =
-        selectedProductId || (!hasIncomingDraft.current ? nextProducts[0]?.productId : undefined);
-      if (nextProductId && !hasIncomingDraft.current) {
-        const product = nextProducts.find((item) => item.productId === nextProductId);
-        const template = findTemplateForProductType(nextTemplates, product?.productType);
-        setSelectedProductId(nextProductId);
-        if (template) {
-          setSelectedTemplateId(template.id);
-        }
-      }
     } catch (offersError) {
       setError(
         offersError instanceof Error
@@ -90,7 +73,7 @@ export function useOffers(initialProductId?: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [selectedProductId]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -114,9 +97,6 @@ export function useOffers(initialProductId?: string | null) {
     const consolidatedOffers = prepareConsolidatedTemporaryOffers(preparedOffers);
     const firstConsolidatedOffer = consolidatedOffers[0];
     if (!firstConsolidatedOffer) return;
-    setSelectedProductId(firstOffer.productId ?? '');
-    setSelectedTemplateId(firstOffer.template?.id ?? '');
-    setTemporaryOffer(firstConsolidatedOffer);
     setConsolidatedTemporaryOffers(consolidatedOffers);
     setCurrentOffer(firstConsolidatedOffer);
     setSuccess(
@@ -127,48 +107,6 @@ export function useOffers(initialProductId?: string | null) {
           : `${preparedOffers.length} ofertas preparadas com o template comercial padrao.`,
     );
   }, [templates, temporaryOfferDrafts, temporaryOfferFailedCount]);
-
-  const selectedProduct = useMemo(
-    () => pricingItems.find((item) => item.productId === selectedProductId) ?? null,
-    [pricingItems, selectedProductId],
-  );
-
-  const selectProduct = useCallback(
-    (productId: string) => {
-      setSelectedProductId(productId);
-      const product = pricingItems.find((item) => item.productId === productId);
-      const template = findTemplateForProductType(templates, product?.productType);
-      if (template) {
-        setSelectedTemplateId(template.id);
-      }
-    },
-    [pricingItems, templates],
-  );
-
-  async function generate() {
-    if (!selectedProductId) {
-      setError('Selecione um produto precificado.');
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const offer = await generateOffer({
-        productId: selectedProductId,
-        templateId: selectedTemplateId || undefined,
-      });
-      setCurrentOffer(offer);
-      setSuccess('Oferta gerada com sucesso.');
-      await load();
-    } catch (offersError) {
-      setError(
-        offersError instanceof Error ? offersError.message : 'Nao foi possivel gerar a oferta.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
 
   async function copy(offer: OfferItem) {
     await navigator.clipboard.writeText(offer.message);
@@ -214,20 +152,13 @@ export function useOffers(initialProductId?: string | null) {
     pricingItems,
     templates,
     offers,
-    selectedProduct,
-    selectedProductId,
-    selectedTemplateId,
     currentOffer,
-    temporaryOffer,
     consolidatedTemporaryOffers,
     loading,
     saving,
     error,
     success,
-    setSelectedProductId: selectProduct,
-    setSelectedTemplateId,
     setCurrentOffer,
-    generate,
     copy,
     share,
     duplicate,

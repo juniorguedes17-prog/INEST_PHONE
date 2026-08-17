@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import {
   ActionButton,
   EmptyState,
@@ -51,8 +50,7 @@ const deliveryTimeOptions = [
 const defaultDeliveryTime = 'Prazo conforme oferta';
 
 export function OffersPageContent() {
-  const searchParams = useSearchParams();
-  const offers = useOffers(searchParams.get('productId'));
+  const offers = useOffers();
   const [temporaryDeliveryTimes, setTemporaryDeliveryTimes] = useState<Record<string, string>>({});
   const showingTemporaryOffer = Boolean(
     offers.currentOffer &&
@@ -247,35 +245,6 @@ export function OffersPageContent() {
         </div>
       ) : null}
 
-      <SettingsCard
-        eyebrow="Nova oferta"
-        title="Produto e template"
-        description="Selecione os dados oficiais e gere a mensagem comercial."
-      >
-        <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_minmax(220px,1fr)_auto] md:items-end">
-          <SelectInput
-            label="Produto precificado"
-            value={offers.selectedProductId}
-            options={offers.pricingItems.map((item) => [item.productId, item.productName])}
-            onChange={offers.setSelectedProductId}
-          />
-          <SelectInput
-            label="Template"
-            value={offers.selectedTemplateId}
-            options={offers.templates.map((template) => [template.id, template.name])}
-            onChange={offers.setSelectedTemplateId}
-          />
-          <ActionButton
-            variant="success"
-            className="w-full md:w-auto"
-            onClick={() => void offers.generate()}
-            disabled={offers.saving}
-          >
-            {offers.saving ? 'Gerando...' : 'Gerar Oferta'}
-          </ActionButton>
-        </div>
-      </SettingsCard>
-
       <section className="min-h-[calc(100vh-330px)]">
         <div
           className={
@@ -287,14 +256,10 @@ export function OffersPageContent() {
           <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
             <div className="grid gap-3">
               {offers.loading ? <LoadingState /> : null}
-              {!offers.loading && !filteredOffers.length ? (
+              {!offers.loading && !filteredOffers.length && offers.offers.length ? (
                 <EmptyState
-                  title={offers.offers.length ? 'Nenhuma oferta encontrada.' : 'Nenhuma oferta gerada.'}
-                  description={
-                    offers.offers.length
-                      ? 'Ajuste ou limpe os filtros para visualizar outros registros.'
-                      : 'Selecione um produto precificado e gere a primeira mensagem.'
-                  }
+                  title="Nenhuma oferta encontrada."
+                  description="Ajuste ou limpe os filtros para visualizar outros registros."
                 />
               ) : null}
               {!offers.loading
@@ -403,35 +368,6 @@ export function OffersPageContent() {
         onClose={() => setFiltersOpen(false)}
       />
     </div>
-  );
-}
-
-function SelectInput({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[][];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block min-w-0">
-      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="field-control"
-      >
-        {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
