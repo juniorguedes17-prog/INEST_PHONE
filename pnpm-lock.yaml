@@ -45,6 +45,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@inest/product-identity':
+        specifier: workspace:*
+        version: link:../product-identity
       '@nestjs/common':
         specifier: ^10.4.0
         version: 10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -122,8 +125,32 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@22.20.0)
 
+  apps/product-identity:
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.9.0
+        version: 9.39.4
+      '@types/node':
+        specifier: ^22.5.0
+        version: 22.20.0
+      eslint:
+        specifier: ^9.9.0
+        version: 9.39.4(jiti@2.7.0)
+      tsx:
+        specifier: ^4.20.3
+        version: 4.23.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.3.0
+        version: 8.63.0(eslint@9.39.4(jiti@2.7.0))(typescript@5.9.3)
+
   apps/web:
     dependencies:
+      '@inest/product-identity':
+        specifier: workspace:*
+        version: link:../product-identity
       next:
         specifier: ^15.0.0
         version: 15.5.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
