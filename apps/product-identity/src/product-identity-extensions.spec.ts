@@ -76,6 +76,24 @@ test('iPad protege familia, chip, tela e armazenamento', () => {
   assert.equal(deriveProfitLookupIdentity(novo('iPad Air 128GB')).status, 'insufficient_identity');
 });
 
+test('iPad 11 deriva apenas a tela invariavel e a variante Wi-Fi base do registry', () => {
+  const quote = deriveExtendedProductIdentity(novo('iPad 11 128GB Wi-Fi'));
+  const catalog = deriveExtendedProductIdentity(novo('iPad 11 128GB 11"'));
+  const cellular = deriveProfitLookupIdentity(novo('iPad 11 128GB Wi-Fi Cellular'));
+
+  assert.equal(quote.canonical.canonicalModelKey, 'ipad-11');
+  assert.equal(quote.canonical.canonicalScreen, '11"');
+  assert.equal(quote.canonical.canonicalScreenSource, 'model_invariant');
+  assert.equal(quote.canonical.canonicalConnectivity, 'Wi-Fi');
+  assert.equal(quote.canonical.canonicalConnectivitySource, 'explicit');
+  assert.equal(catalog.canonical.canonicalScreenSource, 'explicit');
+  assert.equal(catalog.canonical.canonicalConnectivity, 'Wi-Fi');
+  assert.equal(catalog.canonical.canonicalConnectivitySource, 'safe_default');
+  assert.equal(quote.profit.status, 'valid');
+  assert.equal(quote.profit.key, catalog.profit.key);
+  assert.notEqual(quote.profit.key, cellular.key);
+});
+
 test('MacBook protege familia, chip, tela, RAM e armazenamento', () => {
   const air13 = deriveProfitLookupIdentity(novo('MacBook Air M5 13" 16/512GB'));
   const air15 = deriveProfitLookupIdentity(novo('MacBook Air M5 15" 16/512GB'));
@@ -219,6 +237,21 @@ test('Apple Watch protege familia, geracao, tamanho e conectividade', () => {
   assert.notEqual(gps.key, cellular.key);
   assert.notEqual(gps.key, smaller.key);
   assert.equal(se.status, 'insufficient_identity');
+});
+
+test('Apple Watch aplica GPS somente como default seguro da variante base', () => {
+  const quote = deriveExtendedProductIdentity(novo('Apple Watch SE 3 GPS 40mm S/M'));
+  const base = deriveExtendedProductIdentity(novo('Apple Watch SE3 40mm'));
+  const cellular = deriveExtendedProductIdentity(novo('Apple Watch SE3 40mm Com Celular'));
+
+  assert.equal(quote.canonical.canonicalConnectivity, 'GPS');
+  assert.equal(quote.canonical.canonicalConnectivitySource, 'explicit');
+  assert.equal(base.canonical.canonicalConnectivity, 'GPS');
+  assert.equal(base.canonical.canonicalConnectivitySource, 'safe_default');
+  assert.equal(cellular.canonical.canonicalConnectivity, 'GPS + Cellular');
+  assert.equal(cellular.canonical.canonicalConnectivitySource, 'explicit');
+  assert.equal(quote.profit.key, base.profit.key);
+  assert.notEqual(quote.profit.key, cellular.profit.key);
 });
 
 test('AirPods protege geracao e cancelamento de ruido', () => {

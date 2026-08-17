@@ -3,6 +3,8 @@ export interface CanonicalModelRegistryEntry {
   label: string;
   category: string;
   aliases: readonly string[];
+  invariants?: Readonly<{ screen?: string }>;
+  safeDefaults?: Readonly<{ connectivity?: string }>;
 }
 
 function entry(
@@ -10,8 +12,9 @@ function entry(
   label: string,
   category: string,
   aliases: readonly string[],
+  metadata: Pick<CanonicalModelRegistryEntry, 'invariants' | 'safeDefaults'> = {},
 ): CanonicalModelRegistryEntry {
-  return { key, label, category, aliases: [...new Set([label, ...aliases])] };
+  return { key, label, category, aliases: [...new Set([label, ...aliases])], ...metadata };
 }
 
 function iphone(
@@ -90,19 +93,21 @@ function ipad(
   key: string,
   label: string,
   aliases: readonly string[],
+  metadata?: Pick<CanonicalModelRegistryEntry, 'invariants' | 'safeDefaults'>,
 ) {
-  return entry(key, label, 'iPad', aliases);
+  return entry(key, label, 'iPad', aliases, metadata);
 }
 
 function watch(
   key: string,
   label: string,
   aliases: readonly string[],
+  metadata?: Pick<CanonicalModelRegistryEntry, 'invariants' | 'safeDefaults'>,
 ) {
   const aliasesWithUnits = aliases.flatMap((alias) =>
     /\s\d{2}$/.test(alias) ? [alias, `${alias}mm`] : [alias],
   );
-  return entry(key, label, 'Apple Watch', aliasesWithUnits);
+  return entry(key, label, 'Apple Watch', aliasesWithUnits, metadata);
 }
 
 function accessory(
@@ -165,7 +170,10 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   macStudio('mac-studio-m4-ultra', 'Mac Studio M4 Ultra', ['mac studio m4 ultra']),
 
   ipad('ipad-10', 'iPad 10', ['ipad 10']),
-  ipad('ipad-11', 'iPad 11', ['ipad 11', 'ipad a16']),
+  ipad('ipad-11', 'iPad 11', ['ipad 11', 'ipad a16'], {
+    invariants: { screen: '11"' },
+    safeDefaults: { connectivity: 'Wi-Fi' },
+  }),
   ipad('ipad-air-m4-11', 'iPad Air M4 11"', ['ipad air m4 11']),
   ipad('ipad-air-m4-13', 'iPad Air M4 13"', ['ipad air m4 13']),
   ipad('ipad-pro-m4-11', 'iPad Pro M4 11"', ['ipad pro m4 11']),
@@ -177,7 +185,7 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   watch('apple-watch-series-11-46', 'Apple Watch Series 11 46mm', ['apple watch series 11 46', 'apple watch s11 46', 'watch s11 46', 'series 11 46', 's11 46']),
   watch('apple-watch-se-2-40', 'Apple Watch SE 2 40mm', ['apple watch se 2 40', 'apple watch se2 40', 'watch se2 40', 'se2 40']),
   watch('apple-watch-se-2-44', 'Apple Watch SE 2 44mm', ['apple watch se 2 44', 'apple watch se2 44', 'watch se2 44', 'se2 44']),
-  watch('apple-watch-se-3-40', 'Apple Watch SE 3 40mm', ['apple watch se 3 40', 'apple watch se3 40', 'watch se3 40', 'se3 40']),
+  watch('apple-watch-se-3-40', 'Apple Watch SE 3 40mm', ['apple watch se 3 40', 'apple watch se3 40', 'watch se3 40', 'se3 40'], { safeDefaults: { connectivity: 'GPS' } }),
   watch('apple-watch-se-3-44', 'Apple Watch SE 3 44mm', ['apple watch se 3 44', 'apple watch se3 44', 'watch se3 44', 'se3 44']),
   watch('apple-watch-ultra-2-49', 'Apple Watch Ultra 2 49mm', ['apple watch ultra 2 49', 'watch ultra 2 49', 'ultra 2 49']),
   watch('apple-watch-ultra-3-49', 'Apple Watch Ultra 3 49mm', ['apple watch ultra 3 49', 'watch ultra 3 49', 'ultra 3 49']),

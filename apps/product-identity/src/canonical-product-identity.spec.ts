@@ -23,7 +23,9 @@ test('preserva a identidade homologada de iPhone Pro Max', () => {
     canonicalStorage: '256GB',
     canonicalColor: 'azul-profundo',
     canonicalScreen: null,
+    canonicalScreenSource: 'unknown',
     canonicalConnectivity: null,
+    canonicalConnectivitySource: 'unknown',
     canonicalChip: null,
   });
 });
@@ -46,7 +48,9 @@ test('preserva RAM, armazenamento, tela e chip de MacBook', () => {
     canonicalStorage: '512GB',
     canonicalColor: 'preto',
     canonicalScreen: '13"',
+    canonicalScreenSource: 'explicit',
     canonicalConnectivity: null,
+    canonicalConnectivitySource: 'unknown',
     canonicalChip: 'M5',
   });
 });
@@ -69,7 +73,9 @@ test('preserva tamanho e conectividade de Apple Watch', () => {
     canonicalStorage: null,
     canonicalColor: 'prata',
     canonicalScreen: '46mm',
+    canonicalScreenSource: 'explicit',
     canonicalConnectivity: 'GPS + Cellular',
+    canonicalConnectivitySource: 'explicit',
     canonicalChip: null,
   });
 });
@@ -84,6 +90,8 @@ test('preserva o comportamento fail-closed para produto desconhecido', () => {
   assert.equal(result.canonicalModelConfidence, 0);
   assert.equal(result.canonicalModelMatchMethod, 'unclassified');
   assert.equal(result.canonicalStorage, '512GB');
+  assert.equal(result.canonicalScreenSource, 'unknown');
+  assert.equal(result.canonicalConnectivitySource, 'unknown');
 });
 
 test('preserva a normalizacao textual pura', () => {

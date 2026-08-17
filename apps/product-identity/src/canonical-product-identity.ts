@@ -27,9 +27,13 @@ export interface CanonicalProductIdentity {
   canonicalStorage: string | null;
   canonicalColor: string | null;
   canonicalScreen: string | null;
+  canonicalScreenSource: CanonicalAttributeSource;
   canonicalConnectivity: string | null;
+  canonicalConnectivitySource: CanonicalAttributeSource;
   canonicalChip: string | null;
 }
+
+export type CanonicalAttributeSource = 'explicit' | 'model_invariant' | 'safe_default' | 'unknown';
 
 export const canonicalColorAliases = [
   { value: 'preto', label: 'Preto', swatch: '#171717', terms: ['black', 'preto', 'midnight'] },
@@ -80,18 +84,31 @@ export function normalizeCanonicalProductIdentity(
       .join(' '),
   );
   const inferredCategory = resolveCategory(identityText);
-  const canonicalScreen = resolveScreen(identityText, inferredCategory);
+  const explicitScreen = resolveScreen(identityText, inferredCategory);
   const canonicalChip = resolveChip(identityText);
   const modelResolution = resolveCanonicalModel({
     text: identityText,
     category: inferredCategory,
-    screen: canonicalScreen,
+    screen: explicitScreen,
     chip: canonicalChip,
   });
   const canonicalCategory = modelResolution.entry?.category ?? inferredCategory;
+  const canonicalScreen = explicitScreen ?? modelResolution.entry?.invariants?.screen ?? null;
+  const canonicalScreenSource: CanonicalAttributeSource = explicitScreen
+    ? 'explicit'
+    : modelResolution.entry?.invariants?.screen
+      ? 'model_invariant'
+      : 'unknown';
   const canonicalRam = resolveRam(attributeText, canonicalCategory);
   const canonicalStorage = resolveStorage(attributeText, canonicalRam);
-  const canonicalConnectivity = resolveConnectivity(attributeText);
+  const explicitConnectivity = resolveConnectivity(attributeText, canonicalCategory);
+  const canonicalConnectivity =
+    explicitConnectivity ?? modelResolution.entry?.safeDefaults?.connectivity ?? null;
+  const canonicalConnectivitySource: CanonicalAttributeSource = explicitConnectivity
+    ? 'explicit'
+    : modelResolution.entry?.safeDefaults?.connectivity
+      ? 'safe_default'
+      : 'unknown';
   const canonicalColor = resolveColor(normalizeCanonicalText(source.color || attributeText));
   const canonicalCondition = resolveCondition(attributeText);
 
@@ -107,7 +124,9 @@ export function normalizeCanonicalProductIdentity(
     canonicalStorage,
     canonicalColor,
     canonicalScreen,
+    canonicalScreenSource,
     canonicalConnectivity,
+    canonicalConnectivitySource,
     canonicalChip,
   };
 }
@@ -330,9 +349,12 @@ function resolveScreen(text: string, category: string) {
   return null;
 }
 
-function resolveConnectivity(text: string) {
+function resolveConnectivity(text: string, category: string) {
+  const cellular = /\bcellular\b|\bcom\s+cel(?:ular)?\b/.test(text);
   if (/\bgps\s*(?:\+|e|and)?\s*cellular\b|\bgps\s*cell\b/.test(text)) return 'GPS + Cellular';
-  if (/\bcellular\b|\bcom\s+cell\b/.test(text)) return 'Cellular';
+  if (cellular && category === 'Apple Watch') return 'GPS + Cellular';
+  if (cellular && category === 'iPad') return 'Wi-Fi + Cellular';
+  if (cellular) return 'Cellular';
   if (/\bgps\b/.test(text)) return 'GPS';
   if (/\be\s*sim\b|\besim\b/.test(text)) return 'eSIM';
   if (/\bwi\s*fi\b|\bwifi\b/.test(text)) return 'Wi-Fi';

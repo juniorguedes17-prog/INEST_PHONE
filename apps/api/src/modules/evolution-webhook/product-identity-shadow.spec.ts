@@ -10,8 +10,9 @@ describe('product identity ingestion shadow', () => {
 
     expect(item).toEqual(before);
     expect(observation?.identity.canonical.canonicalModelKey).toBe('ipad-11');
-    expect(observation?.identity.profit.status).toBe('insufficient_identity');
-    expect(observation?.identity.profit.missingAttributes).toEqual(['screen']);
+    expect(observation?.identity.canonical.canonicalScreen).toBe('11"');
+    expect(observation?.identity.canonical.canonicalScreenSource).toBe('model_invariant');
+    expect(observation?.identity.profit.status).toBe('valid');
   });
 
   it('observa Apple Watch GPS sem substituir conectividade ou preco', () => {
@@ -22,6 +23,7 @@ describe('product identity ingestion shadow', () => {
     expect(item).toEqual(before);
     expect(observation?.identity.canonical.canonicalModelKey).toBe('apple-watch-se-3-40');
     expect(observation?.identity.canonical.canonicalConnectivity).toBe('GPS');
+    expect(observation?.identity.canonical.canonicalConnectivitySource).toBe('explicit');
   });
 
   it('preserva preco e rawLine em blocos independentes Tala Cell', () => {
