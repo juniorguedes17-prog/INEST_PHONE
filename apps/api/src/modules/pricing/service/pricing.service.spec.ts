@@ -247,7 +247,7 @@ describe('PricingService native product profit integration', () => {
 
   it.each([
     ['iPhone', 'iPhone 17 Pro Max', '256GB'],
-    ['MacBook', 'MacBook Air M5 13"', '512GB'],
+    ['MacBook', 'MacBook Air M5 13" 16GB', '512GB'],
     ['iPad', 'iPad Air M4 13"', '128GB'],
     ['Apple Watch', 'Apple Watch Series 11 46mm', ''],
   ] as const)(
@@ -390,7 +390,7 @@ describe('PricingService native product profit integration', () => {
     });
   });
 
-  it('keeps duplicate_profit authoritative while shadow resolves iPhone 17 Pro safely', async () => {
+  it('uses canonical profit identity for iPhone 17 Pro instead of the legacy duplicate', async () => {
     const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     const repository = {
       findBrazilRadarQuote: vi.fn().mockResolvedValue(
@@ -441,11 +441,18 @@ describe('PricingService native product profit integration', () => {
     const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
 
     expect(result).toMatchObject({
-      calculationStatus: 'duplicate_profit',
-      desiredNetProfit: null,
-      salePrice: null,
-      offerPrice: null,
-      offerDraft: null,
+      calculationStatus: 'ready',
+      desiredNetProfit: 500,
+      salePrice: 5850,
+      offerPrice: 5950,
+      profit: {
+        source: 'native_product_catalog',
+        condition: 'NOVO',
+        recordId: '38',
+      },
+      offerDraft: {
+        payload: { productId: null, sourceQuoteId: BRAZIL_QUOTE_ID },
+      },
     });
     expect(log).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -461,5 +468,288 @@ describe('PricingService native product profit integration', () => {
       }),
     );
     log.mockRestore();
+  });
+
+  it.each([
+    ['NOVO', '38', 500],
+    ['SEMINOVO', '100', 400],
+    ['CPO', '116', 450],
+  ] as const)('keeps Brazil Radar profit independent for condition %s', async (condition, id, profit) => {
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          condition,
+          productName: 'iPhone 17 Pro 256GB',
+          model: 'iPhone 17 Pro 256GB',
+        }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records: [
+          {
+            productId: '38',
+            condition: 'NOVO',
+            productDescription: 'iPhone 17 Pro 256GB',
+            normalizedDescription: 'iphone 17 pro 256gb',
+            netProfit: 500,
+          },
+          {
+            productId: '100',
+            condition: 'SEMINOVO',
+            productDescription: 'iPhone 17 Pro 256GB',
+            normalizedDescription: 'iphone 17 pro 256gb',
+            netProfit: 400,
+          },
+          {
+            productId: '116',
+            condition: 'CPO',
+            productDescription: 'iPhone 17 Pro 256GB',
+            normalizedDescription: 'iphone 17 pro 256gb',
+            netProfit: 450,
+          },
+        ],
+        fetchedAt: '2026-08-17T10:00:00.000Z',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(result).toMatchObject({
+      calculationStatus: 'ready',
+      desiredNetProfit: profit,
+      profit: { condition, recordId: id },
+    });
+  });
+
+  it('shares profit across colors while preserving each Radar quote cost', async () => {
+    const calculate = async (color: string, price: number) => {
+      const repository = {
+        findBrazilRadarQuote: vi.fn().mockResolvedValue(
+          brazilRadarQuote({
+            color,
+            price,
+            productName: 'iPhone 17 Pro 256GB',
+            model: 'iPhone 17 Pro 256GB',
+          }),
+        ),
+        findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+        listPricingConfigurations: vi.fn().mockResolvedValue([]),
+      };
+      const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: '38',
+              condition: 'NOVO',
+              productDescription: 'iPhone 17 Pro 256GB',
+              normalizedDescription: 'iphone 17 pro 256gb',
+              netProfit: 500,
+            },
+          ],
+          fetchedAt: '2026-08-17T10:00:00.000Z',
+        }),
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
+      return service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+    };
+
+    const orange = await calculate('Laranja', 6580);
+    const white = await calculate('Branco', 6780);
+
+    expect(orange).toMatchObject({
+      costProduct: 6580,
+      desiredNetProfit: 500,
+      salePrice: 7430,
+      profit: { recordId: '38' },
+    });
+    expect(white).toMatchObject({
+      costProduct: 6780,
+      desiredNetProfit: 500,
+      salePrice: 7630,
+      profit: { recordId: '38' },
+    });
+  });
+
+  it('uses canonical profit identity for the real MacBook Pro M5 14 16/512 quote', async () => {
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          productName: 'MacBook Pro M5 14" 16GB/512GB',
+          normalizedName: 'macbook pro m5 14 16gb 512gb',
+          category: 'MacBook',
+          model: 'MacBook Pro M5 14" 16GB/512GB',
+          capacity: '512GB',
+          price: 11250,
+        }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi
+        .fn()
+        .mockResolvedValue([{ key: 'pricing.offer_increment', value: '100', type: 'currency' }]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records: [
+          {
+            productId: '14',
+            condition: 'NOVO',
+            productDescription: 'MacBook Pro M5 14 16/512GB',
+            normalizedDescription: 'macbook pro m5 14 16 512gb',
+            netProfit: 1300,
+          },
+        ],
+        fetchedAt: '2026-08-17T10:00:00.000Z',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(result).toMatchObject({
+      calculationStatus: 'ready',
+      costProduct: 11250,
+      desiredNetProfit: 1300,
+      pricingCosts: { fixedCost: 200, freight: 50, paymentFee: 100, offerIncrement: 100 },
+      salePrice: 12900,
+      offerPrice: 13000,
+      profit: { source: 'native_product_catalog', condition: 'NOVO', recordId: '14' },
+    });
+  });
+
+  it('fails closed when a MacBook quote omits RAM', async () => {
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          productName: 'MacBook Pro M5 14" 512GB',
+          normalizedName: 'macbook pro m5 14 512gb',
+          category: 'MacBook',
+          model: 'MacBook Pro M5 14" 512GB',
+          capacity: '512GB',
+        }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records: [
+          {
+            productId: '14',
+            condition: 'NOVO',
+            productDescription: 'MacBook Pro M5 14 16/512GB',
+            normalizedDescription: 'macbook pro m5 14 16 512gb',
+            netProfit: 1300,
+          },
+          {
+            productId: '16',
+            condition: 'NOVO',
+            productDescription: 'MacBook Pro M5 14 24/512GB',
+            normalizedDescription: 'macbook pro m5 14 24 512gb',
+            netProfit: 1600,
+          },
+        ],
+        fetchedAt: '2026-08-17T10:00:00.000Z',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(result).toMatchObject({
+      calculationStatus: 'insufficient_identity',
+      calculationError: 'Informacoes insuficientes para identificar a configuracao financeira.',
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      profit: { source: 'unavailable', recordId: null },
+      offerDraft: null,
+    });
+  });
+
+  it.each([
+    {
+      name: 'ambiguous identity',
+      productName: 'iPhone 17 Pro 256GB Apple Watch S11 46mm',
+      records: [],
+      status: 'ambiguous_identity',
+      error: 'Identidade financeira ambigua para este produto.',
+    },
+    {
+      name: 'catalog collision',
+      productName: 'iPhone 17 Pro 256GB',
+      records: [
+        {
+          productId: '38',
+          condition: 'NOVO' as const,
+          productDescription: 'iPhone 17 Pro 256GB',
+          normalizedDescription: 'iphone 17 pro 256gb',
+          netProfit: 500,
+        },
+        {
+          productId: '138',
+          condition: 'NOVO' as const,
+          productDescription: 'iPhone 17 Pro 256GB',
+          normalizedDescription: 'iphone 17 pro 256gb',
+          netProfit: 550,
+        },
+      ],
+      status: 'collision',
+      error: 'Mais de um cadastro possui a mesma identidade financeira.',
+    },
+  ])('does not calculate for $name', async ({ productName, records, status, error }) => {
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({ productName, model: productName }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records,
+        fetchedAt: '2026-08-17T10:00:00.000Z',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(result).toMatchObject({
+      calculationStatus: status,
+      calculationError: error,
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      offerDraft: null,
+    });
   });
 });

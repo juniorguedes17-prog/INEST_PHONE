@@ -9,7 +9,7 @@ import {
   ProfitSheetRecord,
 } from '../interfaces/profit-sheet.interface';
 
-export type ProfitIdentityShadowResolution =
+export type ProfitIdentityResolution =
   | { status: 'found'; identity: ProfitLookupIdentity; record: ProfitSheetRecord }
   | { status: 'missing'; identity: ProfitLookupIdentity }
   | { status: 'insufficient_identity'; identity: ProfitLookupIdentity }
@@ -19,6 +19,8 @@ export type ProfitIdentityShadowResolution =
       identity: ProfitLookupIdentity;
       records: readonly ProfitSheetRecord[];
     };
+
+export type ProfitIdentityShadowResolution = ProfitIdentityResolution;
 
 export type ProfitIdentityShadowComparison =
   | 'AGREE_FOUND'
@@ -38,10 +40,10 @@ export interface ProfitIdentityShadowSource {
   color?: string | null;
 }
 
-export function resolveProfitIdentityShadow(
+export function resolveProfitIdentity(
   catalog: ProfitSheetCatalog,
   source: ProfitIdentityShadowSource,
-): ProfitIdentityShadowResolution {
+): ProfitIdentityResolution {
   const identity = deriveProfitLookupIdentity({
     productDescription: source.productDescription,
     category: source.category,
@@ -69,6 +71,8 @@ export function resolveProfitIdentityShadow(
   if (matches.length > 1) return { status: 'collision', identity, records: matches };
   return { status: 'found', identity, record };
 }
+
+export const resolveProfitIdentityShadow = resolveProfitIdentity;
 
 export function compareProfitIdentityResults(
   legacy: ProfitLookupResult,

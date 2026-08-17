@@ -104,7 +104,12 @@ export interface BrazilRadarQuotePricing {
     recordId: string | null;
     updatedAt: string;
   };
-  calculationStatus: 'ready' | 'missing_profit' | 'duplicate_profit';
+  calculationStatus:
+    | 'ready'
+    | 'missing_profit'
+    | 'insufficient_identity'
+    | 'ambiguous_identity'
+    | 'collision';
   calculationError: string | null;
   offerDraft: OfferDraft | null;
 }

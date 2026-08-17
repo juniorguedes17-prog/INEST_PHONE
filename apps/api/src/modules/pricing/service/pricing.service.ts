@@ -22,8 +22,36 @@ import { OFFER_INCREMENT_KEY, PricingRepository } from '../repository/pricing.re
 import { quoteIsValid, toNumber } from '../validators/pricing.validators';
 import {
   compareProfitIdentityResults,
-  resolveProfitIdentityShadow,
+  resolveProfitIdentity,
+  type ProfitIdentityResolution,
 } from './profit-identity-shadow';
+
+function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResolution) {
+  switch (resolution.status) {
+    case 'found':
+      return { calculationStatus: 'ready' as const, calculationError: null };
+    case 'missing':
+      return {
+        calculationStatus: 'missing_profit' as const,
+        calculationError: 'Lucro Liquido nao cadastrado para este produto e condicao.',
+      };
+    case 'insufficient_identity':
+      return {
+        calculationStatus: 'insufficient_identity' as const,
+        calculationError: 'Informacoes insuficientes para identificar a configuracao financeira.',
+      };
+    case 'ambiguous_identity':
+      return {
+        calculationStatus: 'ambiguous_identity' as const,
+        calculationError: 'Identidade financeira ambigua para este produto.',
+      };
+    case 'collision':
+      return {
+        calculationStatus: 'collision' as const,
+        calculationError: 'Mais de um cadastro possui a mesma identidade financeira.',
+      };
+  }
+}
 
 @Injectable()
 export class PricingService {
@@ -309,64 +337,64 @@ export class PricingService {
       this.pricingRepository.findActiveCatalogProduct(profitCondition, normalizedDescription),
     ]);
     const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
-    const profitLookup = this.findProfit(
+    const legacyProfitLookup = this.findProfit(
       profitCatalog,
       catalogProduct?.profitProductId,
       profitCondition,
       profitProductDescription,
     );
+    const profitIdentityResolution = resolveProfitIdentity(profitCatalog, {
+      productDescription: quoteDescription,
+      condition: profitCondition,
+      category: quote.category,
+      color: quote.color,
+    });
     try {
-      const shadowResolution = resolveProfitIdentityShadow(profitCatalog, {
-        productDescription: quoteDescription,
-        condition: profitCondition,
-        category: quote.category,
-        color: quote.color,
-      });
-      const shadowComparison = compareProfitIdentityResults(profitLookup, shadowResolution);
+      const shadowComparison = compareProfitIdentityResults(
+        legacyProfitLookup,
+        profitIdentityResolution,
+      );
       this.logger.log({
         event: 'pricing.profit_identity.shadow',
         sourceQuoteId: quote.id,
-        legacyStatus: profitLookup.status,
-        shadowStatus: shadowResolution.status,
+        legacyStatus: legacyProfitLookup.status,
+        shadowStatus: profitIdentityResolution.status,
         comparison: shadowComparison,
-        legacyRecordId: profitLookup.status === 'found' ? profitLookup.record.productId : null,
+        legacyRecordId:
+          legacyProfitLookup.status === 'found' ? legacyProfitLookup.record.productId : null,
         shadowRecordId:
-          shadowResolution.status === 'found' ? shadowResolution.record.productId : null,
+          profitIdentityResolution.status === 'found'
+            ? profitIdentityResolution.record.productId
+            : null,
         shadowNetProfit:
-          shadowResolution.status === 'found' ? shadowResolution.record.netProfit : null,
-        profitLookupKey: shadowResolution.identity.key,
+          profitIdentityResolution.status === 'found'
+            ? profitIdentityResolution.record.netProfit
+            : null,
+        profitLookupKey: profitIdentityResolution.identity.key,
         condition: profitCondition,
       });
     } catch (error) {
       this.logger.warn({
         event: 'pricing.profit_identity.shadow',
         sourceQuoteId: quote.id,
-        legacyStatus: profitLookup.status,
+        legacyStatus: legacyProfitLookup.status,
         shadowStatus: 'error',
         comparison: 'SHADOW_ERROR',
         condition: profitCondition,
         errorType: error instanceof Error ? error.name : 'UnknownError',
       });
     }
-    const desiredNetProfit = profitLookup.status === 'found' ? profitLookup.record.netProfit : null;
+    const profitRecord =
+      profitIdentityResolution.status === 'found' ? profitIdentityResolution.record : null;
+    const desiredNetProfit = profitRecord?.netProfit ?? null;
     const calculation = this.calculateExternalPricing(
       toNumber(quote.price),
       desiredNetProfit,
       settings,
       pricingConfigurations,
     );
-    const calculationStatus =
-      profitLookup.status === 'found'
-        ? ('ready' as const)
-        : profitLookup.status === 'duplicate'
-          ? ('duplicate_profit' as const)
-          : ('missing_profit' as const);
-    const calculationError =
-      profitLookup.status === 'not_found'
-        ? 'Lucro Liquido nao cadastrado para este produto e condicao.'
-        : profitLookup.status === 'duplicate'
-          ? 'Cadastro duplicado de Lucro Liquido para este produto e condicao.'
-          : null;
+    const { calculationStatus, calculationError } =
+      getBrazilRadarProfitCalculationState(profitIdentityResolution);
     const contact = quote.currentList.supplierContact;
     const productName = catalogProduct?.productDescription?.trim() || quote.productName.trim();
 
@@ -399,10 +427,10 @@ export class PricingService {
       salePrice: calculation.salePrice,
       offerPrice: calculation.offerPrice,
       profit: {
-        source: profitLookup.status === 'found' ? 'native_product_catalog' : 'unavailable',
+        source: profitRecord ? 'native_product_catalog' : 'unavailable',
         condition: profitCondition,
         productDescription: profitProductDescription,
-        recordId: profitLookup.status === 'found' ? profitLookup.record.productId : null,
+        recordId: profitRecord?.productId ?? null,
         updatedAt: profitCatalog.fetchedAt,
       },
       calculationStatus,
