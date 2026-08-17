@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsService } from '../../settings/service/settings.service';
 import { PricingBrazilRadarQuoteRecord } from '../interfaces/pricing-prisma.interface';
@@ -387,5 +388,78 @@ describe('PricingService native product profit integration', () => {
       calculationError: 'Lucro Liquido nao cadastrado para este produto e condicao.',
       offerDraft: null,
     });
+  });
+
+  it('keeps duplicate_profit authoritative while shadow resolves iPhone 17 Pro safely', async () => {
+    const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          productName: 'iPhone 17 Pro 256gb eSIM Americano',
+          model: 'iPhone 17 Pro 256gb eSIM Americano',
+          capacity: '256GB',
+        }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records: [
+          {
+            productId: '34',
+            condition: 'NOVO',
+            productDescription: 'iPhone 17 256GB',
+            normalizedDescription: 'iphone 17 256gb',
+            netProfit: 450,
+          },
+          {
+            productId: '38',
+            condition: 'NOVO',
+            productDescription: 'iPhone 17 Pro 256GB',
+            normalizedDescription: 'iphone 17 pro 256gb',
+            netProfit: 500,
+          },
+          {
+            productId: '41',
+            condition: 'NOVO',
+            productDescription: 'iPhone 17 Pro Max 256GB',
+            normalizedDescription: 'iphone 17 pro max 256gb',
+            netProfit: 500,
+          },
+        ],
+        fetchedAt: '2026-08-17T10:00:00.000Z',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(result).toMatchObject({
+      calculationStatus: 'duplicate_profit',
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      offerDraft: null,
+    });
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'pricing.profit_identity.shadow',
+        sourceQuoteId: BRAZIL_QUOTE_ID,
+        legacyStatus: 'duplicate',
+        shadowStatus: 'found',
+        comparison: 'LEGACY_DUPLICATE_SHADOW_FOUND',
+        legacyRecordId: null,
+        shadowRecordId: '38',
+        shadowNetProfit: 500,
+        condition: 'NOVO',
+      }),
+    );
+    log.mockRestore();
   });
 });

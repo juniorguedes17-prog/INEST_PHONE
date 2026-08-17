@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { SettingsService } from '../../settings/service/settings.service';
 import {
@@ -20,9 +20,15 @@ import {
 import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { OFFER_INCREMENT_KEY, PricingRepository } from '../repository/pricing.repository';
 import { quoteIsValid, toNumber } from '../validators/pricing.validators';
+import {
+  compareProfitIdentityResults,
+  resolveProfitIdentityShadow,
+} from './profit-identity-shadow';
 
 @Injectable()
 export class PricingService {
+  private readonly logger = new Logger(PricingService.name);
+
   constructor(
     @Inject(PricingRepository) private readonly pricingRepository: PricingRepository,
     @Inject(SettingsService) private readonly settingsService: SettingsService,
@@ -309,6 +315,39 @@ export class PricingService {
       profitCondition,
       profitProductDescription,
     );
+    try {
+      const shadowResolution = resolveProfitIdentityShadow(profitCatalog, {
+        productDescription: quoteDescription,
+        condition: profitCondition,
+        category: quote.category,
+        color: quote.color,
+      });
+      const shadowComparison = compareProfitIdentityResults(profitLookup, shadowResolution);
+      this.logger.log({
+        event: 'pricing.profit_identity.shadow',
+        sourceQuoteId: quote.id,
+        legacyStatus: profitLookup.status,
+        shadowStatus: shadowResolution.status,
+        comparison: shadowComparison,
+        legacyRecordId: profitLookup.status === 'found' ? profitLookup.record.productId : null,
+        shadowRecordId:
+          shadowResolution.status === 'found' ? shadowResolution.record.productId : null,
+        shadowNetProfit:
+          shadowResolution.status === 'found' ? shadowResolution.record.netProfit : null,
+        profitLookupKey: shadowResolution.identity.key,
+        condition: profitCondition,
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'pricing.profit_identity.shadow',
+        sourceQuoteId: quote.id,
+        legacyStatus: profitLookup.status,
+        shadowStatus: 'error',
+        comparison: 'SHADOW_ERROR',
+        condition: profitCondition,
+        errorType: error instanceof Error ? error.name : 'UnknownError',
+      });
+    }
     const desiredNetProfit = profitLookup.status === 'found' ? profitLookup.record.netProfit : null;
     const calculation = this.calculateExternalPricing(
       toNumber(quote.price),
