@@ -16,6 +16,7 @@ import {
 import { listProducts } from '@/features/products/services/products-service';
 import { ProductItem } from '@/features/products/types/products';
 import { calculateBrazilRadarQuotePricing } from '@/features/pricing/services/pricing-service';
+import { prepareBrazilRadarPricingBatch } from '@/features/pricing/services/brazil-radar-pricing-batch';
 import { BRAZIL_RADAR_PRICING_STORAGE_KEY } from '@/features/pricing/types/pricing';
 import { listSuppliers } from '@/features/suppliers/services/suppliers-service';
 import { SupplierItem } from '@/features/suppliers/types/suppliers';
@@ -60,6 +61,7 @@ export function PriceRadarPageContent() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [handoffSending, setHandoffSending] = useState(false);
 
   useEffect(() => {
     async function loadReferences() {
@@ -211,6 +213,44 @@ export function PriceRadarPageContent() {
     }
   }
 
+  async function sendSelectedToPricing() {
+    if (handoffSending) return;
+
+    const selectedQuotes = groupedProducts
+      .filter((product) => selectedIds.has(product.id))
+      .map((product) => product.referenceQuote);
+    if (!selectedQuotes.length) return;
+
+    setHandoffSending(true);
+    setHandoffError(null);
+    try {
+      const result = await prepareBrazilRadarPricingBatch(
+        selectedQuotes,
+        (sourceQuoteId) => calculateBrazilRadarQuotePricing({ sourceQuoteId }),
+      );
+      if (!result.items.length) {
+        throw new Error(result.errors[0] ?? 'Nao foi possivel enviar as cotacoes para Precificacao.');
+      }
+
+      window.sessionStorage.setItem(
+        BRAZIL_RADAR_PRICING_STORAGE_KEY,
+        JSON.stringify({ items: result.items, failedCount: result.failedQuoteIds.length }),
+      );
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        result.successfulQuoteIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      router.push('/pricing?source=br-radar');
+    } catch (error) {
+      setHandoffError(
+        error instanceof Error ? error.message : 'Nao foi possivel enviar as cotacoes para Precificacao.',
+      );
+    } finally {
+      setHandoffSending(false);
+    }
+  }
+
   return (
     <div className="grid min-w-0 gap-4">
       <PageHeader
@@ -350,8 +390,8 @@ export function PriceRadarPageContent() {
             <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 shadow-card">
               <strong className="text-sm text-blue-800">{selectedIds.size} produtos selecionados</strong>
               <div className="flex flex-wrap gap-2">
-                <ActionButton disabled title="Integracao com Precificacao preparada para evolucao futura">
-                  Enviar para Precificacao
+                <ActionButton disabled={handoffSending} onClick={() => void sendSelectedToPricing()}>
+                  {handoffSending ? 'Enviando...' : 'Enviar para Precificacao'}
                 </ActionButton>
                 <ActionButton variant="ghost" onClick={() => setSelectedIds(new Set())}>
                   Limpar selecao

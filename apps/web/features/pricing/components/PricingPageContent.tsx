@@ -53,6 +53,7 @@ export function PricingPageContent() {
   const [profitModalOpen, setProfitModalOpen] = useState(false);
   const [profitValue, setProfitValue] = useState('');
   const [profitModalError, setProfitModalError] = useState<string | null>(null);
+  const [profitItem, setProfitItem] = useState<ReturnType<typeof usePricing>['brazilRadarPricings'][number] | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
   const models = useMemo(
     () => buildCanonicalModelFacetOptions(pricing.items),
@@ -112,7 +113,8 @@ export function PricingPageContent() {
     setPage(1);
   }
 
-  function openProfitModal() {
+  function openProfitModal(item: ReturnType<typeof usePricing>['brazilRadarPricings'][number]) {
+    setProfitItem(item);
     setProfitValue('');
     setProfitModalError(null);
     setProfitModalOpen(true);
@@ -121,8 +123,10 @@ export function PricingPageContent() {
   async function saveMissingProfit() {
     setProfitModalError(null);
     try {
-      await pricing.registerBrazilRadarProfit(profitValue);
+      if (!profitItem) return;
+      await pricing.registerBrazilRadarProfit(profitItem, profitValue);
       setProfitModalOpen(false);
+      setProfitItem(null);
     } catch (profitError) {
       setProfitModalError(
         profitError instanceof Error
@@ -197,7 +201,7 @@ export function PricingPageContent() {
             {!pricing.loading &&
             !pricing.items.length &&
             !pricing.temporaryImportPricing &&
-            !pricing.brazilRadarPricing ? (
+            !pricing.brazilRadarPricings.length ? (
               <EmptyState
                 title="Nenhum produto encontrado."
                 description="O produto precisa possuir preco valido no Radar para aparecer na Precificacao."
@@ -206,14 +210,15 @@ export function PricingPageContent() {
             {!pricing.loading
               ? (
                   <>
-                    {pricing.brazilRadarPricing ? (
+                    {pricing.brazilRadarPricings.map((item) => (
                       <BrazilRadarQuotePricingCard
-                        item={pricing.brazilRadarPricing}
+                        key={item.sourceQuoteId}
+                        item={item}
                         generating={pricing.saving}
-                        onGenerateOffer={pricing.generateBrazilRadarOffer}
-                        onRegisterProfit={openProfitModal}
+                        onGenerateOffer={() => pricing.generateBrazilRadarOffer(item)}
+                        onRegisterProfit={() => openProfitModal(item)}
                       />
-                    ) : null}
+                    ))}
                     {pricing.temporaryImportPricing ? (
                       <TemporaryImportPricingCard
                         item={pricing.temporaryImportPricing}
@@ -311,12 +316,15 @@ export function PricingPageContent() {
 
       <MissingProfitModal
         open={profitModalOpen}
-        item={pricing.brazilRadarPricing}
+        item={profitItem}
         value={profitValue}
         error={profitModalError}
         saving={pricing.saving}
         onChange={setProfitValue}
-        onClose={() => setProfitModalOpen(false)}
+        onClose={() => {
+          setProfitModalOpen(false);
+          setProfitItem(null);
+        }}
         onSave={() => void saveMissingProfit()}
       />
     </div>
@@ -329,7 +337,7 @@ function BrazilRadarQuotePricingCard({
   onGenerateOffer,
   onRegisterProfit,
 }: {
-  item: NonNullable<ReturnType<typeof usePricing>['brazilRadarPricing']>;
+  item: ReturnType<typeof usePricing>['brazilRadarPricings'][number];
   generating: boolean;
   onGenerateOffer: () => void;
   onRegisterProfit: () => void;
@@ -429,7 +437,7 @@ function MissingProfitModal({
   onSave,
 }: {
   open: boolean;
-  item: ReturnType<typeof usePricing>['brazilRadarPricing'];
+  item: ReturnType<typeof usePricing>['brazilRadarPricings'][number] | null;
   value: string;
   error: string | null;
   saving: boolean;

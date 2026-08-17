@@ -10,6 +10,7 @@ import {
 } from '../services/pricing-service';
 import {
   BrazilRadarQuotePricing,
+  BrazilRadarPricingBatchStorage,
   BRAZIL_RADAR_PRICING_STORAGE_KEY,
   OfferDraft,
   PricingFilters,
@@ -59,8 +60,7 @@ export function usePricing() {
   const [success, setSuccess] = useState<string | null>(null);
   const [temporaryImportPricing, setTemporaryImportPricing] =
     useState<TemporaryImportPricing | null>(null);
-  const [brazilRadarPricing, setBrazilRadarPricing] =
-    useState<BrazilRadarQuotePricing | null>(null);
+  const [brazilRadarPricings, setBrazilRadarPricings] = useState<BrazilRadarQuotePricing[]>([]);
 
   useEffect(() => {
     const stored = window.sessionStorage.getItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY);
@@ -81,11 +81,16 @@ export function usePricing() {
 
     window.sessionStorage.removeItem(BRAZIL_RADAR_PRICING_STORAGE_KEY);
     try {
-      const prepared = JSON.parse(stored) as BrazilRadarQuotePricing;
-      setBrazilRadarPricing(prepared);
-      if (prepared.calculationStatus === 'ready') {
-        setSuccess('Cotacao do Radar Brasil carregada.');
-      }
+      const prepared = JSON.parse(stored) as BrazilRadarQuotePricing | BrazilRadarPricingBatchStorage;
+      const batch = toBrazilRadarPricingBatch(prepared);
+      setBrazilRadarPricings(batch.items);
+      setSuccess(
+        batch.failedCount
+          ? `${batch.items.length} cotacoes carregadas; ${batch.failedCount} nao puderam ser enviadas.`
+          : batch.items.length === 1
+            ? 'Cotacao do Radar Brasil carregada.'
+            : `${batch.items.length} cotacoes do Radar Brasil carregadas.`,
+      );
     } catch {
       setError('Nao foi possivel carregar a cotacao do Radar Brasil.');
     }
@@ -171,38 +176,34 @@ export function usePricing() {
     sendOfferDraft({ ...temporaryImportPricing.offerDraft, productType, source: 'temporary-import' });
   }
 
-  function generateBrazilRadarOffer() {
-    if (!brazilRadarPricing?.offerDraft) return;
-    const isIphone = /iphone/i.test(brazilRadarPricing.product.name);
+  function generateBrazilRadarOffer(item: BrazilRadarQuotePricing) {
+    if (!item.offerDraft) return;
+    const isIphone = /iphone/i.test(item.product.name);
     const productType = isIphone
-      ? brazilRadarPricing.profit.condition === 'NOVO'
+      ? item.profit.condition === 'NOVO'
         ? 'IPHONE_SEALED'
         : 'IPHONE_USED'
       : 'ACCESSORY';
 
     sendOfferDraft({
-      ...brazilRadarPricing.offerDraft,
+      ...item.offerDraft,
       productType,
       source: 'radar-quote',
     });
   }
 
-  async function registerBrazilRadarProfit(netProfit: string) {
-    if (!brazilRadarPricing) {
-      throw new Error('A cotacao do Radar Brasil nao esta disponivel para cadastro do lucro.');
-    }
-
+  async function registerBrazilRadarProfit(item: BrazilRadarQuotePricing, netProfit: string) {
     setSaving(true);
     setSuccess(null);
     try {
-      const catalogProduct = brazilRadarPricing.catalogProductId
-        ? await getProduct(brazilRadarPricing.catalogProductId)
+      const catalogProduct = item.catalogProductId
+        ? await getProduct(item.catalogProductId)
         : null;
       const [products, references] = catalogProduct
         ? [[], { categories: [], models: [], colors: [], storages: [] }]
         : await Promise.all([listProducts(emptyProductFilters), getProductReferences()]);
       const registration = resolveProfitRegistration({
-        item: brazilRadarPricing,
+        item,
         netProfit,
         products,
         references,
@@ -226,7 +227,7 @@ export function usePricing() {
 
           const productsAfterConflict = await listProducts(emptyProductFilters);
           const retry = resolveProfitRegistration({
-            item: brazilRadarPricing,
+            item,
             netProfit,
             products: productsAfterConflict,
             references,
@@ -242,9 +243,13 @@ export function usePricing() {
       }
 
       const recalculated = await calculateBrazilRadarQuotePricing({
-        sourceQuoteId: brazilRadarPricing.sourceQuoteId,
+        sourceQuoteId: item.sourceQuoteId,
       });
-      setBrazilRadarPricing(recalculated);
+      setBrazilRadarPricings((current) =>
+        current.map((currentItem) =>
+          currentItem.sourceQuoteId === recalculated.sourceQuoteId ? recalculated : currentItem,
+        ),
+      );
 
       if (recalculated.calculationStatus !== 'ready') {
         throw new Error(
@@ -273,13 +278,23 @@ export function usePricing() {
     error,
     success,
     temporaryImportPricing,
-    brazilRadarPricing,
+    brazilRadarPricings,
     recalculate,
     generateOffer,
     generateTemporaryOffer,
     generateBrazilRadarOffer,
     registerBrazilRadarProfit,
   };
+}
+
+function toBrazilRadarPricingBatch(
+  prepared: BrazilRadarQuotePricing | BrazilRadarPricingBatchStorage,
+): BrazilRadarPricingBatchStorage {
+  if ('items' in prepared && Array.isArray(prepared.items)) {
+    return prepared;
+  }
+
+  return { items: [prepared as BrazilRadarQuotePricing], failedCount: 0 };
 }
 
 function isUuid(value: string) {
