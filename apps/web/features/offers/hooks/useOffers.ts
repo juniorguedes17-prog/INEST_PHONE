@@ -18,6 +18,12 @@ import {
   PricingItem,
   TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '@/features/pricing/types/pricing';
+import {
+  findTemplateForProductType,
+  PreparedTemporaryOffer,
+  prepareConsolidatedTemporaryOffers,
+  prepareTemporaryOffer,
+} from '../utils/temporary-offer-consolidation';
 
 export function useOffers(initialProductId?: string | null) {
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
@@ -32,7 +38,7 @@ export function useOffers(initialProductId?: string | null) {
   const [success, setSuccess] = useState<string | null>(null);
   const [temporaryOfferDrafts, setTemporaryOfferDrafts] = useState<OfferDraft[]>([]);
   const [temporaryOffer, setTemporaryOffer] = useState<OfferItem | null>(null);
-  const [temporaryOffers, setTemporaryOffers] = useState<OfferItem[]>([]);
+  const [consolidatedTemporaryOffers, setConsolidatedTemporaryOffers] = useState<OfferItem[]>([]);
   const [temporaryOfferFailedCount, setTemporaryOfferFailedCount] = useState(0);
   const hasIncomingDraft = useRef(false);
 
@@ -92,7 +98,7 @@ export function useOffers(initialProductId?: string | null) {
   useEffect(() => {
     if (!temporaryOfferDrafts.length || !templates.length) return;
 
-    const preparedOffers: OfferItem[] = [];
+    const preparedOffers: PreparedTemporaryOffer[] = [];
     for (const draft of temporaryOfferDrafts) {
       const preparedOffer = prepareTemporaryOffer(draft, templates);
       if (!preparedOffer) {
@@ -104,11 +110,14 @@ export function useOffers(initialProductId?: string | null) {
 
     const firstOffer = preparedOffers[0];
     if (!firstOffer) return;
+    const consolidatedOffers = prepareConsolidatedTemporaryOffers(preparedOffers);
+    const firstConsolidatedOffer = consolidatedOffers[0];
+    if (!firstConsolidatedOffer) return;
     setSelectedProductId(firstOffer.productId ?? '');
     setSelectedTemplateId(firstOffer.template?.id ?? '');
-    setTemporaryOffer(firstOffer);
-    setTemporaryOffers(preparedOffers);
-    setCurrentOffer(firstOffer);
+    setTemporaryOffer(firstConsolidatedOffer);
+    setConsolidatedTemporaryOffers(consolidatedOffers);
+    setCurrentOffer(firstConsolidatedOffer);
     setSuccess(
       temporaryOfferFailedCount
         ? `${preparedOffers.length} ofertas preparadas. ${temporaryOfferFailedCount} item(ns) nao puderam ser processados.`
@@ -209,7 +218,7 @@ export function useOffers(initialProductId?: string | null) {
     selectedTemplateId,
     currentOffer,
     temporaryOffer,
-    temporaryOffers,
+    consolidatedTemporaryOffers,
     loading,
     saving,
     error,
@@ -231,129 +240,4 @@ function toOfferDraftBatch(prepared: OfferDraft | OfferDraftBatchStorage): Offer
   }
 
   return { drafts: [prepared as OfferDraft], failedCount: 0 };
-}
-
-function prepareTemporaryOffer(
-  draft: OfferDraft,
-  templates: CommercialTemplate[],
-): OfferItem | null {
-  const template = findTemplateForProductType(templates, draft.productType);
-  if (!template) return null;
-
-  const payload = draft.payload;
-  const draftIdentity = payload.productId ?? payload.sourceQuoteId;
-  if (!draftIdentity) return null;
-
-  const offerPrice = formatCurrency(payload.offerPrice);
-  const message = renderOfferMessage(template.content, {
-    produto: payload.productName,
-    modelo: payload.productName,
-    cor: payload.color,
-    capacidade: payload.capacity,
-    preco: formatCurrency(payload.salePrice),
-    preco_oferta: offerPrice,
-    prazo: payload.deliveryTime || 'Prazo conforme oferta',
-    garantia: payload.warranty,
-  });
-
-  return {
-    id: draftIdentity,
-    template,
-    message,
-    status: 'DRAFT',
-    salePrice: payload.salePrice,
-    offerPrice: payload.offerPrice,
-    whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
-    productId: payload.productId,
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function renderTemplate(template: string, variables: Record<string, string>) {
-  return template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => variables[key] ?? '');
-}
-
-function renderOfferMessage(template: string, variables: Record<string, string>) {
-  const offerPrice = variables.preco_oferta ?? '';
-  const productName = variables.produto ?? variables.modelo ?? '';
-  const renderedMessage = removeLegacyOfferPrice(renderTemplate(template, variables));
-
-  if (hasOfferPriceByVariation(renderedMessage, offerPrice)) {
-    return normalizeMessageSpacing(renderedMessage);
-  }
-
-  const messageWithoutStandalonePrice = removeStandaloneOfferPrice(
-    renderedMessage,
-    offerPrice,
-  );
-
-  return insertOfferPriceBelowProduct(
-    messageWithoutStandalonePrice,
-    productName,
-    offerPrice,
-  );
-}
-
-function removeLegacyOfferPrice(message: string) {
-  return message
-    .split('\n')
-    .filter((line) => !/^\s*pre[cç]o\s+de\s+oferta\s*:/i.test(line))
-    .join('\n');
-}
-
-function hasOfferPriceByVariation(message: string, offerPrice: string) {
-  return message
-    .split('\n')
-    .some((line) => line.includes(offerPrice) && !isStandaloneOfferPrice(line, offerPrice));
-}
-
-function removeStandaloneOfferPrice(message: string, offerPrice: string) {
-  return message
-    .split('\n')
-    .filter((line) => !isStandaloneOfferPrice(line, offerPrice))
-    .join('\n');
-}
-
-function isStandaloneOfferPrice(line: string, offerPrice: string) {
-  return line.trim() === `💰 ${offerPrice}`;
-}
-
-function insertOfferPriceBelowProduct(message: string, productName: string, offerPrice: string) {
-  const lines = message.split('\n');
-  const normalizedProductName = normalizeForMatch(productName);
-  const productLineIndex = lines.findIndex((line) =>
-    normalizeForMatch(line).includes(normalizedProductName),
-  );
-
-  if (productLineIndex === -1) {
-    return normalizeMessageSpacing(message);
-  }
-
-  lines.splice(productLineIndex + 1, 0, '', `💰 ${offerPrice}`);
-  return normalizeMessageSpacing(lines.join('\n'));
-}
-
-function normalizeForMatch(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function normalizeMessageSpacing(message: string) {
-  return message.replace(/\n{3,}/g, '\n\n').trim();
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-}
-
-function findTemplateForProductType(templates: CommercialTemplate[], productType?: string) {
-  const usedProduct = productType === 'IPHONE_USED' || productType === 'APPLE_CPO';
-  return (
-    templates.find((template) => template.productType === (usedProduct ? 'IPHONE_USED' : 'IPHONE_SEALED')) ??
-    templates[0]
-  );
 }

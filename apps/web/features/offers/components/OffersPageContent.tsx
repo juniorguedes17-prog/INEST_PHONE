@@ -154,14 +154,14 @@ export function OffersPageContent() {
         onOpenFilters={() => setFiltersOpen(true)}
       />
 
-      {offers.temporaryOffers.length ? (
+      {offers.consolidatedTemporaryOffers.length ? (
         <SettingsCard
-          eyebrow={offers.temporaryOffers.length === 1 ? 'Oferta preparada' : 'Ofertas preparadas'}
+          eyebrow={offers.consolidatedTemporaryOffers.length === 1 ? 'Oferta preparada' : 'Ofertas preparadas'}
           title="Template comercial da Precificacao"
           description="Rascunho temporario pronto para envio, sem gravacao no banco."
         >
           <div className="grid gap-3">
-            {offers.temporaryOffers.map((offer) => (
+            {offers.consolidatedTemporaryOffers.map((offer) => (
               <div key={offer.id} className="grid gap-2">
                 <p className="text-sm font-bold text-inest-text">
                   {offer.template?.name || 'Template comercial'}
