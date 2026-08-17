@@ -14,6 +14,7 @@ import {
 import { CommercialTemplate, OfferItem } from '../types/offers';
 import {
   OfferDraft,
+  OfferDraftBatchStorage,
   PricingItem,
   TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '@/features/pricing/types/pricing';
@@ -29,8 +30,10 @@ export function useOffers(initialProductId?: string | null) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [temporaryOfferDraft, setTemporaryOfferDraft] = useState<OfferDraft | null>(null);
+  const [temporaryOfferDrafts, setTemporaryOfferDrafts] = useState<OfferDraft[]>([]);
   const [temporaryOffer, setTemporaryOffer] = useState<OfferItem | null>(null);
+  const [temporaryOffers, setTemporaryOffers] = useState<OfferItem[]>([]);
+  const [temporaryOfferFailedCount, setTemporaryOfferFailedCount] = useState(0);
   const hasIncomingDraft = useRef(false);
 
   useEffect(() => {
@@ -40,7 +43,10 @@ export function useOffers(initialProductId?: string | null) {
     window.sessionStorage.removeItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
     try {
       hasIncomingDraft.current = true;
-      setTemporaryOfferDraft(JSON.parse(storedDraft) as OfferDraft);
+      const prepared = JSON.parse(storedDraft) as OfferDraft | OfferDraftBatchStorage;
+      const batch = toOfferDraftBatch(prepared);
+      setTemporaryOfferDrafts(batch.drafts);
+      setTemporaryOfferFailedCount(batch.failedCount);
     } catch {
       setError('Nao foi possivel carregar a oferta preparada pela Precificacao.');
     }
@@ -84,50 +90,33 @@ export function useOffers(initialProductId?: string | null) {
   }, [load]);
 
   useEffect(() => {
-    if (!temporaryOfferDraft || !templates.length) return;
+    if (!temporaryOfferDrafts.length || !templates.length) return;
 
-    const template = findTemplateForProductType(
-      templates,
-      temporaryOfferDraft.productType,
-    );
-    if (!template) return;
-
-    const payload = temporaryOfferDraft.payload;
-    const draftIdentity = payload.productId ?? payload.sourceQuoteId;
-    if (!draftIdentity) {
-      setError('Oferta preparada sem identificador de origem.');
-      return;
+    const preparedOffers: OfferItem[] = [];
+    for (const draft of temporaryOfferDrafts) {
+      const preparedOffer = prepareTemporaryOffer(draft, templates);
+      if (!preparedOffer) {
+        setError('Oferta preparada sem identificador de origem.');
+        return;
+      }
+      preparedOffers.push(preparedOffer);
     }
-    const offerPrice = formatCurrency(payload.offerPrice);
-    const message = renderOfferMessage(template.content, {
-      produto: payload.productName,
-      modelo: payload.productName,
-      cor: payload.color,
-      capacidade: payload.capacity,
-      preco: formatCurrency(payload.salePrice),
-      preco_oferta: offerPrice,
-      prazo: payload.deliveryTime || 'Prazo conforme oferta',
-      garantia: payload.warranty,
-    });
 
-    const preparedOffer: OfferItem = {
-      id: draftIdentity,
-      template,
-      message,
-      status: 'DRAFT',
-      salePrice: payload.salePrice,
-      offerPrice: payload.offerPrice,
-      whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
-      productId: null,
-      createdAt: new Date().toISOString(),
-    };
-
-    setSelectedProductId(payload.productId ?? '');
-    setSelectedTemplateId(template.id);
-    setTemporaryOffer(preparedOffer);
-    setCurrentOffer(preparedOffer);
-    setSuccess('Oferta preparada com o template comercial padrao.');
-  }, [templates, temporaryOfferDraft]);
+    const firstOffer = preparedOffers[0];
+    if (!firstOffer) return;
+    setSelectedProductId(firstOffer.productId ?? '');
+    setSelectedTemplateId(firstOffer.template?.id ?? '');
+    setTemporaryOffer(firstOffer);
+    setTemporaryOffers(preparedOffers);
+    setCurrentOffer(firstOffer);
+    setSuccess(
+      temporaryOfferFailedCount
+        ? `${preparedOffers.length} ofertas preparadas. ${temporaryOfferFailedCount} item(ns) nao puderam ser processados.`
+        : preparedOffers.length === 1
+          ? 'Oferta preparada com o template comercial padrao.'
+          : `${preparedOffers.length} ofertas preparadas com o template comercial padrao.`,
+    );
+  }, [templates, temporaryOfferDrafts, temporaryOfferFailedCount]);
 
   const selectedProduct = useMemo(
     () => pricingItems.find((item) => item.productId === selectedProductId) ?? null,
@@ -220,6 +209,7 @@ export function useOffers(initialProductId?: string | null) {
     selectedTemplateId,
     currentOffer,
     temporaryOffer,
+    temporaryOffers,
     loading,
     saving,
     error,
@@ -232,6 +222,50 @@ export function useOffers(initialProductId?: string | null) {
     share,
     duplicate,
     remove,
+  };
+}
+
+function toOfferDraftBatch(prepared: OfferDraft | OfferDraftBatchStorage): OfferDraftBatchStorage {
+  if ('drafts' in prepared && Array.isArray(prepared.drafts)) {
+    return prepared;
+  }
+
+  return { drafts: [prepared as OfferDraft], failedCount: 0 };
+}
+
+function prepareTemporaryOffer(
+  draft: OfferDraft,
+  templates: CommercialTemplate[],
+): OfferItem | null {
+  const template = findTemplateForProductType(templates, draft.productType);
+  if (!template) return null;
+
+  const payload = draft.payload;
+  const draftIdentity = payload.productId ?? payload.sourceQuoteId;
+  if (!draftIdentity) return null;
+
+  const offerPrice = formatCurrency(payload.offerPrice);
+  const message = renderOfferMessage(template.content, {
+    produto: payload.productName,
+    modelo: payload.productName,
+    cor: payload.color,
+    capacidade: payload.capacity,
+    preco: formatCurrency(payload.salePrice),
+    preco_oferta: offerPrice,
+    prazo: payload.deliveryTime || 'Prazo conforme oferta',
+    garantia: payload.warranty,
+  });
+
+  return {
+    id: draftIdentity,
+    template,
+    message,
+    status: 'DRAFT',
+    salePrice: payload.salePrice,
+    offerPrice: payload.offerPrice,
+    whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
+    productId: payload.productId,
+    createdAt: new Date().toISOString(),
   };
 }
 

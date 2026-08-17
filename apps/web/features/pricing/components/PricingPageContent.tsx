@@ -24,6 +24,7 @@ import {
 } from '@/features/price-radar/utils/brazil-radar-facets';
 import { ProductFacetsDrawer, buildFacetOptions } from '@/features/price-radar/components/ProductFacetsDrawer';
 import { getProductCardPresentation } from '@/utils/product-card-presentation';
+import { PricingOfferTarget } from '../types/pricing';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -53,6 +54,7 @@ export function PricingPageContent() {
   const [profitModalOpen, setProfitModalOpen] = useState(false);
   const [profitValue, setProfitValue] = useState('');
   const [profitModalError, setProfitModalError] = useState<string | null>(null);
+  const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(() => new Set());
   const [profitItem, setProfitItem] = useState<ReturnType<typeof usePricing>['brazilRadarPricings'][number] | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
   const models = useMemo(
@@ -103,6 +105,25 @@ export function PricingPageContent() {
     () => pricing.items.slice((page - 1) * pageSize, page * pageSize),
     [page, pageSize, pricing.items],
   );
+  const selectablePageItems = useMemo(
+    () => paginatedItems.filter((item) => item.googleSheetsReady),
+    [paginatedItems],
+  );
+  const selectedOfferTargets = useMemo<PricingOfferTarget[]>(() => {
+    const catalogTargets = pricing.items
+      .filter((item) => item.googleSheetsReady && selectedOfferIds.has(catalogSelectionId(item.productId)))
+      .map((item) => ({ id: catalogSelectionId(item.productId), kind: 'catalog' as const, productId: item.productId }));
+    const radarTargets = pricing.brazilRadarPricings
+      .filter(
+        (item) =>
+          item.calculationStatus === 'ready' &&
+          item.offerDraft !== null &&
+          selectedOfferIds.has(radarSelectionId(item.sourceQuoteId)),
+      )
+      .map((item) => ({ id: radarSelectionId(item.sourceQuoteId), kind: 'brazil-radar' as const, item }));
+
+    return [...catalogTargets, ...radarTargets];
+  }, [pricing.brazilRadarPricings, pricing.items, selectedOfferIds]);
 
   useEffect(() => {
     setPage(1);
@@ -111,6 +132,42 @@ export function PricingPageContent() {
   function clearFilters() {
     pricing.setFilters(initialFilters);
     setPage(1);
+  }
+
+  function setOfferSelection(id: string, selected: boolean) {
+    setSelectedOfferIds((current) => {
+      const next = new Set(current);
+      if (selected) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function selectCurrentPage(selected: boolean) {
+    setSelectedOfferIds((current) => {
+      const next = new Set(current);
+      selectablePageItems.forEach((item) => {
+        const id = catalogSelectionId(item.productId);
+        if (selected) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  }
+
+  async function generateSelectedOffers() {
+    const result = await pricing.prepareOfferBatch(selectedOfferTargets);
+    if (!result) return;
+
+    setSelectedOfferIds((current) => {
+      const next = new Set(current);
+      result.successfulIds.forEach((id) => next.delete(id));
+      return next;
+    });
+
+    if (result.drafts.length) {
+      pricing.sendOfferDraftBatch(result.drafts, result.failedIds.length);
+    }
   }
 
   function openProfitModal(item: ReturnType<typeof usePricing>['brazilRadarPricings'][number]) {
@@ -196,6 +253,44 @@ export function PricingPageContent() {
 
       <section className="min-h-[calc(100vh-330px)]">
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
+          {selectedOfferTargets.length ? (
+            <div className="sticky top-2 z-10 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-inest-blue/30 bg-white p-3 shadow-card">
+              <strong className="text-sm text-inest-text">
+                {selectedOfferTargets.length} {selectedOfferTargets.length === 1 ? 'produto selecionado' : 'produtos selecionados'}
+              </strong>
+              <div className="flex items-center gap-2">
+                <ActionButton
+                  variant="secondary"
+                  className="h-9 px-3 text-xs"
+                  disabled={pricing.saving}
+                  onClick={() => setSelectedOfferIds(new Set())}
+                >
+                  Limpar selecao
+                </ActionButton>
+                <ActionButton
+                  variant="success"
+                  className="h-9 px-3 text-xs"
+                  disabled={pricing.saving}
+                  onClick={() => void generateSelectedOffers()}
+                >
+                  {pricing.saving ? 'Preparando...' : 'Gerar Ofertas'}
+                </ActionButton>
+              </div>
+            </div>
+          ) : null}
+          {selectablePageItems.length ? (
+            <label className="mb-3 flex w-fit items-center gap-2 text-sm font-bold text-inest-text">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-inest-blue"
+                checked={selectablePageItems.every((item) =>
+                  selectedOfferIds.has(catalogSelectionId(item.productId)),
+                )}
+                onChange={(event) => selectCurrentPage(event.target.checked)}
+              />
+              Selecionar pagina
+            </label>
+          ) : null}
           <div className="grid gap-3">
             {pricing.loading ? <LoadingState /> : null}
             {!pricing.loading &&
@@ -215,6 +310,10 @@ export function PricingPageContent() {
                         key={item.sourceQuoteId}
                         item={item}
                         generating={pricing.saving}
+                        selected={selectedOfferIds.has(radarSelectionId(item.sourceQuoteId))}
+                        onSelect={(selected) =>
+                          setOfferSelection(radarSelectionId(item.sourceQuoteId), selected)
+                        }
                         onGenerateOffer={() => pricing.generateBrazilRadarOffer(item)}
                         onRegisterProfit={() => openProfitModal(item)}
                       />
@@ -231,6 +330,10 @@ export function PricingPageContent() {
                     key={item.productId}
                     item={item}
                     generating={pricing.saving}
+                    selected={selectedOfferIds.has(catalogSelectionId(item.productId))}
+                    onSelect={(productId, selected) =>
+                      setOfferSelection(catalogSelectionId(productId), selected)
+                    }
                     onGenerateOffer={(productId) => void pricing.generateOffer(productId)}
                   />
                     ))}
@@ -331,14 +434,26 @@ export function PricingPageContent() {
   );
 }
 
+function catalogSelectionId(productId: string) {
+  return `catalog:${productId}`;
+}
+
+function radarSelectionId(sourceQuoteId: string) {
+  return `radar:${sourceQuoteId}`;
+}
+
 function BrazilRadarQuotePricingCard({
   item,
   generating,
+  selected,
+  onSelect,
   onGenerateOffer,
   onRegisterProfit,
 }: {
   item: ReturnType<typeof usePricing>['brazilRadarPricings'][number];
   generating: boolean;
+  selected: boolean;
+  onSelect: (selected: boolean) => void;
   onGenerateOffer: () => void;
   onRegisterProfit: () => void;
 }) {
@@ -352,7 +467,16 @@ function BrazilRadarQuotePricingCard({
   const ready = item.calculationStatus === 'ready' && item.offerDraft !== null;
 
   return (
-    <article className="grid w-full gap-3 rounded-xl border border-green-200 bg-white p-3 shadow-card md:grid-cols-[64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+    <article className="grid w-full gap-3 rounded-xl border border-green-200 bg-white p-3 shadow-card md:grid-cols-[28px_64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+      <label className="flex h-8 w-8 items-center justify-center" aria-label={`Selecionar ${presentation.title}`}>
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-inest-blue"
+          checked={selected}
+          disabled={generating || !ready}
+          onChange={(event) => onSelect(event.target.checked)}
+        />
+      </label>
       <div className="grid h-16 w-16 place-items-center rounded-lg bg-green-50 font-display text-lg font-black text-inest-green">
         BR
       </div>

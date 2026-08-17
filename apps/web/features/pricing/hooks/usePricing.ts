@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   calculateBrazilRadarQuotePricing,
@@ -13,12 +13,15 @@ import {
   BrazilRadarPricingBatchStorage,
   BRAZIL_RADAR_PRICING_STORAGE_KEY,
   OfferDraft,
+  OfferDraftBatchStorage,
   PricingFilters,
   PricingItem,
+  PricingOfferTarget,
   TemporaryImportPricing,
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
   TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '../types/pricing';
+import { prepareOfferDraftBatch } from '../services/offer-draft-batch';
 import {
   getCanonicalCapacities,
   getCanonicalCategory,
@@ -61,6 +64,7 @@ export function usePricing() {
   const [temporaryImportPricing, setTemporaryImportPricing] =
     useState<TemporaryImportPricing | null>(null);
   const [brazilRadarPricings, setBrazilRadarPricings] = useState<BrazilRadarQuotePricing[]>([]);
+  const offerBatchPending = useRef(false);
 
   useEffect(() => {
     const stored = window.sessionStorage.getItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY);
@@ -177,7 +181,47 @@ export function usePricing() {
   }
 
   function generateBrazilRadarOffer(item: BrazilRadarQuotePricing) {
-    if (!item.offerDraft) return;
+    sendOfferDraft(toBrazilRadarOfferDraft(item));
+  }
+
+  async function prepareOfferBatch(targets: PricingOfferTarget[]) {
+    if (!targets.length || offerBatchPending.current) return null;
+
+    offerBatchPending.current = true;
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await prepareOfferDraftBatch(targets, async (target) => {
+        if (target.kind === 'catalog') {
+          return { ...(await generateOfferDraft(target.productId)), source: 'pricing' };
+        }
+
+        return toBrazilRadarOfferDraft(target.item);
+      });
+
+      if (!result.drafts.length) {
+        setError(result.errors[0] ?? 'Nenhuma oferta pode ser preparada.');
+      }
+
+      return result;
+    } finally {
+      offerBatchPending.current = false;
+      setSaving(false);
+    }
+  }
+
+  function sendOfferDraftBatch(drafts: OfferDraft[], failedCount: number) {
+    const batch: OfferDraftBatchStorage = { drafts, failedCount };
+    window.sessionStorage.setItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY, JSON.stringify(batch));
+    router.push('/offers');
+  }
+
+  function toBrazilRadarOfferDraft(item: BrazilRadarQuotePricing): OfferDraft {
+    if (!item.offerDraft) {
+      throw new Error('A cotacao nao esta pronta para gerar oferta.');
+    }
+
     const isIphone = /iphone/i.test(item.product.name);
     const productType = isIphone
       ? item.profit.condition === 'NOVO'
@@ -185,11 +229,11 @@ export function usePricing() {
         : 'IPHONE_USED'
       : 'ACCESSORY';
 
-    sendOfferDraft({
+    return {
       ...item.offerDraft,
       productType,
       source: 'radar-quote',
-    });
+    };
   }
 
   async function registerBrazilRadarProfit(item: BrazilRadarQuotePricing, netProfit: string) {
@@ -283,6 +327,8 @@ export function usePricing() {
     generateOffer,
     generateTemporaryOffer,
     generateBrazilRadarOffer,
+    prepareOfferBatch,
+    sendOfferDraftBatch,
     registerBrazilRadarProfit,
   };
 }

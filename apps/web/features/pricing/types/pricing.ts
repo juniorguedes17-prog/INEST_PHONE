@@ -119,6 +119,15 @@ export interface BrazilRadarPricingBatchStorage {
   failedCount: number;
 }
 
+export interface OfferDraftBatchStorage {
+  drafts: OfferDraft[];
+  failedCount: number;
+}
+
+export type PricingOfferTarget =
+  | { id: string; kind: 'catalog'; productId: string }
+  | { id: string; kind: 'brazil-radar'; item: BrazilRadarQuotePricing };
+
 export interface TemporaryImportPricingRequest {
   productId: string;
   productName: string;

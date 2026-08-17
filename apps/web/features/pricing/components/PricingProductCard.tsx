@@ -6,12 +6,16 @@ import { PricingItem } from '../types/pricing';
 interface PricingProductCardProps {
   item: PricingItem;
   generating: boolean;
+  selected: boolean;
+  onSelect: (productId: string, selected: boolean) => void;
   onGenerateOffer: (productId: string) => void;
 }
 
 export const PricingProductCard = memo(function PricingProductCard({
   item,
   generating,
+  selected,
+  onSelect,
   onGenerateOffer,
 }: PricingProductCardProps) {
   const presentation = getProductCardPresentation({
@@ -23,7 +27,16 @@ export const PricingProductCard = memo(function PricingProductCard({
   });
 
   return (
-    <article className="grid w-full gap-3 rounded-xl border border-inest-line bg-white p-3 shadow-card transition-colors hover:border-slate-300 hover:bg-slate-50/60 focus-within:ring-2 focus-within:ring-inest-blue/30 md:grid-cols-[64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+    <article className="grid w-full gap-3 rounded-xl border border-inest-line bg-white p-3 shadow-card transition-colors hover:border-slate-300 hover:bg-slate-50/60 focus-within:ring-2 focus-within:ring-inest-blue/30 md:grid-cols-[28px_64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+      <label className="flex h-8 w-8 items-center justify-center" aria-label={`Selecionar ${presentation.title}`}>
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-inest-blue"
+          checked={selected}
+          disabled={generating || !item.googleSheetsReady}
+          onChange={(event) => onSelect(item.productId, event.target.checked)}
+        />
+      </label>
       <div className="grid h-16 w-16 place-items-center rounded-lg bg-inest-soft font-display text-lg font-black text-inest-blue">
         {item.category?.slice(0, 2).toUpperCase() || 'IN'}
       </div>
