@@ -138,6 +138,7 @@ export function ProductsPageContent() {
                       getProductCardPresentation({
                         canonicalDescription: product.productDescription,
                         rawDescription: getProductTitle(product),
+                        condition: product.profitCondition,
                         capacity: product.storage?.displayName,
                         color: product.color?.name,
                       }).attributes
