@@ -21,6 +21,10 @@ export const defaultSettings: Required<UpdateSettingsDto> = {
     defaultMargin: 0,
     defaultDiscount: 0,
   },
+  pricing: {
+    commercialRoundingEnding1: 49,
+    commercialRoundingEnding2: 70,
+  },
   importation: {
     dollarQuote: 5.35,
     cdeExitPerBox: 110,

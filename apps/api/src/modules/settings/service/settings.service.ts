@@ -1,5 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
+import {
+  COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
+  COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
+  hasValidCommercialPriceEndings,
+  normalizeCommercialPriceEndings,
+  PRICING_CONFIGURATION_SCOPE,
+} from '../../pricing/utils/commercial-price-rounding';
 import { UpdateSettingsDto } from '../dto/settings.dto';
 import { SettingsRepository } from '../repository/settings.repository';
 import { defaultSettings } from '../settings.defaults';
@@ -10,10 +17,11 @@ export class SettingsService {
   constructor(@Inject(SettingsRepository) private readonly settingsRepository: SettingsRepository) {}
 
   async getSettings(): Promise<Required<UpdateSettingsDto>> {
-    const [systemConfigurations, financialConfiguration, importConfiguration] = await Promise.all([
+    const [systemConfigurations, financialConfiguration, importConfiguration, pricingConfigurations] = await Promise.all([
       this.settingsRepository.findSystemConfigurations(),
       this.settingsRepository.findFinancialConfiguration(),
       this.settingsRepository.findImportConfiguration(),
+      this.settingsRepository.findSystemConfigurations(PRICING_CONFIGURATION_SCOPE),
     ]);
 
     const system = Object.fromEntries(systemConfigurations.map((item) => [item.key, item.value]));
@@ -38,6 +46,7 @@ export class SettingsService {
             defaultDiscount: toNumber(financialConfiguration.discount),
           }
         : defaultSettings.financial,
+      pricing: this.getPricingSettings(pricingConfigurations),
       importation: importConfiguration
         ? {
             dollarQuote: toNumber(importConfiguration.dollarQuote),
@@ -100,6 +109,7 @@ export class SettingsService {
     const nextSettings = {
       general: settings.general ?? oldValue.general,
       financial: settings.financial ?? oldValue.financial,
+      pricing: settings.pricing ?? oldValue.pricing,
       importation: settings.importation ?? oldValue.importation,
       usaFinancial: settings.usaFinancial
         ? { ...settings.usaFinancial, lastUpdated: new Date().toISOString() }
@@ -108,7 +118,9 @@ export class SettingsService {
       userPreferences: settings.userPreferences ?? oldValue.userPreferences,
     };
 
+    this.assertValidPricingSettings(nextSettings.pricing);
     await this.persistSystemSettings(nextSettings);
+    await this.persistPricingSettings(nextSettings.pricing);
     await this.settingsRepository.upsertFinancialConfiguration(nextSettings.financial, user?.id);
     await this.settingsRepository.upsertImportConfiguration(nextSettings.importation);
 
@@ -130,6 +142,7 @@ export class SettingsService {
 
     await this.settingsRepository.deleteSystemConfigurations();
     await this.persistSystemSettings(defaultSettings);
+    await this.persistPricingSettings(defaultSettings.pricing);
     await this.settingsRepository.upsertFinancialConfiguration(defaultSettings.financial, user?.id);
     await this.settingsRepository.upsertImportConfiguration(defaultSettings.importation);
 
@@ -185,6 +198,48 @@ export class SettingsService {
         this.settingsRepository.upsertSystemConfiguration(key, value, type),
       ),
     );
+  }
+
+  private getPricingSettings(pricingConfigurations: Array<{ key: string; value: string }>) {
+    const endings = normalizeCommercialPriceEndings([
+      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_ONE_KEY)?.value,
+      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_TWO_KEY)?.value,
+    ]);
+
+    return {
+      commercialRoundingEnding1: endings[0]!,
+      commercialRoundingEnding2: endings[1]!,
+    };
+  }
+
+  private async persistPricingSettings(settings: Required<UpdateSettingsDto>['pricing']) {
+    const endings = this.assertValidPricingSettings(settings);
+
+    await Promise.all([
+      this.settingsRepository.upsertSystemConfiguration(
+        COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
+        String(endings[0]!),
+        'numero',
+        PRICING_CONFIGURATION_SCOPE,
+      ),
+      this.settingsRepository.upsertSystemConfiguration(
+        COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
+        String(endings[1]!),
+        'numero',
+        PRICING_CONFIGURATION_SCOPE,
+      ),
+    ]);
+  }
+
+  private assertValidPricingSettings(settings: Required<UpdateSettingsDto>['pricing']) {
+    const endings = [settings.commercialRoundingEnding1, settings.commercialRoundingEnding2];
+    if (!hasValidCommercialPriceEndings(endings)) {
+      throw new BadRequestException(
+        'Os finais comerciais devem ser inteiros diferentes entre 0 e 99.',
+      );
+    }
+
+    return endings;
   }
 
   private parseTheme(value?: string) {

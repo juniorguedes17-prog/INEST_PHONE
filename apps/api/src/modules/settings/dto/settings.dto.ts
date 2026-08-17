@@ -5,6 +5,7 @@ import {
   IsDateString,
   IsEmail,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
@@ -69,6 +70,20 @@ export class FinancialSettingsDto {
   @IsNumber()
   @Min(0)
   defaultDiscount!: number;
+}
+
+export class PricingSettingsDto {
+  @ApiProperty()
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  commercialRoundingEnding1!: number;
+
+  @ApiProperty()
+  @IsInt()
+  @Min(0)
+  @Max(99)
+  commercialRoundingEnding2!: number;
 }
 
 export class ImportRedirectRuleDto {
@@ -238,6 +253,12 @@ export class UpdateSettingsDto {
   @ValidateNested()
   @Type(() => FinancialSettingsDto)
   financial?: FinancialSettingsDto;
+
+  @ApiProperty({ type: PricingSettingsDto, required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PricingSettingsDto)
+  pricing?: PricingSettingsDto;
 
   @ApiProperty({ type: ImportSettingsDto, required: false })
   @IsOptional()

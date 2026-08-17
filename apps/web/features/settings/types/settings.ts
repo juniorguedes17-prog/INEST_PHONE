@@ -16,6 +16,11 @@ export interface FinancialSettings {
   defaultDiscount: number;
 }
 
+export interface PricingSettings {
+  commercialRoundingEnding1: number;
+  commercialRoundingEnding2: number;
+}
+
 export interface ImportRedirectRule {
   productType: string;
   matchTerms: string[];
@@ -64,6 +69,7 @@ export interface UserPreferences {
 export interface SettingsPayload {
   general: GeneralSettings;
   financial: FinancialSettings;
+  pricing: PricingSettings;
   importation: ImportSettings;
   usaFinancial: UsaFinancialSettings;
   offers: OfferSettings;

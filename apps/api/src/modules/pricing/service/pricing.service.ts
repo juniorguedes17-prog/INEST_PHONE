@@ -19,6 +19,12 @@ import {
 } from '../providers/google-sheets-profit.provider';
 import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { OFFER_INCREMENT_KEY, PricingRepository } from '../repository/pricing.repository';
+import {
+  COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
+  COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
+  normalizeCommercialPriceEndings,
+  roundUpToCommercialPrice,
+} from '../utils/commercial-price-rounding';
 import { quoteIsValid, toNumber } from '../validators/pricing.validators';
 import {
   compareProfitIdentityResults,
@@ -75,6 +81,7 @@ export class PricingService {
     const offerIncrement = toNumber(
       pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
     );
+    const commercialEndings = this.getCommercialPriceEndings(pricingConfigurations);
     const bestQuotes = this.getBestQuotesByProduct(quotes);
 
     const catalog = Array.from(bestQuotes.values()).map((quote) => {
@@ -94,10 +101,12 @@ export class PricingService {
       const paymentFee = toNumber(settings.financial.defaultPaymentFee);
       const desiredNetProfit =
         profitLookup.status === 'found' ? profitLookup.record.netProfit : null;
-      const salePrice =
+      const basePrice =
         desiredNetProfit === null
           ? null
           : costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
+      const salePrice =
+        basePrice === null ? null : roundUpToCommercialPrice(basePrice, commercialEndings);
       const offerPrice = salePrice === null ? null : salePrice + offerIncrement;
       const calculationError =
         profitLookup.status === 'not_found'
@@ -472,10 +481,14 @@ export class PricingService {
     const offerIncrement = toNumber(
       pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
     );
-    const salePrice =
+    const basePrice =
       desiredNetProfit === null
         ? null
         : costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
+    const salePrice =
+      basePrice === null
+        ? null
+        : roundUpToCommercialPrice(basePrice, this.getCommercialPriceEndings(pricingConfigurations));
     const offerPrice = salePrice === null ? null : salePrice + offerIncrement;
 
     return {
@@ -488,6 +501,17 @@ export class PricingService {
       margin:
         salePrice !== null && desiredNetProfit !== null ? desiredNetProfit / salePrice : null,
     };
+  }
+
+  private getCommercialPriceEndings(
+    pricingConfigurations: Awaited<ReturnType<PricingRepository['listPricingConfigurations']>>,
+  ) {
+    return normalizeCommercialPriceEndings([
+      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_ONE_KEY)
+        ?.value,
+      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_TWO_KEY)
+        ?.value,
+    ]);
   }
 
   private resolveBrazilRadarProfitCondition(condition?: string | null): ProfitCondition {

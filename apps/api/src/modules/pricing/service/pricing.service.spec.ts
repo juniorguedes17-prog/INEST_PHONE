@@ -5,6 +5,10 @@ import { PricingBrazilRadarQuoteRecord } from '../interfaces/pricing-prisma.inte
 import { ProfitSheetCatalog } from '../interfaces/profit-sheet.interface';
 import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { PricingRepository } from '../repository/pricing.repository';
+import {
+  COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
+  COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
+} from '../utils/commercial-price-rounding';
 import { PricingService } from './pricing.service';
 
 const BRAZIL_QUOTE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -108,8 +112,8 @@ describe('PricingService native product profit integration', () => {
 
     expect(item).toMatchObject({
       desiredNetProfit: 1190,
-      salePrice: 6540,
-      offerPrice: 6640,
+      salePrice: 6549,
+      offerPrice: 6649,
       profitSource: 'native_product_catalog',
       calculationStatus: 'ready',
     });
@@ -169,12 +173,12 @@ describe('PricingService native product profit integration', () => {
   });
 
   it.each([
-    ['NOVO', 'iPhone 17 Pro Max 256GB', 690],
-    ['SEMINOVO', 'iPhone 16 Pro 256GB', 549],
-    ['CPO', 'iPhone 17 Pro Max 256GB', 690],
+    ['NOVO', 'iPhone 17 Pro Max 256GB', 690, 6049],
+    ['SEMINOVO', 'iPhone 16 Pro 256GB', 549, 5949],
+    ['CPO', 'iPhone 17 Pro Max 256GB', 690, 6049],
   ] as const)(
     'uses the native %s profit record for temporary radar pricing',
-    async (condition, productDescription, expectedProfit) => {
+    async (condition, productDescription, expectedProfit, expectedSalePrice) => {
       const repository = {
         listPricingConfigurations: vi
           .fn()
@@ -232,8 +236,8 @@ describe('PricingService native product profit integration', () => {
       expect(result).toMatchObject({
         desiredNetProfit: expectedProfit,
         pricingCosts: { fixedCost: 200, freight: 50, paymentFee: 100 },
-        salePrice: 5350 + expectedProfit,
-        offerPrice: 5450 + expectedProfit,
+        salePrice: expectedSalePrice,
+        offerPrice: expectedSalePrice + 100,
         profit: { source: 'native_product_catalog', condition },
         offerDraft: {
           payload: {
@@ -244,6 +248,63 @@ describe('PricingService native product profit integration', () => {
       });
     },
   );
+
+  it('applies commercial endings configured in the pricing scope', async () => {
+    const repository = {
+      listPricingConfigurations: vi.fn().mockResolvedValue([
+        { key: 'offer_increment', value: '100', type: 'currency' },
+        { key: COMMERCIAL_ROUNDING_ENDING_ONE_KEY, value: '90', type: 'number' },
+        { key: COMMERCIAL_ROUNDING_ENDING_TWO_KEY, value: '49', type: 'number' },
+      ]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records: [
+          {
+            productId: '1',
+            condition: 'NOVO',
+            productDescription: 'iPhone 17 128GB',
+            normalizedDescription: 'iphone 17 128gb',
+            netProfit: 5,
+          },
+        ],
+        fetchedAt: '2026-08-17T00:00:00.000Z',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateTemporaryImport({
+      productId: 'radar-py-1',
+      productName: 'iPhone 17 128GB',
+      category: 'iPhone',
+      supplier: 'Fornecedor',
+      store: 'Loja',
+      productUrl: 'https://example.com/product',
+      priceUsd: 1000,
+      dollarQuote: 5,
+      convertedPrice: 5000,
+      cdeExit: 0,
+      redirectCost: 0,
+      brazilDispatch: 0,
+      invoiceTax: 0,
+      correiosLabel: 0,
+      totalCost: 5000,
+      model: 'iPhone 17 128GB',
+      condition: 'NOVO',
+    });
+
+    expect(result).toMatchObject({
+      desiredNetProfit: 5,
+      salePrice: 5390,
+      offerPrice: 5490,
+      margin: 5 / 5390,
+    });
+  });
 
   it.each([
     ['iPhone', 'iPhone 17 Pro Max', '256GB'],
@@ -305,8 +366,8 @@ describe('PricingService native product profit integration', () => {
         costProduct: 5000,
         desiredNetProfit: 690,
         pricingCosts: { fixedCost: 200, freight: 50, paymentFee: 100, offerIncrement: 100 },
-        salePrice: 6040,
-        offerPrice: 6140,
+        salePrice: 6049,
+        offerPrice: 6149,
         calculationStatus: 'ready',
         offerDraft: {
           payload: {
@@ -443,8 +504,8 @@ describe('PricingService native product profit integration', () => {
     expect(result).toMatchObject({
       calculationStatus: 'ready',
       desiredNetProfit: 500,
-      salePrice: 5850,
-      offerPrice: 5950,
+      salePrice: 5870,
+      offerPrice: 5970,
       profit: {
         source: 'native_product_catalog',
         condition: 'NOVO',
@@ -573,13 +634,13 @@ describe('PricingService native product profit integration', () => {
     expect(orange).toMatchObject({
       costProduct: 6580,
       desiredNetProfit: 500,
-      salePrice: 7430,
+      salePrice: 7449,
       profit: { recordId: '38' },
     });
     expect(white).toMatchObject({
       costProduct: 6780,
       desiredNetProfit: 500,
-      salePrice: 7630,
+      salePrice: 7649,
       profit: { recordId: '38' },
     });
   });
@@ -629,8 +690,8 @@ describe('PricingService native product profit integration', () => {
       costProduct: 11250,
       desiredNetProfit: 1300,
       pricingCosts: { fixedCost: 200, freight: 50, paymentFee: 100, offerIncrement: 100 },
-      salePrice: 12900,
-      offerPrice: 13000,
+      salePrice: 12949,
+      offerPrice: 13049,
       profit: { source: 'native_product_catalog', condition: 'NOVO', recordId: '14' },
     });
   });

@@ -284,6 +284,37 @@ export function SettingsPageContent() {
             />
           </div>
         </SettingsCard>
+
+        <SettingsCard
+          eyebrow="Precificacao"
+          title="Arredondamento de preco"
+          description="Finais comerciais aplicados para cima ao preco de venda."
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextInput
+              label="Final comercial 1"
+              type="number"
+              value={String(settings.pricing.commercialRoundingEnding1)}
+              onChange={(value) =>
+                updateSettings((current) => ({
+                  ...current,
+                  pricing: { ...current.pricing, commercialRoundingEnding1: toNumber(value) },
+                }))
+              }
+            />
+            <TextInput
+              label="Final comercial 2"
+              type="number"
+              value={String(settings.pricing.commercialRoundingEnding2)}
+              onChange={(value) =>
+                updateSettings((current) => ({
+                  ...current,
+                  pricing: { ...current.pricing, commercialRoundingEnding2: toNumber(value) },
+                }))
+              }
+            />
+          </div>
+        </SettingsCard>
       </div>
 
       <SettingsCard

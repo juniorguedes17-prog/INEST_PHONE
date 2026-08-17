@@ -21,20 +21,20 @@ import {
 export class SettingsRepository {
   constructor(@Inject(PrismaService) private readonly prismaService: PrismaService) {}
 
-  findSystemConfigurations(): Promise<SystemConfigurationRecord[]> {
+  findSystemConfigurations(scope = SETTINGS_SCOPE): Promise<SystemConfigurationRecord[]> {
     return this.prisma.systemConfiguration.findMany({
       where: {
-        scope: SETTINGS_SCOPE,
+        scope,
       },
     });
   }
 
-  async upsertSystemConfiguration(key: string, value: string, type = 'texto') {
+  async upsertSystemConfiguration(key: string, value: string, type = 'texto', scope = SETTINGS_SCOPE) {
     return this.prisma.systemConfiguration.upsert({
       where: {
         key_scope: {
           key,
-          scope: SETTINGS_SCOPE,
+          scope,
         },
       },
       update: {
@@ -45,7 +45,7 @@ export class SettingsRepository {
         key,
         value,
         type,
-        scope: SETTINGS_SCOPE,
+        scope,
       },
     });
   }
