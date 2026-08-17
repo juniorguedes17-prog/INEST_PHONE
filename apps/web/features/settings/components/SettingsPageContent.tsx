@@ -315,6 +315,25 @@ export function SettingsPageContent() {
             />
           </div>
         </SettingsCard>
+
+        <SettingsCard
+          eyebrow="Precificacao"
+          title="Acrescimo padrao da oferta"
+          description="Valor opcional adicionado ao preco ao gerar uma oferta."
+        >
+          <div className="max-w-sm">
+            <CurrencyInput
+              label="Acrescimo padrao"
+              value={settings.pricing.offerIncrement}
+              onChange={(event) =>
+                updateSettings((current) => ({
+                  ...current,
+                  pricing: { ...current.pricing, offerIncrement: toNumber(event.target.value) },
+                }))
+              }
+            />
+          </div>
+        </SettingsCard>
       </div>
 
       <SettingsCard

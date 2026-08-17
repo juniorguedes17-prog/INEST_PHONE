@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { OfferDraft } from '../types/pricing';
 import { prepareOfferDraftBatch } from './offer-draft-batch';
+import { applyOfferDraftPrice } from './offer-draft-price';
 
 type Target = { id: string; supplier: string; color: string; condition: string };
 
@@ -77,4 +78,34 @@ test('ignores a duplicated selected identifier', async () => {
 
   assert.equal(calls, 1);
   assert.equal(result.drafts.length, 1);
+});
+
+test('applies the same offer increment decision to every selected draft', async () => {
+  const salePrices = [4349, 5370, 6449, 7070, 8249];
+  const targets = salePrices.map((salePrice, index) => ({
+    id: `product-${index + 1}`,
+    supplier: 'Fornecedor',
+    color: 'Preto',
+    condition: 'NOVO',
+    salePrice,
+  }));
+  const prepareDraft = (target: (typeof targets)[number], includeOfferIncrement: boolean) => {
+    const draft = draftFor(target);
+    return applyOfferDraftPrice(
+      { ...draft, payload: { ...draft.payload, salePrice: target.salePrice } },
+      includeOfferIncrement,
+      100,
+    );
+  };
+
+  const withIncrement = await prepareOfferDraftBatch(targets, async (target) =>
+    prepareDraft(target, true),
+  );
+  const withoutIncrement = await prepareOfferDraftBatch(targets, async (target) =>
+    prepareDraft(target, false),
+  );
+
+  assert.deepEqual(withIncrement.drafts.map((draft) => draft.payload.offerPrice), [4449, 5470, 6549, 7170, 8349]);
+  assert.deepEqual(withoutIncrement.drafts.map((draft) => draft.payload.offerPrice), salePrices);
+  assert.deepEqual(withIncrement.drafts.map((draft) => draft.payload.salePrice), salePrices);
 });

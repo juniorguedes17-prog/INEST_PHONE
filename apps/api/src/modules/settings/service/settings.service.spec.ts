@@ -5,6 +5,7 @@ import {
   COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
   PRICING_CONFIGURATION_SCOPE,
 } from '../../pricing/utils/commercial-price-rounding';
+import { OFFER_INCREMENT_KEY } from '../../pricing/utils/offer-increment';
 import { SettingsRepository } from '../repository/settings.repository';
 import { SettingsService } from './settings.service';
 
@@ -32,6 +33,7 @@ describe('SettingsService commercial price endings', () => {
 
     await expect(service.getSettings()).resolves.toMatchObject({
       pricing: {
+        offerIncrement: 100,
         commercialRoundingEnding1: 49,
         commercialRoundingEnding2: 70,
       },
@@ -47,6 +49,7 @@ describe('SettingsService commercial price endings', () => {
 
     await expect(service.getSettings()).resolves.toMatchObject({
       pricing: {
+        offerIncrement: 100,
         commercialRoundingEnding1: 49,
         commercialRoundingEnding2: 70,
       },
@@ -59,11 +62,18 @@ describe('SettingsService commercial price endings', () => {
 
     await service.updateSettings({
       pricing: {
+        offerIncrement: 100.5,
         commercialRoundingEnding1: 70,
         commercialRoundingEnding2: 49,
       },
     });
 
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      OFFER_INCREMENT_KEY,
+      '100.5',
+      'moeda',
+      PRICING_CONFIGURATION_SCOPE,
+    );
     expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
       COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
       '70',
@@ -86,12 +96,42 @@ describe('SettingsService commercial price endings', () => {
     await expect(
       service.updateSettings({
         pricing: {
+          offerIncrement: 100,
           commercialRoundingEnding1: 49,
           commercialRoundingEnding2: 49,
         },
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
-    expect(settings.pricing).toEqual({ commercialRoundingEnding1: 49, commercialRoundingEnding2: 70 });
+    expect(settings.pricing).toEqual({
+      offerIncrement: 100,
+      commercialRoundingEnding1: 49,
+      commercialRoundingEnding2: 70,
+    });
+  });
+
+  it('falls back to R$100 for an invalid stored offer increment', async () => {
+    const repository = createRepository([{ key: OFFER_INCREMENT_KEY, value: '-1' }]);
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(service.getSettings()).resolves.toMatchObject({
+      pricing: { offerIncrement: 100 },
+    });
+  });
+
+  it.each([-1, 100.555])('rejects invalid offer increment %s before writing settings', async (offerIncrement) => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(
+      service.updateSettings({
+        pricing: {
+          offerIncrement,
+          commercialRoundingEnding1: 49,
+          commercialRoundingEnding2: 70,
+        },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
   });
 });

@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from '@/components/shared';
 import { usePricing } from '../hooks/usePricing';
+import { useSettings } from '@/features/settings/hooks/useSettings';
 import { PricingProductCard } from './PricingProductCard';
 import { PricingToolbar } from './PricingToolbar';
 import {
@@ -47,7 +48,12 @@ const initialFilters = {
 };
 
 export function PricingPageContent() {
-  const pricing = usePricing();
+  const { settings: settingsPayload } = useSettings();
+  const [includeOfferIncrement, setIncludeOfferIncrement] = useState(true);
+  const pricing = usePricing({
+    includeOfferIncrement,
+    offerIncrement: settingsPayload?.pricing.offerIncrement,
+  });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -253,6 +259,18 @@ export function PricingPageContent() {
 
       <section className="min-h-[calc(100vh-330px)]">
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
+          <label className="mb-3 flex w-fit items-center gap-2 rounded-xl border border-inest-line bg-white px-3 py-2 text-sm font-bold text-inest-text shadow-card">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-inest-green"
+              checked={includeOfferIncrement}
+              onChange={(event) => setIncludeOfferIncrement(event.target.checked)}
+            />
+            <span>Adicionar acrescimo a oferta</span>
+            <span className="text-xs text-inest-muted">
+              {settingsPayload ? `+ ${formatCurrency(settingsPayload.pricing.offerIncrement)}` : 'Carregando acrescimo'}
+            </span>
+          </label>
           {selectedOfferTargets.length ? (
             <div className="sticky top-2 z-10 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-inest-blue/30 bg-white p-3 shadow-card">
               <strong className="text-sm text-inest-text">

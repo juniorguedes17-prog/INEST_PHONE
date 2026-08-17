@@ -22,6 +22,7 @@ export const defaultSettings: Required<UpdateSettingsDto> = {
     defaultDiscount: 0,
   },
   pricing: {
+    offerIncrement: 100,
     commercialRoundingEnding1: 49,
     commercialRoundingEnding2: 70,
   },

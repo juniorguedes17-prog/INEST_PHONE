@@ -7,6 +7,11 @@ import {
   normalizeCommercialPriceEndings,
   PRICING_CONFIGURATION_SCOPE,
 } from '../../pricing/utils/commercial-price-rounding';
+import {
+  hasValidOfferIncrement,
+  normalizeOfferIncrement,
+  OFFER_INCREMENT_KEY,
+} from '../../pricing/utils/offer-increment';
 import { UpdateSettingsDto } from '../dto/settings.dto';
 import { SettingsRepository } from '../repository/settings.repository';
 import { defaultSettings } from '../settings.defaults';
@@ -207,15 +212,25 @@ export class SettingsService {
     ]);
 
     return {
+      offerIncrement: normalizeOfferIncrement(
+        pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value,
+      ),
       commercialRoundingEnding1: endings[0]!,
       commercialRoundingEnding2: endings[1]!,
     };
   }
 
   private async persistPricingSettings(settings: Required<UpdateSettingsDto>['pricing']) {
-    const endings = this.assertValidPricingSettings(settings);
+    this.assertValidPricingSettings(settings);
+    const endings = [settings.commercialRoundingEnding1, settings.commercialRoundingEnding2];
 
     await Promise.all([
+      this.settingsRepository.upsertSystemConfiguration(
+        OFFER_INCREMENT_KEY,
+        String(settings.offerIncrement),
+        'moeda',
+        PRICING_CONFIGURATION_SCOPE,
+      ),
       this.settingsRepository.upsertSystemConfiguration(
         COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
         String(endings[0]!),
@@ -239,7 +254,9 @@ export class SettingsService {
       );
     }
 
-    return endings;
+    if (!hasValidOfferIncrement(settings.offerIncrement)) {
+      throw new BadRequestException('O acrescimo da oferta deve ser um valor nao negativo com ate duas casas decimais.');
+    }
   }
 
   private parseTheme(value?: string) {

@@ -17,6 +17,7 @@ export interface FinancialSettings {
 }
 
 export interface PricingSettings {
+  offerIncrement: number;
   commercialRoundingEnding1: number;
   commercialRoundingEnding2: number;
 }

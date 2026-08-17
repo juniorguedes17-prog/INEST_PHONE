@@ -25,6 +25,7 @@ import {
   normalizeCommercialPriceEndings,
   roundUpToCommercialPrice,
 } from '../utils/commercial-price-rounding';
+import { normalizeOfferIncrement } from '../utils/offer-increment';
 import { quoteIsValid, toNumber } from '../validators/pricing.validators';
 import {
   compareProfitIdentityResults,
@@ -78,9 +79,7 @@ export class PricingService {
       this.profitProvider.getCatalog(),
     ]);
 
-    const offerIncrement = toNumber(
-      pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
-    );
+    const offerIncrement = this.getOfferIncrement(pricingConfigurations);
     const commercialEndings = this.getCommercialPriceEndings(pricingConfigurations);
     const bestQuotes = this.getBestQuotesByProduct(quotes);
 
@@ -478,9 +477,7 @@ export class PricingService {
     const fixedCost = toNumber(settings.financial.globalFixedCost);
     const freight = toNumber(settings.financial.defaultFreight);
     const paymentFee = toNumber(settings.financial.defaultPaymentFee);
-    const offerIncrement = toNumber(
-      pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value ?? 100,
-    );
+    const offerIncrement = this.getOfferIncrement(pricingConfigurations);
     const basePrice =
       desiredNetProfit === null
         ? null
@@ -512,6 +509,14 @@ export class PricingService {
       pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_TWO_KEY)
         ?.value,
     ]);
+  }
+
+  private getOfferIncrement(
+    pricingConfigurations: Awaited<ReturnType<PricingRepository['listPricingConfigurations']>>,
+  ) {
+    return normalizeOfferIncrement(
+      pricingConfigurations.find((item) => item.key === OFFER_INCREMENT_KEY)?.value,
+    );
   }
 
   private resolveBrazilRadarProfitCondition(condition?: string | null): ProfitCondition {

@@ -22,6 +22,7 @@ import {
   TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '../types/pricing';
 import { prepareOfferDraftBatch } from '../services/offer-draft-batch';
+import { applyOfferDraftPrice } from '../services/offer-draft-price';
 import {
   getCanonicalCapacities,
   getCanonicalCategory,
@@ -52,7 +53,13 @@ const initialFilters: PricingFilters = {
   sort: 'lowest_price',
 };
 
-export function usePricing() {
+export function usePricing({
+  includeOfferIncrement = true,
+  offerIncrement,
+}: {
+  includeOfferIncrement?: boolean;
+  offerIncrement?: number;
+} = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [items, setItems] = useState<PricingItem[]>([]);
@@ -158,7 +165,7 @@ export function usePricing() {
     setSuccess(null);
     try {
       const draft = await generateOfferDraft(productId);
-      sendOfferDraft({ ...draft, source: 'pricing' });
+      sendOfferDraft(applyOfferPrice({ ...draft, source: 'pricing' }));
     } catch (pricingError) {
       setError(
         pricingError instanceof Error ? pricingError.message : 'Nao foi possivel gerar a oferta.',
@@ -177,11 +184,13 @@ export function usePricing() {
         : 'IPHONE_USED'
       : 'ACCESSORY';
 
-    sendOfferDraft({ ...temporaryImportPricing.offerDraft, productType, source: 'temporary-import' });
+    sendOfferDraft(
+      applyOfferPrice({ ...temporaryImportPricing.offerDraft, productType, source: 'temporary-import' }),
+    );
   }
 
   function generateBrazilRadarOffer(item: BrazilRadarQuotePricing) {
-    sendOfferDraft(toBrazilRadarOfferDraft(item));
+    sendOfferDraft(applyOfferPrice(toBrazilRadarOfferDraft(item)));
   }
 
   async function prepareOfferBatch(targets: PricingOfferTarget[]) {
@@ -194,10 +203,10 @@ export function usePricing() {
     try {
       const result = await prepareOfferDraftBatch(targets, async (target) => {
         if (target.kind === 'catalog') {
-          return { ...(await generateOfferDraft(target.productId)), source: 'pricing' };
+          return applyOfferPrice({ ...(await generateOfferDraft(target.productId)), source: 'pricing' });
         }
 
-        return toBrazilRadarOfferDraft(target.item);
+        return applyOfferPrice(toBrazilRadarOfferDraft(target.item));
       });
 
       if (!result.drafts.length) {
@@ -311,6 +320,10 @@ export function usePricing() {
   function sendOfferDraft(draft: OfferDraft) {
     window.sessionStorage.setItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
     router.push(draft.route);
+  }
+
+  function applyOfferPrice(draft: OfferDraft) {
+    return applyOfferDraftPrice(draft, includeOfferIncrement, offerIncrement);
   }
 
   return {

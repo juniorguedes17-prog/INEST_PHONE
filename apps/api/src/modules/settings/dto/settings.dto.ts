@@ -74,6 +74,11 @@ export class FinancialSettingsDto {
 
 export class PricingSettingsDto {
   @ApiProperty()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  offerIncrement!: number;
+
+  @ApiProperty()
   @IsInt()
   @Min(0)
   @Max(99)

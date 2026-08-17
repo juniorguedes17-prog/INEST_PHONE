@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PricingPrismaClient } from '../interfaces/pricing-prisma.interface';
+export { OFFER_INCREMENT_KEY } from '../utils/offer-increment';
 
 export const PRICING_SCOPE = 'pricing';
-export const OFFER_INCREMENT_KEY = 'offer_increment';
 export const MODEL_PROFIT_PREFIX = 'model_profit.';
 
 @Injectable()
