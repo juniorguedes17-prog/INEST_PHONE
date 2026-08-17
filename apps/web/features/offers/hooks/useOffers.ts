@@ -110,7 +110,28 @@ export function useOffers(initialProductId?: string | null) {
 
     const firstOffer = preparedOffers[0];
     if (!firstOffer) return;
+    console.debug('[offers.consolidation.runtime]', {
+      beforeCount: preparedOffers.length,
+      items: preparedOffers.map((offer) => ({
+        productName: offer.sourceDraft.payload.productName,
+        templateId: offer.template.id,
+        templateName: offer.template.name,
+        productType: offer.sourceDraft.productType,
+        sourceQuoteId: offer.sourceDraft.payload.sourceQuoteId,
+      })),
+    });
     const consolidatedOffers = prepareConsolidatedTemporaryOffers(preparedOffers);
+    console.debug('[offers.consolidation.runtime]', {
+      beforeCount: preparedOffers.length,
+      items: preparedOffers.map((offer) => ({
+        productName: offer.sourceDraft.payload.productName,
+        templateId: offer.template.id,
+        templateName: offer.template.name,
+        productType: offer.sourceDraft.productType,
+        sourceQuoteId: offer.sourceDraft.payload.sourceQuoteId,
+      })),
+      afterCount: consolidatedOffers.length,
+    });
     const firstConsolidatedOffer = consolidatedOffers[0];
     if (!firstConsolidatedOffer) return;
     setSelectedProductId(firstOffer.productId ?? '');
