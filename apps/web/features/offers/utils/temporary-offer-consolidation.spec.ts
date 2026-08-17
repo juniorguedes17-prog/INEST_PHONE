@@ -61,6 +61,41 @@ function draft(index: number, productType = 'IPHONE_SEALED'): OfferDraft {
   };
 }
 
+function draftForProduct({
+  id,
+  productId,
+  productName,
+  color,
+  capacity,
+  offerPrice,
+  productType = 'IPHONE_SEALED',
+}: {
+  id: string;
+  productId: string | null;
+  productName: string;
+  color: string;
+  capacity: string;
+  offerPrice: number;
+  productType?: string;
+}): OfferDraft {
+  return {
+    targetModule: 'offers',
+    route: '/offers',
+    productType,
+    payload: {
+      productId,
+      sourceQuoteId: `quote-${id}`,
+      productName,
+      color,
+      capacity,
+      salePrice: offerPrice + 200,
+      offerPrice,
+      deliveryTime: 'Entrega imediata',
+      warranty: 'Garantia iNest',
+    },
+  };
+}
+
 function prepare(drafts: OfferDraft[]) {
   return drafts.map((item) => {
     const result = prepareTemporaryOffer(item, [sealedTemplate, usedTemplate]);
@@ -114,6 +149,125 @@ test('consolidates five runtime drafts with the same editable template id', () =
       ),
     );
   });
+});
+
+test('groups four colors of the same product configuration into one variant block', () => {
+  const productName = 'iPhone 17 256GB As Is';
+  const drafts = [
+    draftForProduct({
+      id: 'black',
+      productId: 'iphone-17-256-as-is',
+      productName,
+      color: 'Preto',
+      capacity: '256GB',
+      offerPrice: 5139,
+    }),
+    draftForProduct({
+      id: 'blue',
+      productId: 'iphone-17-256-as-is',
+      productName,
+      color: 'Azul',
+      capacity: '256GB',
+      offerPrice: 5189,
+    }),
+    draftForProduct({
+      id: 'lavender',
+      productId: 'iphone-17-256-as-is',
+      productName,
+      color: 'Lavender',
+      capacity: '256GB',
+      offerPrice: 5190,
+    }),
+    draftForProduct({
+      id: 'white',
+      productId: 'iphone-17-256-as-is',
+      productName,
+      color: 'Branco',
+      capacity: '256GB',
+      offerPrice: 5220,
+    }),
+  ];
+  const [consolidated] = prepareConsolidatedTemporaryOffers(
+    prepareWithTemplate(drafts, runtimeSealedTemplate),
+  );
+
+  assert.ok(consolidated);
+  assert.equal(occurrences(consolidated.message, productName), 1);
+  assert.equal(occurrences(consolidated.message, '256GB'), 1);
+  assert.match(consolidated.message, /⚫ Preto: R\$\s?5\.139,00/);
+  assert.match(consolidated.message, /🔵 Azul: R\$\s?5\.189,00/);
+  assert.match(consolidated.message, /🟣 Lavender: R\$\s?5\.190,00/);
+  assert.match(consolidated.message, /⚪ Branco: R\$\s?5\.220,00/);
+
+  const positions = ['Preto', 'Azul', 'Lavender', 'Branco'].map((color) =>
+    consolidated.message.indexOf(color),
+  );
+  assert.ok(positions[0]! < positions[1]! && positions[1]! < positions[2]! && positions[2]! < positions[3]!);
+});
+
+test('keeps product configurations and seminovos separated when they cannot be proven equal', () => {
+  const drafts = [
+    draftForProduct({
+      id: 'base-black',
+      productId: 'iphone-17-256',
+      productName: 'iPhone 17 256GB',
+      color: 'Preto',
+      capacity: '256GB',
+      offerPrice: 5000,
+    }),
+    draftForProduct({
+      id: 'base-blue',
+      productId: 'iphone-17-256',
+      productName: 'iPhone 17 256GB',
+      color: 'Azul',
+      capacity: '256GB',
+      offerPrice: 5050,
+    }),
+    draftForProduct({
+      id: 'pro-black',
+      productId: 'iphone-17-pro-256',
+      productName: 'iPhone 17 Pro 256GB',
+      color: 'Preto',
+      capacity: '256GB',
+      offerPrice: 6500,
+    }),
+    draftForProduct({
+      id: 'storage-128',
+      productId: null,
+      productName: 'iPhone 17 128GB',
+      color: 'Branco',
+      capacity: '128GB',
+      offerPrice: 4700,
+    }),
+    draftForProduct({
+      id: 'used-a',
+      productId: 'iphone-used',
+      productName: 'iPhone 17 256GB',
+      color: 'Preto',
+      capacity: '256GB',
+      offerPrice: 4200,
+      productType: 'IPHONE_USED',
+    }),
+    draftForProduct({
+      id: 'used-b',
+      productId: 'iphone-used',
+      productName: 'iPhone 17 256GB',
+      color: 'Azul',
+      capacity: '256GB',
+      offerPrice: 4250,
+      productType: 'IPHONE_USED',
+    }),
+  ];
+  const consolidated = prepareConsolidatedTemporaryOffers(
+    prepareWithTemplate(drafts, runtimeSealedTemplate),
+  );
+  const [message] = consolidated.map((offer) => offer.message);
+
+  assert.equal(consolidated.length, 1);
+  assert.ok(message);
+  assert.equal(occurrences(message, 'iPhone 17 256GB'), 3);
+  assert.equal(occurrences(message, 'iPhone 17 Pro 256GB'), 1);
+  assert.equal(occurrences(message, 'iPhone 17 128GB'), 1);
 });
 
 for (const count of [2, 5, 10]) {

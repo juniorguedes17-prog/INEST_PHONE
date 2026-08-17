@@ -59,8 +59,8 @@ function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): OfferItem | 
   if (!sections) return null;
 
   const header = renderTemplate(sections.header, toConsolidatedTemplateVariables(firstOffer.sourceDraft));
-  const products = group.map((offer) =>
-    renderOfferMessage(sections.product, toConsolidatedTemplateVariables(offer.sourceDraft)),
+  const products = groupOffersByConfiguration(group).map((productGroup) =>
+    renderProductConfiguration(sections.productHeading, productGroup),
   );
   const footer = renderTemplate(sections.footer, toConsolidatedTemplateVariables(firstOffer.sourceDraft));
   const message = normalizeMessageSpacing([header, ...products, footer].filter(Boolean).join('\n\n'));
@@ -72,23 +72,93 @@ function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): OfferItem | 
   };
 }
 
+function groupOffersByConfiguration(offers: PreparedTemporaryOffer[]) {
+  const groups = new Map<string, PreparedTemporaryOffer[]>();
+
+  offers.forEach((offer, index) => {
+    const configurationKey = getProductConfigurationKey(offer);
+    const groupKey = configurationKey ?? `unverified-${index}`;
+    const group = groups.get(groupKey);
+    if (group) group.push(offer);
+    else groups.set(groupKey, [offer]);
+  });
+
+  return Array.from(groups.values());
+}
+
+function getProductConfigurationKey(offer: PreparedTemporaryOffer) {
+  const { productType, payload } = offer.sourceDraft;
+  if (productType === 'IPHONE_USED' || productType === 'APPLE_CPO') return null;
+
+  return JSON.stringify({
+    productId: payload.productId,
+    productName: payload.productName,
+    capacity: payload.capacity,
+    productType: productType ?? null,
+  });
+}
+
+function renderProductConfiguration(
+  productHeadingTemplate: string,
+  offers: PreparedTemporaryOffer[],
+) {
+  const firstOffer = offers[0];
+  if (!firstOffer) return '';
+
+  const heading = renderTemplate(
+    productHeadingTemplate,
+    toProductHeadingVariables(firstOffer.sourceDraft),
+  );
+  const variants = offers.map((offer) => formatVariantLine(offer.sourceDraft)).filter(Boolean);
+
+  return normalizeMessageSpacing([heading, ...variants].filter(Boolean).join('\n'));
+}
+
+function formatVariantLine(draft: OfferDraft) {
+  const color = formatColorLabel(draft.payload.color);
+  const price = formatCurrency(draft.payload.offerPrice);
+  return color ? `${color}: ${price}` : `💰 ${price}`;
+}
+
+function formatColorLabel(color: string) {
+  const labels: Record<string, string> = {
+    azul: '🔵 Azul',
+    branco: '⚪ Branco',
+    lavender: '🟣 Lavender',
+    laranja: '🟠 Laranja',
+    preto: '⚫ Preto',
+    roxo: '🟣 Roxo',
+  };
+  const normalizedColor = color.trim().toLocaleLowerCase('pt-BR');
+  return labels[normalizedColor] ?? color.trim();
+}
+
 function splitTemplateForProducts(template: string) {
   const productMarkerIndex = findFirstMarkerIndex(template, ['{{produto}}', '{{modelo}}']);
   if (productMarkerIndex === -1) return null;
 
-  const productDetailMarkerIndex = findLastMarkerIndex(
+  const firstProductDetailMarkerIndex = findFirstMarkerIndexAfter(
+    template,
+    ['{{cor}}', '{{cores}}', '{{capacidade}}', '{{preco_oferta}}', '{{preco}}'],
+    productMarkerIndex,
+  );
+  const lastProductDetailMarkerIndex = findLastMarkerIndex(
     template,
     ['{{cor}}', '{{cores}}', '{{capacidade}}', '{{preco_oferta}}', '{{preco}}'],
     productMarkerIndex,
   );
 
   const productStart = template.lastIndexOf('\n', productMarkerIndex) + 1;
-  const productEndLine = template.indexOf('\n', productDetailMarkerIndex);
+  const productHeadingEnd =
+    firstProductDetailMarkerIndex === -1
+      ? template.indexOf('\n', productMarkerIndex)
+      : template.lastIndexOf('\n', firstProductDetailMarkerIndex) + 1;
+  const productEndLine = template.indexOf('\n', lastProductDetailMarkerIndex);
   const productEnd = productEndLine === -1 ? template.length : productEndLine;
 
   return {
     header: template.slice(0, productStart).trimEnd(),
-    product: template.slice(productStart, productEnd).trim(),
+    productHeading: template.slice(productStart, productHeadingEnd).trim(),
     footer: template.slice(productEnd).trimStart(),
   };
 }
@@ -106,6 +176,14 @@ function findLastMarkerIndex(template: string, markers: string[], fromIndex: num
     const markerIndex = template.lastIndexOf(marker);
     return markerIndex >= fromIndex ? Math.max(lastIndex, markerIndex) : lastIndex;
   }, fromIndex);
+}
+
+function findFirstMarkerIndexAfter(template: string, markers: string[], fromIndex: number) {
+  return markers.reduce((firstIndex, marker) => {
+    const markerIndex = template.indexOf(marker, fromIndex);
+    if (markerIndex === -1) return firstIndex;
+    return firstIndex === -1 ? markerIndex : Math.min(firstIndex, markerIndex);
+  }, -1);
 }
 
 function toTemplateVariables(draft: OfferDraft): Record<string, string> {
@@ -127,6 +205,22 @@ function toConsolidatedTemplateVariables(draft: OfferDraft): Record<string, stri
   return {
     ...toTemplateVariables(draft),
     cores: [payload.color, payload.capacity].filter(Boolean).join(' '),
+  };
+}
+
+function toProductHeadingVariables(draft: OfferDraft): Record<string, string> {
+  const payload = draft.payload;
+  const productName = payload.productName.trim();
+  const capacity = payload.capacity.trim();
+  const productLabel =
+    capacity && !productName.toLocaleLowerCase('pt-BR').includes(capacity.toLocaleLowerCase('pt-BR'))
+      ? `${productName} ${capacity}`
+      : productName;
+
+  return {
+    ...toConsolidatedTemplateVariables(draft),
+    produto: productLabel,
+    modelo: productLabel,
   };
 }
 
