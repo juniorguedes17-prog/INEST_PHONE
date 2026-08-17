@@ -5,6 +5,7 @@ import { CommercialTemplate } from '../types/offers';
 import {
   prepareConsolidatedTemporaryOffers,
   prepareTemporaryOffer,
+  renderTemporaryOfferMessage,
 } from './temporary-offer-consolidation';
 
 const sealedTemplate: CommercialTemplate = {
@@ -34,7 +35,9 @@ const runtimeSealedTemplate: CommercialTemplate = {
   name: 'Template Oficial - Produtos Lacrados',
   productType: 'IPHONE_SEALED',
   status: 'ACTIVE',
-  content: `HEADER EDITAVEL {{garantia}} {{prazo}}
+  content: `HEADER EDITAVEL {{garantia}}
+
+✈️ Prazo de entrega: {{prazo}}
 
 📱 {{modelo}}
 
@@ -203,6 +206,34 @@ test('groups four colors of the same product configuration into one variant bloc
     consolidated.message.indexOf(color),
   );
   assert.ok(positions[0]! < positions[1]! && positions[1]! < positions[2]! && positions[2]! < positions[3]!);
+});
+
+test('rerenders the consolidated message with each supported delivery time', () => {
+  const drafts = Array.from({ length: 5 }, (_, index) => draft(index + 1));
+  const [consolidated] = prepareConsolidatedTemporaryOffers(
+    prepareWithTemplate(drafts, runtimeSealedTemplate),
+  );
+  assert.ok(consolidated);
+
+  const deliveryTimes = [
+    'Em até 3 dias úteis',
+    'De 3 a 5 dias úteis',
+    'De 5 a 7 dias úteis',
+    'De 8 a 10 dias úteis',
+    'De 11 a 15 dias úteis',
+    'De 25 a 30 dias úteis',
+  ];
+
+  assert.match(
+    renderTemporaryOfferMessage(consolidated, 'Prazo conforme oferta'),
+    /Prazo conforme oferta/,
+  );
+  deliveryTimes.forEach((deliveryTime) => {
+    const message = renderTemporaryOfferMessage(consolidated, deliveryTime);
+    assert.match(message, new RegExp(`Prazo de entrega: ${deliveryTime}`));
+    assert.equal(occurrences(message, 'HEADER EDITAVEL'), 1);
+    assert.equal(occurrences(message, 'CTA EDITAVEL'), 1);
+  });
 });
 
 test('keeps product configurations and seminovos separated when they cannot be proven equal', () => {

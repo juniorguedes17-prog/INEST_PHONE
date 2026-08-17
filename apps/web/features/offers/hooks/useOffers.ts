@@ -21,6 +21,7 @@ import {
 import {
   findTemplateForProductType,
   PreparedTemporaryOffer,
+  TemporaryOfferItem,
   prepareConsolidatedTemporaryOffers,
   prepareTemporaryOffer,
 } from '../utils/temporary-offer-consolidation';
@@ -38,7 +39,7 @@ export function useOffers(initialProductId?: string | null) {
   const [success, setSuccess] = useState<string | null>(null);
   const [temporaryOfferDrafts, setTemporaryOfferDrafts] = useState<OfferDraft[]>([]);
   const [temporaryOffer, setTemporaryOffer] = useState<OfferItem | null>(null);
-  const [consolidatedTemporaryOffers, setConsolidatedTemporaryOffers] = useState<OfferItem[]>([]);
+  const [consolidatedTemporaryOffers, setConsolidatedTemporaryOffers] = useState<TemporaryOfferItem[]>([]);
   const [temporaryOfferFailedCount, setTemporaryOfferFailedCount] = useState(0);
   const hasIncomingDraft = useRef(false);
 
@@ -171,15 +172,15 @@ export function useOffers(initialProductId?: string | null) {
 
   async function copy(offer: OfferItem) {
     await navigator.clipboard.writeText(offer.message);
-    if (offer.productId) {
+    if (offer.productId && !('sourceDrafts' in offer)) {
       await registerOfferCopy(offer.id);
     }
     setSuccess('Texto copiado.');
   }
 
   async function share(offer: OfferItem) {
-    if (!offer.productId) {
-      window.open(offer.whatsappUrl, '_blank');
+    if (!offer.productId || 'sourceDrafts' in offer) {
+      window.open(`https://wa.me/?text=${encodeURIComponent(offer.message)}`, '_blank');
       return;
     }
     const result = await shareOffer(offer.id);

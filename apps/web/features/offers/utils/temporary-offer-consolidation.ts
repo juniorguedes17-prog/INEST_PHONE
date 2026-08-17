@@ -1,8 +1,12 @@
 import { OfferDraft } from '@/features/pricing/types/pricing';
 import { CommercialTemplate, OfferItem } from '../types/offers';
 
-export interface PreparedTemporaryOffer extends OfferItem {
+export interface TemporaryOfferItem extends OfferItem {
   template: CommercialTemplate;
+  sourceDrafts: OfferDraft[];
+}
+
+export interface PreparedTemporaryOffer extends TemporaryOfferItem {
   sourceDraft: OfferDraft;
 }
 
@@ -29,13 +33,14 @@ export function prepareTemporaryOffer(
     whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
     productId: payload.productId,
     createdAt: new Date().toISOString(),
+    sourceDrafts: [draft],
     sourceDraft: draft,
   };
 }
 
 export function prepareConsolidatedTemporaryOffers(
   offers: PreparedTemporaryOffer[],
-): OfferItem[] {
+): TemporaryOfferItem[] {
   const groups = new Map<string, PreparedTemporaryOffer[]>();
 
   for (const offer of offers) {
@@ -50,7 +55,7 @@ export function prepareConsolidatedTemporaryOffers(
   });
 }
 
-function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): OfferItem | null {
+function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): TemporaryOfferItem | null {
   const firstOffer = group[0];
   if (!firstOffer) return null;
   if (group.length === 1) return firstOffer;
@@ -58,18 +63,61 @@ function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): OfferItem | 
   const sections = splitTemplateForProducts(firstOffer.template.content);
   if (!sections) return null;
 
-  const header = renderTemplate(sections.header, toConsolidatedTemplateVariables(firstOffer.sourceDraft));
-  const products = groupOffersByConfiguration(group).map((productGroup) =>
-    renderProductConfiguration(sections.productHeading, productGroup),
-  );
-  const footer = renderTemplate(sections.footer, toConsolidatedTemplateVariables(firstOffer.sourceDraft));
-  const message = normalizeMessageSpacing([header, ...products, footer].filter(Boolean).join('\n\n'));
+  const message = renderConsolidatedMessage(firstOffer.template.content, group);
 
   return {
     ...firstOffer,
+    sourceDrafts: group.flatMap((offer) => offer.sourceDrafts),
     message,
     whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
   };
+}
+
+export function renderTemporaryOfferMessage(
+  offer: TemporaryOfferItem,
+  deliveryTime: string,
+) {
+  if (offer.sourceDrafts.length === 1) {
+    const [draft] = offer.sourceDrafts;
+    if (!draft) return offer.message;
+    return renderOfferMessage(
+      offer.template.content,
+      toTemplateVariables(draft, deliveryTime),
+    );
+  }
+
+  const preparedOffers = offer.sourceDrafts.map((draft) => ({
+    ...offer,
+    id: draft.payload.productId ?? draft.payload.sourceQuoteId ?? offer.id,
+    sourceDrafts: [draft],
+    sourceDraft: draft,
+  }));
+  return renderConsolidatedMessage(offer.template.content, preparedOffers, deliveryTime);
+}
+
+function renderConsolidatedMessage(
+  template: string,
+  group: PreparedTemporaryOffer[],
+  deliveryTime?: string,
+) {
+  const firstOffer = group[0];
+  if (!firstOffer) return '';
+
+  const sections = splitTemplateForProducts(template);
+  if (!sections) return firstOffer.message;
+
+  const header = renderTemplate(
+    sections.header,
+    toConsolidatedTemplateVariables(firstOffer.sourceDraft, deliveryTime),
+  );
+  const products = groupOffersByConfiguration(group).map((productGroup) =>
+    renderProductConfiguration(sections.productHeading, productGroup, deliveryTime),
+  );
+  const footer = renderTemplate(
+    sections.footer,
+    toConsolidatedTemplateVariables(firstOffer.sourceDraft, deliveryTime),
+  );
+  return normalizeMessageSpacing([header, ...products, footer].filter(Boolean).join('\n\n'));
 }
 
 function groupOffersByConfiguration(offers: PreparedTemporaryOffer[]) {
@@ -101,13 +149,14 @@ function getProductConfigurationKey(offer: PreparedTemporaryOffer) {
 function renderProductConfiguration(
   productHeadingTemplate: string,
   offers: PreparedTemporaryOffer[],
+  deliveryTime?: string,
 ) {
   const firstOffer = offers[0];
   if (!firstOffer) return '';
 
   const heading = renderTemplate(
     productHeadingTemplate,
-    toProductHeadingVariables(firstOffer.sourceDraft),
+    toProductHeadingVariables(firstOffer.sourceDraft, deliveryTime),
   );
   const variants = offers.map((offer) => formatVariantLine(offer.sourceDraft)).filter(Boolean);
 
@@ -186,7 +235,7 @@ function findFirstMarkerIndexAfter(template: string, markers: string[], fromInde
   }, -1);
 }
 
-function toTemplateVariables(draft: OfferDraft): Record<string, string> {
+function toTemplateVariables(draft: OfferDraft, deliveryTime?: string): Record<string, string> {
   const payload = draft.payload;
   return {
     produto: payload.productName,
@@ -195,20 +244,23 @@ function toTemplateVariables(draft: OfferDraft): Record<string, string> {
     capacidade: payload.capacity,
     preco: formatCurrency(payload.salePrice),
     preco_oferta: formatCurrency(payload.offerPrice),
-    prazo: payload.deliveryTime || 'Prazo conforme oferta',
+    prazo: deliveryTime || payload.deliveryTime || 'Prazo conforme oferta',
     garantia: payload.warranty,
   };
 }
 
-function toConsolidatedTemplateVariables(draft: OfferDraft): Record<string, string> {
+function toConsolidatedTemplateVariables(
+  draft: OfferDraft,
+  deliveryTime?: string,
+): Record<string, string> {
   const payload = draft.payload;
   return {
-    ...toTemplateVariables(draft),
+    ...toTemplateVariables(draft, deliveryTime),
     cores: [payload.color, payload.capacity].filter(Boolean).join(' '),
   };
 }
 
-function toProductHeadingVariables(draft: OfferDraft): Record<string, string> {
+function toProductHeadingVariables(draft: OfferDraft, deliveryTime?: string): Record<string, string> {
   const payload = draft.payload;
   const productName = payload.productName.trim();
   const capacity = payload.capacity.trim();
@@ -218,7 +270,7 @@ function toProductHeadingVariables(draft: OfferDraft): Record<string, string> {
       : productName;
 
   return {
-    ...toConsolidatedTemplateVariables(draft),
+    ...toConsolidatedTemplateVariables(draft, deliveryTime),
     produto: productLabel,
     modelo: productLabel,
   };

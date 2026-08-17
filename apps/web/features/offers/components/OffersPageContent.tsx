@@ -13,6 +13,7 @@ import {
   StatusBadge,
 } from '@/components/shared';
 import { useOffers } from '../hooks/useOffers';
+import { renderTemporaryOfferMessage } from '../utils/temporary-offer-consolidation';
 import { OfferListCard } from './OfferListCard';
 import { OffersToolbar } from './OffersToolbar';
 import {
@@ -38,9 +39,21 @@ const initialFilters = {
   date: '',
 };
 
+const deliveryTimeOptions = [
+  'Em até 3 dias úteis',
+  'De 3 a 5 dias úteis',
+  'De 5 a 7 dias úteis',
+  'De 8 a 10 dias úteis',
+  'De 11 a 15 dias úteis',
+  'De 25 a 30 dias úteis',
+] as const;
+
+const defaultDeliveryTime = 'Prazo conforme oferta';
+
 export function OffersPageContent() {
   const searchParams = useSearchParams();
   const offers = useOffers(searchParams.get('productId'));
+  const [temporaryDeliveryTimes, setTemporaryDeliveryTimes] = useState<Record<string, string>>({});
   const showingTemporaryOffer = Boolean(
     offers.currentOffer &&
       offers.consolidatedTemporaryOffers.some((offer) => offer.id === offers.currentOffer?.id),
@@ -172,14 +185,59 @@ export function OffersPageContent() {
                 <p className="text-sm font-bold text-inest-text">
                   {offer.template?.name || 'Template comercial'}
                 </p>
+                <label className="grid gap-1.5 text-sm font-bold text-inest-text">
+                  <span>Prazo de entrega</span>
+                  <select
+                    value={temporaryDeliveryTimes[offer.id] ?? ''}
+                    onChange={(event) =>
+                      setTemporaryDeliveryTimes((current) => ({
+                        ...current,
+                        [offer.id]: event.target.value || defaultDeliveryTime,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-inest-line bg-white px-3 py-2 font-normal outline-none focus:border-inest-blue"
+                  >
+                    <option value="">{defaultDeliveryTime}</option>
+                    {deliveryTimeOptions.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-inest-line bg-inest-soft p-3 text-sm leading-6 text-inest-text">
-                  {offer.message}
+                  {renderTemporaryOfferMessage(
+                    offer,
+                    temporaryDeliveryTimes[offer.id] || defaultDeliveryTime,
+                  )}
                 </pre>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <ActionButton variant="secondary" onClick={() => void offers.copy(offer)}>
+                  <ActionButton
+                    variant="secondary"
+                    onClick={() =>
+                      void offers.copy({
+                        ...offer,
+                        message: renderTemporaryOfferMessage(
+                          offer,
+                          temporaryDeliveryTimes[offer.id] || defaultDeliveryTime,
+                        ),
+                      })
+                    }
+                  >
                     Copiar texto
                   </ActionButton>
-                  <ActionButton variant="success" onClick={() => void offers.share(offer)}>
+                  <ActionButton
+                    variant="success"
+                    onClick={() =>
+                      void offers.share({
+                        ...offer,
+                        message: renderTemporaryOfferMessage(
+                          offer,
+                          temporaryDeliveryTimes[offer.id] || defaultDeliveryTime,
+                        ),
+                      })
+                    }
+                  >
                     Compartilhar
                   </ActionButton>
                 </div>
