@@ -3,8 +3,9 @@ import { ConfigService } from '@nestjs/config';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
+import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
-import { EvolutionMessage } from './evolution-webhook.types';
+import { EvolutionMessage, ParsedSupplierListItem } from './evolution-webhook.types';
 
 @Injectable()
 export class EvolutionWebhookService implements OnModuleInit {
@@ -30,6 +31,10 @@ export class EvolutionWebhookService implements OnModuleInit {
         );
         continue;
       }
+      this.processParsedSupplierItemsShadow(parsedItems, {
+        supplierContactId: currentList.supplierContactId,
+        sourceMessageId: currentList.sourceMessageId,
+      });
 
       if (hasEquivalentSnapshot(currentList.items, parsedItems)) continue;
 
@@ -97,6 +102,10 @@ export class EvolutionWebhookService implements OnModuleInit {
       );
       return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
+    this.processParsedSupplierItemsShadow(items, {
+      supplierContactId: supplier.id,
+      sourceMessageId: message.messageId,
+    });
 
     try {
       await this.prisma.$transaction(async (transaction) => {
@@ -147,6 +156,33 @@ export class EvolutionWebhookService implements OnModuleInit {
     const expectedSecret = this.config.get<string>('app.evolutionWebhookSecret', '');
     if (!enabled || !expectedSecret || !safeEqual(providedSecret, expectedSecret)) {
       throw new UnauthorizedException('Webhook nao autorizado.');
+    }
+  }
+
+  private processParsedSupplierItemsShadow(
+    items: readonly ParsedSupplierListItem[],
+    context: { supplierContactId: string; sourceMessageId: string },
+  ) {
+    for (const { item, identity } of processParsedSupplierItemsShadow(items)) {
+      this.logger.debug(
+        JSON.stringify({
+          event: 'evolution.product_identity.shadow',
+          supplierContactId: context.supplierContactId,
+          sourceMessageId: context.sourceMessageId,
+          rawLine: item.rawLine,
+          productName: item.productName,
+          canonicalModelKey: identity.canonical.canonicalModelKey || null,
+          canonicalCondition: identity.canonical.canonicalCondition,
+          canonicalStorage: identity.canonical.canonicalStorage,
+          canonicalRam: identity.canonical.canonicalRam,
+          canonicalScreen: identity.canonical.canonicalScreen,
+          canonicalConnectivity: identity.canonical.canonicalConnectivity,
+          canonicalColor: identity.canonical.canonicalColor,
+          identityStatus: identity.variant.status,
+          profitStatus: identity.profit.status,
+          missingAttributes: identity.profit.missingAttributes,
+        }),
+      );
     }
   }
 }

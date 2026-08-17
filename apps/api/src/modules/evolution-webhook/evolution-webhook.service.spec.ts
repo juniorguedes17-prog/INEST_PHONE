@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { EvolutionWebhookService } from './evolution-webhook.service';
 
@@ -41,6 +42,62 @@ function createService() {
 }
 
 describe('EvolutionWebhookService', () => {
+  it('executa a observacao shadow durante a ingestao sem alterar os itens persistidos', async () => {
+    const { service, transaction } = createService();
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-shadow', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'iPhone 17 Pro 256GB\nPreto R$ 6.400' },
+      },
+    });
+
+    const persistedItems = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0].create.items.create;
+    expect(persistedItems).toEqual([
+      expect.objectContaining({ price: 6400, rawLine: 'Preto R$ 6.400' }),
+    ]);
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining('evolution.product_identity.shadow'),
+    );
+    debug.mockRestore();
+  });
+
+  it('executa a mesma observacao shadow durante o repair sem regravar snapshot equivalente', async () => {
+    const { service, prisma } = createService();
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+    prisma.supplierCurrentList.findMany.mockResolvedValue([
+      {
+        id: 'current-list-id',
+        supplierContactId: 'supplier-contact-id',
+        sourceMessageId: 'message-repair-shadow',
+        rawContent: 'iPhone 17 Pro 256GB\nAzul R$ 6.150',
+        items: [
+          {
+            productName: 'iPhone 17 Pro 256GB',
+            normalizedName: 'iphone 17 pro 256gb',
+            category: 'iPhone',
+            model: 'iPhone 17 Pro 256GB',
+            capacity: '256GB',
+            color: 'azul',
+            condition: 'NOVO',
+            price: { toString: () => '6150' },
+            availability: null,
+            rawLine: 'Azul R$ 6.150',
+          },
+        ],
+      },
+    ]);
+
+    await service.onModuleInit();
+
+    expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining('evolution.product_identity.shadow'),
+    );
+    debug.mockRestore();
+  });
   it('reprocessa a lista atual a partir do texto original quando o formato de moeda mudou', async () => {
     const { service, prisma } = createService();
     prisma.supplierCurrentList.findMany.mockResolvedValue([
