@@ -58,11 +58,11 @@ function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): OfferItem | 
   const sections = splitTemplateForProducts(firstOffer.template.content);
   if (!sections) return null;
 
-  const header = renderTemplate(sections.header, toTemplateVariables(firstOffer.sourceDraft));
+  const header = renderTemplate(sections.header, toConsolidatedTemplateVariables(firstOffer.sourceDraft));
   const products = group.map((offer) =>
-    renderTemplate(sections.product, toTemplateVariables(offer.sourceDraft)),
+    renderOfferMessage(sections.product, toConsolidatedTemplateVariables(offer.sourceDraft)),
   );
-  const footer = renderTemplate(sections.footer, toTemplateVariables(firstOffer.sourceDraft));
+  const footer = renderTemplate(sections.footer, toConsolidatedTemplateVariables(firstOffer.sourceDraft));
   const message = normalizeMessageSpacing([header, ...products, footer].filter(Boolean).join('\n\n'));
 
   return {
@@ -73,15 +73,17 @@ function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): OfferItem | 
 }
 
 function splitTemplateForProducts(template: string) {
-  const productMarker = '{{produto}}';
-  const priceMarker = '{{preco_oferta}}';
-  const productMarkerIndex = template.indexOf(productMarker);
-  const priceMarkerIndex = template.indexOf(priceMarker, productMarkerIndex);
-  if (productMarkerIndex === -1 || priceMarkerIndex === -1) return null;
+  const productMarkerIndex = findFirstMarkerIndex(template, ['{{produto}}', '{{modelo}}']);
+  if (productMarkerIndex === -1) return null;
+
+  const productDetailMarkerIndex = findLastMarkerIndex(
+    template,
+    ['{{cor}}', '{{cores}}', '{{capacidade}}', '{{preco_oferta}}', '{{preco}}'],
+    productMarkerIndex,
+  );
 
   const productStart = template.lastIndexOf('\n', productMarkerIndex) + 1;
-  const priceEnd = priceMarkerIndex + priceMarker.length;
-  const productEndLine = template.indexOf('\n', priceEnd);
+  const productEndLine = template.indexOf('\n', productDetailMarkerIndex);
   const productEnd = productEndLine === -1 ? template.length : productEndLine;
 
   return {
@@ -89,6 +91,21 @@ function splitTemplateForProducts(template: string) {
     product: template.slice(productStart, productEnd).trim(),
     footer: template.slice(productEnd).trimStart(),
   };
+}
+
+function findFirstMarkerIndex(template: string, markers: string[]) {
+  return markers.reduce((firstIndex, marker) => {
+    const markerIndex = template.indexOf(marker);
+    if (markerIndex === -1) return firstIndex;
+    return firstIndex === -1 ? markerIndex : Math.min(firstIndex, markerIndex);
+  }, -1);
+}
+
+function findLastMarkerIndex(template: string, markers: string[], fromIndex: number) {
+  return markers.reduce((lastIndex, marker) => {
+    const markerIndex = template.lastIndexOf(marker);
+    return markerIndex >= fromIndex ? Math.max(lastIndex, markerIndex) : lastIndex;
+  }, fromIndex);
 }
 
 function toTemplateVariables(draft: OfferDraft): Record<string, string> {
@@ -102,6 +119,14 @@ function toTemplateVariables(draft: OfferDraft): Record<string, string> {
     preco_oferta: formatCurrency(payload.offerPrice),
     prazo: payload.deliveryTime || 'Prazo conforme oferta',
     garantia: payload.warranty,
+  };
+}
+
+function toConsolidatedTemplateVariables(draft: OfferDraft): Record<string, string> {
+  const payload = draft.payload;
+  return {
+    ...toTemplateVariables(draft),
+    cores: [payload.color, payload.capacity].filter(Boolean).join(' '),
   };
 }
 

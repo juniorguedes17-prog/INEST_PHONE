@@ -29,6 +29,20 @@ const usedTemplate: CommercialTemplate = {
   content: sealedTemplate.content.replace('HEADER', 'HEADER USADO').replace('CTA', 'CTA USADO'),
 };
 
+const runtimeSealedTemplate: CommercialTemplate = {
+  id: 'same-template-id',
+  name: 'Template Oficial - Produtos Lacrados',
+  productType: 'IPHONE_SEALED',
+  status: 'ACTIVE',
+  content: `HEADER EDITAVEL {{garantia}} {{prazo}}
+
+📱 {{modelo}}
+
+{{cores}}
+
+CTA EDITAVEL`,
+};
+
 function draft(index: number, productType = 'IPHONE_SEALED'): OfferDraft {
   return {
     targetModule: 'offers',
@@ -55,6 +69,14 @@ function prepare(drafts: OfferDraft[]) {
   });
 }
 
+function prepareWithTemplate(drafts: OfferDraft[], template: CommercialTemplate) {
+  return drafts.map((item) => {
+    const result = prepareTemporaryOffer(item, [template]);
+    assert.ok(result);
+    return result;
+  });
+}
+
 function occurrences(message: string, value: string) {
   return message.split(value).length - 1;
 }
@@ -66,6 +88,32 @@ test('keeps the one-draft message identical', () => {
   const [consolidated] = prepareConsolidatedTemporaryOffers([prepared]);
   assert.ok(consolidated);
   assert.equal(consolidated.message, prepared.message);
+});
+
+test('consolidates five runtime drafts with the same editable template id', () => {
+  const drafts = Array.from({ length: 5 }, (_, index) => draft(index + 1));
+  const input = prepareWithTemplate(drafts, runtimeSealedTemplate);
+  const output = prepareConsolidatedTemporaryOffers(input);
+
+  assert.equal(input.length, 5);
+  assert.equal(output.length, 1);
+  const [consolidated] = output;
+  assert.ok(consolidated);
+  assert.equal(occurrences(consolidated.message, 'HEADER EDITAVEL'), 1);
+  assert.equal(occurrences(consolidated.message, 'CTA EDITAVEL'), 1);
+
+  drafts.forEach((item) => {
+    assert.ok(consolidated.message.includes(item.payload.productName));
+    assert.ok(consolidated.message.includes(item.payload.color));
+    assert.ok(consolidated.message.includes(item.payload.capacity));
+    assert.ok(
+      consolidated.message.includes(
+        new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+          item.payload.offerPrice,
+        ),
+      ),
+    );
+  });
 });
 
 for (const count of [2, 5, 10]) {
@@ -91,9 +139,12 @@ for (const count of [2, 5, 10]) {
   });
 }
 
-test('separates sealed and used drafts by resolved template', () => {
+test('separates five sealed and three used drafts by resolved template', () => {
   const consolidated = prepareConsolidatedTemporaryOffers(
-    prepare([draft(1), draft(2), draft(3, 'IPHONE_USED'), draft(4, 'IPHONE_USED')]),
+    prepare([
+      ...Array.from({ length: 5 }, (_, index) => draft(index + 1)),
+      ...Array.from({ length: 3 }, (_, index) => draft(index + 6, 'IPHONE_USED')),
+    ]),
   );
 
   assert.equal(consolidated.length, 2);
