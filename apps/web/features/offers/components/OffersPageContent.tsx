@@ -41,6 +41,11 @@ const initialFilters = {
 export function OffersPageContent() {
   const searchParams = useSearchParams();
   const offers = useOffers(searchParams.get('productId'));
+  const showingTemporaryOffer = Boolean(
+    offers.currentOffer &&
+      offers.consolidatedTemporaryOffers.some((offer) => offer.id === offers.currentOffer?.id),
+  );
+  const showingPersistedPreview = Boolean(offers.currentOffer && !showingTemporaryOffer);
   const [filters, setFilters] = useState(initialFilters);
   const [sort, setSort] = useState('recent');
   const [page, setPage] = useState(1);
@@ -155,24 +160,33 @@ export function OffersPageContent() {
       />
 
       {offers.consolidatedTemporaryOffers.length ? (
-        <SettingsCard
-          eyebrow={offers.consolidatedTemporaryOffers.length === 1 ? 'Oferta preparada' : 'Ofertas preparadas'}
-          title="Template comercial da Precificacao"
-          description="Rascunho temporario pronto para envio, sem gravacao no banco."
-        >
-          <div className="grid gap-3">
-            {offers.consolidatedTemporaryOffers.map((offer) => (
-              <div key={offer.id} className="grid gap-2">
+        <div className="grid gap-4">
+          {offers.consolidatedTemporaryOffers.map((offer) => (
+            <SettingsCard
+              key={offer.id}
+              eyebrow="Oferta preparada"
+              title="Template comercial da Precificacao"
+              description="Rascunho temporario pronto para envio, sem gravacao no banco."
+            >
+              <div className="grid gap-3">
                 <p className="text-sm font-bold text-inest-text">
                   {offer.template?.name || 'Template comercial'}
                 </p>
                 <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg border border-inest-line bg-inest-soft p-3 text-sm leading-6 text-inest-text">
                   {offer.message}
                 </pre>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <ActionButton variant="secondary" onClick={() => void offers.copy(offer)}>
+                    Copiar texto
+                  </ActionButton>
+                  <ActionButton variant="success" onClick={() => void offers.share(offer)}>
+                    Compartilhar
+                  </ActionButton>
+                </div>
               </div>
-            ))}
-          </div>
-        </SettingsCard>
+            </SettingsCard>
+          ))}
+        </div>
       ) : null}
 
       <SettingsCard
@@ -205,7 +219,13 @@ export function OffersPageContent() {
       </SettingsCard>
 
       <section className="min-h-[calc(100vh-330px)]">
-        <div className="grid min-h-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div
+          className={
+            showingPersistedPreview
+              ? 'grid min-h-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_360px]'
+              : 'grid min-h-0 gap-4'
+          }
+        >
           <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
             <div className="grid gap-3">
               {offers.loading ? <LoadingState /> : null}
@@ -249,16 +269,16 @@ export function OffersPageContent() {
             ) : null}
           </div>
 
-          <aside className="min-w-0 2xl:sticky 2xl:top-0 2xl:self-start">
-            <SettingsCard
-              eyebrow="Previa"
-              title="Mensagem comercial"
-              description="Somente informacoes destinadas ao cliente."
-            >
-              {offers.currentOffer ? (
+          {showingPersistedPreview ? (
+            <aside className="min-w-0 2xl:sticky 2xl:top-0 2xl:self-start">
+              <SettingsCard
+                eyebrow="Previa"
+                title="Mensagem comercial"
+                description="Somente informacoes destinadas ao cliente."
+              >
                 <div className="grid gap-3">
                   <pre className="max-h-[420px] overflow-y-auto whitespace-pre-wrap rounded-lg border border-inest-line bg-inest-soft p-3 text-sm leading-6 text-inest-text">
-                    {offers.currentOffer.message}
+                    {offers.currentOffer?.message}
                   </pre>
                   <div className="grid gap-2 sm:grid-cols-2 2xl:grid-cols-1">
                     <ActionButton
@@ -275,14 +295,9 @@ export function OffersPageContent() {
                     </ActionButton>
                   </div>
                 </div>
-              ) : (
-                <EmptyState
-                  title="Sem previa."
-                  description="Gere ou visualize uma oferta para conferir a mensagem."
-                />
-              )}
-            </SettingsCard>
-          </aside>
+              </SettingsCard>
+            </aside>
+          ) : null}
         </div>
       </section>
 
