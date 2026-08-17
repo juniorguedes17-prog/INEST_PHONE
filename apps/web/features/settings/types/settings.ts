@@ -61,7 +61,7 @@ export interface OfferSettings {
 }
 
 export interface UserPreferences {
-  theme: 'light' | 'dark' | 'system';
+  theme: ThemePreference;
   language: 'pt-BR' | 'en-US' | 'es-PY';
   currencyFormat: string;
   dateFormat: string;
@@ -76,3 +76,4 @@ export interface SettingsPayload {
   offers: OfferSettings;
   userPreferences: UserPreferences;
 }
+import type { ThemePreference } from '@/lib/theme-preference';

@@ -4,6 +4,14 @@ import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ActionButton, ContentContainer, SearchInput } from '@/components/shared';
+import { getSettings, updateUserTheme } from '@/features/settings/services/settings-service';
+import {
+  applyThemePreference,
+  getStoredThemePreference,
+  normalizeThemePreference,
+  THEME_CHANGE_EVENT,
+} from '@/lib/theme-preference';
+import type { ThemePreference } from '@/lib/theme-preference';
 import { clearAccessToken } from '@/services/authenticated-fetch';
 import { logout } from '@/services/auth-service';
 import { getNavigationItem } from './navigation';
@@ -12,29 +20,58 @@ interface HeaderProps {
   onOpenMenu: () => void;
 }
 
-type AppTheme = 'light' | 'dark';
-
-const THEME_STORAGE_KEY = 'inest.theme';
-
 export function Header({ onOpenMenu }: HeaderProps) {
   const pathname = usePathname();
   const router = useRouter();
   const item = getNavigationItem(pathname);
-  const [theme, setTheme] = useState<AppTheme>('light');
+  const [theme, setTheme] = useState<ThemePreference>('light');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isUpdatingTheme, setIsUpdatingTheme] = useState(false);
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const nextTheme: AppTheme = storedTheme === 'dark' ? 'dark' : 'light';
-    document.documentElement.dataset.theme = nextTheme;
-    setTheme(nextTheme);
+    const localTheme = getStoredThemePreference();
+    applyThemePreference(localTheme);
+    setTheme(localTheme);
+
+    void getSettings()
+      .then((settings) => {
+        const officialTheme = applyThemePreference(settings.userPreferences.theme);
+        setTheme(officialTheme);
+      })
+      .catch(() => {
+        // O cache local continua sendo usado quando a leitura oficial falhar.
+      });
   }, []);
 
-  function toggleTheme() {
-    const nextTheme: AppTheme = theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = nextTheme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+  useEffect(() => {
+    function handleThemeChange(event: Event) {
+      setTheme(normalizeThemePreference((event as CustomEvent<ThemePreference>).detail));
+    }
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+  }, []);
+
+  async function toggleTheme() {
+    if (isUpdatingTheme) {
+      return;
+    }
+
+    const previousTheme = theme;
+    const nextTheme = applyThemePreference(theme === 'dark' ? 'light' : 'dark');
     setTheme(nextTheme);
+    setIsUpdatingTheme(true);
+
+    try {
+      const savedSettings = await updateUserTheme(nextTheme);
+      const officialTheme = applyThemePreference(savedSettings.userPreferences.theme);
+      setTheme(officialTheme);
+    } catch {
+      const restoredTheme = applyThemePreference(previousTheme);
+      setTheme(restoredTheme);
+    } finally {
+      setIsUpdatingTheme(false);
+    }
   }
 
   async function handleLogout() {
@@ -96,6 +133,7 @@ export function Header({ onOpenMenu }: HeaderProps) {
           <button
             type="button"
             onClick={toggleTheme}
+            disabled={isUpdatingTheme}
             aria-label="Alternar tema"
             title={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
             className="hidden h-10 w-10 place-items-center rounded-lg border border-inest-line bg-white text-sm font-black text-inest-text transition-colors hover:bg-inest-soft sm:grid"

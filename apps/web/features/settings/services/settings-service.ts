@@ -1,4 +1,6 @@
 import { env } from '@/lib/env';
+import { normalizeThemePreference } from '@/lib/theme-preference';
+import type { ThemePreference } from '@/lib/theme-preference';
 import { authenticatedFetch } from '@/services/authenticated-fetch';
 import { SettingsPayload } from '../types/settings';
 
@@ -19,7 +21,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
 export async function getSettings(): Promise<SettingsPayload> {
   const response = await authenticatedFetch(`${env.apiUrl}/settings`);
 
-  return parseResponse<SettingsPayload>(response);
+  return normalizeSettings(await parseResponse<SettingsPayload>(response));
 }
 
 export async function updateSettings(settings: SettingsPayload): Promise<SettingsPayload> {
@@ -31,7 +33,7 @@ export async function updateSettings(settings: SettingsPayload): Promise<Setting
     body: JSON.stringify(settings),
   });
 
-  return parseResponse<SettingsPayload>(response);
+  return normalizeSettings(await parseResponse<SettingsPayload>(response));
 }
 
 export async function resetSettingsDefaults(): Promise<SettingsPayload> {
@@ -39,5 +41,27 @@ export async function resetSettingsDefaults(): Promise<SettingsPayload> {
     method: 'POST',
   });
 
-  return parseResponse<SettingsPayload>(response);
+  return normalizeSettings(await parseResponse<SettingsPayload>(response));
+}
+
+export async function updateUserTheme(theme: ThemePreference): Promise<SettingsPayload> {
+  const currentSettings = await getSettings();
+
+  return updateSettings({
+    ...currentSettings,
+    userPreferences: {
+      ...currentSettings.userPreferences,
+      theme,
+    },
+  });
+}
+
+function normalizeSettings(settings: SettingsPayload): SettingsPayload {
+  return {
+    ...settings,
+    userPreferences: {
+      ...settings.userPreferences,
+      theme: normalizeThemePreference(settings.userPreferences.theme),
+    },
+  };
 }

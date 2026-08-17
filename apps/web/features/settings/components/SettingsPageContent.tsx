@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import {
   ActionButton,
   CurrencyInput,
@@ -10,6 +11,12 @@ import {
   SettingsCard,
   StatusBadge,
 } from '@/components/shared';
+import {
+  applyThemePreference,
+  normalizeThemePreference,
+  THEME_CHANGE_EVENT,
+} from '@/lib/theme-preference';
+import type { ThemePreference } from '@/lib/theme-preference';
 import { useSettings } from '../hooks/useSettings';
 import { ImportRedirectRule, SettingsPayload } from '../types/settings';
 import { OfferTemplatesSettingsCard } from './OfferTemplatesSettingsCard';
@@ -17,6 +24,32 @@ import { OfferTemplatesSettingsCard } from './OfferTemplatesSettingsCard';
 export function SettingsPageContent() {
   const { settings, setSettings, loading, saving, error, success, reload, save, resetDefaults } =
     useSettings();
+
+  useEffect(() => {
+    if (settings) {
+      applyThemePreference(settings.userPreferences.theme);
+    }
+  }, [settings?.userPreferences.theme]);
+
+  useEffect(() => {
+    function handleThemeChange(event: Event) {
+      const theme = normalizeThemePreference(
+        (event as CustomEvent<ThemePreference>).detail,
+      );
+
+      setSettings((current) =>
+        current
+          ? {
+              ...current,
+              userPreferences: { ...current.userPreferences, theme },
+            }
+          : current,
+      );
+    }
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+    return () => window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange);
+  }, [setSettings]);
 
   if (loading) {
     return (
@@ -641,17 +674,15 @@ export function SettingsPageContent() {
               options={[
                 ['light', 'Claro'],
                 ['dark', 'Escuro'],
-                ['system', 'Sistema'],
               ]}
-              onChange={(value) =>
+              onChange={(value) => {
+                const theme = normalizeThemePreference(value);
+                applyThemePreference(theme);
                 updateSettings((current) => ({
                   ...current,
-                  userPreferences: {
-                    ...current.userPreferences,
-                    theme: value as SettingsPayload['userPreferences']['theme'],
-                  },
-                }))
-              }
+                  userPreferences: { ...current.userPreferences, theme },
+                }));
+              }}
             />
             <SelectInput
               label="Idioma"
