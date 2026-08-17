@@ -16,6 +16,8 @@ export type ProductIdentityFamily =
   | 'ipad'
   | 'macbook'
   | 'mac-mini'
+  | 'imac'
+  | 'mac-studio'
   | 'apple-watch'
   | 'airpods'
   | 'accessory'
@@ -92,6 +94,16 @@ export const profitIdentityPolicies: readonly ProfitIdentityPolicy[] = [
   },
   {
     family: 'mac-mini',
+    required: ['model', 'ram', 'storage', 'condition'],
+    optional: ['chip', 'chipVariant', 'cpu', 'gpu'],
+  },
+  {
+    family: 'imac',
+    required: ['model', 'screen', 'ram', 'storage', 'condition'],
+    optional: ['chip', 'chipVariant', 'cpu', 'gpu'],
+  },
+  {
+    family: 'mac-studio',
     required: ['model', 'ram', 'storage', 'condition'],
     optional: ['chip', 'chipVariant', 'cpu', 'gpu'],
   },
@@ -329,6 +341,8 @@ function resolveFamily(identity: CanonicalProductIdentity): ProductIdentityFamil
   if (model.startsWith('iphone-')) return 'iphone';
   if (model.startsWith('ipad-')) return 'ipad';
   if (model.startsWith('mac-mini-')) return 'mac-mini';
+  if (model.startsWith('imac-')) return 'imac';
+  if (model.startsWith('mac-studio-')) return 'mac-studio';
   if (model.startsWith('macbook-')) return 'macbook';
   if (model.startsWith('apple-watch-')) return 'apple-watch';
   if (model.startsWith('airpods')) return 'airpods';
@@ -380,7 +394,7 @@ function resolveSlashStorage(text: string) {
 }
 
 function resolveChipVariant(chip: string | null) {
-  const match = chip?.match(/\b(Pro|Max)\b/i);
+  const match = chip?.match(/\b(Pro|Max|Ultra)\b/i);
   return match?.[1] ? match[1].toUpperCase() : null;
 }
 

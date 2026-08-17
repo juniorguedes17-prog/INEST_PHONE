@@ -91,6 +91,54 @@ test('MacBook protege familia, chip, tela, RAM e armazenamento', () => {
   assert.notEqual(air13.key, moreStorage.key);
 });
 
+test('MacBook Neo converge unidades equivalentes de tela sem fundir configuracoes', () => {
+  const equivalentForms = [
+    'Mac Neo 13 8/256',
+    'MacBook Neo 13 8/256GB',
+    'MacBook Neo 13" 8GB/256GB',
+    'MacBook Neo 13-inch 8GB 256GB',
+    'MacBook Neo 13 inch 8GB+256GB',
+    'MacBook Neo 13 polegadas 8GB/256GB',
+  ].map((productName) => deriveExtendedProductIdentity(novo(productName)));
+
+  equivalentForms.forEach(({ canonical, profit }) => {
+    assert.equal(profit.status, 'valid');
+    assert.equal(canonical.canonicalModelKey, 'macbook-neo-13');
+    assert.equal(canonical.canonicalScreen, '13"');
+    assert.equal(profit.attributes.ram, '8gb');
+    assert.equal(profit.attributes.storage, '256gb');
+  });
+  assert.equal(new Set(equivalentForms.map(({ profit }) => profit.key)).size, 1);
+
+  const moreRam = deriveProfitLookupIdentity(novo('MacBook Neo 13" 16GB/256GB'));
+  const largerStorage = deriveProfitLookupIdentity(novo('MacBook Neo 13" 8GB/512GB'));
+  assert.notEqual(equivalentForms[0]?.profit.key, moreRam.key);
+  assert.notEqual(equivalentForms[0]?.profit.key, largerStorage.key);
+});
+
+test('caso real MacBook Pro M5 14 16/512 converge com produto_id 14', () => {
+  const file = new URL('../../../prisma/data/profit-products.json', import.meta.url);
+  const catalog = JSON.parse(readFileSync(file, 'utf8')) as Array<{
+    produto_id: number;
+    condicao_produto: string;
+    produto_descricao: string;
+    lucro_liquido: number;
+  }>;
+  const record = catalog.find((item) => item.produto_id === 14);
+  assert.ok(record);
+
+  const quote = deriveProfitLookupIdentity(novo('MacBook Pro M5 14" 16GB/512GB'));
+  const product = deriveProfitLookupIdentity({
+    productDescription: record.produto_descricao,
+    quality: record.condicao_produto,
+  });
+
+  assert.equal(quote.status, 'valid');
+  assert.equal(quote.key, product.key);
+  assert.equal(record.produto_descricao, 'MacBook Pro M5 14 16/512GB');
+  assert.equal(record.lucro_liquido, 1300);
+});
+
 test('Mac Mini protege chip, RAM, armazenamento e unidades de compute', () => {
   const m2 = deriveProfitLookupIdentity(novo('Mac Mini M2 8/256GB'));
   const m4 = deriveProfitLookupIdentity(novo('Mac Mini M4 16/512GB'));
@@ -100,6 +148,65 @@ test('Mac Mini protege chip, RAM, armazenamento e unidades de compute', () => {
   assert.equal(m4.status, 'valid');
   assert.notEqual(m2.key, m4.key);
   assert.notEqual(m4.key, m4Gpu.key);
+});
+
+test('iMac protege chip, tela, RAM, armazenamento e unidades de compute', () => {
+  const equivalentForms = [
+    'iMac M4 24" 16GB/256GB',
+    'iMAC / M4 / 24" / 16GB+256GB',
+    'iMac M4 24-inch 16GB 256GB',
+    'iMac M4 24 polegadas 16GB/256GB',
+  ].map((productName) => deriveExtendedProductIdentity(novo(productName)));
+
+  equivalentForms.forEach(({ canonical, profit }) => {
+    assert.equal(profit.status, 'valid');
+    assert.equal(profit.family, 'imac');
+    assert.equal(canonical.canonicalModelKey, 'imac-m4-24');
+    assert.equal(canonical.canonicalChip, 'M4');
+    assert.equal(canonical.canonicalScreen, '24"');
+    assert.equal(profit.attributes.ram, '16gb');
+    assert.equal(profit.attributes.storage, '256gb');
+  });
+  assert.equal(new Set(equivalentForms.map(({ profit }) => profit.key)).size, 1);
+
+  const m5 = deriveProfitLookupIdentity(novo('iMac M5 24" 16GB/256GB'));
+  const moreRam = deriveProfitLookupIdentity(novo('iMac M4 24" 24GB/256GB'));
+  const moreStorage = deriveProfitLookupIdentity(novo('iMac M4 24" 16GB/512GB'));
+  const gpuVariant = deriveProfitLookupIdentity(novo('iMac M4 24" 16GB/256GB GPU 10'));
+  const missingRam = deriveProfitLookupIdentity(novo('iMac M4 24" 256GB'));
+
+  assert.notEqual(equivalentForms[0]?.profit.key, m5.key);
+  assert.notEqual(equivalentForms[0]?.profit.key, moreRam.key);
+  assert.notEqual(equivalentForms[0]?.profit.key, moreStorage.key);
+  assert.notEqual(equivalentForms[0]?.profit.key, gpuVariant.key);
+  assert.equal(missingRam.status, 'insufficient_identity');
+  assert.deepEqual(missingRam.missingAttributes, ['ram']);
+});
+
+test('Mac Studio protege chip variant, RAM e armazenamento sem exigir tela', () => {
+  const base = deriveExtendedProductIdentity(novo('Mac Studio M4 Max 36GB/512GB'));
+  const equivalent = deriveExtendedProductIdentity(novo('MAC STUDIO / M4 MAX / 36GB+512GB'));
+  const moreRam = deriveProfitLookupIdentity(novo('Mac Studio M4 Max 48GB/512GB'));
+  const moreStorage = deriveProfitLookupIdentity(novo('Mac Studio M4 Max 36GB/1TB'));
+  const m3Ultra = deriveProfitLookupIdentity(novo('Mac Studio M3 Ultra 36GB/512GB'));
+  const m4Ultra = deriveProfitLookupIdentity(novo('Mac Studio M4 Ultra 36GB/512GB'));
+  const missingRam = deriveProfitLookupIdentity(novo('Mac Studio M4 Max 512GB'));
+
+  assert.equal(base.profit.status, 'valid');
+  assert.equal(base.profit.family, 'mac-studio');
+  assert.equal(base.canonical.canonicalModelKey, 'mac-studio-m4-max');
+  assert.equal(base.canonical.canonicalChip, 'M4 Max');
+  assert.equal(base.canonical.canonicalScreen, null);
+  assert.equal(base.profit.attributes.chipVariant, 'max');
+  assert.equal(base.profit.key, equivalent.profit.key);
+  assert.notEqual(base.profit.key, moreRam.key);
+  assert.notEqual(base.profit.key, moreStorage.key);
+  assert.notEqual(base.profit.key, m3Ultra.key);
+  assert.notEqual(base.profit.key, m4Ultra.key);
+  assert.equal(m3Ultra.attributes.chipVariant, 'ultra');
+  assert.equal(m4Ultra.attributes.chipVariant, 'ultra');
+  assert.equal(missingRam.status, 'insufficient_identity');
+  assert.deepEqual(missingRam.missingAttributes, ['ram']);
 });
 
 test('Apple Watch protege familia, geracao, tamanho e conectividade', () => {

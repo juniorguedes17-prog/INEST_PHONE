@@ -196,6 +196,8 @@ function firstMeaningfulText(...values: Array<string | null | undefined>) {
 function resolveCategory(text: string) {
   if (/\b(?:iphone|iph)\b|\biph\s*\d|\biphone\s*\d/.test(text)) return 'iPhone';
   if (/\bipad\b/.test(text)) return 'iPad';
+  if (/\bimac\b/.test(text)) return 'iMac';
+  if (/\bmac\s+studio\b/.test(text)) return 'Mac Studio';
   if (/\bmacbook\b|\bmac\s+(?:air|pro|neo|mini)\b/.test(text)) return 'MacBook';
   if (/\bapple\s*watch\b|\bwatch\b|\b(?:series\s*\d+|s\s*\d+|se\s*\d+|ultra\s*\d+)\s+\d{2}(?:mm)?\b/.test(text)) {
     return 'Apple Watch';
@@ -240,6 +242,9 @@ function deriveDeterministicModelLabel({
   const macMini = text.match(/\bmac\s*mini\b/);
   if (macMini) return joinLabel('Mac Mini', chip);
 
+  if (/\bimac\b/.test(text)) return joinLabel('iMac', chip, screen);
+  if (/\bmac\s*studio\b/.test(text)) return joinLabel('Mac Studio', chip);
+
   const macbook = text.match(/\b(?:macbook|mac)\s*(air|pro|neo)\b/);
   if (macbook?.[1]) {
     const family = titleWord(macbook[1]);
@@ -280,7 +285,7 @@ function resolveRam(text: string, category: string) {
   const explicit = text.match(/\b(\d{1,3})gb\s*(?:ram|memory|memoria)\b|\b(\d{1,3})\s*ram\b/);
   const slash = text.match(/\b(\d{1,3})\s*\/\s*(\d{2,4})\b/);
   const memoryCandidates = Array.from(text.matchAll(/\b(\d{1,3})gb\b/g), (match) => Number(match[1]));
-  const inferred = category === 'MacBook'
+  const inferred = ['MacBook', 'iMac', 'Mac Studio'].includes(category)
     ? memoryCandidates.find((value) => value <= 64)
     : undefined;
   const value = explicit?.[1] ?? explicit?.[2] ?? slash?.[1] ?? inferred;
@@ -305,11 +310,21 @@ function resolveScreen(text: string, category: string) {
     const size = text.match(/\b(3[89]|4[02469])mm\b/)?.[1];
     return size ? `${size}mm` : null;
   }
-  const explicit = text.match(/\b(1[0-6](?:\.\d+)?)inch\b|\b(1[0-6](?:\.\d+)?)\s*["”]/)?.[1]
-    ?? text.match(/\b(1[0-6](?:\.\d+)?)inch\b|\b(1[0-6](?:\.\d+)?)\s*["”]/)?.[2];
+  const sizePattern = category === 'iMac'
+    ? '(?:1[7-9]|2[0-9]|3[0-2])'
+    : '1[0-6]';
+  const explicitMatch = text.match(
+    new RegExp(`\\b(${sizePattern}(?:\\.\\d+)?)inch\\b|\\b(${sizePattern}(?:\\.\\d+)?)\\s*["”]`),
+  );
+  const explicit = explicitMatch?.[1] ?? explicitMatch?.[2];
   if (explicit) return `${explicit.replace(/\.\d$/, '')}"`;
-  if (category === 'MacBook' || /\bipad\s+(?:air|pro|mini)\b/.test(text)) {
-    const contextual = text.match(/\b(?:m\d+(?:\s+(?:pro|max))?|air|pro|neo)\s+(1[0-6](?:\.\d+)?)\b/)?.[1];
+  if (category === 'MacBook' || category === 'iMac' || /\bipad\s+(?:air|pro|mini)\b/.test(text)) {
+    const contextualSizePattern = category === 'iMac'
+      ? '(?:1[7-9]|2[0-9]|3[0-2])'
+      : '1[0-6]';
+    const contextual = text.match(
+      new RegExp(`\\b(?:m\\d+(?:\\s+(?:pro|max|ultra))?|air|pro|neo)\\s+(${contextualSizePattern}(?:\\.\\d+)?)\\b`),
+    )?.[1];
     if (contextual) return `${contextual.replace(/\.\d$/, '')}"`;
   }
   return null;
@@ -325,7 +340,7 @@ function resolveConnectivity(text: string) {
 }
 
 function resolveChip(text: string) {
-  const chip = text.match(/\b([ma]\d+)\s*(pro|max)?\b/);
+  const chip = text.match(/\b([ma]\d+)\s*(pro|max|ultra)?\b/);
   if (!chip?.[1]) return null;
   return joinLabel(chip[1].toUpperCase(), chip[2] ? titleWord(chip[2]) : '');
 }

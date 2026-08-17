@@ -52,8 +52,38 @@ function macbook(
   key: string,
   label: string,
   aliases: readonly string[],
+  includeScreenUnits = false,
 ) {
-  return entry(key, label, 'MacBook', aliases);
+  return entry(
+    key,
+    label,
+    'MacBook',
+    includeScreenUnits ? withScreenUnitAliases(aliases) : aliases,
+  );
+}
+
+function imac(
+  key: string,
+  label: string,
+  aliases: readonly string[],
+) {
+  return entry(key, label, 'iMac', withScreenUnitAliases(aliases));
+}
+
+function macStudio(
+  key: string,
+  label: string,
+  aliases: readonly string[],
+) {
+  return entry(key, label, 'Mac Studio', aliases);
+}
+
+function withScreenUnitAliases(aliases: readonly string[]) {
+  return aliases.flatMap((alias) =>
+    /\s\d{2}$/.test(alias)
+      ? [alias, `${alias} inch`, `${alias} polegadas`]
+      : [alias],
+  );
 }
 
 function ipad(
@@ -113,7 +143,7 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   iphone(17, 'Pro Max'),
 
   macbook('macbook-neo', 'MacBook Neo', ['macbook neo', 'mac neo']),
-  macbook('macbook-neo-13', 'MacBook Neo 13"', ['macbook neo 13', 'mac neo 13']),
+  macbook('macbook-neo-13', 'MacBook Neo 13"', ['macbook neo 13', 'mac neo 13'], true),
   macbook('macbook-air-m4-13', 'MacBook Air M4 13"', ['macbook air m4 13', 'mac air m4 13']),
   macbook('macbook-air-m4-15', 'MacBook Air M4 15"', ['macbook air m4 15', 'mac air m4 15']),
   macbook('macbook-air-m5-13', 'MacBook Air M5 13"', ['macbook air m5 13', 'mac air m5 13']),
@@ -128,6 +158,11 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   macbook('mac-mini-m2', 'Mac Mini M2', ['mac mini m2']),
   macbook('mac-mini-m4', 'Mac Mini M4', ['mac mini m4']),
   macbook('mac-mini-m4-pro', 'Mac Mini M4 Pro', ['mac mini m4 pro']),
+  imac('imac-m4-24', 'iMac M4 24"', ['imac m4 24']),
+  imac('imac-m5-24', 'iMac M5 24"', ['imac m5 24']),
+  macStudio('mac-studio-m3-ultra', 'Mac Studio M3 Ultra', ['mac studio m3 ultra']),
+  macStudio('mac-studio-m4-max', 'Mac Studio M4 Max', ['mac studio m4 max']),
+  macStudio('mac-studio-m4-ultra', 'Mac Studio M4 Ultra', ['mac studio m4 ultra']),
 
   ipad('ipad-10', 'iPad 10', ['ipad 10']),
   ipad('ipad-11', 'iPad 11', ['ipad 11', 'ipad a16']),
