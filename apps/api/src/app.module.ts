@@ -8,6 +8,7 @@ import { authConfig } from './config/auth.config';
 import { databaseConfig } from './config/database.config';
 import { validateEnv } from './config/env.validation';
 import { AuthModule } from './modules/auth/auth.module';
+import { AdminDiagnosticsModule } from './modules/admin-diagnostics/admin-diagnostics.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { EvolutionWebhookModule } from './modules/evolution-webhook/evolution-webhook.module';
@@ -43,6 +44,7 @@ const envFileName = `.env.${appEnv}`;
     }),
     PrismaModule,
     AuthModule,
+    AdminDiagnosticsModule,
     CustomersModule,
     DashboardModule,
     EvolutionWebhookModule,
