@@ -10,6 +10,7 @@ function createService() {
     supplierCurrentList: { upsert: vi.fn().mockResolvedValue({}) },
   };
   const prisma = {
+    product: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn((callback: (client: typeof transaction) => unknown) =>
       callback(transaction),
     ),
@@ -54,13 +55,12 @@ describe('EvolutionWebhookService', () => {
       },
     });
 
-    const persistedItems = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0].create.items.create;
+    const persistedItems =
+      transaction.supplierCurrentList.upsert.mock.calls[0]?.[0].create.items.create;
     expect(persistedItems).toEqual([
       expect.objectContaining({ price: 6400, rawLine: 'Preto R$ 6.400' }),
     ]);
-    expect(debug).toHaveBeenCalledWith(
-      expect.stringContaining('evolution.product_identity.shadow'),
-    );
+    expect(debug).toHaveBeenCalledWith(expect.stringContaining('evolution.product_id.shadow'));
     debug.mockRestore();
   });
 
@@ -93,9 +93,7 @@ describe('EvolutionWebhookService', () => {
     await service.onModuleInit();
 
     expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
-    expect(debug).toHaveBeenCalledWith(
-      expect.stringContaining('evolution.product_identity.shadow'),
-    );
+    expect(debug).toHaveBeenCalledWith(expect.stringContaining('evolution.product_id.shadow'));
     debug.mockRestore();
   });
   it('reprocessa a lista atual a partir do texto original quando o formato de moeda mudou', async () => {

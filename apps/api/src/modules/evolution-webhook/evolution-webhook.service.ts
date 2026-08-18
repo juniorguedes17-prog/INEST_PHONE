@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ProductStatus } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
@@ -21,6 +22,7 @@ export class EvolutionWebhookService implements OnModuleInit {
     const currentLists = await this.prisma.supplierCurrentList.findMany({
       include: { items: true },
     });
+    const catalog = await this.loadProductShadowCatalog();
     let updated = 0;
 
     for (const currentList of currentLists) {
@@ -31,10 +33,14 @@ export class EvolutionWebhookService implements OnModuleInit {
         );
         continue;
       }
-      this.processParsedSupplierItemsShadow(parsedItems, {
-        supplierContactId: currentList.supplierContactId,
-        sourceMessageId: currentList.sourceMessageId,
-      });
+      await this.processParsedSupplierItemsShadow(
+        parsedItems,
+        {
+          supplierContactId: currentList.supplierContactId,
+          sourceMessageId: currentList.sourceMessageId,
+        },
+        catalog,
+      );
 
       if (hasEquivalentSnapshot(currentList.items, parsedItems)) continue;
 
@@ -102,10 +108,15 @@ export class EvolutionWebhookService implements OnModuleInit {
       );
       return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
-    this.processParsedSupplierItemsShadow(items, {
-      supplierContactId: supplier.id,
-      sourceMessageId: message.messageId,
-    });
+    const catalog = await this.loadProductShadowCatalog();
+    await this.processParsedSupplierItemsShadow(
+      items,
+      {
+        supplierContactId: supplier.id,
+        sourceMessageId: message.messageId,
+      },
+      catalog,
+    );
 
     try {
       await this.prisma.$transaction(async (transaction) => {
@@ -159,33 +170,45 @@ export class EvolutionWebhookService implements OnModuleInit {
     }
   }
 
-  private processParsedSupplierItemsShadow(
+  private async processParsedSupplierItemsShadow(
     items: readonly ParsedSupplierListItem[],
     context: { supplierContactId: string; sourceMessageId: string },
+    catalog: Awaited<ReturnType<EvolutionWebhookService['loadProductShadowCatalog']>>,
   ) {
-    for (const { item, identity } of processParsedSupplierItemsShadow(items)) {
+    for (const { item, identity, productResolution } of processParsedSupplierItemsShadow(
+      items,
+      catalog,
+    )) {
       this.logger.debug(
         JSON.stringify({
-          event: 'evolution.product_identity.shadow',
-          supplierContactId: context.supplierContactId,
+          event: 'evolution.product_id.shadow',
+          supplier: context.supplierContactId,
           sourceMessageId: context.sourceMessageId,
-          rawLine: item.rawLine,
-          productName: item.productName,
+          rawDescription: item.productName,
           canonicalModelKey: identity.canonical.canonicalModelKey || null,
-          canonicalCondition: identity.canonical.canonicalCondition,
-          canonicalStorage: identity.canonical.canonicalStorage,
-          canonicalRam: identity.canonical.canonicalRam,
-          canonicalScreen: identity.canonical.canonicalScreen,
-          canonicalScreenSource: identity.canonical.canonicalScreenSource,
-          canonicalConnectivity: identity.canonical.canonicalConnectivity,
-          canonicalConnectivitySource: identity.canonical.canonicalConnectivitySource,
-          canonicalColor: identity.canonical.canonicalColor,
-          identityStatus: identity.variant.status,
-          profitStatus: identity.profit.status,
-          missingAttributes: identity.profit.missingAttributes,
+          status: productResolution.status,
+          resolvedProductId: productResolution.productId ?? null,
+          candidateCount: productResolution.candidateCount,
         }),
       );
     }
+  }
+
+  private loadProductShadowCatalog() {
+    return this.prisma.product.findMany({
+      where: { active: true, status: ProductStatus.ACTIVE, deletedAt: null },
+      select: {
+        id: true,
+        productDescription: true,
+        productType: true,
+        profitCondition: true,
+        variantAttributes: true,
+        category: { select: { name: true } },
+        model: { select: { name: true } },
+        color: { select: { name: true } },
+        storage: { select: { displayName: true, value: true, unit: true } },
+      },
+    });
   }
 }
 

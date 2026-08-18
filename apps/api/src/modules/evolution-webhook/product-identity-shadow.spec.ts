@@ -1,6 +1,43 @@
 import { describe, expect, it } from 'vitest';
+import { deriveExtendedProductIdentity } from '@inest/product-identity';
 import { parseSupplierListText } from './supplier-list.parser';
-import { processParsedSupplierItemsShadow } from './product-identity-shadow';
+import {
+  processParsedSupplierItemsShadow,
+  resolveProductIdShadow,
+  type ProductIdShadowCandidate,
+} from './product-identity-shadow';
+
+function catalogProduct(
+  id: string,
+  productDescription: string,
+  profitCondition = 'NOVO',
+  variantAttributes: unknown = null,
+): ProductIdShadowCandidate {
+  const storage = [...productDescription.matchAll(/\b(\d+)\s*GB\b/gi)].at(-1)?.[1] ?? null;
+  return {
+    id,
+    productDescription,
+    productType: productDescription.toLowerCase().includes('ipad')
+      ? 'IPAD'
+      : productDescription.toLowerCase().includes('watch')
+        ? 'APPLE_WATCH'
+        : productDescription.toLowerCase().includes('mac')
+          ? 'MACBOOK'
+          : profitCondition === 'CPO'
+            ? 'APPLE_CPO'
+            : 'IPHONE_SEALED',
+    profitCondition,
+    variantAttributes,
+    category: null,
+    model: null,
+    color: null,
+    storage: storage ? { displayName: `${storage}GB`, value: storage, unit: 'GB' } : null,
+  };
+}
+
+function supplierIdentity(productName: string, condition = 'NOVO') {
+  return deriveExtendedProductIdentity({ productName, quality: condition });
+}
 
 describe('product identity ingestion shadow', () => {
   it('observa iPad sem alterar o item do parser', () => {
@@ -37,10 +74,12 @@ describe('product identity ingestion shadow', () => {
     const observations = processParsedSupplierItemsShadow(items);
 
     expect(items).toEqual(before);
-    expect(observations.map(({ item }) => [item.normalizedName, item.price, item.rawLine])).toEqual([
-      ['iphone 17 256gb as is', 4389, 'PRETO R$ 4.389'],
-      ['iphone 16 128gb', 3350, 'PRETO R$ 3.350'],
-    ]);
+    expect(observations.map(({ item }) => [item.normalizedName, item.price, item.rawLine])).toEqual(
+      [
+        ['iphone 17 256gb as is', 4389, 'PRETO R$ 4.389'],
+        ['iphone 16 128gb', 3350, 'PRETO R$ 3.350'],
+      ],
+    );
   });
 
   it('preserva cotacoes independentes de Mac e acessorio', () => {
@@ -58,5 +97,92 @@ describe('product identity ingestion shadow', () => {
       ['mac mini m4 16 512', 5700],
       ['cabo usb c lightning', 70],
     ]);
+  });
+
+  it('resolves exactly one structured catalog candidate for MacBook Neo text variations', () => {
+    const catalog = [
+      catalogProduct('neo-256', 'MacBook Neo A18 Pro 13" 8GB/256GB', 'NOVO', {
+        chip: 'A18 Pro',
+        chipVariant: 'pro',
+        screen: '13"',
+        ram: '8GB',
+      }),
+    ];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo A18 Pro 13" 8GB 256GB'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo 13 8GB/256GB'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
+  });
+
+  it('keeps Apple Watch size and connectivity variants distinct', () => {
+    const catalog = [
+      catalogProduct('watch-42-gps', 'Apple Watch Series 11 42mm GPS'),
+      catalogProduct('watch-46-gps', 'Apple Watch Series 11 46mm GPS'),
+      catalogProduct('watch-42-cellular', 'Apple Watch Series 11 42mm GPS + Cellular'),
+    ];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity('Apple Watch Series 11 42mm GPS'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'watch-42-gps' });
+    expect(
+      resolveProductIdShadow(supplierIdentity('Apple Watch Series 11 46mm GPS'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'watch-46-gps' });
+    expect(
+      resolveProductIdShadow(
+        supplierIdentity('Apple Watch Series 11 42mm GPS + Cellular'),
+        catalog,
+      ),
+    ).toMatchObject({ status: 'FOUND', productId: 'watch-42-cellular' });
+  });
+
+  it('keeps storage and condition variants distinct and fails closed for missing or ambiguous candidates', () => {
+    const catalog = [
+      catalogProduct('air-256-new', 'iPhone 17 Air 256GB'),
+      catalogProduct('air-512-new', 'iPhone 17 Air 512GB'),
+      catalogProduct('air-256-cpo', 'iPhone 17 Air 256GB', 'CPO'),
+    ];
+
+    expect(resolveProductIdShadow(supplierIdentity('iPhone 17 Air 256GB'), catalog)).toMatchObject({
+      status: 'FOUND',
+      productId: 'air-256-new',
+    });
+    expect(resolveProductIdShadow(supplierIdentity('iPhone 17 Air 512GB'), catalog)).toMatchObject({
+      status: 'FOUND',
+      productId: 'air-512-new',
+    });
+    expect(
+      resolveProductIdShadow(supplierIdentity('iPhone 17 Air 256GB', 'CPO'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'air-256-cpo' });
+    expect(resolveProductIdShadow(supplierIdentity('iPhone 17 Air 1TB'), catalog)).toMatchObject({
+      status: 'MISSING',
+      reason: 'catalog_no_match',
+    });
+    expect(
+      resolveProductIdShadow(supplierIdentity('iPhone 17 Air 256GB'), [
+        catalog[0]!,
+        catalogProduct('air-256-new-duplicate', 'iPhone 17 Air 256GB'),
+      ]),
+    ).toMatchObject({
+      status: 'AMBIGUOUS',
+      candidates: ['air-256-new', 'air-256-new-duplicate'],
+      candidateCount: 2,
+    });
+  });
+
+  it('resolves iPad through its canonical chip, screen, storage, connectivity, and condition', () => {
+    const catalog = [
+      catalogProduct('ipad-11-a16-256-wifi', 'iPad 11 A16 256GB 11" Wi-Fi', 'NOVO', {
+        chip: 'A16',
+        screen: '11"',
+        connectivity: 'Wi-Fi',
+      }),
+    ];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity('iPad 11 A16 11" Wi-Fi 256GB'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'ipad-11-a16-256-wifi', candidateCount: 1 });
   });
 });
