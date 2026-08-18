@@ -33,7 +33,8 @@
     "prisma:migrate": "node scripts/run-env.mjs development prisma migrate dev",
     "prisma:studio": "node scripts/run-env.mjs development prisma studio",
     "prisma:seed": "node scripts/run-env.mjs development prisma db seed",
-    "prisma:seed:profit": "node scripts/run-env.mjs development tsx prisma/profit-products.seed.ts"
+    "prisma:seed:profit": "node scripts/run-env.mjs development tsx prisma/profit-products.seed.ts",
+    "products:variant-attributes:backfill": "tsx scripts/backfill-product-variant-attributes.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

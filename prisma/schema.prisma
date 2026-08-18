@@ -522,6 +522,7 @@ model Product {
   profitProductId       Int?              @unique(map: "uq_produto_lucro_produto_id") @map("produto_id")
   productDescription    String?           @map("produto_descricao") @db.VarChar(240)
   normalizedDescription String?           @map("produto_descricao_normalizada") @db.VarChar(240)
+  variantAttributes     Json?             @map("atributos_variante")
   profitCondition       ProductCondition? @map("condicao_produto")
   netProfit             Decimal?          @map("lucro_liquido") @db.Decimal(12, 2)
   active                Boolean           @default(true) @map("ativo")

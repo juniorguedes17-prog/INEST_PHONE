@@ -3,6 +3,7 @@ export interface ProductRecord {
   profitProductId?: number | null;
   productDescription?: string | null;
   normalizedDescription?: string | null;
+  variantAttributes?: unknown;
   profitCondition?: string | null;
   netProfit?: number | string | null;
   active?: boolean;
