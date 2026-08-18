@@ -104,9 +104,12 @@ export class AuthService {
   }
 
   async logout(refreshToken?: string, userId?: string, context?: RequestContext) {
+    let auditUserId = userId;
+
     if (refreshToken) {
       try {
         const payload = await this.tokenService.verifyRefreshToken(refreshToken);
+        auditUserId ??= payload.sub;
 
         if (payload.jti) {
           await this.sessionService.revoke(payload.jti);
@@ -116,7 +119,7 @@ export class AuthService {
       }
     }
 
-    await this.auditLogger.logAuthEvent('LOGOUT', 'auth.logout', userId ?? null, context);
+    await this.auditLogger.logAuthEvent('LOGOUT', 'auth.logout', auditUserId ?? null, context);
 
     return {
       success: true,

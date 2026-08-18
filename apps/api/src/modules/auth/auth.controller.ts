@@ -63,12 +63,10 @@ export class AuthController {
   }
 
   @Post('logout')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @Public()
   @ApiOperation({ summary: 'Encerra a sessao atual.' })
   async logout(
     @Body() logoutDto: LogoutDto,
-    @CurrentUser() user: AuthenticatedUser,
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
@@ -76,7 +74,7 @@ export class AuthController {
       logoutDto.refreshToken ?? this.getCookie(request, REFRESH_TOKEN_COOKIE) ?? undefined;
     const result = await this.authService.logout(
       refreshToken,
-      user?.id,
+      undefined,
       this.getRequestContext(request),
     );
     this.clearAuthCookies(response);

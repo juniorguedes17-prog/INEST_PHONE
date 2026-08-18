@@ -1,6 +1,6 @@
 import { env } from '@/lib/env';
 import { LoginResponse } from '@/types/auth';
-import { clearAccessToken, persistAccessToken } from './authenticated-fetch';
+import { authenticatedFetch, clearAuthSession, persistAccessToken } from './authenticated-fetch';
 
 interface LoginInput {
   email: string;
@@ -41,15 +41,23 @@ export async function login(input: LoginInput): Promise<LoginResponse> {
 }
 
 export async function logout(): Promise<void> {
-  await fetch(`${env.apiUrl}/auth/logout`, {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({}),
-  });
-  clearAccessToken();
+  try {
+    const response = await authenticatedFetch(`${env.apiUrl}/auth/logout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+
+    if (!response.ok && response.status !== 401 && response.status !== 403) {
+      throw new Error('Nao foi possivel encerrar a sessao remota.');
+    }
+  } catch {
+    // O encerramento local continua seguro quando a sessao remota ja expirou.
+  }
+
+  clearAuthSession();
 }
 
 export async function refreshSession(): Promise<LoginResponse> {

@@ -12,7 +12,6 @@ import {
   THEME_CHANGE_EVENT,
 } from '@/lib/theme-preference';
 import type { ThemePreference } from '@/lib/theme-preference';
-import { clearAccessToken } from '@/services/authenticated-fetch';
 import { logout } from '@/services/auth-service';
 import { getNavigationItem } from './navigation';
 
@@ -81,14 +80,9 @@ export function Header({ onOpenMenu }: HeaderProps) {
 
     setIsLoggingOut(true);
 
-    try {
-      await logout();
-    } finally {
-      // A sessao local deve ser encerrada mesmo quando o refresh token ja expirou.
-      clearAccessToken();
-      router.replace('/login');
-      router.refresh();
-    }
+    await logout();
+    router.replace('/login');
+    router.refresh();
   }
 
   return (
