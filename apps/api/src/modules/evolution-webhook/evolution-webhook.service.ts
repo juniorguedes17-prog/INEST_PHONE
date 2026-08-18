@@ -5,6 +5,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
+import { vm2ShadowResultStore } from './product-identity-shadow-store';
 import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
 import { EvolutionMessage, ParsedSupplierListItem } from './evolution-webhook.types';
 
@@ -175,10 +176,10 @@ export class EvolutionWebhookService implements OnModuleInit {
     context: { supplierContactId: string; sourceMessageId: string },
     catalog: Awaited<ReturnType<EvolutionWebhookService['loadProductShadowCatalog']>>,
   ) {
-    for (const { item, identity, productResolution } of processParsedSupplierItemsShadow(
-      items,
-      catalog,
-    )) {
+    const observations = processParsedSupplierItemsShadow(items, catalog);
+    vm2ShadowResultStore.record(observations);
+
+    for (const { item, identity, productResolution } of observations) {
       this.logger.debug(
         JSON.stringify({
           event: 'evolution.product_id.shadow',

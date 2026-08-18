@@ -41,4 +41,10 @@ export class AdminDiagnosticsController {
   statusVariantAttributes() {
     return this.diagnosticsService.variantAttributesStatus();
   }
+
+  // TEMPORARY VM2 SHADOW DIAGNOSTIC — REMOVE AFTER PRODUCTION VALIDATION
+  @Get('vm2-shadow-summary')
+  vm2ShadowSummary() {
+    return this.diagnosticsService.vm2ShadowSummary();
+  }
 }

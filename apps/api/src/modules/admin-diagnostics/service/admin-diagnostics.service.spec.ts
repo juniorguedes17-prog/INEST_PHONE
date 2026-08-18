@@ -131,4 +131,20 @@ describe('AdminDiagnosticsService', () => {
     expect(result.withoutVariantAttributes).toBe(0);
     expect(update).not.toHaveBeenCalled();
   });
+
+  it('exposes the process-local VM2 shadow summary without database writes', () => {
+    const prisma = { product: {} };
+    const service = new AdminDiagnosticsService(prisma as never);
+
+    expect(service.vm2ShadowSummary()).toMatchObject({
+      totalProcessed: expect.any(Number),
+      found: expect.any(Number),
+      missing: expect.any(Number),
+      ambiguous: expect.any(Number),
+      foundIncorrectSuspects: expect.any(Number),
+      missingSamples: expect.any(Array),
+      ambiguousSamples: expect.any(Array),
+    });
+    expect(prisma.product).not.toHaveProperty('update');
+  });
 });

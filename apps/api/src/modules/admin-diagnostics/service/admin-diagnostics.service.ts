@@ -7,6 +7,7 @@ import {
   type VariantAttributesBackfillProduct,
   type VariantAttributesBackfillResult,
 } from '../../products/variant-attributes-backfill';
+import { vm2ShadowResultStore } from '../../evolution-webhook/product-identity-shadow-store';
 
 const activeWhere = {
   active: true,
@@ -111,6 +112,11 @@ export class AdminDiagnosticsService {
       ...(blockers.length ? { blockers } : {}),
       vm1: blockers.length ? 'BLOCKED' : 'RELEASED',
     };
+  }
+
+  // TEMPORARY VM2 SHADOW DIAGNOSTIC — REMOVE AFTER PRODUCTION VALIDATION
+  vm2ShadowSummary() {
+    return vm2ShadowResultStore.summary();
   }
 
   // TEMPORARY VM1 HOMOLOGATION ENDPOINT — REMOVE AFTER VALIDATION
