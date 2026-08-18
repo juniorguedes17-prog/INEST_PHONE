@@ -84,6 +84,11 @@ body {
   opacity: 1;
 }
 
+.radar-product-card {
+  content-visibility: auto;
+  contain-intrinsic-size: 180px;
+}
+
 button,
 input,
 select,

@@ -44,7 +44,7 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
 
   return (
     <article
-      className={`relative grid min-w-0 gap-3 rounded-xl border bg-white p-3 shadow-card transition-colors focus-within:ring-2 focus-within:ring-inest-blue/30 sm:grid-cols-[72px_minmax(0,1fr)] lg:grid-cols-[28px_72px_minmax(220px,1fr)_160px_190px] lg:items-center ${
+      className={`radar-product-card relative grid min-w-0 gap-3 rounded-xl border bg-white p-3 shadow-card transition-colors focus-within:ring-2 focus-within:ring-inest-blue/30 sm:grid-cols-[72px_minmax(0,1fr)] lg:grid-cols-[28px_72px_minmax(220px,1fr)_160px_190px] lg:items-center ${
         selected ? 'border-inest-blue bg-blue-50/30' : 'border-inest-line hover:border-slate-300'
       }`}
     >

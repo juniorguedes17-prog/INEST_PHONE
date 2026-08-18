@@ -33,6 +33,32 @@ export interface BrazilRadarFacets {
   priceMax: number;
 }
 
+export interface BrazilRadarFilterRow {
+  id: string;
+  quote: PriceQuoteItem;
+  category: string;
+  model: string;
+  modelLabel: string;
+  condition: string;
+  colors: string[];
+  capacities: string[];
+  price: number;
+}
+
+export interface RadarFacetIndex {
+  rows: Map<string, BrazilRadarFilterRow>;
+  orderById: Map<string, number>;
+  allIds: Set<string>;
+  facets: {
+    categories: Map<string, Set<string>>;
+    models: Map<string, Set<string>>;
+    conditions: Map<string, Set<string>>;
+    colors: Map<string, Set<string>>;
+    capacities: Map<string, Set<string>>;
+  };
+  prices: Array<{ id: string; value: number }>;
+}
+
 export type BrazilRadarFacetDimension =
   'categories' | 'models' | 'condition' | 'colors' | 'capacities' | 'price';
 
@@ -47,6 +73,133 @@ export const emptyBrazilRadarFacetState: BrazilRadarFacetState = {
   minPrice: '',
   maxPrice: '',
 };
+
+export function buildBrazilRadarFacetIndex(quotes: PriceQuoteItem[]): RadarFacetIndex {
+  const rows = new Map<string, BrazilRadarFilterRow>();
+  const facets: RadarFacetIndex['facets'] = {
+    categories: new Map(),
+    models: new Map(),
+    conditions: new Map(),
+    colors: new Map(),
+    capacities: new Map(),
+  };
+
+  quotes.forEach((quote) => {
+    const row = normalizeBrazilRadarFilterRow(quote);
+    rows.set(row.id, row);
+    addFacetValues(facets.categories, row.category, row.id);
+    addFacetValues(facets.models, row.model, row.id);
+    addFacetValues(facets.conditions, row.condition, row.id);
+    addFacetValues(facets.colors, row.colors, row.id);
+    addFacetValues(facets.capacities, row.capacities, row.id);
+  });
+
+  return {
+    rows,
+    orderById: new Map(Array.from(rows.keys()).map((id, position) => [id, position])),
+    allIds: new Set(rows.keys()),
+    facets,
+    prices: Array.from(rows.values())
+      .filter((row) => Number.isFinite(row.price) && row.price >= 0)
+      .map((row) => ({ id: row.id, value: row.price }))
+      .sort((left, right) => left.value - right.value),
+  };
+}
+
+export function queryBrazilRadarFacetIndex(
+  index: RadarFacetIndex,
+  filters: BrazilRadarFacetState,
+  excludedDimension?: BrazilRadarFacetDimension,
+) {
+  const matchingSets: Set<string>[] = [];
+
+  addSelectedFacetSet(
+    matchingSets,
+    index.facets.categories,
+    filters.categories,
+    excludedDimension === 'categories',
+  );
+  addSelectedFacetSet(
+    matchingSets,
+    index.facets.models,
+    filters.models,
+    excludedDimension === 'models',
+  );
+  addSelectedFacetSet(
+    matchingSets,
+    index.facets.conditions,
+    filters.condition ? [filters.condition] : [],
+    excludedDimension === 'condition',
+  );
+  addSelectedFacetSet(
+    matchingSets,
+    index.facets.colors,
+    filters.colors,
+    excludedDimension === 'colors',
+  );
+  addSelectedFacetSet(
+    matchingSets,
+    index.facets.capacities,
+    filters.capacities,
+    excludedDimension === 'capacities',
+  );
+
+  if (excludedDimension !== 'price' && (filters.minPrice !== '' || filters.maxPrice !== '')) {
+    matchingSets.push(queryPriceRange(index.prices, filters.minPrice, filters.maxPrice));
+  }
+
+  if (!matchingSets.length) return new Set(index.allIds);
+
+  matchingSets.sort((left, right) => left.size - right.size);
+  const result = new Set(matchingSets[0]);
+  for (const candidate of matchingSets.slice(1)) {
+    for (const id of result) {
+      if (!candidate.has(id)) result.delete(id);
+    }
+    if (!result.size) break;
+  }
+  return result;
+}
+
+export function filterBrazilRadarQuotesByIndex(
+  index: RadarFacetIndex,
+  filters: BrazilRadarFacetState,
+) {
+  const matchingIds = queryBrazilRadarFacetIndex(index, filters);
+  return Array.from(matchingIds)
+    .sort((left, right) => index.orderById.get(left)! - index.orderById.get(right)!)
+    .map((id) => index.rows.get(id)!.quote);
+}
+
+export function buildBrazilRadarFacetsFromIndex(
+  index: RadarFacetIndex,
+  filters: BrazilRadarFacetState = emptyBrazilRadarFacetState,
+): BrazilRadarFacets {
+  const categoryIds = queryBrazilRadarFacetIndex(index, filters, 'categories');
+  const modelIds = queryBrazilRadarFacetIndex(index, filters, 'models');
+  const conditionIds = queryBrazilRadarFacetIndex(index, filters, 'condition');
+  const colorIds = queryBrazilRadarFacetIndex(index, filters, 'colors');
+  const capacityIds = queryBrazilRadarFacetIndex(index, filters, 'capacities');
+  const priceIds = queryBrazilRadarFacetIndex(index, filters, 'price');
+
+  return {
+    categories: countIndexedFacetValues(index, categoryIds, (row) => [row.category], categoryOrder),
+    models: countIndexedModels(index, modelIds),
+    conditions: countIndexedFacetValues(index, conditionIds, (row) => [row.condition], conditionOrder),
+    colors: countIndexedFacetValues(index, colorIds, (row) => row.colors).map((option) => ({
+      ...option,
+      swatch: canonicalColorAliases.find((color) => color.value === option.value)?.swatch,
+    })),
+    capacities: countIndexedFacetValues(
+      index,
+      capacityIds,
+      (row) => row.capacities,
+      capacityOrder,
+    ),
+    priceMin: getIndexedPriceBoundary(index, priceIds, 'min'),
+    priceMax: getIndexedPriceBoundary(index, priceIds, 'max'),
+  };
+}
 
 const capacityOrder = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB'];
 const categoryOrder = ['iPhone', 'iPad', 'MacBook', 'Apple Watch', 'Eletronicos', 'Acessorios'];
@@ -261,6 +414,29 @@ export function getCanonicalColors(source: CatalogFacetSource) {
 
 export function getCanonicalCapacities(source: CatalogFacetSource) {
   const identity = normalizeCanonicalProductIdentity(source);
+  return getCanonicalCapacitiesFromIdentity(source, identity);
+}
+
+function normalizeBrazilRadarFilterRow(quote: PriceQuoteItem): BrazilRadarFilterRow {
+  const identity = normalizeCanonicalProductIdentity(quote);
+
+  return {
+    id: quote.id,
+    quote,
+    category: identity.canonicalCategory,
+    model: identity.canonicalModelKey,
+    modelLabel: identity.canonicalModelMatched ? identity.canonicalModelLabel : '',
+    condition: identity.canonicalCondition,
+    colors: getCanonicalColors(quote),
+    capacities: getCanonicalCapacitiesFromIdentity(quote, identity),
+    price: quote.costProduct,
+  };
+}
+
+function getCanonicalCapacitiesFromIdentity(
+  source: CatalogFacetSource,
+  identity: ReturnType<typeof normalizeCanonicalProductIdentity>,
+) {
   const text = normalizeCatalogFilterText(
     `${source.capacity ?? ''} ${source.model ?? ''} ${source.productName ?? ''}`,
   ).replace(/(\d+)\s*(gb|tb)/g, '$1$2');
@@ -302,6 +478,137 @@ function countFacetValues(
     }
     return a.label.localeCompare(b.label, 'pt-BR');
   });
+}
+
+function addFacetValues(
+  facet: Map<string, Set<string>>,
+  values: string | string[],
+  id: string,
+) {
+  const normalizedValues = Array.isArray(values) ? values : [values];
+  new Set(normalizedValues.filter(Boolean)).forEach((value) => {
+    const ids = facet.get(value) ?? new Set<string>();
+    ids.add(id);
+    facet.set(value, ids);
+  });
+}
+
+function addSelectedFacetSet(
+  matchingSets: Set<string>[],
+  facet: Map<string, Set<string>>,
+  selected: string[],
+  excluded: boolean,
+) {
+  if (excluded || !selected.length) return;
+
+  const union = new Set<string>();
+  selected.forEach((value) => {
+    facet.get(value)?.forEach((id) => union.add(id));
+  });
+  matchingSets.push(union);
+}
+
+function queryPriceRange(
+  prices: Array<{ id: string; value: number }>,
+  minValue: string,
+  maxValue: string,
+) {
+  const min = minValue === '' ? Number.NEGATIVE_INFINITY : Number(minValue);
+  const max = maxValue === '' ? Number.POSITIVE_INFINITY : Number(maxValue);
+  if (Number.isNaN(min) || Number.isNaN(max)) return new Set<string>();
+
+  const start = lowerBound(prices, min);
+  const end = upperBound(prices, max);
+  return new Set(prices.slice(start, end).map((entry) => entry.id));
+}
+
+function lowerBound(prices: Array<{ id: string; value: number }>, value: number) {
+  let low = 0;
+  let high = prices.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const entry = prices[middle]!;
+    if (entry.value < value) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function upperBound(prices: Array<{ id: string; value: number }>, value: number) {
+  let low = 0;
+  let high = prices.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const entry = prices[middle]!;
+    if (entry.value <= value) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function countIndexedFacetValues(
+  index: RadarFacetIndex,
+  ids: Set<string>,
+  getValues: (row: BrazilRadarFilterRow) => string[],
+  preferredOrder: string[] = [],
+) {
+  const counts = new Map<string, number>();
+  ids.forEach((id) => {
+    const row = index.rows.get(id);
+    if (!row) return;
+    new Set(getValues(row).filter(Boolean)).forEach((value) => {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    });
+  });
+
+  return sortFacetOptions(
+    Array.from(counts, ([value, count]) => ({ value, label: value, count })),
+    preferredOrder,
+  );
+}
+
+function countIndexedModels(index: RadarFacetIndex, ids: Set<string>) {
+  const counts = new Map<string, { label: string; count: number }>();
+  ids.forEach((id) => {
+    const row = index.rows.get(id);
+    if (!row || !row.model || !row.modelLabel) return;
+    const current = counts.get(row.model);
+    counts.set(row.model, {
+      label: row.modelLabel,
+      count: (current?.count ?? 0) + 1,
+    });
+  });
+
+  return Array.from(counts, ([value, option]) => ({ value, ...option })).sort(sortModelsNewestFirst);
+}
+
+function sortFacetOptions(options: FacetOption[], preferredOrder: string[]) {
+  return options.sort((left, right) => {
+    const leftOrder = preferredOrder.indexOf(left.value);
+    const rightOrder = preferredOrder.indexOf(right.value);
+    if (leftOrder >= 0 || rightOrder >= 0) {
+      return (
+        (leftOrder < 0 ? Number.MAX_SAFE_INTEGER : leftOrder) -
+        (rightOrder < 0 ? Number.MAX_SAFE_INTEGER : rightOrder)
+      );
+    }
+    return left.label.localeCompare(right.label, 'pt-BR');
+  });
+}
+
+function getIndexedPriceBoundary(
+  index: RadarFacetIndex,
+  ids: Set<string>,
+  boundary: 'min' | 'max',
+) {
+  const values = Array.from(ids)
+    .map((id) => index.rows.get(id)?.price)
+    .filter(
+      (value): value is number =>
+        typeof value === 'number' && Number.isFinite(value) && value >= 0,
+    );
+  if (!values.length) return 0;
+  return boundary === 'min' ? Math.floor(Math.min(...values)) : Math.ceil(Math.max(...values));
 }
 
 function sortModelsNewestFirst(a: FacetOption, b: FacetOption) {

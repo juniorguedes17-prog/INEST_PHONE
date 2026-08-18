@@ -31,11 +31,12 @@ import { BrazilRadarFiltersDrawer } from './BrazilRadarFiltersDrawer';
 import {
   BrazilRadarFacetState,
   BrazilRadarFacetDimension,
-  buildBrazilRadarFacets,
+  buildBrazilRadarFacetIndex,
+  buildBrazilRadarFacetsFromIndex,
   countActiveBrazilRadarFacets,
   emptyBrazilRadarFacetState,
   areBrazilRadarFacetStatesEqual,
-  filterBrazilRadarQuotes,
+  filterBrazilRadarQuotesByIndex,
   isVisibleRadarQuote,
   normalizeBrazilRadarFacetState,
 } from '../utils/brazil-radar-facets';
@@ -108,17 +109,21 @@ export function PriceRadarPageContent() {
     () => radar.quotes.filter(isVisibleRadarQuote),
     [radar.quotes],
   );
+  const facetIndex = useMemo(
+    () => buildBrazilRadarFacetIndex(visibleRadarQuotes),
+    [visibleRadarQuotes],
+  );
   const facets = useMemo(
-    () => buildBrazilRadarFacets(visibleRadarQuotes, facetFilters),
-    [facetFilters, visibleRadarQuotes],
+    () => buildBrazilRadarFacetsFromIndex(facetIndex, facetFilters),
+    [facetFilters, facetIndex],
   );
   const normalizedFacetFilters = useMemo(
     () => normalizeBrazilRadarFacetState(facetFilters, facets),
     [facetFilters, facets],
   );
   const filteredQuotes = useMemo(
-    () => filterBrazilRadarQuotes(visibleRadarQuotes, normalizedFacetFilters),
-    [normalizedFacetFilters, visibleRadarQuotes],
+    () => filterBrazilRadarQuotesByIndex(facetIndex, normalizedFacetFilters),
+    [facetIndex, normalizedFacetFilters],
   );
   const activeFilterCount = useMemo(
     () => countActiveBrazilRadarFacets(normalizedFacetFilters),
@@ -197,9 +202,9 @@ export function PriceRadarPageContent() {
 
   function changeFacetFilters(nextFilters: BrazilRadarFacetState) {
     const changedDimension = getChangedFacetDimension(facetFilters, nextFilters);
-    const nextFacets = buildBrazilRadarFacets(visibleRadarQuotes, nextFilters);
+    const nextFacets = buildBrazilRadarFacetsFromIndex(facetIndex, nextFilters);
     const firstPass = normalizeBrazilRadarFacetState(nextFilters, nextFacets, changedDimension);
-    const stableFacets = buildBrazilRadarFacets(visibleRadarQuotes, firstPass);
+    const stableFacets = buildBrazilRadarFacetsFromIndex(facetIndex, firstPass);
     setFacetFilters(normalizeBrazilRadarFacetState(firstPass, stableFacets));
   }
 
