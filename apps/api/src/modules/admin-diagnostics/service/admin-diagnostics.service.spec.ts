@@ -80,6 +80,14 @@ describe('AdminDiagnosticsService', () => {
     const dryRun = await service.variantAttributesDryRun();
     expect(dryRun.readyToApply).toBe(false);
     expect(dryRun.review).toBe(1);
+    expect(dryRun.reviewItems).toEqual([{
+      productId: unsafe.id,
+      profitProductId: unsafe.profitProductId,
+      productDescription: unsafe.productDescription,
+      family: unsafe.productType,
+      reason: 'identidade_insuficiente',
+      currentVariantAttributes: null,
+    }]);
     expect(update).not.toHaveBeenCalled();
     await expect(service.applyVariantAttributes()).rejects.toBeInstanceOf(ConflictException);
     expect(update).not.toHaveBeenCalled();

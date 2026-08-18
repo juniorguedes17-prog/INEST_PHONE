@@ -224,6 +224,17 @@ export class AdminDiagnosticsService {
       productsEligible: result.productsEligible,
       auto: result.auto,
       review,
+      reviewItems: result.review.map((item) => {
+        const product = products.find(({ id }) => id === item.id);
+        return {
+          productId: item.id,
+          profitProductId: product?.profitProductId ?? null,
+          productDescription: product?.productDescription ?? null,
+          family: product?.productType ?? null,
+          reason: item.reason,
+          currentVariantAttributes: product?.variantAttributes ?? null,
+        };
+      }),
       blocked,
       ambiguous: result.ambiguous,
       collisions,
