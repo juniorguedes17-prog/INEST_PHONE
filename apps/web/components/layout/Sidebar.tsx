@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { INestLogo } from '@/components/shared/INestLogo';
 import { visibleNavigationItems } from './navigation';
 import { cn } from '@/utils/cn';
 
@@ -22,15 +22,8 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         collapsed ? 'w-[76px]' : 'w-[244px]',
       )}
     >
-      <div className="flex min-h-12 items-center gap-3 px-2">
-        <Image
-          src="/brand/inest-phone-logo.png"
-          alt="iNest Phone"
-          width={56}
-          height={56}
-          priority
-          className="h-12 w-12 flex-none object-contain"
-        />
+      <div className={cn('flex min-h-16 items-center gap-3 px-1', collapsed && 'justify-center')}>
+        <INestLogo variant={collapsed ? 'compact' : 'default'} priority />
         {!collapsed ? (
           <div className="min-w-0">
             <span className="block truncate text-sm font-semibold text-inest-muted">Gestao Comercial</span>

@@ -10,6 +10,7 @@ export * from './EmptyState';
 export * from './ErrorState';
 export * from './FilterSidebar';
 export * from './FilterCard';
+export * from './INestLogo';
 export * from './InfoTag';
 export * from './KpiCard';
 export * from './ListHeader';

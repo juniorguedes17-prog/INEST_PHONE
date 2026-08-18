@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ActionButton, ContentContainer, SearchInput } from '@/components/shared';
+import { INestLogo } from '@/components/shared/INestLogo';
 import { getSettings, updateUserTheme } from '@/features/settings/services/settings-service';
 import {
   applyThemePreference,
@@ -97,14 +97,7 @@ export function Header({ onOpenMenu }: HeaderProps) {
           >
             Menu
           </button>
-          <Image
-            src="/brand/inest-phone-logo.png"
-            alt="iNest Phone"
-            width={40}
-            height={40}
-            priority
-            className="hidden h-10 w-10 flex-none object-contain sm:block"
-          />
+          <INestLogo variant="compact" priority className="hidden sm:block" />
           <div className="min-w-0">
             <nav
               aria-label="Breadcrumb"

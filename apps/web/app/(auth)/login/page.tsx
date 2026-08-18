@@ -1,9 +1,9 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
+import { INestLogo } from '@/components/shared/INestLogo';
 import { login } from '@/services/auth-service';
 
 export default function LoginPage() {
@@ -34,14 +34,7 @@ export default function LoginPage() {
       <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-10 lg:grid-cols-[1fr_440px]">
         <div className="max-w-2xl">
           <p className="text-sm font-bold uppercase tracking-wide text-inest-blue">Acesso seguro</p>
-          <Image
-            src="/brand/inest-phone-logo.png"
-            alt="iNest Phone"
-            width={180}
-            height={180}
-            priority
-            className="mt-4 h-[180px] w-[180px] object-contain"
-          />
+          <INestLogo variant="login" priority className="mt-4" />
           <p className="mt-5 text-lg leading-8 text-inest-muted">
             Plataforma comercial preparada para radar de precos, precificacao, ofertas e gestao
             operacional com controle de acesso por perfil.
