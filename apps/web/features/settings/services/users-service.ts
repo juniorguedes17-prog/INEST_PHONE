@@ -1,6 +1,6 @@
 import { env } from '@/lib/env';
 import { authenticatedFetch } from '@/services/authenticated-fetch';
-import { AccessUser, CreateAdministratorInput } from '../types/users';
+import { AccessUser, CreateAdministratorInput, UpdateAdministratorInput } from '../types/users';
 
 async function parseResponse<T>(response: Response): Promise<T> {
   const payload = (await response.json().catch(() => null)) as unknown;
@@ -24,6 +24,19 @@ export async function listAccessUsers(): Promise<AccessUser[]> {
 export async function createAdministrator(input: CreateAdministratorInput): Promise<AccessUser> {
   const response = await authenticatedFetch(`${env.apiUrl}/users`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  return parseResponse<AccessUser>(response);
+}
+
+export async function updateAccessUser(
+  id: string,
+  input: UpdateAdministratorInput,
+): Promise<AccessUser> {
+  const response = await authenticatedFetch(`${env.apiUrl}/users/${id}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
   });

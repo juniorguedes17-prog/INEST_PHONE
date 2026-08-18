@@ -33,6 +33,7 @@ function createService(overrides?: Partial<Record<string, unknown>>) {
       .fn()
       .mockResolvedValue({ ...activeUser, status: 'INACTIVE' as const }),
     activateAdministrator: vi.fn().mockResolvedValue(activeUser),
+    updateAdministrator: vi.fn().mockResolvedValue(activeUser),
     ...overrides,
   };
   const passwordService = {
@@ -89,6 +90,38 @@ describe('UsersService', () => {
     });
   });
 
+  it('rejects administrator creation passwords shorter than eight characters', async () => {
+    const { service, passwordService, usersRepository } = createService();
+
+    for (const password of ['123456', '1234567']) {
+      await expect(
+        service.createAdministrator(
+          { name: 'Jessica', email: 'jessica@inest.com', password },
+          actor,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+
+    expect(passwordService.hashPassword).not.toHaveBeenCalled();
+    expect(usersRepository.createAdministrator).not.toHaveBeenCalled();
+  });
+
+  it('accepts administrator creation passwords with eight or more characters', async () => {
+    const { service, passwordService } = createService();
+
+    await service.createAdministrator(
+      { name: 'Jessica', email: 'jessica@inest.com', password: '12345678' },
+      actor,
+    );
+    await service.createAdministrator(
+      { name: 'Jessica', email: 'jessica2@inest.com', password: '123456789' },
+      actor,
+    );
+
+    expect(passwordService.hashPassword).toHaveBeenCalledWith('12345678');
+    expect(passwordService.hashPassword).toHaveBeenCalledWith('123456789');
+  });
+
   it('returns a friendly error when the e-mail already exists', async () => {
     const { service } = createService({
       createAdministrator: vi.fn().mockRejectedValue(new DuplicateManagedUserEmailError()),
@@ -129,5 +162,94 @@ describe('UsersService', () => {
     expect(usersRepository.deactivateAdministrator).toHaveBeenCalledWith(activeUser.id, actor.id);
     expect(result).toMatchObject({ id: activeUser.id, status: 'INACTIVE' });
     expect(result).not.toHaveProperty('passwordHash');
+  });
+
+  it('updates name and e-mail without replacing the current password', async () => {
+    const { service, usersRepository, passwordService } = createService({
+      updateAdministrator: vi.fn().mockResolvedValue({
+        ...activeUser,
+        name: 'Jessica Ribeiro',
+        email: 'jessica.ribeiro@inest.com',
+      }),
+    });
+
+    const result = await service.updateAdministrator(
+      activeUser.id,
+      { name: ' Jessica Ribeiro ', email: ' JESSICA.RIBEIRO@INEST.COM ' },
+      actor,
+    );
+
+    expect(passwordService.hashPassword).not.toHaveBeenCalled();
+    expect(usersRepository.updateAdministrator).toHaveBeenCalledWith({
+      id: activeUser.id,
+      name: 'Jessica Ribeiro',
+      email: 'jessica.ribeiro@inest.com',
+      passwordHash: undefined,
+      actorId: actor.id,
+    });
+    expect(result).toMatchObject({ name: 'Jessica Ribeiro', email: 'jessica.ribeiro@inest.com' });
+    expect(result).not.toHaveProperty('passwordHash');
+  });
+
+  it('keeps the current password when the edit password is empty', async () => {
+    const { service, usersRepository, passwordService } = createService();
+
+    await service.updateAdministrator(
+      activeUser.id,
+      { name: 'Jessica', email: 'jessica@inest.com', password: '' },
+      actor,
+    );
+
+    expect(passwordService.hashPassword).not.toHaveBeenCalled();
+    expect(usersRepository.updateAdministrator).toHaveBeenCalledWith(
+      expect.objectContaining({ passwordHash: undefined }),
+    );
+  });
+
+  it('rejects edited passwords shorter than eight characters', async () => {
+    const { service, passwordService, usersRepository } = createService();
+
+    for (const password of ['123456', '1234567']) {
+      await expect(
+        service.updateAdministrator(
+          activeUser.id,
+          { name: 'Jessica', email: 'jessica@inest.com', password },
+          actor,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+
+    expect(passwordService.hashPassword).not.toHaveBeenCalled();
+    expect(usersRepository.updateAdministrator).not.toHaveBeenCalled();
+  });
+
+  it('hashes an edited password and returns only safe fields', async () => {
+    const { service, usersRepository, passwordService } = createService();
+
+    const result = await service.updateAdministrator(
+      activeUser.id,
+      { name: 'Jessica', email: 'jessica@inest.com', password: '12345678' },
+      actor,
+    );
+
+    expect(passwordService.hashPassword).toHaveBeenCalledWith('12345678');
+    expect(usersRepository.updateAdministrator).toHaveBeenCalledWith(
+      expect.objectContaining({ passwordHash: '$2b$hashed-password' }),
+    );
+    expect(result).not.toHaveProperty('passwordHash');
+  });
+
+  it('returns a friendly error when an edited e-mail already exists', async () => {
+    const { service } = createService({
+      updateAdministrator: vi.fn().mockRejectedValue(new DuplicateManagedUserEmailError()),
+    });
+
+    await expect(
+      service.updateAdministrator(
+        activeUser.id,
+        { name: 'Jessica', email: 'ja-existe@inest.com' },
+        actor,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
   });
 });

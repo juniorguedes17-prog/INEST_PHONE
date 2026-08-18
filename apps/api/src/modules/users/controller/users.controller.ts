@@ -5,7 +5,7 @@ import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
-import { CreateAdministratorDto } from '../dto/users.dto';
+import { CreateAdministratorDto, UpdateAdministratorDto } from '../dto/users.dto';
 import { UsersService } from '../service/users.service';
 import { ADMINISTRATOR_ROLE } from '../users.constants';
 
@@ -39,5 +39,15 @@ export class UsersController {
   @ApiOperation({ summary: 'Reativa o acesso de um administrador.' })
   activate(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
     return this.usersService.activateAdministrator(id, user);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Edita dados de um usuario administrador.' })
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateAdministratorDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.usersService.updateAdministrator(id, dto, user);
   }
 }

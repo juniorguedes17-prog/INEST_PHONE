@@ -95,6 +95,70 @@ export class UsersRepository {
     });
   }
 
+  async updateAdministrator(input: {
+    id: string;
+    name?: string;
+    email?: string;
+    passwordHash?: string;
+    actorId: string;
+  }): Promise<ManagedUserRecord> {
+    return this.prisma.$transaction(async (transaction) => {
+      const currentUser = await transaction.user.findFirst({
+        where: {
+          id: input.id,
+          deletedAt: null,
+          role: { name: ADMINISTRATOR_ROLE },
+        },
+        select: managedUserSelect,
+      });
+
+      if (!currentUser) {
+        throw new ManagedUserNotFoundError();
+      }
+
+      const email = input.email ?? currentUser.email;
+      if (email !== currentUser.email) {
+        const existingUser = await transaction.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+
+        if (existingUser && existingUser.id !== input.id) {
+          throw new DuplicateManagedUserEmailError();
+        }
+      }
+
+      const user = await transaction.user.update({
+        where: { id: input.id },
+        data: {
+          name: input.name ?? currentUser.name,
+          email,
+          ...(input.passwordHash ? { passwordHash: input.passwordHash } : {}),
+          updatedBy: input.actorId,
+        },
+        select: managedUserSelect,
+      });
+
+      if (input.passwordHash) {
+        await transaction.refreshSession.deleteMany({ where: { userId: input.id } });
+      }
+
+      await transaction.auditLog.create({
+        data: {
+          userId: input.actorId,
+          operationType: 'UPDATE',
+          entity: 'users',
+          entityId: user.id,
+          oldValue: this.toAuditValue(currentUser),
+          newValue: this.toAuditValue(user),
+          context: { event: 'users.administrator_updated', passwordChanged: Boolean(input.passwordHash) },
+        },
+      });
+
+      return user;
+    });
+  }
+
   async deactivateAdministrator(id: string, actorId: string): Promise<ManagedUserRecord> {
     return this.runSerializable(async (transaction) => {
       const currentUser = await transaction.user.findFirst({

@@ -7,7 +7,8 @@ import {
 } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { PasswordService } from '../../auth/services/password.service';
-import { CreateAdministratorDto } from '../dto/users.dto';
+import { MINIMUM_PASSWORD_LENGTH } from '../../auth/constants/auth.constants';
+import { CreateAdministratorDto, UpdateAdministratorDto } from '../dto/users.dto';
 import {
   DuplicateManagedUserEmailError,
   LastActiveAdministratorError,
@@ -41,6 +42,8 @@ export class UsersService {
       throw new BadRequestException('Informe o e-mail do usuario.');
     }
 
+    this.assertPasswordLength(dto.password);
+
     const passwordHash = await this.passwordService.hashPassword(dto.password);
 
     try {
@@ -58,6 +61,46 @@ export class UsersService {
 
       if (error instanceof ManagedUserNotFoundError) {
         throw new NotFoundException('Perfil Administrador indisponivel.');
+      }
+
+      throw error;
+    }
+  }
+
+  async updateAdministrator(id: string, dto: UpdateAdministratorDto, actor: AuthenticatedUser) {
+    const name = dto.name === undefined ? undefined : dto.name.trim();
+    const email = dto.email === undefined ? undefined : dto.email.trim().toLowerCase();
+
+    if (name !== undefined && !name) {
+      throw new BadRequestException('Informe o nome do usuario.');
+    }
+
+    if (email !== undefined && !email) {
+      throw new BadRequestException('Informe o e-mail do usuario.');
+    }
+
+    if (dto.password) {
+      this.assertPasswordLength(dto.password);
+    }
+
+    const passwordHash = dto.password ? await this.passwordService.hashPassword(dto.password) : undefined;
+
+    try {
+      const user = await this.usersRepository.updateAdministrator({
+        id,
+        name,
+        email,
+        passwordHash,
+        actorId: actor.id,
+      });
+      return this.toResponse(user, actor.id);
+    } catch (error) {
+      if (error instanceof DuplicateManagedUserEmailError || this.isUniqueEmailError(error)) {
+        throw new ConflictException('Ja existe um usuario com este e-mail.');
+      }
+
+      if (error instanceof ManagedUserNotFoundError) {
+        throw new NotFoundException('Usuario administrador nao encontrado.');
       }
 
       throw error;
@@ -121,5 +164,13 @@ export class UsersService {
       'code' in error &&
       (error as { code?: unknown }).code === 'P2002'
     );
+  }
+
+  private assertPasswordLength(password: string) {
+    if (password.length < MINIMUM_PASSWORD_LENGTH) {
+      throw new BadRequestException(
+        `A senha deve possuir pelo menos ${MINIMUM_PASSWORD_LENGTH} caracteres.`,
+      );
+    }
   }
 }

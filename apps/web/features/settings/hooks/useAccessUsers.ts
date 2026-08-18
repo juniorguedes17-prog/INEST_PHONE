@@ -6,8 +6,9 @@ import {
   createAdministrator,
   deactivateAccessUser,
   listAccessUsers,
+  updateAccessUser,
 } from '../services/users-service';
-import { AccessUser, CreateAdministratorInput } from '../types/users';
+import { AccessUser, CreateAdministratorInput, UpdateAdministratorInput } from '../types/users';
 
 export function useAccessUsers() {
   const [users, setUsers] = useState<AccessUser[]>([]);
@@ -82,6 +83,28 @@ export function useAccessUsers() {
     }
   }
 
+  async function update(id: string, input: UpdateAdministratorInput) {
+    setUpdatingUserId(id);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const user = await updateAccessUser(id, input);
+      setUsers((current) => current.map((item) => (item.id === id ? user : item)));
+      setSuccess('Usuario atualizado com sucesso.');
+      return true;
+    } catch (usersError) {
+      setError(
+        usersError instanceof Error
+          ? usersError.message
+          : 'Nao foi possivel atualizar o usuario.',
+      );
+      return false;
+    } finally {
+      setUpdatingUserId(null);
+    }
+  }
+
   async function activate(id: string) {
     setUpdatingUserId(id);
     setError(null);
@@ -113,6 +136,7 @@ export function useAccessUsers() {
     success,
     reload,
     create,
+    update,
     deactivate,
     activate,
   };

@@ -15,6 +15,7 @@ function createRepository(activeAdministratorCount = 2) {
   const transaction = {
     user: {
       findFirst: vi.fn().mockResolvedValue(activeUser),
+      findUnique: vi.fn().mockResolvedValue(null),
       count: vi.fn().mockResolvedValue(activeAdministratorCount),
       update: vi.fn().mockResolvedValue({ ...activeUser, status: 'INACTIVE' }),
     },
@@ -85,6 +86,52 @@ describe('UsersRepository', () => {
       LastActiveAdministratorError,
     );
     expect(transaction.user.update).not.toHaveBeenCalled();
+    expect(transaction.refreshSession.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('updates administrator data and revokes refresh sessions only after a password change', async () => {
+    const { repository, transaction } = createRepository();
+
+    await repository.updateAdministrator({
+      id: activeUser.id,
+      name: 'Jessica Ribeiro',
+      email: 'jessica.ribeiro@inest.com',
+      passwordHash: '$2b$new-password',
+      actorId: 'actor-id',
+    });
+
+    expect(transaction.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: activeUser.id },
+        data: expect.objectContaining({
+          name: 'Jessica Ribeiro',
+          email: 'jessica.ribeiro@inest.com',
+          passwordHash: '$2b$new-password',
+          updatedBy: 'actor-id',
+        }),
+      }),
+    );
+    expect(transaction.refreshSession.deleteMany).toHaveBeenCalledWith({
+      where: { userId: activeUser.id },
+    });
+    expect(transaction.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          context: { event: 'users.administrator_updated', passwordChanged: true },
+        }),
+      }),
+    );
+  });
+
+  it('does not revoke refresh sessions for a name or e-mail-only update', async () => {
+    const { repository, transaction } = createRepository();
+
+    await repository.updateAdministrator({
+      id: activeUser.id,
+      name: 'Jessica Ribeiro',
+      actorId: 'actor-id',
+    });
+
     expect(transaction.refreshSession.deleteMany).not.toHaveBeenCalled();
   });
 });

@@ -14,14 +14,18 @@ import { useAccessUsers } from '../hooks/useAccessUsers';
 import { AccessUser } from '../types/users';
 
 const emptyForm = { name: '', email: '', password: '' };
+const minimumPasswordLength = 8;
 
 export function UsersAccessSettingsCard() {
-  const { users, loading, creating, updatingUserId, error, success, create, deactivate, activate } =
+  const { users, loading, creating, updatingUserId, error, success, create, update, deactivate, activate } =
     useAccessUsers();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AccessUser | null>(null);
+  const [editingUser, setEditingUser] = useState<AccessUser | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
   const [formError, setFormError] = useState<string | null>(null);
+  const [editFormError, setEditFormError] = useState<string | null>(null);
 
   function closeCreateModal() {
     if (creating) {
@@ -41,11 +45,61 @@ export function UsersAccessSettingsCard() {
       return;
     }
 
+    if (form.password.length < minimumPasswordLength) {
+      setFormError(`A senha deve possuir pelo menos ${minimumPasswordLength} caracteres.`);
+      return;
+    }
+
     setFormError(null);
     const created = await create(form);
 
     if (created) {
       closeCreateModal();
+    }
+  }
+
+  function openEditModal(user: AccessUser) {
+    setEditingUser(user);
+    setEditForm({ name: user.name, email: user.email, password: '' });
+    setEditFormError(null);
+  }
+
+  function closeEditModal() {
+    if (editingUser && updatingUserId === editingUser.id) {
+      return;
+    }
+
+    setEditingUser(null);
+    setEditForm(emptyForm);
+    setEditFormError(null);
+  }
+
+  async function handleEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingUser) {
+      return;
+    }
+
+    if (!editForm.name.trim() || !editForm.email.trim()) {
+      setEditFormError('Preencha nome e e-mail.');
+      return;
+    }
+
+    if (editForm.password && editForm.password.length < minimumPasswordLength) {
+      setEditFormError(`A senha deve possuir pelo menos ${minimumPasswordLength} caracteres.`);
+      return;
+    }
+
+    setEditFormError(null);
+    const updated = await update(editingUser.id, {
+      name: editForm.name,
+      email: editForm.email,
+      ...(editForm.password ? { password: editForm.password } : {}),
+    });
+
+    if (updated) {
+      closeEditModal();
     }
   }
 
@@ -103,24 +157,33 @@ export function UsersAccessSettingsCard() {
                 <StatusBadge tone={isActive ? 'green' : 'gray'}>
                   {isActive ? 'ATIVO' : 'INATIVO'}
                 </StatusBadge>
-                {isActive ? (
-                  <ActionButton
-                    variant="danger"
-                    onClick={() => setSelectedUser(user)}
-                    disabled={user.isCurrentUser || isUpdating}
-                    title={user.isCurrentUser ? 'Voce nao pode desativar a propria conta.' : undefined}
-                  >
-                    {isUpdating ? 'Desativando...' : 'Desativar'}
-                  </ActionButton>
-                ) : (
+                <div className="flex flex-wrap gap-2 md:justify-end">
                   <ActionButton
                     variant="secondary"
-                    onClick={() => void activate(user.id)}
+                    onClick={() => openEditModal(user)}
                     disabled={isUpdating}
                   >
-                    {isUpdating ? 'Reativando...' : 'Reativar'}
+                    Editar
                   </ActionButton>
-                )}
+                  {isActive ? (
+                    <ActionButton
+                      variant="danger"
+                      onClick={() => setSelectedUser(user)}
+                      disabled={user.isCurrentUser || isUpdating}
+                      title={user.isCurrentUser ? 'Voce nao pode desativar a propria conta.' : undefined}
+                    >
+                      {isUpdating ? 'Desativando...' : 'Desativar'}
+                    </ActionButton>
+                  ) : (
+                    <ActionButton
+                      variant="secondary"
+                      onClick={() => void activate(user.id)}
+                      disabled={isUpdating}
+                    >
+                      {isUpdating ? 'Reativando...' : 'Reativar'}
+                    </ActionButton>
+                  )}
+                </div>
               </article>
             );
           })}
@@ -162,11 +225,58 @@ export function UsersAccessSettingsCard() {
             value={form.password}
             onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
             autoComplete="new-password"
+            minLength={minimumPasswordLength}
           />
           <div className="rounded-lg border border-inest-line bg-inest-soft p-3 text-sm text-inest-muted">
             Perfil: <strong className="text-inest-text">Administrador</strong>
           </div>
           {formError ? <p className="text-sm font-bold text-red-600">{formError}</p> : null}
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(editingUser)}
+        title="Editar usuario"
+        onClose={closeEditModal}
+        footer={
+          <>
+            <ActionButton variant="secondary" onClick={closeEditModal} disabled={Boolean(updatingUserId)}>
+              Cancelar
+            </ActionButton>
+            <ActionButton
+              type="submit"
+              form="edit-administrator-form"
+              disabled={Boolean(updatingUserId)}
+            >
+              {updatingUserId ? 'Salvando...' : 'Salvar alteracoes'}
+            </ActionButton>
+          </>
+        }
+      >
+        <form id="edit-administrator-form" className="grid gap-4" onSubmit={handleEdit}>
+          <Input
+            label="Nome"
+            value={editForm.name}
+            onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+            autoComplete="name"
+          />
+          <Input
+            label="E-mail"
+            type="email"
+            value={editForm.email}
+            onChange={(event) => setEditForm((current) => ({ ...current, email: event.target.value }))}
+            autoComplete="email"
+          />
+          <Input
+            label="Nova senha"
+            type="password"
+            value={editForm.password}
+            onChange={(event) => setEditForm((current) => ({ ...current, password: event.target.value }))}
+            autoComplete="new-password"
+            minLength={minimumPasswordLength}
+          />
+          <p className="text-sm text-inest-muted">Deixe a senha em branco para mante-la inalterada.</p>
+          {editFormError ? <p className="text-sm font-bold text-red-600">{editFormError}</p> : null}
         </form>
       </Modal>
 

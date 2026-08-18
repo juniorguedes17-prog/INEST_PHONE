@@ -15,3 +15,9 @@ export interface CreateAdministratorInput {
   email: string;
   password: string;
 }
+
+export interface UpdateAdministratorInput {
+  name: string;
+  email: string;
+  password?: string;
+}
