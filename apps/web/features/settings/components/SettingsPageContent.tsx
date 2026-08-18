@@ -20,6 +20,7 @@ import type { ThemePreference } from '@/lib/theme-preference';
 import { useSettings } from '../hooks/useSettings';
 import { ImportRedirectRule, SettingsPayload } from '../types/settings';
 import { OfferTemplatesSettingsCard } from './OfferTemplatesSettingsCard';
+import { UsersAccessSettingsCard } from './UsersAccessSettingsCard';
 
 export function SettingsPageContent() {
   const { settings, setSettings, loading, saving, error, success, reload, save, resetDefaults } =
@@ -725,6 +726,8 @@ export function SettingsPageContent() {
           </div>
         </SettingsCard>
       </div>
+
+      <UsersAccessSettingsCard />
 
       <OfferTemplatesSettingsCard />
     </div>

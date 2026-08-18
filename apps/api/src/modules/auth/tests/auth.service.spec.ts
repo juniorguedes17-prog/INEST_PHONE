@@ -40,6 +40,11 @@ function createService(overrides?: { user?: unknown; passwordIsValid?: boolean }
       refreshExpiresAt: Date.now() + 1000,
     }),
     getAccessExpiresIn: vi.fn().mockReturnValue('15m'),
+    verifyRefreshToken: vi.fn().mockResolvedValue({
+      sub: 'user-id',
+      type: 'refresh',
+      jti: 'refresh-token-id',
+    }),
   };
   const sessionService = {
     register: vi.fn().mockResolvedValue(undefined),
@@ -96,6 +101,20 @@ describe('AuthService', () => {
         password: 'wrong-password',
       }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects inactive users during login', async () => {
+    const { service } = createService({ user: { ...activeUser, status: 'INACTIVE' } });
+
+    await expect(
+      service.login({ email: 'admin@inestphone.local', password: 'ChangeMe@12345' }),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('rejects inactive users during refresh', async () => {
+    const { service } = createService({ user: { ...activeUser, status: 'INACTIVE' } });
+
+    await expect(service.refresh('refresh-token')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
   it('normalizes the email before querying Prisma', async () => {

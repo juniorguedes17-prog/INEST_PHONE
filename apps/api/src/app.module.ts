@@ -20,6 +20,7 @@ import { PricingModule } from './modules/pricing/pricing.module';
 import { ProductsModule } from './modules/products/products.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 const appEnv = process.env.APP_ENV ?? process.env.NODE_ENV ?? 'development';
@@ -49,6 +50,7 @@ const envFileName = `.env.${appEnv}`;
     SettingsModule,
     ProductsModule,
     SuppliersModule,
+    UsersModule,
     PriceRadarModule,
     PricingModule,
     ImportRadarModule,
