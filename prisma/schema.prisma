@@ -382,6 +382,7 @@ model SupplierCurrentList {
 model SupplierCurrentListItem {
   id                    String   @id @default(uuid()) @db.Uuid
   supplierCurrentListId String   @map("supplier_current_list_id") @db.Uuid
+  productId             String?  @map("produto_id") @db.Uuid
   productName           String   @map("product_name") @db.VarChar(280)
   normalizedName        String   @map("normalized_name") @db.VarChar(280)
   category              String?  @map("category") @db.VarChar(80)
@@ -395,8 +396,10 @@ model SupplierCurrentListItem {
   createdAt             DateTime @default(now()) @map("created_at")
 
   currentList SupplierCurrentList @relation(fields: [supplierCurrentListId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product     Product?            @relation(fields: [productId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([supplierCurrentListId], map: "idx_supplier_current_list_item_list_id")
+  @@index([productId], map: "idx_supplier_current_list_item_produto_id")
   @@index([normalizedName], map: "idx_supplier_current_list_item_normalized_name")
   @@map("supplier_current_list_item")
 }
@@ -541,6 +544,7 @@ model Product {
   offerItems     OfferItem[]
   priceHistories PriceHistory[]
   pricings       Pricing[]
+  supplierCurrentListItems SupplierCurrentListItem[]
 
   @@unique([profitCondition, normalizedDescription], map: "uq_produto_condicao_descricao_lucro")
   @@index([categoryId], map: "idx_produto_categoria_id")

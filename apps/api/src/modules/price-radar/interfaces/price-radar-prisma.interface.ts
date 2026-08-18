@@ -30,6 +30,7 @@ export interface PriceQuoteRecord {
 
 export interface AutomatedPriceQuoteRecord {
   id: string;
+  productId: string | null;
   normalizedName: string;
   productName: string;
   category: string | null;
@@ -41,6 +42,10 @@ export interface AutomatedPriceQuoteRecord {
   availability: string | null;
   rawLine: string;
   createdAt: Date;
+  product?: {
+    id: string;
+    productDescription: string | null;
+  } | null;
   currentList: {
     updatedAt: Date;
     receivedAt: Date;
@@ -53,13 +58,6 @@ export interface AutomatedPriceQuoteRecord {
   };
 }
 
-export interface CatalogProductDescriptionRecord {
-  id: string;
-  productDescription: string;
-  normalizedDescription: string;
-  profitCondition: string;
-}
-
 export interface PriceRadarPrismaClient {
   priceHistory: {
     findMany(args?: unknown): Promise<PriceQuoteRecord[]>;
@@ -69,7 +67,6 @@ export interface PriceRadarPrismaClient {
   };
   product: {
     findUnique(args: unknown): Promise<{ id: string } | null>;
-    findMany(args: unknown): Promise<CatalogProductDescriptionRecord[]>;
   };
   supplier: {
     findUnique(args: unknown): Promise<{ id: string } | null>;

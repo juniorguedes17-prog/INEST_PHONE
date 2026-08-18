@@ -379,6 +379,121 @@ describe('PricingService native product profit integration', () => {
     },
   );
 
+  it('prioritizes a resolved master Product.id without reinterpreting the Radar description', async () => {
+    const log = vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          productId: CATALOG_PRODUCT_ID,
+          productName: 'Mac Neo 13 8/256',
+          model: 'Mac Neo 13 8/256',
+          category: 'MacBook',
+          condition: 'NOVO',
+        }),
+      ),
+      findActiveCatalogProductById: vi.fn().mockResolvedValue({
+        id: CATALOG_PRODUCT_ID,
+        profitProductId: 901,
+        productDescription: 'MacBook Neo A18 Pro 13" 8GB/256GB',
+        normalizedDescription: 'macbook neo a18 pro 13 8gb 256gb',
+        productType: 'MACBOOK',
+        profitCondition: 'CPO',
+        category: { name: 'MacBook' },
+        model: { name: 'MacBook Neo' },
+        color: { name: 'Prateado' },
+        storage: { displayName: '256GB' },
+      }),
+      findActiveCatalogProduct: vi.fn(),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records: [
+          {
+            productId: '901',
+            condition: 'CPO',
+            productDescription: 'MacBook Neo A18 Pro 13" 8GB/256GB',
+            normalizedDescription: 'macbook neo a18 pro 13 8gb 256gb',
+            netProfit: 800,
+          },
+        ],
+        fetchedAt: '2026-08-18T10:00:00.000Z',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(repository.findActiveCatalogProductById).toHaveBeenCalledWith(CATALOG_PRODUCT_ID);
+    expect(repository.findActiveCatalogProduct).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      catalogProductId: CATALOG_PRODUCT_ID,
+      product: {
+        id: CATALOG_PRODUCT_ID,
+        name: 'MacBook Neo A18 Pro 13" 8GB/256GB',
+        capacity: '256GB',
+        condition: 'CPO',
+      },
+      desiredNetProfit: 800,
+      calculationStatus: 'ready',
+      offerDraft: {
+        payload: {
+          productId: CATALOG_PRODUCT_ID,
+          color: 'Prateado',
+          capacity: '256GB',
+        },
+      },
+    });
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'pricing.product_id.resolution',
+        sourceQuoteId: BRAZIL_QUOTE_ID,
+        vm2Status: 'FOUND',
+        productId: CATALOG_PRODUCT_ID,
+        pricingResolutionSource: 'PRODUCT_ID',
+      }),
+    );
+    log.mockRestore();
+  });
+
+  it('fails closed without falling back when a persisted Product.id is inactive or missing', async () => {
+    const repository = {
+      findBrazilRadarQuote: vi
+        .fn()
+        .mockResolvedValue(brazilRadarQuote({ productId: CATALOG_PRODUCT_ID })),
+      findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+      findActiveCatalogProduct: vi.fn(),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '' }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(repository.findActiveCatalogProduct).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      catalogProductId: null,
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      calculationStatus: 'missing_profit',
+      calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
+      offerDraft: null,
+    });
+  });
+
   it('keeps an unmatched Radar product and resolves profit by condition and canonical description', async () => {
     const repository = {
       findBrazilRadarQuote: vi.fn().mockResolvedValue(brazilRadarQuote()),
@@ -535,61 +650,64 @@ describe('PricingService native product profit integration', () => {
     ['NOVO', '38', 500],
     ['SEMINOVO', '100', 400],
     ['CPO', '116', 450],
-  ] as const)('keeps Brazil Radar profit independent for condition %s', async (condition, id, profit) => {
-    const repository = {
-      findBrazilRadarQuote: vi.fn().mockResolvedValue(
-        brazilRadarQuote({
-          condition,
-          productName: 'iPhone 17 Pro 256GB',
-          model: 'iPhone 17 Pro 256GB',
+  ] as const)(
+    'keeps Brazil Radar profit independent for condition %s',
+    async (condition, id, profit) => {
+      const repository = {
+        findBrazilRadarQuote: vi.fn().mockResolvedValue(
+          brazilRadarQuote({
+            condition,
+            productName: 'iPhone 17 Pro 256GB',
+            model: 'iPhone 17 Pro 256GB',
+          }),
+        ),
+        findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+        listPricingConfigurations: vi.fn().mockResolvedValue([]),
+      };
+      const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: '38',
+              condition: 'NOVO',
+              productDescription: 'iPhone 17 Pro 256GB',
+              normalizedDescription: 'iphone 17 pro 256gb',
+              netProfit: 500,
+            },
+            {
+              productId: '100',
+              condition: 'SEMINOVO',
+              productDescription: 'iPhone 17 Pro 256GB',
+              normalizedDescription: 'iphone 17 pro 256gb',
+              netProfit: 400,
+            },
+            {
+              productId: '116',
+              condition: 'CPO',
+              productDescription: 'iPhone 17 Pro 256GB',
+              normalizedDescription: 'iphone 17 pro 256gb',
+              netProfit: 450,
+            },
+          ],
+          fetchedAt: '2026-08-17T10:00:00.000Z',
         }),
-      ),
-      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
-      listPricingConfigurations: vi.fn().mockResolvedValue([]),
-    };
-    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
-    const profitProvider = {
-      getCatalog: vi.fn().mockResolvedValue({
-        records: [
-          {
-            productId: '38',
-            condition: 'NOVO',
-            productDescription: 'iPhone 17 Pro 256GB',
-            normalizedDescription: 'iphone 17 pro 256gb',
-            netProfit: 500,
-          },
-          {
-            productId: '100',
-            condition: 'SEMINOVO',
-            productDescription: 'iPhone 17 Pro 256GB',
-            normalizedDescription: 'iphone 17 pro 256gb',
-            netProfit: 400,
-          },
-          {
-            productId: '116',
-            condition: 'CPO',
-            productDescription: 'iPhone 17 Pro 256GB',
-            normalizedDescription: 'iphone 17 pro 256gb',
-            netProfit: 450,
-          },
-        ],
-        fetchedAt: '2026-08-17T10:00:00.000Z',
-      }),
-    };
-    const service = new PricingService(
-      repository as unknown as PricingRepository,
-      settingsService as unknown as SettingsService,
-      profitProvider as unknown as ProductProfitProvider,
-    );
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
 
-    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+      const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
 
-    expect(result).toMatchObject({
-      calculationStatus: 'ready',
-      desiredNetProfit: profit,
-      profit: { condition, recordId: id },
-    });
-  });
+      expect(result).toMatchObject({
+        calculationStatus: 'ready',
+        desiredNetProfit: profit,
+        profit: { condition, recordId: id },
+      });
+    },
+  );
 
   it('shares profit across colors while preserving each Radar quote cost', async () => {
     const calculate = async (color: string, price: number) => {
@@ -783,9 +901,9 @@ describe('PricingService native product profit integration', () => {
     },
   ])('does not calculate for $name', async ({ productName, records, status, error }) => {
     const repository = {
-      findBrazilRadarQuote: vi.fn().mockResolvedValue(
-        brazilRadarQuote({ productName, model: productName }),
-      ),
+      findBrazilRadarQuote: vi
+        .fn()
+        .mockResolvedValue(brazilRadarQuote({ productName, model: productName })),
       findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
       listPricingConfigurations: vi.fn().mockResolvedValue([]),
     };

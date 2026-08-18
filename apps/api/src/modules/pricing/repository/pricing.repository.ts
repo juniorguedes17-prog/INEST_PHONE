@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PricingPrismaClient } from '../interfaces/pricing-prisma.interface';
 export { OFFER_INCREMENT_KEY } from '../utils/offer-increment';
@@ -45,6 +46,30 @@ export class PricingRepository {
         productDescription: true,
         normalizedDescription: true,
         productType: true,
+        profitCondition: true,
+      },
+    });
+  }
+
+  findActiveCatalogProductById(productId: string) {
+    return this.prisma.product.findFirst({
+      where: {
+        id: productId,
+        active: true,
+        status: ProductStatus.ACTIVE,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        profitProductId: true,
+        productDescription: true,
+        normalizedDescription: true,
+        productType: true,
+        profitCondition: true,
+        category: { select: { name: true } },
+        model: { select: { name: true } },
+        color: { select: { name: true } },
+        storage: { select: { displayName: true } },
       },
     });
   }

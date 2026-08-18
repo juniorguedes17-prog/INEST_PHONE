@@ -81,6 +81,12 @@ export class PriceRadarRepository {
           : undefined,
       },
       include: {
+        product: {
+          select: {
+            id: true,
+            productDescription: true,
+          },
+        },
         currentList: {
           include: { supplierContact: true },
         },
@@ -146,36 +152,6 @@ export class PriceRadarRepository {
 
   findProduct(id: string) {
     return this.prisma.product.findUnique({ where: { id } });
-  }
-
-  async listActiveCatalogDescriptions() {
-    const products = await this.prisma.product.findMany({
-      where: {
-        active: true,
-        productDescription: { not: null },
-        normalizedDescription: { not: null },
-        profitCondition: { not: null },
-      },
-      select: {
-        id: true,
-        productDescription: true,
-        normalizedDescription: true,
-        profitCondition: true,
-      },
-    });
-
-    return products.flatMap((product) =>
-      product.productDescription && product.normalizedDescription && product.profitCondition
-        ? [
-            {
-              id: product.id,
-              productDescription: product.productDescription,
-              normalizedDescription: product.normalizedDescription,
-              profitCondition: product.profitCondition,
-            },
-          ]
-        : [],
-    );
   }
 
   findSupplier(id: string) {

@@ -4,13 +4,27 @@ import { EvolutionWebhookService } from './evolution-webhook.service';
 
 const webhookSecret = 'this-is-a-test-webhook-secret-with-32-characters';
 
-function createService() {
+function catalogProduct(id: string, productDescription: string) {
+  return {
+    id,
+    productDescription,
+    productType: 'IPHONE_SEALED',
+    profitCondition: 'NOVO',
+    variantAttributes: null,
+    category: null,
+    model: null,
+    color: null,
+    storage: { displayName: '256GB', value: '256', unit: 'GB' },
+  };
+}
+
+function createService(catalog: unknown[] = []) {
   const transaction = {
     evolutionWebhookReceipt: { create: vi.fn().mockResolvedValue({}) },
     supplierCurrentList: { upsert: vi.fn().mockResolvedValue({}) },
   };
   const prisma = {
-    product: { findMany: vi.fn().mockResolvedValue([]) },
+    product: { findMany: vi.fn().mockResolvedValue(catalog) },
     $transaction: vi.fn((callback: (client: typeof transaction) => unknown) =>
       callback(transaction),
     ),
@@ -43,7 +57,7 @@ function createService() {
 }
 
 describe('EvolutionWebhookService', () => {
-  it('executa a observacao shadow durante a ingestao sem alterar os itens persistidos', async () => {
+  it('persiste productId nulo quando a observacao shadow nao encontra um Product mestre', async () => {
     const { service, transaction } = createService();
     const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
 
@@ -58,10 +72,47 @@ describe('EvolutionWebhookService', () => {
     const persistedItems =
       transaction.supplierCurrentList.upsert.mock.calls[0]?.[0].create.items.create;
     expect(persistedItems).toEqual([
-      expect.objectContaining({ price: 6400, rawLine: 'Preto R$ 6.400' }),
+      expect.objectContaining({ price: 6400, rawLine: 'Preto R$ 6.400', productId: null }),
     ]);
     expect(debug).toHaveBeenCalledWith(expect.stringContaining('evolution.product_id.shadow'));
     debug.mockRestore();
+  });
+
+  it('persiste o Product.id somente quando a observacao shadow retorna FOUND', async () => {
+    const { service, transaction } = createService([
+      catalogProduct('product-17-pro-256', 'iPhone 17 Pro 256GB'),
+    ]);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-found', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'iPhone 17 Pro 256GB\nPreto R$ 6.400' },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert.mock.calls[0]?.[0].create.items.create).toEqual([
+      expect.objectContaining({ productId: 'product-17-pro-256' }),
+    ]);
+  });
+
+  it('persiste productId nulo quando a observacao shadow retorna AMBIGUOUS', async () => {
+    const { service, transaction } = createService([
+      catalogProduct('product-17-pro-256-a', 'iPhone 17 Pro 256GB'),
+      catalogProduct('product-17-pro-256-b', 'iPhone 17 Pro 256GB'),
+    ]);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-ambiguous', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'iPhone 17 Pro 256GB\nPreto R$ 6.400' },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert.mock.calls[0]?.[0].create.items.create).toEqual([
+      expect.objectContaining({ productId: null }),
+    ]);
   });
 
   it('executa a mesma observacao shadow durante o repair sem regravar snapshot equivalente', async () => {

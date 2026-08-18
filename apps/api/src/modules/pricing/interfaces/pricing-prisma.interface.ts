@@ -37,6 +37,7 @@ export interface PricingSystemConfigurationRecord {
 
 export interface PricingBrazilRadarQuoteRecord {
   id: string;
+  productId?: string | null;
   productName: string;
   normalizedName: string;
   category?: string | null;
@@ -65,6 +66,11 @@ export interface PricingCatalogProductRecord {
   productDescription?: string | null;
   normalizedDescription?: string | null;
   productType: string;
+  profitCondition?: string | null;
+  category?: { name: string } | null;
+  model?: { name: string } | null;
+  color?: { name: string } | null;
+  storage?: { displayName: string } | null;
 }
 
 export interface PricingPrismaClient {

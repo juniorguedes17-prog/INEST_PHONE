@@ -8,9 +8,11 @@ function automatedQuote(
   supplierName: string,
   price: number,
   productName = 'iPhone 17 256GB',
+  productId: string | null = null,
 ): AutomatedPriceQuoteRecord {
   return {
     id,
+    productId,
     normalizedName: productName.toLowerCase(),
     productName,
     category: productName.startsWith('Produto') ? null : 'iPhone',
@@ -22,6 +24,7 @@ function automatedQuote(
     availability: null,
     rawLine: `Azul R$ ${price}`,
     createdAt: new Date('2026-08-15T10:00:00.000Z'),
+    product: productId ? { id: productId, productDescription: 'iPhone 17 256GB' } : null,
     currentList: {
       updatedAt: new Date('2026-08-15T10:00:00.000Z'),
       receivedAt: new Date('2026-08-15T10:00:00.000Z'),
@@ -38,7 +41,7 @@ function automatedQuote(
 describe('PriceRadarService automated quotes', () => {
   it('retorna todas as cotacoes atuais mesmo quando o produto se repete em fornecedores', async () => {
     const automatedRecords = [
-      automatedQuote('a', 'Fornecedor A', 4900),
+      automatedQuote('a', 'Fornecedor A', 4900, 'iPhone 17 256GB', 'resolved-product-id'),
       automatedQuote('b', 'Fornecedor B', 4750),
       automatedQuote('c', 'Fornecedor C', 4820),
       automatedQuote('unknown', 'Fornecedor D', 900, 'Produto XYZ 512GB'),
@@ -46,14 +49,6 @@ describe('PriceRadarService automated quotes', () => {
     const repository = {
       listQuotes: vi.fn().mockResolvedValue([]),
       listAutomatedQuotes: vi.fn().mockResolvedValue(automatedRecords),
-      listActiveCatalogDescriptions: vi.fn().mockResolvedValue([
-        {
-          id: '11111111-1111-4111-8111-111111111111',
-          productDescription: 'iPhone 17 256GB',
-          normalizedDescription: 'iphone 17 256gb',
-          profitCondition: 'NOVO',
-        },
-      ]),
     };
     const service = new PriceRadarService(repository as unknown as PriceRadarRepository);
 
@@ -70,8 +65,8 @@ describe('PriceRadarService automated quotes', () => {
     expect(quotes.find((quote) => quote.id === 'evolution:a')).toMatchObject({
       source: 'BRAZIL_RADAR',
       sourceQuoteId: 'a',
-      catalogProductId: '11111111-1111-4111-8111-111111111111',
-      productId: '11111111-1111-4111-8111-111111111111',
+      catalogProductId: 'resolved-product-id',
+      productId: 'resolved-product-id',
     });
     expect(quotes.find((quote) => quote.id === 'evolution:unknown')).toMatchObject({
       source: 'BRAZIL_RADAR',
@@ -81,6 +76,10 @@ describe('PriceRadarService automated quotes', () => {
       productName: 'Produto XYZ 512GB',
       productDescription: undefined,
       costProduct: 900,
+    });
+    expect(quotes.find((quote) => quote.id === 'evolution:b')).toMatchObject({
+      catalogProductId: null,
+      productId: null,
     });
   });
 });

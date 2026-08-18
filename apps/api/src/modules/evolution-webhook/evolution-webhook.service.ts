@@ -110,7 +110,7 @@ export class EvolutionWebhookService implements OnModuleInit {
       return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
     const catalog = await this.loadProductShadowCatalog();
-    await this.processParsedSupplierItemsShadow(
+    const itemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
       items,
       {
         supplierContactId: supplier.id,
@@ -137,7 +137,7 @@ export class EvolutionWebhookService implements OnModuleInit {
             sourceType: 'text',
             rawContent: text,
             receivedAt: message.receivedAt,
-            items: { create: items },
+            items: { create: itemsWithResolvedProductId },
           },
           update: {
             sourceMessageId: message.messageId,
@@ -146,7 +146,7 @@ export class EvolutionWebhookService implements OnModuleInit {
             receivedAt: message.receivedAt,
             items: {
               deleteMany: {},
-              create: items,
+              create: itemsWithResolvedProductId,
             },
             attachments: { deleteMany: {} },
           },
@@ -187,12 +187,20 @@ export class EvolutionWebhookService implements OnModuleInit {
           sourceMessageId: context.sourceMessageId,
           rawDescription: item.productName,
           canonicalModelKey: identity.canonical.canonicalModelKey || null,
-          status: productResolution.status,
+          vm2Status: productResolution.status,
           resolvedProductId: productResolution.productId ?? null,
+          persistedProductId:
+            productResolution.status === 'FOUND' ? (productResolution.productId ?? null) : null,
           candidateCount: productResolution.candidateCount,
         }),
       );
     }
+
+    return observations.map(({ item, productResolution }) => ({
+      ...item,
+      productId:
+        productResolution.status === 'FOUND' ? (productResolution.productId ?? null) : null,
+    }));
   }
 
   private loadProductShadowCatalog() {

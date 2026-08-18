@@ -12,7 +12,11 @@ import {
   PricingBrazilRadarQuoteRecord,
   PricingPriceHistoryRecord,
 } from '../interfaces/pricing-prisma.interface';
-import { ProfitCondition, ProfitSheetCatalog } from '../interfaces/profit-sheet.interface';
+import {
+  ProfitCondition,
+  ProfitLookupResult,
+  ProfitSheetCatalog,
+} from '../interfaces/profit-sheet.interface';
 import {
   lookupProfit,
   normalizeProfitProductDescription,
@@ -58,6 +62,22 @@ function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResoluti
         calculationError: 'Mais de um cadastro possui a mesma identidade financeira.',
       };
   }
+}
+
+function getDirectProductProfitCalculationState(lookup: ProfitLookupResult) {
+  if (lookup.status === 'found') {
+    return { calculationStatus: 'ready' as const, calculationError: null };
+  }
+  if (lookup.status === 'duplicate') {
+    return {
+      calculationStatus: 'collision' as const,
+      calculationError: 'Mais de um cadastro possui a mesma identidade financeira.',
+    };
+  }
+  return {
+    calculationStatus: 'missing_profit' as const,
+    calculationError: 'Lucro Liquido nao cadastrado para este produto e condicao.',
+  };
 }
 
 @Injectable()
@@ -335,65 +355,89 @@ export class PricingService {
       throw new NotFoundException('Cotacao do Radar Brasil nao encontrada.');
     }
 
-    const profitCondition = this.resolveBrazilRadarProfitCondition(quote.condition);
+    const quoteProfitCondition = this.resolveBrazilRadarProfitCondition(quote.condition);
     const quoteDescription = this.getBrazilRadarProfitDescription(quote);
     const normalizedDescription = normalizeProfitProductDescription(quoteDescription);
+    const pricingResolutionSource = quote.productId ? 'PRODUCT_ID' : 'LEGACY_FALLBACK';
     const [settings, pricingConfigurations, profitCatalog, catalogProduct] = await Promise.all([
       this.settingsService.getSettings(),
       this.pricingRepository.listPricingConfigurations(),
       this.profitProvider.getCatalog(),
-      this.pricingRepository.findActiveCatalogProduct(profitCondition, normalizedDescription),
+      quote.productId
+        ? this.pricingRepository.findActiveCatalogProductById(quote.productId)
+        : this.pricingRepository.findActiveCatalogProduct(
+            quoteProfitCondition,
+            normalizedDescription,
+          ),
     ]);
-    const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
-    const legacyProfitLookup = this.findProfit(
-      profitCatalog,
-      catalogProduct?.profitProductId,
-      profitCondition,
-      profitProductDescription,
+    const productIdUnavailable = Boolean(quote.productId && !catalogProduct);
+    const profitCondition = this.resolveBrazilRadarProfitCondition(
+      catalogProduct?.profitCondition ?? quoteProfitCondition,
     );
-    const profitIdentityResolution = resolveProfitIdentity(profitCatalog, {
-      productDescription: quoteDescription,
-      condition: profitCondition,
-      category: quote.category,
-      color: quote.color,
-    });
-    try {
-      const shadowComparison = compareProfitIdentityResults(
-        legacyProfitLookup,
-        profitIdentityResolution,
-      );
-      this.logger.log({
-        event: 'pricing.profit_identity.shadow',
-        sourceQuoteId: quote.id,
-        legacyStatus: legacyProfitLookup.status,
-        shadowStatus: profitIdentityResolution.status,
-        comparison: shadowComparison,
-        legacyRecordId:
-          legacyProfitLookup.status === 'found' ? legacyProfitLookup.record.productId : null,
-        shadowRecordId:
-          profitIdentityResolution.status === 'found'
-            ? profitIdentityResolution.record.productId
-            : null,
-        shadowNetProfit:
-          profitIdentityResolution.status === 'found'
-            ? profitIdentityResolution.record.netProfit
-            : null,
-        profitLookupKey: profitIdentityResolution.identity.key,
-        condition: profitCondition,
-      });
-    } catch (error) {
-      this.logger.warn({
-        event: 'pricing.profit_identity.shadow',
-        sourceQuoteId: quote.id,
-        legacyStatus: legacyProfitLookup.status,
-        shadowStatus: 'error',
-        comparison: 'SHADOW_ERROR',
-        condition: profitCondition,
-        errorType: error instanceof Error ? error.name : 'UnknownError',
-      });
+    const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
+    const legacyProfitLookup = productIdUnavailable
+      ? { status: 'not_found' as const }
+      : this.findProfit(
+          profitCatalog,
+          catalogProduct?.profitProductId,
+          profitCondition,
+          profitProductDescription,
+        );
+    const profitIdentityResolution =
+      pricingResolutionSource === 'LEGACY_FALLBACK'
+        ? resolveProfitIdentity(profitCatalog, {
+            productDescription: quoteDescription,
+            condition: profitCondition,
+            category: quote.category,
+            color: quote.color,
+          })
+        : null;
+    if (profitIdentityResolution) {
+      try {
+        const shadowComparison = compareProfitIdentityResults(
+          legacyProfitLookup,
+          profitIdentityResolution,
+        );
+        this.logger.log({
+          event: 'pricing.profit_identity.shadow',
+          sourceQuoteId: quote.id,
+          legacyStatus: legacyProfitLookup.status,
+          shadowStatus: profitIdentityResolution.status,
+          comparison: shadowComparison,
+          legacyRecordId:
+            legacyProfitLookup.status === 'found' ? legacyProfitLookup.record.productId : null,
+          shadowRecordId:
+            profitIdentityResolution.status === 'found'
+              ? profitIdentityResolution.record.productId
+              : null,
+          shadowNetProfit:
+            profitIdentityResolution.status === 'found'
+              ? profitIdentityResolution.record.netProfit
+              : null,
+          profitLookupKey: profitIdentityResolution.identity.key,
+          condition: profitCondition,
+        });
+      } catch (error) {
+        this.logger.warn({
+          event: 'pricing.profit_identity.shadow',
+          sourceQuoteId: quote.id,
+          legacyStatus: legacyProfitLookup.status,
+          shadowStatus: 'error',
+          comparison: 'SHADOW_ERROR',
+          condition: profitCondition,
+          errorType: error instanceof Error ? error.name : 'UnknownError',
+        });
+      }
     }
-    const profitRecord =
-      profitIdentityResolution.status === 'found' ? profitIdentityResolution.record : null;
+    const profitRecord = productIdUnavailable
+      ? null
+      : pricingResolutionSource === 'PRODUCT_ID'
+        ? legacyProfitLookup.status === 'found'
+          ? legacyProfitLookup.record
+          : null
+        : profitIdentityResolution?.status === 'found'
+          ? profitIdentityResolution.record
+          : null;
     const desiredNetProfit = profitRecord?.netProfit ?? null;
     const calculation = this.calculateExternalPricing(
       toNumber(quote.price),
@@ -401,10 +445,25 @@ export class PricingService {
       settings,
       pricingConfigurations,
     );
-    const { calculationStatus, calculationError } =
-      getBrazilRadarProfitCalculationState(profitIdentityResolution);
+    const { calculationStatus, calculationError } = productIdUnavailable
+      ? {
+          calculationStatus: 'missing_profit' as const,
+          calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
+        }
+      : pricingResolutionSource === 'PRODUCT_ID'
+        ? getDirectProductProfitCalculationState(legacyProfitLookup)
+        : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
     const contact = quote.currentList.supplierContact;
     const productName = catalogProduct?.productDescription?.trim() || quote.productName.trim();
+
+    this.logger.log({
+      event: 'pricing.product_id.resolution',
+      sourceQuoteId: quote.id,
+      vm2Status: quote.productId ? 'FOUND' : null,
+      productId: quote.productId ?? null,
+      pricingResolutionSource,
+      catalogProductId: catalogProduct?.id ?? null,
+    });
 
     return {
       temporary: true,
@@ -415,10 +474,10 @@ export class PricingService {
       product: {
         id: catalogProduct?.id ?? null,
         name: productName,
-        category: quote.category ?? '',
-        model: quote.model ?? quote.productName,
-        capacity: quote.capacity ?? '',
-        color: quote.color ?? '',
+        category: catalogProduct?.category?.name ?? quote.category ?? '',
+        model: catalogProduct?.model?.name ?? quote.model ?? quote.productName,
+        capacity: catalogProduct?.storage?.displayName ?? quote.capacity ?? '',
+        color: catalogProduct?.color?.name ?? quote.color ?? '',
         supplier: contact.supplierName,
         city: contact.address ?? '',
         condition: profitCondition,
@@ -454,8 +513,8 @@ export class PricingService {
                 productId: catalogProduct?.id ?? null,
                 sourceQuoteId: quote.id,
                 productName,
-                color: quote.color ?? '',
-                capacity: quote.capacity ?? '',
+                color: catalogProduct?.color?.name ?? quote.color ?? '',
+                capacity: catalogProduct?.storage?.displayName ?? quote.capacity ?? '',
                 salePrice: calculation.salePrice,
                 offerPrice: calculation.offerPrice,
                 deliveryTime: '',
@@ -470,9 +529,7 @@ export class PricingService {
     costProduct: number,
     desiredNetProfit: number | null,
     settings: Awaited<ReturnType<SettingsService['getSettings']>>,
-    pricingConfigurations: Awaited<
-      ReturnType<PricingRepository['listPricingConfigurations']>
-    >,
+    pricingConfigurations: Awaited<ReturnType<PricingRepository['listPricingConfigurations']>>,
   ) {
     const fixedCost = toNumber(settings.financial.globalFixedCost);
     const freight = toNumber(settings.financial.defaultFreight);
@@ -485,7 +542,10 @@ export class PricingService {
     const salePrice =
       basePrice === null
         ? null
-        : roundUpToCommercialPrice(basePrice, this.getCommercialPriceEndings(pricingConfigurations));
+        : roundUpToCommercialPrice(
+            basePrice,
+            this.getCommercialPriceEndings(pricingConfigurations),
+          );
     const offerPrice = salePrice === null ? null : salePrice + offerIncrement;
 
     return {
@@ -495,8 +555,7 @@ export class PricingService {
       offerIncrement,
       salePrice,
       offerPrice,
-      margin:
-        salePrice !== null && desiredNetProfit !== null ? desiredNetProfit / salePrice : null,
+      margin: salePrice !== null && desiredNetProfit !== null ? desiredNetProfit / salePrice : null,
     };
   }
 
@@ -504,10 +563,8 @@ export class PricingService {
     pricingConfigurations: Awaited<ReturnType<PricingRepository['listPricingConfigurations']>>,
   ) {
     return normalizeCommercialPriceEndings([
-      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_ONE_KEY)
-        ?.value,
-      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_TWO_KEY)
-        ?.value,
+      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_ONE_KEY)?.value,
+      pricingConfigurations.find((item) => item.key === COMMERCIAL_ROUNDING_ENDING_TWO_KEY)?.value,
     ]);
   }
 

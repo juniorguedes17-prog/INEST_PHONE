@@ -8,10 +8,8 @@ import {
 } from '../dto/price-radar.dto';
 import {
   AutomatedPriceQuoteRecord,
-  CatalogProductDescriptionRecord,
   PriceQuoteRecord,
 } from '../interfaces/price-radar-prisma.interface';
-import { normalizeProfitProductDescription } from '../../pricing/providers/google-sheets-profit.provider';
 import { PriceRadarRepository } from '../repository/price-radar.repository';
 import {
   buildWhatsappLink,
@@ -26,18 +24,14 @@ export class PriceRadarService {
   constructor(@Inject(PriceRadarRepository) private readonly repository: PriceRadarRepository) {}
 
   async list(query: PriceRadarQueryDto) {
-    const [records, automatedRecords, catalogDescriptions] = await Promise.all([
+    const [records, automatedRecords] = await Promise.all([
       this.repository.listQuotes(query),
       this.repository.listAutomatedQuotes(query),
-      this.repository.listActiveCatalogDescriptions(),
     ]);
-    const descriptionsByIdentity = this.indexCatalogDescriptions(catalogDescriptions);
     return this.applyPostFilters(
       [
         ...records.map((record) => this.toResponse(record)),
-        ...automatedRecords.map((record) =>
-          this.toAutomatedResponse(record, descriptionsByIdentity.get(this.catalogIdentity(record))),
-        ),
+        ...automatedRecords.map((record) => this.toAutomatedResponse(record)),
       ],
       query,
     );
@@ -273,14 +267,16 @@ export class PriceRadarService {
       notes: record.notes,
     });
     const hidden = isHidden(record.notes) || !validation.valid;
-    const productName = record.product?.productDescription?.trim() || [
-      record.product?.category?.name,
-      record.product?.model?.name,
-      record.product?.storage?.displayName,
-      record.product?.color?.name,
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const productName =
+      record.product?.productDescription?.trim() ||
+      [
+        record.product?.category?.name,
+        record.product?.model?.name,
+        record.product?.storage?.displayName,
+        record.product?.color?.name,
+      ]
+        .filter(Boolean)
+        .join(' ');
 
     return {
       id: record.id,
@@ -318,20 +314,17 @@ export class PriceRadarService {
     };
   }
 
-  private toAutomatedResponse(
-    record: AutomatedPriceQuoteRecord,
-    catalogProduct?: CatalogProductDescriptionRecord,
-  ) {
+  private toAutomatedResponse(record: AutomatedPriceQuoteRecord) {
     const contact = record.currentList.supplierContact;
     return {
       id: `evolution:${record.id}`,
       source: 'BRAZIL_RADAR' as const,
       sourceQuoteId: record.id,
-      catalogProductId: catalogProduct?.id ?? null,
-      productId: catalogProduct?.id ?? null,
+      catalogProductId: record.productId,
+      productId: record.productId,
       supplierId: `evolution:${contact.id}`,
       productName: record.productName,
-      productDescription: catalogProduct?.productDescription,
+      productDescription: record.product?.productDescription ?? undefined,
       category: record.category ?? '',
       model: record.model ?? record.productName,
       color: record.color ?? '',
@@ -357,19 +350,5 @@ export class PriceRadarService {
       valid: true,
       inconsistencies: [],
     };
-  }
-
-  private indexCatalogDescriptions(records: CatalogProductDescriptionRecord[]) {
-    return new Map(
-      records.map((record) => [
-        `${record.profitCondition}:${record.normalizedDescription}`,
-        record,
-      ]),
-    );
-  }
-
-  private catalogIdentity(record: AutomatedPriceQuoteRecord) {
-    const condition = record.condition ?? 'NOVO';
-    return `${condition}:${normalizeProfitProductDescription(record.productName)}`;
   }
 }
