@@ -33,6 +33,9 @@ export interface BrazilRadarFacets {
   priceMax: number;
 }
 
+export type BrazilRadarFacetDimension =
+  'categories' | 'models' | 'condition' | 'colors' | 'capacities' | 'price';
+
 export type CatalogFacetSource = CanonicalProductSource;
 
 export const emptyBrazilRadarFacetState: BrazilRadarFacetState = {
@@ -65,20 +68,37 @@ export function isVisibleRadarQuote(quote: PriceQuoteItem) {
   );
 }
 
-export function buildBrazilRadarFacets(quotes: PriceQuoteItem[]): BrazilRadarFacets {
-  const prices = quotes
+export function buildBrazilRadarFacets(
+  quotes: PriceQuoteItem[],
+  filters: BrazilRadarFacetState = emptyBrazilRadarFacetState,
+): BrazilRadarFacets {
+  const categoryQuotes = filterBrazilRadarQuotes(quotes, filters, 'categories');
+  const modelQuotes = filterBrazilRadarQuotes(quotes, filters, 'models');
+  const conditionQuotes = filterBrazilRadarQuotes(quotes, filters, 'condition');
+  const colorQuotes = filterBrazilRadarQuotes(quotes, filters, 'colors');
+  const capacityQuotes = filterBrazilRadarQuotes(quotes, filters, 'capacities');
+  const priceQuotes = filterBrazilRadarQuotes(quotes, filters, 'price');
+  const prices = priceQuotes
     .map((quote) => quote.costProduct)
     .filter((price) => Number.isFinite(price) && price >= 0);
 
   return {
-    categories: countFacetValues(quotes, (quote) => [getCanonicalCategory(quote)], categoryOrder),
-    models: buildCanonicalModelFacetOptions(quotes),
-    conditions: countFacetValues(quotes, (quote) => [getCanonicalCondition(quote)], conditionOrder),
-    colors: countFacetValues(quotes, getCanonicalColors).map((option) => ({
+    categories: countFacetValues(
+      categoryQuotes,
+      (quote) => [getCanonicalCategory(quote)],
+      categoryOrder,
+    ),
+    models: buildCanonicalModelFacetOptions(modelQuotes),
+    conditions: countFacetValues(
+      conditionQuotes,
+      (quote) => [getCanonicalCondition(quote)],
+      conditionOrder,
+    ),
+    colors: countFacetValues(colorQuotes, getCanonicalColors).map((option) => ({
       ...option,
       swatch: canonicalColorAliases.find((color) => color.value === option.value)?.swatch,
     })),
-    capacities: countFacetValues(quotes, getCanonicalCapacities, capacityOrder),
+    capacities: countFacetValues(capacityQuotes, getCanonicalCapacities, capacityOrder),
     priceMin: prices.length ? Math.floor(Math.min(...prices)) : 0,
     priceMax: prices.length ? Math.ceil(Math.max(...prices)) : 0,
   };
@@ -87,6 +107,7 @@ export function buildBrazilRadarFacets(quotes: PriceQuoteItem[]): BrazilRadarFac
 export function filterBrazilRadarQuotes(
   quotes: PriceQuoteItem[],
   filters: BrazilRadarFacetState,
+  excludedDimension?: BrazilRadarFacetDimension,
 ) {
   const minPrice = filters.minPrice === '' ? Number.NEGATIVE_INFINITY : Number(filters.minPrice);
   const maxPrice = filters.maxPrice === '' ? Number.POSITIVE_INFINITY : Number(filters.maxPrice);
@@ -96,15 +117,88 @@ export function filterBrazilRadarQuotes(
     const quoteCapacities = getCanonicalCapacities(quote);
 
     return (
-      (!filters.categories.length || filters.categories.includes(getCanonicalCategory(quote))) &&
-      (!filters.models.length || filters.models.includes(getCanonicalModelKey(quote))) &&
-      (!filters.condition || filters.condition === getCanonicalCondition(quote)) &&
-      (!filters.colors.length || filters.colors.some((color) => quoteColors.includes(color))) &&
-      (!filters.capacities.length || filters.capacities.some((capacity) => quoteCapacities.includes(capacity))) &&
-      quote.costProduct >= minPrice &&
-      quote.costProduct <= maxPrice
+      (excludedDimension === 'categories' ||
+        !filters.categories.length ||
+        filters.categories.includes(getCanonicalCategory(quote))) &&
+      (excludedDimension === 'models' ||
+        !filters.models.length ||
+        filters.models.includes(getCanonicalModelKey(quote))) &&
+      (excludedDimension === 'condition' ||
+        !filters.condition ||
+        filters.condition === getCanonicalCondition(quote)) &&
+      (excludedDimension === 'colors' ||
+        !filters.colors.length ||
+        filters.colors.some((color) => quoteColors.includes(color))) &&
+      (excludedDimension === 'capacities' ||
+        !filters.capacities.length ||
+        filters.capacities.some((capacity) => quoteCapacities.includes(capacity))) &&
+      (excludedDimension === 'price' ||
+        (quote.costProduct >= minPrice && quote.costProduct <= maxPrice))
     );
   });
+}
+
+export function normalizeBrazilRadarFacetState(
+  filters: BrazilRadarFacetState,
+  facets: BrazilRadarFacets,
+  preservedDimension?: BrazilRadarFacetDimension,
+): BrazilRadarFacetState {
+  const valid = (options: FacetOption[], selected: string[]) => {
+    const available = new Set(options.map((option) => option.value));
+    return selected.filter((value) => available.has(value));
+  };
+  const normalizePrice = (value: string) => {
+    if (!value) return '';
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) &&
+      numericValue >= facets.priceMin &&
+      numericValue <= facets.priceMax
+      ? value
+      : '';
+  };
+  const minPrice = normalizePrice(filters.minPrice);
+  const maxPrice = normalizePrice(filters.maxPrice);
+  const invertedPriceRange =
+    minPrice !== '' && maxPrice !== '' && Number(minPrice) > Number(maxPrice);
+
+  return {
+    ...filters,
+    categories:
+      preservedDimension === 'categories'
+        ? filters.categories
+        : valid(facets.categories, filters.categories),
+    models: preservedDimension === 'models' ? filters.models : valid(facets.models, filters.models),
+    condition:
+      preservedDimension === 'condition'
+        ? filters.condition
+        : facets.conditions.some((option) => option.value === filters.condition)
+          ? filters.condition
+          : '',
+    colors: preservedDimension === 'colors' ? filters.colors : valid(facets.colors, filters.colors),
+    capacities:
+      preservedDimension === 'capacities'
+        ? filters.capacities
+        : valid(facets.capacities, filters.capacities),
+    minPrice:
+      preservedDimension === 'price' ? filters.minPrice : invertedPriceRange ? '' : minPrice,
+    maxPrice:
+      preservedDimension === 'price' ? filters.maxPrice : invertedPriceRange ? '' : maxPrice,
+  };
+}
+
+export function areBrazilRadarFacetStatesEqual(
+  left: BrazilRadarFacetState,
+  right: BrazilRadarFacetState,
+) {
+  return (
+    left.condition === right.condition &&
+    left.minPrice === right.minPrice &&
+    left.maxPrice === right.maxPrice &&
+    arraysEqual(left.categories, right.categories) &&
+    arraysEqual(left.models, right.models) &&
+    arraysEqual(left.colors, right.colors) &&
+    arraysEqual(left.capacities, right.capacities)
+  );
 }
 
 export function countActiveBrazilRadarFacets(filters: BrazilRadarFacetState) {
@@ -136,10 +230,11 @@ export function buildCanonicalModelFacetOptions<T extends CatalogFacetSource>(it
   items.forEach((item) => {
     const identity = normalizeCanonicalProductIdentity(item);
     if (
-      !identity.canonicalModelMatched
-      || !identity.canonicalModelKey
-      || !identity.canonicalModelLabel
-    ) return;
+      !identity.canonicalModelMatched ||
+      !identity.canonicalModelKey ||
+      !identity.canonicalModelLabel
+    )
+      return;
     const current = models.get(identity.canonicalModelKey);
     models.set(identity.canonicalModelKey, {
       value: identity.canonicalModelKey,
@@ -170,12 +265,14 @@ export function getCanonicalCapacities(source: CatalogFacetSource) {
     `${source.capacity ?? ''} ${source.model ?? ''} ${source.productName ?? ''}`,
   ).replace(/(\d+)\s*(gb|tb)/g, '$1$2');
 
-  return Array.from(new Set([
-    ...(identity.canonicalStorage ? [identity.canonicalStorage] : []),
-    ...capacityOrder.filter((capacity) =>
-      new RegExp(`\\b${capacity.toLowerCase()}\\b`).test(text),
-    ),
-  ]));
+  return Array.from(
+    new Set([
+      ...(identity.canonicalStorage ? [identity.canonicalStorage] : []),
+      ...capacityOrder.filter((capacity) =>
+        new RegExp(`\\b${capacity.toLowerCase()}\\b`).test(text),
+      ),
+    ]),
+  );
 }
 
 export function getCanonicalCondition(source: CatalogFacetSource) {
@@ -198,8 +295,10 @@ function countFacetValues(
     const aOrder = preferredOrder.indexOf(a.value);
     const bOrder = preferredOrder.indexOf(b.value);
     if (aOrder >= 0 || bOrder >= 0) {
-      return (aOrder < 0 ? Number.MAX_SAFE_INTEGER : aOrder) -
-        (bOrder < 0 ? Number.MAX_SAFE_INTEGER : bOrder);
+      return (
+        (aOrder < 0 ? Number.MAX_SAFE_INTEGER : aOrder) -
+        (bOrder < 0 ? Number.MAX_SAFE_INTEGER : bOrder)
+      );
     }
     return a.label.localeCompare(b.label, 'pt-BR');
   });
@@ -233,4 +332,8 @@ function toTitleCase(value: string) {
     .filter(Boolean)
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`)
     .join(' ');
+}
+
+function arraysEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }

@@ -30,11 +30,14 @@ import { RadarOrigin, RadarOriginTabs } from './RadarOriginTabs';
 import { BrazilRadarFiltersDrawer } from './BrazilRadarFiltersDrawer';
 import {
   BrazilRadarFacetState,
+  BrazilRadarFacetDimension,
   buildBrazilRadarFacets,
   countActiveBrazilRadarFacets,
   emptyBrazilRadarFacetState,
+  areBrazilRadarFacetStatesEqual,
   filterBrazilRadarQuotes,
   isVisibleRadarQuote,
+  normalizeBrazilRadarFacetState,
 } from '../utils/brazil-radar-facets';
 
 const sortOptions = [
@@ -56,7 +59,9 @@ export function PriceRadarPageContent() {
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<PriceQuoteItem | null>(null);
-  const [facetFilters, setFacetFilters] = useState<BrazilRadarFacetState>(() => createEmptyFacetFilters());
+  const [facetFilters, setFacetFilters] = useState<BrazilRadarFacetState>(() =>
+    createEmptyFacetFilters(),
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -103,15 +108,28 @@ export function PriceRadarPageContent() {
     () => radar.quotes.filter(isVisibleRadarQuote),
     [radar.quotes],
   );
-  const facets = useMemo(() => buildBrazilRadarFacets(visibleRadarQuotes), [visibleRadarQuotes]);
-  const filteredQuotes = useMemo(
-    () => filterBrazilRadarQuotes(visibleRadarQuotes, facetFilters),
+  const facets = useMemo(
+    () => buildBrazilRadarFacets(visibleRadarQuotes, facetFilters),
     [facetFilters, visibleRadarQuotes],
   );
-  const activeFilterCount = useMemo(
-    () => countActiveBrazilRadarFacets(facetFilters),
-    [facetFilters],
+  const normalizedFacetFilters = useMemo(
+    () => normalizeBrazilRadarFacetState(facetFilters, facets),
+    [facetFilters, facets],
   );
+  const filteredQuotes = useMemo(
+    () => filterBrazilRadarQuotes(visibleRadarQuotes, normalizedFacetFilters),
+    [normalizedFacetFilters, visibleRadarQuotes],
+  );
+  const activeFilterCount = useMemo(
+    () => countActiveBrazilRadarFacets(normalizedFacetFilters),
+    [normalizedFacetFilters],
+  );
+
+  useEffect(() => {
+    if (!areBrazilRadarFacetStatesEqual(facetFilters, normalizedFacetFilters)) {
+      setFacetFilters(normalizedFacetFilters);
+    }
+  }, [facetFilters, normalizedFacetFilters]);
 
   const groupedProducts = useMemo(() => toBrazilRadarProducts(filteredQuotes), [filteredQuotes]);
   const totalPages = Math.max(1, Math.ceil(groupedProducts.length / pageSize));
@@ -150,7 +168,9 @@ export function PriceRadarPageContent() {
     const prices = validQuotes.map((quote) => quote.costProduct);
     return {
       lowest: prices.length ? Math.min(...prices) : 0,
-      average: prices.length ? prices.reduce((total, price) => total + price, 0) / prices.length : 0,
+      average: prices.length
+        ? prices.reduce((total, price) => total + price, 0) / prices.length
+        : 0,
       highest: prices.length ? Math.max(...prices) : 0,
       hidden: filteredQuotes.filter((quote) => quote.status === 'hidden').length,
     };
@@ -173,6 +193,14 @@ export function PriceRadarPageContent() {
     });
     setFacetFilters(createEmptyFacetFilters());
     setSelectedIds(new Set());
+  }
+
+  function changeFacetFilters(nextFilters: BrazilRadarFacetState) {
+    const changedDimension = getChangedFacetDimension(facetFilters, nextFilters);
+    const nextFacets = buildBrazilRadarFacets(visibleRadarQuotes, nextFilters);
+    const firstPass = normalizeBrazilRadarFacetState(nextFilters, nextFacets, changedDimension);
+    const stableFacets = buildBrazilRadarFacets(visibleRadarQuotes, firstPass);
+    setFacetFilters(normalizeBrazilRadarFacetState(firstPass, stableFacets));
   }
 
   function toggleSelected(id: string, selected: boolean) {
@@ -201,14 +229,13 @@ export function PriceRadarPageContent() {
       const prepared = await calculateBrazilRadarQuotePricing({
         sourceQuoteId: quote.sourceQuoteId,
       });
-      window.sessionStorage.setItem(
-        BRAZIL_RADAR_PRICING_STORAGE_KEY,
-        JSON.stringify(prepared),
-      );
+      window.sessionStorage.setItem(BRAZIL_RADAR_PRICING_STORAGE_KEY, JSON.stringify(prepared));
       router.push('/pricing?source=br-radar');
     } catch (error) {
       setHandoffError(
-        error instanceof Error ? error.message : 'Nao foi possivel enviar a cotacao para Precificacao.',
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel enviar a cotacao para Precificacao.',
       );
     }
   }
@@ -224,12 +251,13 @@ export function PriceRadarPageContent() {
     setHandoffSending(true);
     setHandoffError(null);
     try {
-      const result = await prepareBrazilRadarPricingBatch(
-        selectedQuotes,
-        (sourceQuoteId) => calculateBrazilRadarQuotePricing({ sourceQuoteId }),
+      const result = await prepareBrazilRadarPricingBatch(selectedQuotes, (sourceQuoteId) =>
+        calculateBrazilRadarQuotePricing({ sourceQuoteId }),
       );
       if (!result.items.length) {
-        throw new Error(result.errors[0] ?? 'Nao foi possivel enviar as cotacoes para Precificacao.');
+        throw new Error(
+          result.errors[0] ?? 'Nao foi possivel enviar as cotacoes para Precificacao.',
+        );
       }
 
       window.sessionStorage.setItem(
@@ -244,7 +272,9 @@ export function PriceRadarPageContent() {
       router.push('/pricing?source=br-radar');
     } catch (error) {
       setHandoffError(
-        error instanceof Error ? error.message : 'Nao foi possivel enviar as cotacoes para Precificacao.',
+        error instanceof Error
+          ? error.message
+          : 'Nao foi possivel enviar as cotacoes para Precificacao.',
       );
     } finally {
       setHandoffSending(false);
@@ -301,168 +331,175 @@ export function PriceRadarPageContent() {
 
       {origin === 'brasil' ? (
         <>
+          <RadarToolbar
+            search={radar.filters.search}
+            total={groupedProducts.length}
+            lastUpdated={lastUpdated}
+            sort={radar.filters.sort}
+            sortOptions={sortOptions}
+            pageSize={pageSize}
+            updating={radar.loading}
+            activeFilterCount={activeFilterCount}
+            onSearchChange={(search) => radar.setFilters((current) => ({ ...current, search }))}
+            onRefresh={() => void radar.reload()}
+            onClear={clearFilters}
+            onSortChange={(sort) => radar.setFilters((current) => ({ ...current, sort }))}
+            onPageSizeChange={setPageSize}
+            onOpenFilters={() => setFiltersOpen(true)}
+          />
 
-      <RadarToolbar
-        search={radar.filters.search}
-        total={groupedProducts.length}
-        lastUpdated={lastUpdated}
-        sort={radar.filters.sort}
-        sortOptions={sortOptions}
-        pageSize={pageSize}
-        updating={radar.loading}
-        activeFilterCount={activeFilterCount}
-        onSearchChange={(search) =>
-          radar.setFilters((current) => ({ ...current, search }))
-        }
-        onRefresh={() => void radar.reload()}
-        onClear={clearFilters}
-        onSortChange={(sort) => radar.setFilters((current) => ({ ...current, sort }))}
-        onPageSizeChange={setPageSize}
-        onOpenFilters={() => setFiltersOpen(true)}
-      />
+          <section
+            className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+            aria-label="Indicadores do Radar"
+          >
+            <KpiCard
+              label="Produtos encontrados"
+              value={String(groupedProducts.length)}
+              detail="Resultado dos filtros atuais"
+              tone="blue"
+            />
+            <KpiCard
+              label="Atualizados hoje"
+              value={String(updatedToday)}
+              detail="Ultimas 24 horas"
+              tone="green"
+            />
+            <KpiCard
+              label="Fornecedores ativos"
+              value={String(activeSuppliers)}
+              detail="Com cotacoes no Radar"
+              tone="purple"
+            />
+            <KpiCard
+              label="Menor preco"
+              value={formatCurrency(displayKpis.lowest)}
+              detail="Apenas registros validos"
+              tone="green"
+            />
+            <KpiCard
+              label="Preco medio"
+              value={formatCurrency(displayKpis.average)}
+              detail="Base de cotacoes validas"
+              tone="blue"
+            />
+            <KpiCard
+              label="Maior preco"
+              value={formatCurrency(displayKpis.highest)}
+              detail={`${displayKpis.hidden} registros ocultados`}
+              tone="amber"
+            />
+          </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6" aria-label="Indicadores do Radar">
-        <KpiCard
-          label="Produtos encontrados"
-          value={String(groupedProducts.length)}
-          detail="Resultado dos filtros atuais"
-          tone="blue"
-        />
-        <KpiCard
-          label="Atualizados hoje"
-          value={String(updatedToday)}
-          detail="Ultimas 24 horas"
-          tone="green"
-        />
-        <KpiCard
-          label="Fornecedores ativos"
-          value={String(activeSuppliers)}
-          detail="Com cotacoes no Radar"
-          tone="purple"
-        />
-        <KpiCard
-          label="Menor preco"
-          value={formatCurrency(displayKpis.lowest)}
-          detail="Apenas registros validos"
-          tone="green"
-        />
-        <KpiCard
-          label="Preco medio"
-          value={formatCurrency(displayKpis.average)}
-          detail="Base de cotacoes validas"
-          tone="blue"
-        />
-        <KpiCard
-          label="Maior preco"
-          value={formatCurrency(displayKpis.highest)}
-          detail={`${displayKpis.hidden} registros ocultados`}
-          tone="amber"
-        />
-      </section>
+          <section className="min-w-0">
+            <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-inest-line bg-white px-4 py-2.5 shadow-card">
+                <label className="flex items-center gap-2 text-sm font-bold text-inest-text">
+                  <input
+                    type="checkbox"
+                    checked={
+                      visibleProducts.length > 0 &&
+                      visibleProducts.every((product) => selectedIds.has(product.id))
+                    }
+                    onChange={(event) => {
+                      setSelectedIds((current) => {
+                        const next = new Set(current);
+                        visibleProducts.forEach((product) => {
+                          if (event.target.checked) next.add(product.id);
+                          else next.delete(product.id);
+                        });
+                        return next;
+                      });
+                    }}
+                    className="h-4 w-4 accent-inest-blue"
+                  />
+                  Selecionar pagina
+                </label>
+                <span className="text-xs font-bold text-inest-muted">
+                  Pagina {page} de {totalPages}
+                </span>
+              </div>
 
-      <section className="min-w-0">
-        <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-inest-line bg-white px-4 py-2.5 shadow-card">
-            <label className="flex items-center gap-2 text-sm font-bold text-inest-text">
-              <input
-                type="checkbox"
-                checked={visibleProducts.length > 0 && visibleProducts.every((product) => selectedIds.has(product.id))}
-                onChange={(event) => {
-                  setSelectedIds((current) => {
-                    const next = new Set(current);
-                    visibleProducts.forEach((product) => {
-                      if (event.target.checked) next.add(product.id);
-                      else next.delete(product.id);
-                    });
-                    return next;
-                  });
-                }}
-                className="h-4 w-4 accent-inest-blue"
-              />
-              Selecionar pagina
-            </label>
-            <span className="text-xs font-bold text-inest-muted">
-              Pagina {page} de {totalPages}
-            </span>
-          </div>
+              {selectedIds.size ? (
+                <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 shadow-card">
+                  <strong className="text-sm text-blue-800">
+                    {selectedIds.size} produtos selecionados
+                  </strong>
+                  <div className="flex flex-wrap gap-2">
+                    <ActionButton
+                      disabled={handoffSending}
+                      onClick={() => void sendSelectedToPricing()}
+                    >
+                      {handoffSending ? 'Enviando...' : 'Enviar para Precificacao'}
+                    </ActionButton>
+                    <ActionButton variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                      Limpar selecao
+                    </ActionButton>
+                  </div>
+                </div>
+              ) : null}
 
-          {selectedIds.size ? (
-            <div className="sticky top-0 z-10 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 shadow-card">
-              <strong className="text-sm text-blue-800">{selectedIds.size} produtos selecionados</strong>
-              <div className="flex flex-wrap gap-2">
-                <ActionButton disabled={handoffSending} onClick={() => void sendSelectedToPricing()}>
-                  {handoffSending ? 'Enviando...' : 'Enviar para Precificacao'}
-                </ActionButton>
-                <ActionButton variant="ghost" onClick={() => setSelectedIds(new Set())}>
-                  Limpar selecao
-                </ActionButton>
+              <div className="mt-4 grid gap-3">
+                {radar.loading ? <LoadingState /> : null}
+                {!radar.loading && !visibleRadarQuotes.length ? (
+                  <EmptyState
+                    title="Radar ainda sem cotacoes."
+                    description="Cadastre uma cotacao ou importe uma lista CSV para iniciar."
+                  />
+                ) : null}
+                {!radar.loading && visibleRadarQuotes.length > 0 && !filteredQuotes.length ? (
+                  <EmptyState
+                    title="Nenhum resultado para estes filtros."
+                    description="Limpe os filtros ou amplie os criterios da consulta."
+                    action={
+                      <ActionButton variant="secondary" onClick={clearFilters}>
+                        Limpar filtros
+                      </ActionButton>
+                    }
+                  />
+                ) : null}
+                {!radar.loading
+                  ? visibleProducts.map((product) => (
+                      <BrazilRadarProductCard
+                        key={product.id}
+                        product={product}
+                        selected={selectedIds.has(product.id)}
+                        onSelect={toggleSelected}
+                        onView={(selectedQuote) => {
+                          setEditingQuote(selectedQuote);
+                          setQuoteModalOpen(true);
+                        }}
+                        onSupplier={openWhatsapp}
+                        onSendToPricing={(quote) => void sendToPricing(quote)}
+                      />
+                    ))
+                  : null}
+              </div>
+
+              <div className="mt-4 rounded-xl border border-inest-line bg-white p-4 shadow-card">
+                <Pagination
+                  page={page}
+                  totalPages={totalPages}
+                  totalItems={groupedProducts.length}
+                  onPageChange={setPage}
+                />
+                {totalPages <= 1 ? (
+                  <p className="text-sm text-inest-muted">
+                    Exibindo {visibleProducts.length} de {groupedProducts.length} produtos
+                  </p>
+                ) : null}
               </div>
             </div>
-          ) : null}
+          </section>
 
-          <div className="mt-4 grid gap-3">
-            {radar.loading ? <LoadingState /> : null}
-            {!radar.loading && !visibleRadarQuotes.length ? (
-              <EmptyState
-                title="Radar ainda sem cotacoes."
-                description="Cadastre uma cotacao ou importe uma lista CSV para iniciar."
-              />
-            ) : null}
-            {!radar.loading && visibleRadarQuotes.length > 0 && !filteredQuotes.length ? (
-              <EmptyState
-                title="Nenhum resultado para estes filtros."
-                description="Limpe os filtros ou amplie os criterios da consulta."
-                action={
-                  <ActionButton variant="secondary" onClick={clearFilters}>
-                    Limpar filtros
-                  </ActionButton>
-                }
-              />
-            ) : null}
-            {!radar.loading
-              ? visibleProducts.map((product) => (
-                  <BrazilRadarProductCard
-                    key={product.id}
-                    product={product}
-                    selected={selectedIds.has(product.id)}
-                    onSelect={toggleSelected}
-                    onView={(selectedQuote) => {
-                      setEditingQuote(selectedQuote);
-                      setQuoteModalOpen(true);
-                    }}
-                    onSupplier={openWhatsapp}
-                    onSendToPricing={(quote) => void sendToPricing(quote)}
-                  />
-                ))
-              : null}
-          </div>
-
-          <div className="mt-4 rounded-xl border border-inest-line bg-white p-4 shadow-card">
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              totalItems={groupedProducts.length}
-              onPageChange={setPage}
-            />
-            {totalPages <= 1 ? (
-              <p className="text-sm text-inest-muted">
-                Exibindo {visibleProducts.length} de {groupedProducts.length} produtos
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </section>
-
-      <BrazilRadarFiltersDrawer
-        open={filtersOpen}
-        filters={facetFilters}
-        facets={facets}
-        resultCount={groupedProducts.length}
-        onChange={setFacetFilters}
-        onClear={clearFilters}
-        onClose={() => setFiltersOpen(false)}
-      />
-
+          <BrazilRadarFiltersDrawer
+            open={filtersOpen}
+            filters={facetFilters}
+            facets={facets}
+            resultCount={groupedProducts.length}
+            onChange={changeFacetFilters}
+            onClear={clearFilters}
+            onClose={() => setFiltersOpen(false)}
+          />
         </>
       ) : null}
 
@@ -489,6 +526,23 @@ export function PriceRadarPageContent() {
       />
     </div>
   );
+}
+
+function getChangedFacetDimension(
+  previous: BrazilRadarFacetState,
+  next: BrazilRadarFacetState,
+): BrazilRadarFacetDimension | undefined {
+  if (!arraysEqual(previous.categories, next.categories)) return 'categories';
+  if (!arraysEqual(previous.models, next.models)) return 'models';
+  if (previous.condition !== next.condition) return 'condition';
+  if (!arraysEqual(previous.colors, next.colors)) return 'colors';
+  if (!arraysEqual(previous.capacities, next.capacities)) return 'capacities';
+  if (previous.minPrice !== next.minPrice || previous.maxPrice !== next.maxPrice) return 'price';
+  return undefined;
+}
+
+function arraysEqual(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function QuoteFormModal({

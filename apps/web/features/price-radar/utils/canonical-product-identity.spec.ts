@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildCanonicalModelFacetOptions } from './brazil-radar-facets';
+import {
+  areBrazilRadarFacetStatesEqual,
+  buildBrazilRadarFacets,
+  buildCanonicalModelFacetOptions,
+  emptyBrazilRadarFacetState,
+  filterBrazilRadarQuotes,
+  normalizeBrazilRadarFacetState,
+} from './brazil-radar-facets';
+import { PriceQuoteItem } from '../types/price-radar';
 import { normalizeCanonicalProductIdentity } from './canonical-product-identity';
 
 function identity(productName: string) {
@@ -12,21 +20,17 @@ test('consolida aliases de iPhone em uma identidade unica', () => {
   const inputs = ['IPH 17PM', 'iPhone17 ProMax', 'iphone 17 pro max'];
   const identities = inputs.map(identity);
 
-  assert.deepEqual(identities.map((item) => item.canonicalModelLabel), [
-    'iPhone 17 Pro Max',
-    'iPhone 17 Pro Max',
-    'iPhone 17 Pro Max',
-  ]);
+  assert.deepEqual(
+    identities.map((item) => item.canonicalModelLabel),
+    ['iPhone 17 Pro Max', 'iPhone 17 Pro Max', 'iPhone 17 Pro Max'],
+  );
   assert.equal(new Set(identities.map((item) => item.canonicalModelKey)).size, 1);
   assert.ok(identities.every((item) => item.canonicalModelMatched));
   assert.ok(identities.every((item) => item.canonicalModelConfidence >= 0.95));
 });
 
 test('separa modelo, RAM, armazenamento e tela de MacBook', () => {
-  const inputs = [
-    'Mac Air M5 13 16/512',
-    'MacBook Air M5 13inch 16GB 512GB',
-  ];
+  const inputs = ['Mac Air M5 13 16/512', 'MacBook Air M5 13inch 16GB 512GB'];
   const identities = inputs.map(identity);
 
   identities.forEach((item) => {
@@ -51,9 +55,18 @@ test('consolida aliases de Apple Watch e separa conectividade', () => {
 });
 
 test('consolida iPad e acessorios por aliases deterministas', () => {
-  assert.equal(identity('iPad Air M4 13').canonicalModelKey, identity('iPad Air M4 13"').canonicalModelKey);
-  assert.equal(identity('Apple Pencil Pro').canonicalModelKey, identity('Pencil Pro').canonicalModelKey);
-  assert.equal(identity('Magic Keyboard com teclado numerico').canonicalModelLabel, 'Magic Keyboard');
+  assert.equal(
+    identity('iPad Air M4 13').canonicalModelKey,
+    identity('iPad Air M4 13"').canonicalModelKey,
+  );
+  assert.equal(
+    identity('Apple Pencil Pro').canonicalModelKey,
+    identity('Pencil Pro').canonicalModelKey,
+  );
+  assert.equal(
+    identity('Magic Keyboard com teclado numerico').canonicalModelLabel,
+    'Magic Keyboard',
+  );
 });
 
 test('mantem produto desconhecido sem forcar correspondencia Apple', () => {
@@ -83,9 +96,7 @@ test('agrega a contagem de grafias equivalentes pelo canonicalModelKey', () => {
   ];
   const facets = buildCanonicalModelFacetOptions(items);
 
-  assert.deepEqual(facets, [
-    { value: 'iphone-17-pro-max', label: 'iPhone 17 Pro Max', count: 10 },
-  ]);
+  assert.deepEqual(facets, [{ value: 'iphone-17-pro-max', label: 'iPhone 17 Pro Max', count: 10 }]);
 });
 
 test('corpus de regressao nao transforma residuos em modelos', () => {
@@ -109,7 +120,10 @@ test('corpus de regressao nao transforma residuos em modelos', () => {
     assert.equal(result.canonicalModelLabel, '', productName);
   });
 
-  assert.deepEqual(buildCanonicalModelFacetOptions(invalidModels.map((productName) => ({ productName }))), []);
+  assert.deepEqual(
+    buildCanonicalModelFacetOptions(invalidModels.map((productName) => ({ productName }))),
+    [],
+  );
 });
 
 test('normaliza acessorio somente quando existe regra segura no registry', () => {
@@ -119,9 +133,7 @@ test('normaliza acessorio somente quando existe regra segura no registry', () =>
   ];
   const facets = buildCanonicalModelFacetOptions(inputs.map((productName) => ({ productName })));
 
-  assert.deepEqual(facets, [
-    { value: 'airtag', label: 'AirTag', count: 2 },
-  ]);
+  assert.deepEqual(facets, [{ value: 'airtag', label: 'AirTag', count: 2 }]);
 });
 
 test('mantem produto desconhecido no dataset sem contaminar o facet Modelo', () => {
@@ -134,9 +146,7 @@ test('mantem produto desconhecido no dataset sem contaminar o facet Modelo', () 
 
   assert.equal(items.length, 3);
   assert.ok(items.some((item) => item.id === 'unknown'));
-  assert.deepEqual(facets, [
-    { value: 'iphone-17-pro-max', label: 'iPhone 17 Pro Max', count: 1 },
-  ]);
+  assert.deepEqual(facets, [{ value: 'iphone-17-pro-max', label: 'iPhone 17 Pro Max', count: 1 }]);
 });
 
 test('nao forca modelo quando o texto contem categorias conflitantes', () => {
@@ -144,4 +154,162 @@ test('nao forca modelo quando o texto contem categorias conflitantes', () => {
 
   assert.equal(conflict.canonicalModelMatched, false);
   assert.equal(conflict.canonicalModelMatchMethod, 'unclassified');
+});
+
+function quote(values: Partial<PriceQuoteItem>): PriceQuoteItem {
+  return {
+    id: values.id ?? crypto.randomUUID(),
+    productId: values.productId ?? null,
+    supplierId: values.supplierId ?? 'supplier',
+    productName: values.productName ?? '',
+    category: values.category ?? '',
+    model: values.model ?? '',
+    color: values.color ?? '',
+    capacity: values.capacity ?? '',
+    productType: values.productType ?? '',
+    quality: values.quality ?? '',
+    supplier: values.supplier ?? { id: 'supplier', name: 'Fornecedor' },
+    city: values.city ?? '',
+    deliveryTime: values.deliveryTime ?? '',
+    contact: values.contact ?? '',
+    notes: values.notes ?? '',
+    costProduct: values.costProduct ?? 100,
+    quoteDate: values.quoteDate ?? '2026-08-18',
+    updatedAt: values.updatedAt ?? '2026-08-18',
+    status: values.status ?? 'valid',
+    valid: values.valid ?? true,
+    inconsistencies: values.inconsistencies ?? [],
+  };
+}
+
+test('deriva facetas em cascata sem misturar categorias ou modelos', () => {
+  const quotes = [
+    quote({
+      productName: 'iPhone 17 128GB Azul',
+      category: 'iPhone',
+      model: 'iPhone 17',
+      color: 'Azul',
+      capacity: '128GB',
+    }),
+    quote({
+      productName: 'iPhone 17 256GB Preto',
+      category: 'iPhone',
+      model: 'iPhone 17',
+      color: 'Preto',
+      capacity: '256GB',
+    }),
+    quote({
+      productName: 'iPhone 16 128GB Azul',
+      category: 'iPhone',
+      model: 'iPhone 16',
+      color: 'Azul',
+      capacity: '128GB',
+    }),
+    quote({
+      productName: 'iPad 11 A16 256GB',
+      category: 'iPad',
+      model: 'iPad 11 A16',
+      color: 'Cinza',
+      capacity: '256GB',
+    }),
+  ];
+  const categoryFilters = { ...emptyBrazilRadarFacetState, categories: ['iPhone'] };
+  const categoryFacets = buildBrazilRadarFacets(quotes, categoryFilters);
+
+  assert.deepEqual(categoryFacets.models.map((option) => option.label).sort(), [
+    'iPhone 16',
+    'iPhone 17',
+  ]);
+  assert.ok(categoryFacets.models.every((option) => option.label.startsWith('iPhone')));
+
+  const modelFilters = { ...categoryFilters, models: ['iphone-17'] };
+  const modelFacets = buildBrazilRadarFacets(quotes, modelFilters);
+  assert.deepEqual(modelFacets.colors.map((option) => option.value).sort(), ['azul', 'preto']);
+  assert.deepEqual(modelFacets.capacities.map((option) => option.value).sort(), ['128GB', '256GB']);
+  assert.equal(
+    new Set(modelFacets.colors.map((option) => option.value)).size,
+    modelFacets.colors.length,
+  );
+});
+
+test('considera os demais filtros ao derivar condicao e permite trocar a propria dimensao', () => {
+  const quotes = [
+    quote({
+      productName: 'iPhone 17 128GB Azul',
+      category: 'iPhone',
+      model: 'iPhone 17',
+      color: 'Azul',
+      capacity: '128GB',
+      quality: 'Novo',
+    }),
+    quote({
+      productName: 'iPhone 17 128GB Preto',
+      category: 'iPhone',
+      model: 'iPhone 17',
+      color: 'Preto',
+      capacity: '128GB',
+      quality: 'CPO',
+    }),
+    quote({
+      productName: 'iPhone 16 128GB Azul',
+      category: 'iPhone',
+      model: 'iPhone 16',
+      color: 'Azul',
+      capacity: '128GB',
+      quality: 'Novo',
+    }),
+  ];
+  const filters = {
+    ...emptyBrazilRadarFacetState,
+    categories: ['iPhone'],
+    models: ['iphone-17'],
+  };
+  const facets = buildBrazilRadarFacets(quotes, filters);
+
+  assert.deepEqual(
+    facets.conditions.map((option) => option.value),
+    ['Novo', 'CPO'],
+  );
+  const colorFacets = buildBrazilRadarFacets(quotes, { ...filters, colors: ['azul'] });
+  assert.deepEqual(
+    colorFacets.colors.map((option) => option.value),
+    ['azul', 'preto'],
+  );
+});
+
+test('limpa somente selecoes que deixaram de existir no conjunto compativel', () => {
+  const quotes = [
+    quote({
+      productName: 'iPhone 17 128GB Azul',
+      category: 'iPhone',
+      model: 'iPhone 17',
+      color: 'Azul',
+      capacity: '128GB',
+    }),
+    quote({
+      productName: 'iPad 11 A16 256GB',
+      category: 'iPad',
+      model: 'iPad 11 A16',
+      color: 'Cinza',
+      capacity: '256GB',
+    }),
+  ];
+  const filters = {
+    ...emptyBrazilRadarFacetState,
+    categories: ['iPad'],
+    models: ['iphone-17'],
+    colors: ['azul'],
+  };
+  const facets = buildBrazilRadarFacets(quotes, filters);
+  const firstPass = normalizeBrazilRadarFacetState(filters, facets, 'categories');
+  const normalized = normalizeBrazilRadarFacetState(
+    firstPass,
+    buildBrazilRadarFacets(quotes, firstPass),
+  );
+
+  assert.deepEqual(normalized.categories, ['iPad']);
+  assert.deepEqual(normalized.models, []);
+  assert.deepEqual(normalized.colors, []);
+  assert.equal(areBrazilRadarFacetStatesEqual(filters, normalized), false);
+  assert.equal(filterBrazilRadarQuotes(quotes, normalized).length, 1);
 });
