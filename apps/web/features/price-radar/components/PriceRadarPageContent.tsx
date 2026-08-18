@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ActionButton,
@@ -31,15 +31,17 @@ import { BrazilRadarFiltersDrawer } from './BrazilRadarFiltersDrawer';
 import {
   BrazilRadarFacetState,
   BrazilRadarFacetDimension,
-  buildBrazilRadarFacetIndex,
   buildBrazilRadarFacetsFromIndex,
   countActiveBrazilRadarFacets,
   emptyBrazilRadarFacetState,
   areBrazilRadarFacetStatesEqual,
   filterBrazilRadarQuotesByIndex,
-  isVisibleRadarQuote,
   normalizeBrazilRadarFacetState,
 } from '../utils/brazil-radar-facets';
+import {
+  getBrazilRadarSnapshotCache,
+  updateBrazilRadarUiState,
+} from '../state/brazil-radar-snapshot-cache';
 
 const sortOptions = [
   ['lowest_price', 'Menor preco'],
@@ -61,13 +63,27 @@ export function PriceRadarPageContent() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<PriceQuoteItem | null>(null);
   const [facetFilters, setFacetFilters] = useState<BrazilRadarFacetState>(() =>
-    createEmptyFacetFilters(),
+    getBrazilRadarSnapshotCache().ui.facetFilters ?? createEmptyFacetFilters(),
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(() => getBrazilRadarSnapshotCache().ui.page);
+  const [pageSize, setPageSize] = useState(() => getBrazilRadarSnapshotCache().ui.pageSize);
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [handoffSending, setHandoffSending] = useState(false);
+  const pageStateInitialized = useRef(false);
+
+  const persistFacetFilters = useCallback((nextFilters: BrazilRadarFacetState) => {
+    setFacetFilters(nextFilters);
+    updateBrazilRadarUiState({ facetFilters: nextFilters });
+  }, []);
+  const persistPage = useCallback((nextPage: number) => {
+    setPage(nextPage);
+    updateBrazilRadarUiState({ page: nextPage });
+  }, []);
+  const persistPageSize = useCallback((nextPageSize: number) => {
+    setPageSize(nextPageSize);
+    updateBrazilRadarUiState({ pageSize: nextPageSize });
+  }, []);
 
   useEffect(() => {
     async function loadReferences() {
@@ -105,14 +121,8 @@ export function PriceRadarPageContent() {
     [editingQuote, products, suppliers],
   );
 
-  const visibleRadarQuotes = useMemo(
-    () => radar.quotes.filter(isVisibleRadarQuote),
-    [radar.quotes],
-  );
-  const facetIndex = useMemo(
-    () => buildBrazilRadarFacetIndex(visibleRadarQuotes),
-    [visibleRadarQuotes],
-  );
+  const visibleRadarQuotes = radar.visibleQuotes;
+  const facetIndex = radar.facetIndex;
   const facets = useMemo(
     () => buildBrazilRadarFacetsFromIndex(facetIndex, facetFilters),
     [facetFilters, facetIndex],
@@ -132,9 +142,9 @@ export function PriceRadarPageContent() {
 
   useEffect(() => {
     if (!areBrazilRadarFacetStatesEqual(facetFilters, normalizedFacetFilters)) {
-      setFacetFilters(normalizedFacetFilters);
+      persistFacetFilters(normalizedFacetFilters);
     }
-  }, [facetFilters, normalizedFacetFilters]);
+  }, [facetFilters, normalizedFacetFilters, persistFacetFilters]);
 
   const groupedProducts = useMemo(() => toBrazilRadarProducts(filteredQuotes), [filteredQuotes]);
   const totalPages = Math.max(1, Math.ceil(groupedProducts.length / pageSize));
@@ -182,8 +192,12 @@ export function PriceRadarPageContent() {
   }, [filteredQuotes]);
 
   useEffect(() => {
-    setPage(1);
-  }, [pageSize, facetFilters, radar.filters.search, radar.filters.sort]);
+    if (!pageStateInitialized.current) {
+      pageStateInitialized.current = true;
+      return;
+    }
+    persistPage(1);
+  }, [pageSize, facetFilters, persistPage, radar.filters.search, radar.filters.sort]);
 
   function clearFilters() {
     radar.setFilters({
@@ -196,7 +210,7 @@ export function PriceRadarPageContent() {
       status: '',
       sort: 'lowest_price',
     });
-    setFacetFilters(createEmptyFacetFilters());
+    persistFacetFilters(createEmptyFacetFilters());
     setSelectedIds(new Set());
   }
 
@@ -205,7 +219,7 @@ export function PriceRadarPageContent() {
     const nextFacets = buildBrazilRadarFacetsFromIndex(facetIndex, nextFilters);
     const firstPass = normalizeBrazilRadarFacetState(nextFilters, nextFacets, changedDimension);
     const stableFacets = buildBrazilRadarFacetsFromIndex(facetIndex, firstPass);
-    setFacetFilters(normalizeBrazilRadarFacetState(firstPass, stableFacets));
+    persistFacetFilters(normalizeBrazilRadarFacetState(firstPass, stableFacets));
   }
 
   function toggleSelected(id: string, selected: boolean) {
@@ -296,6 +310,9 @@ export function PriceRadarPageContent() {
           origin === 'brasil' ? (
             <>
               {radar.success ? <StatusBadge tone="green">{radar.success}</StatusBadge> : null}
+              {radar.revalidationError ? (
+                <StatusBadge tone="amber">Atualizacao pendente</StatusBadge>
+              ) : null}
               <ActionButton variant="secondary" onClick={() => setImportModalOpen(true)}>
                 Importar CSV
               </ActionButton>
@@ -343,13 +360,13 @@ export function PriceRadarPageContent() {
             sort={radar.filters.sort}
             sortOptions={sortOptions}
             pageSize={pageSize}
-            updating={radar.loading}
+            updating={radar.isRevalidating}
             activeFilterCount={activeFilterCount}
             onSearchChange={(search) => radar.setFilters((current) => ({ ...current, search }))}
             onRefresh={() => void radar.reload()}
             onClear={clearFilters}
             onSortChange={(sort) => radar.setFilters((current) => ({ ...current, sort }))}
-            onPageSizeChange={setPageSize}
+            onPageSizeChange={persistPageSize}
             onOpenFilters={() => setFiltersOpen(true)}
           />
 
@@ -485,7 +502,7 @@ export function PriceRadarPageContent() {
                   page={page}
                   totalPages={totalPages}
                   totalItems={groupedProducts.length}
-                  onPageChange={setPage}
+                  onPageChange={persistPage}
                 />
                 {totalPages <= 1 ? (
                   <p className="text-sm text-inest-muted">

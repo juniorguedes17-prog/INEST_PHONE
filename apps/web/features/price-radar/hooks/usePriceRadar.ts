@@ -1,78 +1,77 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import {
   createPriceQuote,
-  getPriceRadarKpis,
   hidePriceQuote,
   importPriceRadarCsv,
-  listPriceQuotes,
   updatePriceQuote,
 } from '../services/price-radar-service';
 import {
   CsvImportResult,
   PriceQuoteFormPayload,
-  PriceQuoteItem,
-  PriceRadarFilters,
-  PriceRadarKpis,
 } from '../types/price-radar';
-
-const initialFilters: PriceRadarFilters = {
-  search: '',
-  productId: '',
-  supplierId: '',
-  city: '',
-  quality: '',
-  deliveryTime: '',
-  status: '',
-  sort: 'lowest_price',
-};
-
-const initialKpis: PriceRadarKpis = {
-  lowestValidPrice: 0,
-  averagePrice: 0,
-  highestPrice: 0,
-  hiddenCount: 0,
-};
+import {
+  BRAZIL_RADAR_REVALIDATE_INTERVAL_MS,
+  getBrazilRadarSnapshotCache,
+  hasBrazilRadarSnapshot,
+  initialPriceRadarKpis,
+  isBrazilRadarSnapshotStale,
+  revalidateBrazilRadarSnapshot,
+  setBrazilRadarFilters,
+  subscribeToBrazilRadarSnapshotCache,
+} from '../state/brazil-radar-snapshot-cache';
 
 export function usePriceRadar() {
-  const [quotes, setQuotes] = useState<PriceQuoteItem[]>([]);
-  const [kpis, setKpis] = useState<PriceRadarKpis>(initialKpis);
-  const [filters, setFilters] = useState<PriceRadarFilters>(initialFilters);
-  const [loading, setLoading] = useState(true);
+  const snapshot = useSyncExternalStore(
+    subscribeToBrazilRadarSnapshotCache,
+    getBrazilRadarSnapshotCache,
+    getBrazilRadarSnapshotCache,
+  );
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [lastImport, setLastImport] = useState<CsvImportResult | null>(null);
+  const hasSnapshot = hasBrazilRadarSnapshot(snapshot.filters);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      const [nextQuotes, nextKpis] = await Promise.all([
-        listPriceQuotes(filters),
-        getPriceRadarKpis(filters),
-      ]);
-      setQuotes(nextQuotes);
-      setKpis(nextKpis);
-    } catch (priceRadarError) {
-      setError(
-        priceRadarError instanceof Error
-          ? priceRadarError.message
-          : 'Nao foi possivel carregar o Radar de Precos.',
-      );
-    } finally {
-      setLoading(false);
+      await revalidateBrazilRadarSnapshot(snapshot.filters);
+    } catch {
+      // The cache retains a previous snapshot and exposes the error to the page.
     }
-  }, [filters]);
+  }, [snapshot.filters]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!hasSnapshot || isBrazilRadarSnapshotStale(snapshot.filters)) {
+      void load();
+    }
+
+    const revalidateIfStale = () => {
+      if (isBrazilRadarSnapshotStale(snapshot.filters)) {
+        void load();
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        revalidateIfStale();
+      }
+    };
+
+    window.addEventListener('focus', revalidateIfStale);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    const timer = window.setInterval(revalidateIfStale, BRAZIL_RADAR_REVALIDATE_INTERVAL_MS);
+
+    return () => {
+      window.removeEventListener('focus', revalidateIfStale);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.clearInterval(timer);
+    };
+  }, [hasSnapshot, load, snapshot.filters]);
 
   async function save(payload: PriceQuoteFormPayload, id?: string) {
     setSaving(true);
-    setError(null);
+    setActionError(null);
     setSuccess(null);
     try {
       if (id) {
@@ -84,7 +83,7 @@ export function usePriceRadar() {
       }
       await load();
     } catch (priceRadarError) {
-      setError(
+      setActionError(
         priceRadarError instanceof Error
           ? priceRadarError.message
           : 'Nao foi possivel salvar a cotacao.',
@@ -96,14 +95,14 @@ export function usePriceRadar() {
 
   async function hide(id: string) {
     setSaving(true);
-    setError(null);
+    setActionError(null);
     setSuccess(null);
     try {
       await hidePriceQuote(id);
       setSuccess('Cotacao ocultada logicamente.');
       await load();
     } catch (priceRadarError) {
-      setError(
+      setActionError(
         priceRadarError instanceof Error
           ? priceRadarError.message
           : 'Nao foi possivel ocultar a cotacao.',
@@ -115,7 +114,7 @@ export function usePriceRadar() {
 
   async function importCsv(csvContent: string) {
     setSaving(true);
-    setError(null);
+    setActionError(null);
     setSuccess(null);
     setLastImport(null);
     try {
@@ -126,7 +125,7 @@ export function usePriceRadar() {
       );
       await load();
     } catch (priceRadarError) {
-      setError(
+      setActionError(
         priceRadarError instanceof Error
           ? priceRadarError.message
           : 'Nao foi possivel importar o CSV.',
@@ -137,13 +136,17 @@ export function usePriceRadar() {
   }
 
   return {
-    quotes,
-    kpis,
-    filters,
-    setFilters,
-    loading,
+    quotes: hasSnapshot ? snapshot.items : [],
+    visibleQuotes: hasSnapshot ? snapshot.visibleItems : [],
+    facetIndex: snapshot.facetIndex,
+    kpis: hasSnapshot ? snapshot.kpis : initialPriceRadarKpis,
+    filters: snapshot.filters,
+    setFilters: setBrazilRadarFilters,
+    loading: !hasSnapshot && snapshot.isRevalidating,
+    isRevalidating: snapshot.isRevalidating,
     saving,
-    error,
+    error: actionError ?? (hasSnapshot ? null : snapshot.error),
+    revalidationError: hasSnapshot ? snapshot.error : null,
     success,
     lastImport,
     reload: load,

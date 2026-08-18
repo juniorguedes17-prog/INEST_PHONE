@@ -2,6 +2,7 @@ import { env } from '@/lib/env';
 
 const ACCESS_TOKEN_STORAGE_KEY = 'inest.access-token';
 const AUTH_COOKIES = ['access_token', 'refresh_token'] as const;
+export const AUTH_SESSION_CLEARED_EVENT = 'inest:auth-session-cleared';
 
 interface RefreshResponse {
   tokens?: {
@@ -40,6 +41,8 @@ export function clearAuthSession(options: { redirectToLogin?: boolean } = {}): v
   AUTH_COOKIES.forEach((name) => {
     document.cookie = `${name}=; Max-Age=0; Path=/; SameSite=Lax`;
   });
+
+  window.dispatchEvent(new Event(AUTH_SESSION_CLEARED_EVENT));
 
   if (options.redirectToLogin && window.location.pathname !== '/login') {
     window.location.replace('/login');
