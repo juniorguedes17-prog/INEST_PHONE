@@ -20,6 +20,7 @@ export interface VariantAttributesBackfillResult {
   auto: number;
   review: Array<{ id: string; reason: string }>;
   blocked: Array<{ id: string; reason: string }>;
+  ambiguous: number;
   collisions: Array<{ key: string; productIds: string[] }>;
   updates: number;
   unchanged: number;
@@ -35,6 +36,7 @@ export async function backfillVariantAttributes(
     auto: 0,
     review: [],
     blocked: [],
+    ambiguous: 0,
     collisions: [],
     updates: 0,
     unchanged: 0,
@@ -62,6 +64,7 @@ export async function backfillVariantAttributes(
       continue;
     }
     if (resolution.status === 'blocked') {
+      if (resolution.reason === 'identidade_ambigua') result.ambiguous += 1;
       result.blocked.push({ id: product.id, reason: resolution.reason ?? 'identidade_bloqueada' });
       continue;
     }

@@ -1,7 +1,12 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { ProductStatus } from '@prisma/client';
 import { deriveCanonicalVariantIdentity } from '@inest/product-identity';
 import { PrismaService } from '../../../prisma/prisma.service';
+import {
+  backfillVariantAttributes,
+  type VariantAttributesBackfillProduct,
+  type VariantAttributesBackfillResult,
+} from '../../products/variant-attributes-backfill';
 
 const activeWhere = {
   active: true,
@@ -22,6 +27,7 @@ const productSelect = {
   model: { select: { name: true } },
   color: { select: { name: true } },
   storage: { select: { displayName: true, value: true, unit: true } },
+  variantAttributes: true,
 } as const;
 
 type ProductRecord = Awaited<ReturnType<AdminDiagnosticsService['loadActiveProducts']>>[number];
@@ -30,6 +36,8 @@ type IdentityLabel = 'VALID' | 'INSUFFICIENT' | 'UNRESOLVED' | 'AMBIGUOUS';
 
 @Injectable()
 export class AdminDiagnosticsService {
+  private variantApplyInFlight = false;
+
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async readiness() {
@@ -105,8 +113,160 @@ export class AdminDiagnosticsService {
     };
   }
 
+  // TEMPORARY VM1 HOMOLOGATION ENDPOINT — REMOVE AFTER VALIDATION
+  async variantAttributesDryRun() {
+    const products = await this.loadVariantAttributeProducts();
+    return this.variantAttributesSummary(await this.runVariantAttributes(products, true), products);
+  }
+
+  // TEMPORARY VM1 HOMOLOGATION ENDPOINT — REMOVE AFTER VALIDATION
+  async applyVariantAttributes() {
+    if (this.variantApplyInFlight) {
+      throw new ConflictException({ applied: false, reason: 'VM1_BACKFILL_ALREADY_RUNNING' });
+    }
+
+    this.variantApplyInFlight = true;
+    try {
+      const products = await this.loadVariantAttributeProducts();
+      const dryRun = await this.runVariantAttributes(products, true);
+      const summary = this.variantAttributesSummary(dryRun, products);
+      if (!summary.readyToApply) {
+        throw new ConflictException({
+          applied: false,
+          reason: 'VM1_BACKFILL_NOT_SAFE',
+          ...summary,
+        });
+      }
+
+      const applied = await this.runVariantAttributes(products, false);
+      return {
+        applied: true,
+        productsUpdated: applied.updates,
+        review: applied.review.length,
+        blocked: applied.blocked.length,
+        ambiguous: applied.ambiguous,
+        collisions: applied.collisions.length,
+      };
+    } finally {
+      this.variantApplyInFlight = false;
+    }
+  }
+
+  // TEMPORARY VM1 HOMOLOGATION ENDPOINT — REMOVE AFTER VALIDATION
+  async variantAttributesStatus() {
+    const products = await this.loadVariantAttributeProducts();
+    const result = await this.runVariantAttributes(products, true);
+    const summary = this.variantAttributesSummary(result, products);
+    return {
+      productsActive: products.length,
+      withVariantAttributes: products.filter((product) => product.variantAttributes !== null).length,
+      withoutVariantAttributes: products.filter((product) => product.variantAttributes === null).length,
+      review: summary.review,
+      blocked: summary.blocked,
+      ambiguous: summary.ambiguous,
+      collisions: summary.collisions,
+      checks: this.variantAttributeChecks(products),
+    };
+  }
+
   async loadActiveProducts() {
     return this.prisma.product.findMany({ where: activeWhere, select: productSelect });
+  }
+
+  private async loadVariantAttributeProducts() {
+    return this.prisma.product.findMany({ where: activeWhere, select: productSelect });
+  }
+
+  private runVariantAttributes(
+    products: Awaited<ReturnType<AdminDiagnosticsService['loadVariantAttributeProducts']>>,
+    dryRun: boolean,
+  ) {
+    return backfillVariantAttributes(
+      products.map((product) => this.variantAttributesInput(product)),
+      {
+        updateVariantAttributes: async (id, variantAttributes) => {
+          await this.prisma.product.update({ where: { id }, data: { variantAttributes } });
+        },
+      },
+      dryRun,
+    );
+  }
+
+  private variantAttributesInput(product: ProductRecord): VariantAttributesBackfillProduct {
+    return {
+      id: product.id,
+      productDescription: product.productDescription,
+      category: product.category?.name,
+      model: product.model?.name,
+      color: product.color?.name,
+      capacity: product.storage?.displayName ?? product.storage?.value,
+      quality: product.profitCondition,
+      productType: product.productType,
+      variantAttributes: product.variantAttributes,
+    };
+  }
+
+  private variantAttributesSummary(
+    result: VariantAttributesBackfillResult,
+    products: readonly ProductRecord[],
+  ) {
+    const review = result.review.length;
+    const blocked = result.blocked.length;
+    const collisions = result.collisions.length;
+    const readyToApply =
+      review === 0 &&
+      blocked === 0 &&
+      result.ambiguous === 0 &&
+      collisions === 0 &&
+      result.auto === products.length;
+
+    return {
+      productsEligible: result.productsEligible,
+      auto: result.auto,
+      review,
+      blocked,
+      ambiguous: result.ambiguous,
+      collisions,
+      readyToApply,
+      checks: this.variantAttributeChecks(products),
+    };
+  }
+
+  private variantAttributeChecks(products: readonly ProductRecord[]) {
+    const neo256 = this.findMatching(products, ['macbook neo', '256']);
+    const neo512 = this.findMatching(products, ['macbook neo', '512']);
+    const watch42 = this.findMatching(products, ['series 11', '42']);
+    const watch46 = this.findMatching(products, ['series 11', '46']);
+    const ipad = this.findMatching(products, ['ipad', '11', 'a16']);
+    const air256 = this.findMatching(products, ['iphone', 'air', '256']);
+    const air512 = this.findMatching(products, ['iphone', 'air', '512']);
+
+    return {
+      macbookNeo256: this.variantCheck(neo256, { chip: 'A18 Pro', chipVariant: 'pro', screen: '13"', ram: '8GB' }, '256'),
+      macbookNeo512: this.variantCheck(neo512, { chip: 'A18 Pro', chipVariant: 'pro', screen: '13"', ram: '8GB' }, '512'),
+      watchSeries11_42Gps: this.variantCheck(watch42, { screen: '42mm', connectivity: 'GPS' }),
+      watchSeries11_46Gps: this.variantCheck(watch46, { screen: '46mm', connectivity: 'GPS' }),
+      ipad11A16: this.variantCheck(ipad, { chip: 'A16', screen: '11"' }),
+      iphone17Air: Boolean(air256 && air512),
+    };
+  }
+
+  private variantCheck(
+    product: ProductRecord | null,
+    expected: Record<string, string>,
+    storage?: string,
+  ) {
+    if (!product) return { pass: false, status: 'NOT_FOUND' };
+    const identity = this.audit(product)?.identity;
+    const attributes = product.variantAttributes;
+    const matchesStorage = !storage || product.storage?.displayName?.includes(storage) || product.storage?.value?.includes(storage);
+    const pass = Boolean(
+      identity?.status === 'valid' &&
+        matchesStorage &&
+        attributes &&
+        Object.entries(expected).every(([key, value]) => (attributes as Record<string, unknown>)[key] === value || (key === 'chip' && (attributes as Record<string, unknown>)[key] === 'a18-pro')),
+    );
+    return { pass, status: identity ? this.classify(identity.status, identity.canonicalModelKey) : 'UNRESOLVED', attributes: attributes ?? null };
   }
 
   private async findByProfitProductId(profitProductId: number) {
@@ -131,7 +291,7 @@ export class AdminDiagnosticsService {
     return canonicalModelKey ? 'INSUFFICIENT' : 'UNRESOLVED';
   }
 
-  private findMatching(products: ProductRecord[], terms: string[]) {
+  private findMatching(products: readonly ProductRecord[], terms: string[]) {
     return products.find((product) => {
       const text = [product.productDescription, product.model?.name, product.storage?.displayName]
         .filter(Boolean)

@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -22,5 +22,23 @@ export class AdminDiagnosticsController {
   @ApiOperation({ summary: 'Audita temporariamente a prontidao da VM1.' })
   readiness() {
     return this.diagnosticsService.readiness();
+  }
+
+  // TEMPORARY VM1 HOMOLOGATION ENDPOINT — REMOVE AFTER VALIDATION
+  @Get('vm1-variant-attributes/dry-run')
+  dryRunVariantAttributes() {
+    return this.diagnosticsService.variantAttributesDryRun();
+  }
+
+  // TEMPORARY VM1 HOMOLOGATION ENDPOINT — REMOVE AFTER VALIDATION
+  @Post('vm1-variant-attributes/apply')
+  applyVariantAttributes() {
+    return this.diagnosticsService.applyVariantAttributes();
+  }
+
+  // TEMPORARY VM1 HOMOLOGATION ENDPOINT — REMOVE AFTER VALIDATION
+  @Get('vm1-variant-attributes/status')
+  statusVariantAttributes() {
+    return this.diagnosticsService.variantAttributesStatus();
   }
 }

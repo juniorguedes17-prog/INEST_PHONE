@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { AdminDiagnosticsService } from './admin-diagnostics.service';
 
@@ -15,6 +16,24 @@ function product(id: string, profitProductId: number, description: string, activ
     model: { name: description },
     color: null,
     storage: null,
+  };
+}
+
+function variantProduct(description: string, variantAttributes: unknown = null) {
+  return {
+    id: 'variant-product',
+    profitProductId: 200,
+    productDescription: description,
+    active: true,
+    status: 'ACTIVE',
+    deletedAt: null,
+    productType: 'MACBOOK',
+    profitCondition: 'NOVO',
+    variantAttributes,
+    category: { name: 'MacBook' },
+    model: { name: 'MacBook Neo' },
+    color: null,
+    storage: { displayName: '256GB', value: '256', unit: 'GB' },
   };
 }
 
@@ -45,5 +64,63 @@ describe('AdminDiagnosticsService', () => {
     expect(prisma.product).not.toHaveProperty('create');
     expect(prisma.product).not.toHaveProperty('update');
     expect(prisma.product).not.toHaveProperty('delete');
+  });
+
+  it('runs VM1 dry-run without writing and blocks an unsafe apply', async () => {
+    const unsafe = variantProduct('Produto desconhecido 256GB');
+    const update = vi.fn();
+    const prisma = {
+      product: {
+        findMany: vi.fn().mockResolvedValue([unsafe]),
+        update,
+      },
+    };
+    const service = new AdminDiagnosticsService(prisma as never);
+
+    const dryRun = await service.variantAttributesDryRun();
+    expect(dryRun.readyToApply).toBe(false);
+    expect(dryRun.review).toBe(1);
+    expect(update).not.toHaveBeenCalled();
+    await expect(service.applyVariantAttributes()).rejects.toBeInstanceOf(ConflictException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('applies only variantAttributes after the internal dry-run is safe', async () => {
+    const valid = variantProduct('MacBook Neo A18 Pro 13" 8GB/256GB');
+    const update = vi.fn().mockResolvedValue(valid);
+    const prisma = {
+      product: {
+        findMany: vi.fn().mockResolvedValue([valid]),
+        update,
+      },
+    };
+    const service = new AdminDiagnosticsService(prisma as never);
+
+    const result = await service.applyVariantAttributes();
+
+    expect(result).toMatchObject({ applied: true, productsUpdated: 1, review: 0, blocked: 0, collisions: 0 });
+    expect(update).toHaveBeenCalledWith({
+      where: { id: valid.id },
+      data: { variantAttributes: { chip: 'A18 Pro', chipVariant: 'pro', screen: '13"', ram: '8GB' } },
+    });
+  });
+
+  it('keeps VM1 status read-only', async () => {
+    const valid = variantProduct('MacBook Neo A18 Pro 13" 8GB/256GB', {
+      chip: 'A18 Pro',
+      chipVariant: 'pro',
+      screen: '13"',
+      ram: '8GB',
+    });
+    const update = vi.fn();
+    const prisma = { product: { findMany: vi.fn().mockResolvedValue([valid]), update } };
+    const service = new AdminDiagnosticsService(prisma as never);
+
+    const result = await service.variantAttributesStatus();
+
+    expect(result.productsActive).toBe(1);
+    expect(result.withVariantAttributes).toBe(1);
+    expect(result.withoutVariantAttributes).toBe(0);
+    expect(update).not.toHaveBeenCalled();
   });
 });
