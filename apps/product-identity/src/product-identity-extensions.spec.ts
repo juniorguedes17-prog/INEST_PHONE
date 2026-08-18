@@ -134,6 +134,49 @@ test('MacBook Neo converge unidades equivalentes de tela sem fundir configuracoe
   assert.notEqual(equivalentForms[0]?.profit.key, largerStorage.key);
 });
 
+test('MacBook Neo A18 Pro preserva chip e armazenamento por configuracao', () => {
+  const base256 = deriveExtendedProductIdentity(novo('MacBook Neo A18 Pro 13" 8GB/256GB'));
+  const base512 = deriveExtendedProductIdentity(novo('MacBook Neo A18 Pro 13" 8GB/512GB'));
+  const equivalent = deriveExtendedProductIdentity(novo('MacBook Neo A18 Pro 13-inch 8GB 256GB'));
+
+  assert.equal(base256.profit.status, 'valid');
+  assert.equal(base512.profit.status, 'valid');
+  assert.equal(base256.canonical.canonicalChip, 'A18 Pro');
+  assert.equal(base256.profit.attributes.chip, 'a18-pro');
+  assert.equal(base256.profit.attributes.chipVariant, 'pro');
+  assert.equal(base256.profit.attributes.storage, '256gb');
+  assert.equal(base512.profit.attributes.storage, '512gb');
+  assert.equal(base256.profit.key, equivalent.profit.key);
+  assert.notEqual(base256.profit.key, base512.profit.key);
+});
+
+test('catalogo saneia iPhone Air e acessorios com nomes deterministas', () => {
+  const air256 = deriveProfitLookupIdentity(novo('iPhone 17 Air 256GB'));
+  const air512 = deriveProfitLookupIdentity(novo('iPhone 17 Air 512GB'));
+  const charger = deriveExtendedProductIdentity(novo('Carregador Apple 20W USB-C'));
+  const cable = deriveExtendedProductIdentity(novo('Cabo Apple USB-C'));
+
+  assert.equal(air256.status, 'valid');
+  assert.equal(air512.status, 'valid');
+  assert.notEqual(air256.key, air512.key);
+  assert.equal(charger.profit.status, 'valid');
+  assert.equal(charger.canonical.canonicalModelKey, 'apple-charger-20w-usb-c');
+  assert.equal(cable.profit.status, 'valid');
+  assert.equal(cable.canonical.canonicalModelKey, 'apple-cable-usb-c');
+});
+
+test('Apple Watch sem geracao ou tamanho inequivocos permanece fail-closed', () => {
+  for (const productName of [
+    'Apple Watch SE 11 GPS 42mm',
+    'Apple Watch SE 11 GPS 46mm',
+    'Apple Watch Ultra 3 2024',
+  ]) {
+    const identity = deriveProfitLookupIdentity(novo(productName));
+    assert.equal(identity.status, 'insufficient_identity');
+    assert.equal(identity.key, null);
+  }
+});
+
 test('caso real MacBook Pro M5 14 16/512 converge com produto_id 14', () => {
   const file = new URL('../../../prisma/data/profit-products.json', import.meta.url);
   const catalog = JSON.parse(readFileSync(file, 'utf8')) as Array<{
@@ -354,8 +397,8 @@ test('audita os 129 produtos sem alterar a fixture', () => {
   const audit = auditProfitIdentityCatalog(records);
 
   assert.equal(audit.total, 129);
-  assert.equal(audit.valid, 120);
-  assert.equal(audit.insufficient, 9);
+  assert.equal(audit.valid, 126);
+  assert.equal(audit.insufficient, 3);
   assert.equal(audit.ambiguous, 0);
   assert.equal(audit.collisions.length, 0);
 });

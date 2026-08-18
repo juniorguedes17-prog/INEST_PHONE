@@ -2,13 +2,13 @@
   {
     "produto_id": 1,
     "condicao_produto": "NOVO",
-    "produto_descricao": "MacBook Neo 13 8/256GB",
+    "produto_descricao": "MacBook Neo A18 Pro 13\" 8GB/256GB",
     "lucro_liquido": 750
   },
   {
     "produto_id": 2,
     "condicao_produto": "NOVO",
-    "produto_descricao": "MacBook Neo 13 8/512GB",
+    "produto_descricao": "MacBook Neo A18 Pro 13\" 8GB/512GB",
     "lucro_liquido": 850
   },
   {
@@ -212,13 +212,13 @@
   {
     "produto_id": 36,
     "condicao_produto": "NOVO",
-    "produto_descricao": "iPhone Air 256GB",
+    "produto_descricao": "iPhone 17 Air 256GB",
     "lucro_liquido": 490
   },
   {
     "produto_id": 37,
     "condicao_produto": "NOVO",
-    "produto_descricao": "iPhone Air 512GB",
+    "produto_descricao": "iPhone 17 Air 512GB",
     "lucro_liquido": 590
   },
   {
@@ -680,13 +680,13 @@
   {
     "produto_id": 114,
     "condicao_produto": "CPO",
-    "produto_descricao": "iPhone Air 256GB",
+    "produto_descricao": "iPhone 17 Air 256GB",
     "lucro_liquido": 590
   },
   {
     "produto_id": 115,
     "condicao_produto": "CPO",
-    "produto_descricao": "iPhone Air 512GB",
+    "produto_descricao": "iPhone 17 Air 512GB",
     "lucro_liquido": 640
   },
   {

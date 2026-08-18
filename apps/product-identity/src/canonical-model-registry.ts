@@ -148,7 +148,19 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   iphone(17, 'Pro Max'),
 
   macbook('macbook-neo', 'MacBook Neo', ['macbook neo', 'mac neo']),
-  macbook('macbook-neo-13', 'MacBook Neo 13"', ['macbook neo 13', 'mac neo 13'], true),
+  macbook(
+    'macbook-neo-13',
+    'MacBook Neo 13"',
+    [
+      'macbook neo 13',
+      'mac neo 13',
+      'macbook neo a18 pro 13',
+      'macbook neo a18 pro 13"',
+      'mac neo a18 pro 13',
+      'mac neo a18 pro 13"',
+    ],
+    true,
+  ),
   macbook('macbook-air-m4-13', 'MacBook Air M4 13"', ['macbook air m4 13', 'mac air m4 13']),
   macbook('macbook-air-m4-15', 'MacBook Air M4 15"', ['macbook air m4 15', 'mac air m4 15']),
   macbook('macbook-air-m5-13', 'MacBook Air M5 13"', ['macbook air m5 13', 'mac air m5 13']),
@@ -208,4 +220,8 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   accessory('magic-mouse-3', 'Magic Mouse 3', ['magic mouse 3', 'magic mouse 3g']),
   accessory('magic-keyboard', 'Magic Keyboard', ['magic keyboard']),
   accessory('airtag', 'AirTag', ['apple airtag', 'airtag']),
+  accessory('apple-charger-20w-usb-c', 'Carregador Apple 20W USB-C', [
+    'carregador apple 20w usb c',
+  ]),
+  accessory('apple-cable-usb-c', 'Cabo Apple USB-C', ['cabo apple usb c']),
 ] as const;
