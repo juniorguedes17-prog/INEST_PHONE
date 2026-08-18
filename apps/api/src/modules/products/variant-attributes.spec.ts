@@ -3,8 +3,10 @@ import { backfillVariantAttributes } from './variant-attributes-backfill';
 import {
   VariantAttributesValidationError,
   deriveVariantAttributes,
+  materializeVariantAttributes,
   validateVariantAttributes,
 } from './variant-attributes';
+import { deriveExtendedProductIdentity } from '@inest/product-identity';
 
 const novo = { quality: 'NOVO' };
 
@@ -62,6 +64,28 @@ describe('Product variant attributes', () => {
         family: 'accessory',
         attributes: { connector: 'usb-c', power: '20w' },
       });
+  });
+
+  it('materializes canonical dimensions when the Core exposes them in its attribute map', () => {
+    const macbook = deriveExtendedProductIdentity({
+      ...novo,
+      productDescription: 'MacBook Neo A18 Pro 13" 8GB/256GB',
+    }).variant;
+    const ipad = deriveExtendedProductIdentity({
+      ...novo,
+      productDescription: 'iPad 11 A16 128GB Wi-Fi',
+    }).variant;
+    const watch = deriveExtendedProductIdentity({
+      ...novo,
+      productDescription: 'Apple Watch Series 11 42mm GPS',
+    }).variant;
+
+    expect(materializeVariantAttributes({ ...macbook, canonicalChip: null, canonicalScreen: null, canonicalRam: null }))
+      .toMatchObject({ chip: 'a18-pro', chipVariant: 'pro', screen: '13"', ram: '8gb' });
+    expect(materializeVariantAttributes({ ...ipad, canonicalChip: null, canonicalScreen: null, canonicalConnectivity: null }))
+      .toMatchObject({ chip: 'a16', screen: '11"', connectivity: 'wi-fi' });
+    expect(materializeVariantAttributes({ ...watch, canonicalScreen: null, canonicalConnectivity: null }))
+      .toMatchObject({ screen: '42mm', connectivity: 'gps' });
   });
 
   it('keeps optional iPhone attributes absent when the Core cannot prove them', () => {

@@ -1,6 +1,7 @@
 import {
   deriveExtendedProductIdentity,
   type CanonicalProductSource,
+  type CanonicalVariantIdentity,
   type ProductIdentityFamily,
 } from '@inest/product-identity';
 
@@ -67,27 +68,7 @@ export function deriveVariantAttributes(source: CanonicalProductSource): Variant
     return { status: 'review', family: variant.family, reason: 'identidade_insuficiente' };
   }
 
-  const candidates: Partial<Record<VariantAttributeKey, string | null>> = {
-    chip: variant.canonicalChip,
-    chipVariant: variant.attributes.chipVariant ?? null,
-    screen: variant.canonicalScreen,
-    ram: variant.canonicalRam,
-    connectivity: variant.canonicalConnectivity,
-    cpu: variant.attributes.cpu ?? null,
-    gpu: variant.attributes.gpu ?? null,
-    feature: variant.attributes.feature ?? null,
-    connector: variant.attributes.connector ?? null,
-    length: variant.attributes.length ?? null,
-    quantity: variant.attributes.quantity ?? null,
-    power: variant.attributes.power ?? null,
-    commercialFinish: variant.commercialFinish,
-  };
-  const allowed = new Set<string>(variantAttributeKeysByFamily[variant.family]);
-  const attributes = Object.fromEntries(
-    Object.entries(candidates).filter(
-      ([key, value]) => allowed.has(key) && typeof value === 'string' && value.length > 0,
-    ),
-  ) as ProductVariantAttributes;
+  const attributes = materializeVariantAttributes(variant);
 
   return {
     status: 'auto',
@@ -95,6 +76,37 @@ export function deriveVariantAttributes(source: CanonicalProductSource): Variant
     attributes: validateVariantAttributes(attributes, variant.family),
     canonicalKey: variant.key,
   };
+}
+
+// The Core exposes canonical dimensions both as named fields and in its
+// attribute map. Prefer the named representation and fall back to the map so
+// the persistence adapter remains compatible with both shapes.
+export function materializeVariantAttributes(
+  variant: CanonicalVariantIdentity,
+): ProductVariantAttributes {
+  const coreAttribute = (key: string, canonicalValue: string | null) =>
+    canonicalValue ?? variant.attributes[key] ?? null;
+  const candidates: Partial<Record<VariantAttributeKey, string | null>> = {
+    chip: coreAttribute('chip', variant.canonicalChip),
+    chipVariant: coreAttribute('chipVariant', null),
+    screen: coreAttribute('screen', variant.canonicalScreen),
+    ram: coreAttribute('ram', variant.canonicalRam),
+    connectivity: coreAttribute('connectivity', variant.canonicalConnectivity),
+    cpu: coreAttribute('cpu', null),
+    gpu: coreAttribute('gpu', null),
+    feature: coreAttribute('feature', null),
+    connector: coreAttribute('connector', null),
+    length: coreAttribute('length', null),
+    quantity: coreAttribute('quantity', null),
+    power: coreAttribute('power', null),
+    commercialFinish: variant.commercialFinish,
+  };
+  const allowed = new Set<string>(variantAttributeKeysByFamily[variant.family]);
+  return Object.fromEntries(
+    Object.entries(candidates).filter(
+      ([key, value]) => allowed.has(key) && typeof value === 'string' && value.length > 0,
+    ),
+  ) as ProductVariantAttributes;
 }
 
 export function equalVariantAttributes(
