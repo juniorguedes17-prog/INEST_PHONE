@@ -22,11 +22,13 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         collapsed ? 'w-[76px]' : 'w-[244px]',
       )}
     >
-      <div className={cn('flex min-h-16 items-center gap-3 px-1', collapsed && 'justify-center')}>
-        <INestLogo variant={collapsed ? 'compact' : 'default'} priority />
+      <div className={cn('flex min-h-16 items-center gap-2', collapsed && 'justify-center')}>
+        <INestLogo variant={collapsed ? 'compact' : 'navigation'} priority />
         {!collapsed ? (
-          <div className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-inest-muted">Gestao Comercial</span>
+          <div className="min-w-0 flex-1">
+            <span className="block whitespace-nowrap text-xs font-semibold text-inest-muted">
+              Gestão Comercial
+            </span>
           </div>
         ) : null}
       </div>

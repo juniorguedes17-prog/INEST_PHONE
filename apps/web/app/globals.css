@@ -53,6 +53,11 @@ body {
   height: 44px;
 }
 
+.inest-logo--navigation {
+  width: 108px;
+  height: 46px;
+}
+
 .inest-logo--login {
   width: min(460px, 100%);
   height: clamp(180px, 20vw, 230px);
@@ -67,6 +72,17 @@ body {
   object-fit: contain;
   object-position: center;
   transition: opacity 160ms ease;
+}
+
+/* Navigation crops only the transparent canvas around the supplied mark. */
+.inest-logo--compact .inest-logo__asset,
+.inest-logo--navigation .inest-logo__asset {
+  object-fit: cover;
+}
+
+/* Keep the approved login composition independent from navigation sizing. */
+.inest-logo--login .inest-logo__asset {
+  object-fit: contain;
 }
 
 .inest-logo__asset--dark {

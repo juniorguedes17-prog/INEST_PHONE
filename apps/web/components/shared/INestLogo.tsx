@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import { cn } from '@/utils/cn';
 
-type INestLogoVariant = 'compact' | 'default' | 'login';
+type INestLogoVariant = 'compact' | 'default' | 'navigation' | 'login';
 
 interface INestLogoProps {
   variant?: INestLogoVariant;
