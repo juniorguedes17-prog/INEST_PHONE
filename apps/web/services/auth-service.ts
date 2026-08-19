@@ -2,6 +2,8 @@ import { env } from '@/lib/env';
 import { LoginResponse } from '@/types/auth';
 import { authenticatedFetch, clearAuthSession, persistAccessToken } from './authenticated-fetch';
 
+const LOGOUT_TIMEOUT_MS = 10_000;
+
 interface LoginInput {
   email: string;
   password: string;
@@ -41,6 +43,9 @@ export async function login(input: LoginInput): Promise<LoginResponse> {
 }
 
 export async function logout(): Promise<void> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), LOGOUT_TIMEOUT_MS);
+
   try {
     const response = await authenticatedFetch(`${env.apiUrl}/auth/logout`, {
       method: 'POST',
@@ -48,6 +53,7 @@ export async function logout(): Promise<void> {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({}),
+      signal: controller.signal,
     });
 
     if (!response.ok && response.status !== 401 && response.status !== 403) {
@@ -55,6 +61,8 @@ export async function logout(): Promise<void> {
     }
   } catch {
     // O encerramento local continua seguro quando a sessao remota ja expirou.
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   clearAuthSession();

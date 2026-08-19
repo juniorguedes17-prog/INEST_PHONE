@@ -28,7 +28,7 @@ export class AuthService {
     const user = await this.findUserByEmail(loginDto.email);
 
     if (!user) {
-      await this.auditLogger.logAuthEvent('ERROR', 'auth.login_failed', null, {
+      this.auditLogger.logAuthEvent('ERROR', 'auth.login_failed', null, {
         email: loginDto.email,
         ...context,
       });
@@ -36,7 +36,7 @@ export class AuthService {
     }
 
     if (user.status !== 'ACTIVE') {
-      await this.auditLogger.logAuthEvent('ERROR', 'auth.user_inactive', user.id, context);
+      this.auditLogger.logAuthEvent('ERROR', 'auth.user_inactive', user.id, context);
       throw new UnauthorizedException('Usuario sem acesso ativo.');
     }
 
@@ -46,7 +46,7 @@ export class AuthService {
     );
 
     if (!passwordIsValid) {
-      await this.auditLogger.logAuthEvent('ERROR', 'auth.login_failed', user.id, context);
+      this.auditLogger.logAuthEvent('ERROR', 'auth.login_failed', user.id, context);
       throw new UnauthorizedException('Credenciais invalidas.');
     }
 
@@ -58,7 +58,7 @@ export class AuthService {
       tokens.refreshExpiresAt,
     );
 
-    await this.auditLogger.logAuthEvent('LOGIN', 'auth.login_success', user.id, context);
+    this.auditLogger.logAuthEvent('LOGIN', 'auth.login_success', user.id, context);
 
     return {
       user: authenticatedUser,
@@ -91,7 +91,7 @@ export class AuthService {
       tokens.refreshExpiresAt,
     );
 
-    await this.auditLogger.logAuthEvent('LOGIN', 'auth.refresh_success', user.id, context);
+    this.auditLogger.logAuthEvent('LOGIN', 'auth.refresh_success', user.id, context);
 
     return {
       user: authenticatedUser,
@@ -119,7 +119,7 @@ export class AuthService {
       }
     }
 
-    await this.auditLogger.logAuthEvent('LOGOUT', 'auth.logout', auditUserId ?? null, context);
+    this.auditLogger.logAuthEvent('LOGOUT', 'auth.logout', auditUserId ?? null, context);
 
     return {
       success: true,

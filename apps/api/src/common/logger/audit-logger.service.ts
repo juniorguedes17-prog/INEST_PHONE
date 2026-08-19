@@ -31,7 +31,7 @@ export class AuditLoggerService {
     });
   }
 
-  async logAuthEvent(
+  logAuthEvent(
     operationType: 'LOGIN' | 'LOGOUT' | 'ERROR',
     event: string,
     userId?: string | null,
@@ -39,28 +39,30 @@ export class AuditLoggerService {
   ) {
     this.logTechnicalEvent(event, { userId, ...context });
 
-    try {
-      await this.prisma.auditLog?.create({
-        data: {
-          userId,
-          operationType,
-          entity: 'auth',
-          entityId: userId ?? null,
-          context: {
-            event,
-            ...(context ?? {}),
+    void Promise.resolve()
+      .then(() =>
+        this.prisma.auditLog?.create({
+          data: {
+            userId,
+            operationType,
+            entity: 'auth',
+            entityId: userId ?? null,
+            context: {
+              event,
+              ...(context ?? {}),
+            },
+            ipAddress: typeof context?.ipAddress === 'string' ? context.ipAddress : null,
+            userAgent: typeof context?.userAgent === 'string' ? context.userAgent : null,
           },
-          ipAddress: typeof context?.ipAddress === 'string' ? context.ipAddress : null,
-          userAgent: typeof context?.userAgent === 'string' ? context.userAgent : null,
-        },
+        }),
+      )
+      .catch((error) => {
+        this.logger.warn({
+          event: 'audit.auth_event_failed',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+        });
       });
-    } catch (error) {
-      this.logger.warn({
-        event: 'audit.auth_event_failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString(),
-      });
-    }
   }
 
   private get prisma(): AuditPrismaClient {
