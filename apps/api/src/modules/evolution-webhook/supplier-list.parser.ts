@@ -93,6 +93,7 @@ export function parseSupplierListText(
 
     if (isConditionDescriptor(line)) {
       currentCondition = detectCondition(line);
+      pendingColors = [];
       if (!currentProduct) activeCondition = currentCondition;
       continue;
     }
@@ -116,10 +117,11 @@ export function parseSupplierListText(
     const lineColor = extractColor(line);
     const price = extractPrice(line, Boolean(currentProduct && lineColor));
     if (price === null) {
-      if (currentProduct && lineColor) {
+      if (currentProduct && lineColor && !isProductCandidate && isStandaloneColorLine(line)) {
         if (!pendingColors.includes(lineColor)) pendingColors.push(lineColor);
         continue;
       }
+      if (pendingColors.length > 0) pendingColors = [];
       if (isProductCandidate && !hasPrice(nextLine ?? '') && !hasContextualBarePrice(nextLine ?? '')) {
         options.onLineRejected?.({ rawLine: line, reason: 'invalid_or_missing_price' });
       }
@@ -227,6 +229,24 @@ function isCompactAppleProductHeading(value: string) {
   );
 }
 
+function isStandaloneColorLine(value: string) {
+  const normalized = normalizeProductText(value)
+    .replace(/\b(?:prata|cinza|cinzento|gray|grey|yellow|spacegray|jetblack|skyblue|deepblue)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return (
+    normalized.length > 0 &&
+    !/\d/.test(normalized) &&
+    !PRODUCT_MARKERS.test(normalized) &&
+    !PRODUCT_IDENTITY_MARKERS.test(normalized) &&
+    !/\b(?:chip|cpu|gpu|ram|bateria|battery|garantia|modelo|estoque|unidade|unidades?)\b/i.test(
+      normalized,
+    ) &&
+    normalized.split(' ').length <= 3
+  );
+}
+
 function isImplicitProductHeading(value: string, category: string | null) {
   if (!category || hasPrice(value)) return false;
   if (extractColor(value)) return false;
@@ -317,7 +337,10 @@ function isContextBoundaryLine(value: string) {
 }
 
 function withCategoryPrefix(value: string, category: string | null) {
-  if (!category || detectCategory(value) || PRODUCT_IDENTITY_MARKERS.test(value)) return value;
+  if (!category || PRODUCT_IDENTITY_MARKERS.test(value)) return value;
+  if (/^\s*iphone\b/i.test(value)) return value;
+  if (isCompactAppleProductHeading(value)) return category === 'iPhone' ? `${category} ${value}` : value;
+  if (detectCategory(value)) return value;
   return `${category} ${value}`;
 }
 

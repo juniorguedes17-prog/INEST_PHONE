@@ -499,4 +499,36 @@ describe('supplier list parser', () => {
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ normalizedName: 'macbook neo 13 8g 256', price: 4500 });
   });
+
+  it('preserva a familia legada ao reconhecer cabecalho compacto', () => {
+    const [item] = parseSupplierListText(`
+      IPHONE
+      16 PLUS 128GB
+      PRETO R$ 3.500
+    `);
+
+    expect(item).toMatchObject({
+      normalizedName: 'iphone 16 plus 128gb',
+      category: 'iPhone',
+      color: 'preto',
+      price: 3500,
+    });
+  });
+
+  it('limpa cores pendentes quando um novo produto muda o contexto', () => {
+    const items = parseSupplierListText(`
+      MacBook Neo 13 8G 256
+      SILVER
+      MacBook Neo 13 8G 512
+      BLUE
+      💵5.240
+    `);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      normalizedName: 'macbook neo 13 8g 512',
+      color: 'blue',
+      price: 5240,
+    });
+  });
 });
