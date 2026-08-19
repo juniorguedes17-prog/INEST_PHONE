@@ -115,6 +115,34 @@ describe('EvolutionWebhookService', () => {
     ]);
   });
 
+  it('registra o sender quando o fornecedor ativo nao e encontrado', async () => {
+    const { service, transaction, supplierContacts } = createService();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    supplierContacts.findActiveByWhatsappNumber.mockResolvedValue(null);
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-supplier-not-found', remoteJid: '13153886169@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'iPhone 17 Pro 256GB\nPreto R$ 6.400' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: false, ignored: true });
+    expect(warn).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: 'evolution.supplier_not_found',
+        externalMessageId: 'message-supplier-not-found',
+        senderJid: '13153886169@s.whatsapp.net',
+        normalizedWhatsappNumber: '13153886169',
+        reason: 'supplier_not_found',
+      }),
+    );
+    expect(transaction.evolutionWebhookReceipt.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('executa a mesma observacao shadow durante o repair sem regravar snapshot equivalente', async () => {
     const { service, prisma } = createService();
     const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);

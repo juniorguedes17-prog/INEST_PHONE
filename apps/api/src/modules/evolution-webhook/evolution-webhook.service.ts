@@ -4,6 +4,7 @@ import { ProductStatus } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
+import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contacts.validators';
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
 import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
@@ -97,6 +98,15 @@ export class EvolutionWebhookService implements OnModuleInit {
 
     const supplier = await this.supplierContacts.findActiveByWhatsappNumber(message.senderJid);
     if (!supplier) {
+      this.logger.warn(
+        JSON.stringify({
+          event: 'evolution.supplier_not_found',
+          externalMessageId: message.messageId,
+          senderJid: message.senderJid,
+          normalizedWhatsappNumber: normalizeWhatsappNumber(message.senderJid),
+          reason: 'supplier_not_found',
+        }),
+      );
       this.logger.warn('Mensagem ignorada: remetente nao corresponde a um fornecedor ativo.');
       return { accepted: false, ignored: true };
     }
