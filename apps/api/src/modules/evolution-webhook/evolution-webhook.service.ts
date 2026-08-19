@@ -7,7 +7,11 @@ import { SupplierContactsService } from '../suppliers/service/supplier-contacts.
 import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contacts.validators';
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
-import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
+import {
+  isValidParsedSupplierListSnapshot,
+  parseSupplierListText,
+  SupplierLineRejection,
+} from './supplier-list.parser';
 import { EvolutionMessage, ParsedSupplierListItem } from './evolution-webhook.types';
 
 @Injectable()
@@ -28,7 +32,7 @@ export class EvolutionWebhookService implements OnModuleInit {
     let updated = 0;
 
     for (const currentList of currentLists) {
-      const parsedItems = parseSupplierListText(currentList.rawContent);
+      const parsedItems = this.parseSupplierList(currentList.rawContent, currentList.sourceMessageId);
       if (!isValidParsedSupplierListSnapshot(parsedItems)) {
         this.logger.warn(
           `Lista atual preservada: lista=${currentList.id} snapshot invalido ou vazio.`,
@@ -112,7 +116,7 @@ export class EvolutionWebhookService implements OnModuleInit {
     }
 
     const text = message.text;
-    const items = parseSupplierListText(text);
+    const items = this.parseSupplierList(text, message.messageId);
     if (!isValidParsedSupplierListSnapshot(items)) {
       this.logger.warn(
         `Lista ignorada para fornecedor ${supplier.id}: nenhum item com preco foi localizado.`,
@@ -179,6 +183,23 @@ export class EvolutionWebhookService implements OnModuleInit {
     if (!enabled || !expectedSecret || !safeEqual(providedSecret, expectedSecret)) {
       throw new UnauthorizedException('Webhook nao autorizado.');
     }
+  }
+
+  private parseSupplierList(content: string, sourceMessageId: string) {
+    return parseSupplierListText(content, {
+      onLineRejected: (rejection) => this.logRejectedSupplierLine(sourceMessageId, rejection),
+    });
+  }
+
+  private logRejectedSupplierLine(sourceMessageId: string, rejection: SupplierLineRejection) {
+    this.logger.warn(
+      JSON.stringify({
+        event: 'evolution.supplier_line_rejected',
+        sourceMessageId,
+        rawLine: rejection.rawLine,
+        reason: rejection.reason,
+      }),
+    );
   }
 
   private async processParsedSupplierItemsShadow(

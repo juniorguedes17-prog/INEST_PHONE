@@ -25,6 +25,33 @@ describe('supplier list parser', () => {
     expect(items[1]?.price).toBe(6700);
   });
 
+  it('mantem os itens identicos e apenas observa rejeicoes sem alterar o resultado', () => {
+    const input = 'iPhone 17 Pro 256GB\nAzul R$ 6.650';
+    const rejections: Array<{ rawLine: string; reason: string }> = [];
+    const headerRejections: Array<{ rawLine: string; reason: string }> = [];
+
+    expect(parseSupplierListText(input, { onLineRejected: (rejection) => rejections.push(rejection) })).toEqual(
+      parseSupplierListText(input),
+    );
+    expect(rejections).toHaveLength(0);
+    expect(parseSupplierListText('IPHONES LACRADOS', {
+      onLineRejected: (rejection) => headerRejections.push(rejection),
+    })).toEqual([]);
+    expect(headerRejections).toHaveLength(0);
+  });
+
+  it('observa preco sem contexto e produto sem preco nos branches existentes', () => {
+    const rejections: Array<{ rawLine: string; reason: string }> = [];
+
+    expect(parseSupplierListText('R$ 6.650\niPhone 17 Pro 256GB', {
+      onLineRejected: (rejection) => rejections.push(rejection),
+    })).toEqual([]);
+    expect(rejections).toEqual([
+      { rawLine: 'R$ 6.650', reason: 'missing_product_context' },
+      { rawLine: 'iPhone 17 Pro 256GB', reason: 'invalid_or_missing_price' },
+    ]);
+  });
+
   it('mantem a condicao CPO e nao trata valores brasileiros como texto', () => {
     const items = parseSupplierListText(`
       APARELHOS CPO

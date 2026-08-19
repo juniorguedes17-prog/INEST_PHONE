@@ -78,6 +78,32 @@ describe('EvolutionWebhookService', () => {
     debug.mockRestore();
   });
 
+  it('observa linha rejeitada sem criar receipt ou lista', async () => {
+    const { service, transaction } = createService();
+    const warn = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-rejected-line', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'iPhone 17 Pro 256GB' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' });
+    expect(warn).toHaveBeenCalledWith(
+      JSON.stringify({
+        event: 'evolution.supplier_line_rejected',
+        sourceMessageId: 'message-rejected-line',
+        rawLine: 'iPhone 17 Pro 256GB',
+        reason: 'invalid_or_missing_price',
+      }),
+    );
+    expect(transaction.evolutionWebhookReceipt.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('persiste o Product.id somente quando a observacao shadow retorna FOUND', async () => {
     const { service, transaction } = createService([
       catalogProduct('product-17-pro-256', 'iPhone 17 Pro 256GB'),

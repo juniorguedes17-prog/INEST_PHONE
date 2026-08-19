@@ -40,7 +40,24 @@ const COLOR_MARKERS = [
   'lavender',
 ];
 
-export function parseSupplierListText(content: string): ParsedSupplierListItem[] {
+export type SupplierLineRejectionReason =
+  | 'invalid_or_missing_price'
+  | 'missing_product_context'
+  | 'empty_normalized_product';
+
+export interface SupplierLineRejection {
+  rawLine: string;
+  reason: SupplierLineRejectionReason;
+}
+
+export interface ParseSupplierListOptions {
+  onLineRejected?: (rejection: SupplierLineRejection) => void;
+}
+
+export function parseSupplierListText(
+  content: string,
+  options: ParseSupplierListOptions = {},
+): ParsedSupplierListItem[] {
   const lines = content
     .split(/\r?\n/)
     .map((line) => cleanLine(line))
@@ -82,21 +99,34 @@ export function parseSupplierListText(content: string): ParsedSupplierListItem[]
       continue;
     }
 
-    if (isProductHeading(line, activeCategory, currentProduct !== null, nextLine)) {
+    const isProductCandidate = isProductHeading(line, activeCategory, currentProduct !== null, nextLine);
+    if (isProductCandidate) {
       currentProduct = withCategoryPrefix(removePrice(line), activeCategory);
       const productCondition = detectCondition(currentProduct);
       currentCondition = productCondition === 'NOVO' ? activeCondition : productCondition;
     }
 
     const price = extractPrice(line);
-    if (price === null || !currentProduct) continue;
+    if (price === null) {
+      if (isProductCandidate && !hasPrice(nextLine ?? '')) {
+        options.onLineRejected?.({ rawLine: line, reason: 'invalid_or_missing_price' });
+      }
+      continue;
+    }
+    if (!currentProduct) {
+      options.onLineRejected?.({ rawLine: line, reason: 'missing_product_context' });
+      continue;
+    }
 
     const productName = canonicalizeProductName(removePrice(currentProduct));
     const color = extractColor(line) ?? extractColor(productName);
     const nameWithoutColor = color ? removeColor(productName, color) : productName;
     const normalizedName = normalizeProductText(nameWithoutColor);
 
-    if (!normalizedName) continue;
+    if (!normalizedName) {
+      options.onLineRejected?.({ rawLine: line, reason: 'empty_normalized_product' });
+      continue;
+    }
 
     items.push({
       productName: nameWithoutColor,
