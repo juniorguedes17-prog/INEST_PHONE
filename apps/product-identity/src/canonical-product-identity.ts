@@ -100,7 +100,7 @@ export function normalizeCanonicalProductIdentity(
       ? 'model_invariant'
       : 'unknown';
   const canonicalRam = resolveRam(attributeText, canonicalCategory);
-  const canonicalStorage = resolveStorage(attributeText, canonicalRam);
+  const canonicalStorage = resolveStorage(attributeText, canonicalRam, canonicalCategory);
   const explicitConnectivity = resolveConnectivity(attributeText, canonicalCategory);
   const canonicalConnectivity =
     explicitConnectivity ?? modelResolution.entry?.safeDefaults?.connectivity ?? null;
@@ -171,7 +171,9 @@ function resolveCanonicalModel({
     return { entry: null, confidence: 0, matchMethod: 'unclassified' };
   }
   if (exactAlias) {
-    return { entry: exactAlias, confidence: 1, matchMethod: 'exact_alias' };
+    return hasInvariantConflict(exactAlias, screen, chip)
+      ? { entry: null, confidence: 0, matchMethod: 'unclassified' }
+      : { entry: exactAlias, confidence: 1, matchMethod: 'exact_alias' };
   }
 
   const deterministicLabel = deriveDeterministicModelLabel({ text, category, screen, chip });
@@ -180,10 +182,27 @@ function resolveCanonicalModel({
   );
 
   if (deterministicEntry) {
-    return { entry: deterministicEntry, confidence: 0.95, matchMethod: 'deterministic' };
+    return hasInvariantConflict(deterministicEntry, screen, chip)
+      ? { entry: null, confidence: 0, matchMethod: 'unclassified' }
+      : { entry: deterministicEntry, confidence: 0.95, matchMethod: 'deterministic' };
   }
 
   return { entry: null, confidence: 0, matchMethod: 'unclassified' };
+}
+
+function hasInvariantConflict(
+  entry: CanonicalModelRegistryEntry,
+  explicitScreen: string | null,
+  explicitChip: string | null,
+) {
+  return (
+    (explicitScreen !== null &&
+      entry.invariants?.screen !== undefined &&
+      normalizeCanonicalText(explicitScreen) !== normalizeCanonicalText(entry.invariants.screen)) ||
+    (explicitChip !== null &&
+      entry.invariants?.chip !== undefined &&
+      normalizeCanonicalText(explicitChip) !== normalizeCanonicalText(entry.invariants.chip))
+  );
 }
 
 function resolveRegistryAlias(text: string): CanonicalModelRegistryEntry | 'conflict' | null {
@@ -305,14 +324,16 @@ function resolveRam(text: string, category: string) {
   const explicit = text.match(/\b(\d{1,3})gb\s*(?:ram|memory|memoria)\b|\b(\d{1,3})\s*ram\b/);
   const slash = text.match(/\b(\d{1,3})\s*\/\s*(\d{2,4})\b/);
   const memoryCandidates = Array.from(text.matchAll(/\b(\d{1,3})gb\b/g), (match) => Number(match[1]));
+  const abbreviated = resolveMacBookAbbreviatedMemory(text, category);
   const inferred = ['MacBook', 'iMac', 'Mac Studio'].includes(category)
     ? memoryCandidates.find((value) => value <= 64)
     : undefined;
   const value = explicit?.[1] ?? explicit?.[2] ?? slash?.[1] ?? inferred;
-  return value ? `${Number(value)}GB` : null;
+  if (value) return `${Number(value)}GB`;
+  return abbreviated?.ram ?? null;
 }
 
-function resolveStorage(text: string, ram: string | null) {
+function resolveStorage(text: string, ram: string | null, category: string) {
   const slash = text.match(/\b\d{1,3}\s*\/\s*(\d{2,4})\b/);
   if (slash?.[1]) return `${Number(slash[1])}GB`;
 
@@ -322,7 +343,41 @@ function resolveStorage(text: string, ram: string | null) {
   const candidates = Array.from(text.matchAll(/\b(\d{2,4})gb\b/g), (match) => Number(match[1]));
   const ramValue = ram ? Number(ram.replace('GB', '')) : null;
   const storage = candidates.find((value) => value !== ramValue || candidates.length === 1 && value >= 64);
-  return storage ? `${storage}GB` : null;
+  if (storage) return `${storage}GB`;
+
+  return resolveMacBookAbbreviatedMemory(text, category)?.storage ?? null;
+}
+
+function resolveMacBookAbbreviatedMemory(text: string, category: string) {
+  if (category !== 'MacBook') return null;
+
+  const tokens = text.split(' ').filter(Boolean);
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const ram = parseMacBookRamToken(tokens[index]);
+    const storage = parseMacBookStorageToken(tokens[index + 1]);
+    if (ram && storage) return { ram, storage };
+  }
+
+  return null;
+}
+
+function parseMacBookRamToken(token: string | undefined) {
+  if (!token) return null;
+  const normalized = token.toLowerCase();
+  const explicit = normalized.match(/^(8|16|18|24|32|36|48|64)(?:gb|g)$/);
+  const bare = normalized.match(/^(8|16|18|24|32|36|48|64)$/);
+  const value = explicit?.[1] ?? bare?.[1];
+  return value ? `${Number(value)}GB` : null;
+}
+
+function parseMacBookStorageToken(token: string | undefined) {
+  if (!token) return null;
+  const normalized = token.toLowerCase();
+  const terabytes = normalized.match(/^(1|2|4|8)tb$/);
+  if (terabytes?.[1]) return `${terabytes[1]}TB`;
+
+  const gigabytes = normalized.match(/^(64|128|256|512|1024|2048|4096|8192)(?:gb)?$/);
+  return gigabytes?.[1] ? `${Number(gigabytes[1])}GB` : null;
 }
 
 function resolveScreen(text: string, category: string) {

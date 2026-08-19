@@ -55,6 +55,20 @@ test('preserva RAM, armazenamento, tela e chip de MacBook', () => {
   });
 });
 
+test('completa invariantes seguras de MacBook Air e Pro', () => {
+  const air = normalizeCanonicalProductIdentity('MacBook Air M5 13" 16G 512');
+  const pro = normalizeCanonicalProductIdentity('MacBook Pro M5 Pro 16" 24G 1TB');
+
+  assert.deepEqual(
+    [air.canonicalModelKey, air.canonicalChip, air.canonicalScreen, air.canonicalRam, air.canonicalStorage],
+    ['macbook-air-m5-13', 'M5', '13"', '16GB', '512GB'],
+  );
+  assert.deepEqual(
+    [pro.canonicalModelKey, pro.canonicalChip, pro.canonicalScreen, pro.canonicalRam, pro.canonicalStorage],
+    ['macbook-pro-m5-pro-16', 'M5 Pro', '16"', '24GB', '1TB'],
+  );
+});
+
 test('converge o MacBook Neo 13 e aplica invariantes canônicas do modelo', () => {
   const supplier = normalizeCanonicalProductIdentity(
     'MacBook Neo (A18) Pro 13" 8/256GB',
@@ -67,6 +81,72 @@ test('converge o MacBook Neo 13 e aplica invariantes canônicas do modelo', () =
   assert.equal(catalog.canonicalChip, 'A18 Pro');
   assert.equal(supplier.canonicalScreen, '13"');
   assert.equal(catalog.canonicalScreen, '13"');
+});
+
+test('enriquece memoria abreviada de MacBook somente em pares inequívocos', () => {
+  const cases = [
+    ['MacBook Neo 13" 8G 256', '8GB', '256GB'],
+    ['MacBook Neo 13" 8G 512', '8GB', '512GB'],
+    ['MacBook Neo 13" 16G 256', '16GB', '256GB'],
+    ['MacBook Neo 13" 16 512', '16GB', '512GB'],
+    ['MacBook Neo 13" 24 1TB', '24GB', '1TB'],
+  ] as const;
+
+  for (const [description, ram, storage] of cases) {
+    const result = normalizeCanonicalProductIdentity(description);
+    assert.equal(result.canonicalModelKey, 'macbook-neo-13');
+    assert.equal(result.canonicalRam, ram);
+    assert.equal(result.canonicalStorage, storage);
+    assert.equal(result.canonicalChip, 'A18 Pro');
+  }
+
+  const ambiguous = normalizeCanonicalProductIdentity('MacBook Neo 13" 12 512');
+  assert.equal(ambiguous.canonicalRam, null);
+  assert.equal(ambiguous.canonicalStorage, null);
+});
+
+test('completa conectividade iPad no nível da família e preserva Cellular explícito', () => {
+  const wifi = normalizeCanonicalProductIdentity('iPad 11 128GB');
+  const wifiComplete = normalizeCanonicalProductIdentity('iPad 11 A16 128GB 11" Wi-Fi');
+  const cellular = normalizeCanonicalProductIdentity('iPad 11 128GB Cellular');
+  const air = normalizeCanonicalProductIdentity('iPad Air M4 11 128GB');
+  const pro = normalizeCanonicalProductIdentity('iPad Pro M5 13 256GB Cellular');
+
+  assert.deepEqual(
+    [wifi.canonicalModelKey, wifi.canonicalChip, wifi.canonicalScreen, wifi.canonicalConnectivity],
+    ['ipad-11', 'A16', '11"', 'Wi-Fi'],
+  );
+  assert.equal(wifi.canonicalConnectivitySource, 'safe_default');
+  assert.deepEqual(
+    [wifiComplete.canonicalChip, wifiComplete.canonicalScreen, wifiComplete.canonicalConnectivity],
+    ['A16', '11"', 'Wi-Fi'],
+  );
+  assert.equal(cellular.canonicalConnectivity, 'Wi-Fi + Cellular');
+  assert.deepEqual(
+    [air.canonicalModelKey, air.canonicalChip, air.canonicalScreen, air.canonicalConnectivity],
+    ['ipad-air-m4-11', 'M4', '11"', 'Wi-Fi'],
+  );
+  assert.deepEqual(
+    [pro.canonicalModelKey, pro.canonicalChip, pro.canonicalScreen, pro.canonicalConnectivity],
+    ['ipad-pro-m5-13', 'M5', '13"', 'Wi-Fi + Cellular'],
+  );
+});
+
+test('falha fechada quando atributo explícito contradiz invariant do modelo', () => {
+  const valid = normalizeCanonicalProductIdentity('iPad 11 A16 128GB 11"');
+  const conflict = normalizeCanonicalProductIdentity('iPad 11 A16 128GB 12"');
+
+  assert.equal(valid.canonicalModelKey, 'ipad-11');
+  assert.equal(valid.canonicalModelMatched, true);
+  assert.equal(conflict.canonicalModelKey, '');
+  assert.equal(conflict.canonicalModelMatched, false);
+});
+
+test('não interpreta pares numéricos abreviados fora de MacBook', () => {
+  const iphone = normalizeCanonicalProductIdentity('iPhone 17 16 512');
+
+  assert.equal(iphone.canonicalRam, null);
+  assert.equal(iphone.canonicalStorage, null);
 });
 
 test('preserva tamanho e conectividade de Apple Watch', () => {

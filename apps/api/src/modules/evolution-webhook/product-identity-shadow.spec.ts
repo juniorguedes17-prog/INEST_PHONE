@@ -128,6 +128,14 @@ describe('product identity ingestion shadow', () => {
     ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
   });
 
+  it('resolves abbreviated MacBook memory against the complete master description', () => {
+    const catalog = [catalogProduct('neo-512', 'MacBook Neo A18 Pro 13" 8GB/512GB')];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo 13" 8G 512'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-512', candidateCount: 1 });
+  });
+
   it('keeps Apple Watch size and connectivity variants distinct', () => {
     const catalog = [
       catalogProduct('watch-42-gps', 'Apple Watch Series 11 42mm GPS'),
