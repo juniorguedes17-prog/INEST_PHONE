@@ -85,12 +85,12 @@ export function normalizeCanonicalProductIdentity(
   );
   const inferredCategory = resolveCategory(identityText);
   const explicitScreen = resolveScreen(identityText, inferredCategory);
-  const canonicalChip = resolveChip(identityText);
+  const explicitChip = resolveChip(identityText);
   const modelResolution = resolveCanonicalModel({
     text: identityText,
     category: inferredCategory,
     screen: explicitScreen,
-    chip: canonicalChip,
+    chip: explicitChip,
   });
   const canonicalCategory = modelResolution.entry?.category ?? inferredCategory;
   const canonicalScreen = explicitScreen ?? modelResolution.entry?.invariants?.screen ?? null;
@@ -111,6 +111,7 @@ export function normalizeCanonicalProductIdentity(
       : 'unknown';
   const canonicalColor = resolveColor(normalizeCanonicalText(source.color || attributeText));
   const canonicalCondition = resolveCondition(attributeText);
+  const canonicalChip = explicitChip ?? modelResolution.entry?.invariants?.chip ?? null;
 
   return {
     canonicalCategory,
@@ -408,7 +409,7 @@ function containsTerm(text: string, term: string) {
 }
 
 function containsPhrase(text: string, phrase: string) {
-  return new RegExp(`(?:^|\\s)${escapeRegExp(phrase)}(?:$|\\s)`).test(text);
+  return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(phrase)}(?=$|[^a-z0-9])`).test(text);
 }
 
 function escapeRegExp(value: string) {

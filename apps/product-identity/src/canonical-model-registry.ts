@@ -3,7 +3,7 @@ export interface CanonicalModelRegistryEntry {
   label: string;
   category: string;
   aliases: readonly string[];
-  invariants?: Readonly<{ screen?: string }>;
+  invariants?: Readonly<{ screen?: string; chip?: string }>;
   safeDefaults?: Readonly<{ connectivity?: string }>;
 }
 
@@ -56,12 +56,14 @@ function macbook(
   label: string,
   aliases: readonly string[],
   includeScreenUnits = false,
+  metadata: Pick<CanonicalModelRegistryEntry, 'invariants' | 'safeDefaults'> = {},
 ) {
   return entry(
     key,
     label,
     'MacBook',
     includeScreenUnits ? withScreenUnitAliases(aliases) : aliases,
+    metadata,
   );
 }
 
@@ -160,6 +162,7 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
       'mac neo a18 pro 13"',
     ],
     true,
+    { invariants: { screen: '13"', chip: 'A18 Pro' } },
   ),
   macbook('macbook-air-m4-13', 'MacBook Air M4 13"', ['macbook air m4 13', 'mac air m4 13']),
   macbook('macbook-air-m4-15', 'MacBook Air M4 15"', ['macbook air m4 15', 'mac air m4 15']),

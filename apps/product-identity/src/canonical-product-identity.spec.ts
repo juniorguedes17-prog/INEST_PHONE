@@ -55,6 +55,20 @@ test('preserva RAM, armazenamento, tela e chip de MacBook', () => {
   });
 });
 
+test('converge o MacBook Neo 13 e aplica invariantes canônicas do modelo', () => {
+  const supplier = normalizeCanonicalProductIdentity(
+    'MacBook Neo (A18) Pro 13" 8/256GB',
+  );
+  const catalog = normalizeCanonicalProductIdentity('MacBook Neo (13”) 8/256GB');
+
+  assert.equal(supplier.canonicalModelKey, 'macbook-neo-13');
+  assert.equal(catalog.canonicalModelKey, 'macbook-neo-13');
+  assert.equal(supplier.canonicalChip, 'A18 Pro');
+  assert.equal(catalog.canonicalChip, 'A18 Pro');
+  assert.equal(supplier.canonicalScreen, '13"');
+  assert.equal(catalog.canonicalScreen, '13"');
+});
+
 test('preserva tamanho e conectividade de Apple Watch', () => {
   const result = normalizeCanonicalProductIdentity({
     productName: 'Apple Watch S11 46mm GPS + Cellular Silver',

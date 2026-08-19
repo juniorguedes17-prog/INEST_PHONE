@@ -117,6 +117,17 @@ describe('product identity ingestion shadow', () => {
     ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
   });
 
+  it('resolves Neo when the master description omits chip text but the model invariant supplies it', () => {
+    const catalog = [catalogProduct('neo-256', 'MacBook Neo 13 8/256GB')];
+
+    expect(
+      resolveProductIdShadow(
+        supplierIdentity('MacBook Neo (A18) Pro 13" 8/256GB'),
+        catalog,
+      ),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
+  });
+
   it('keeps Apple Watch size and connectivity variants distinct', () => {
     const catalog = [
       catalogProduct('watch-42-gps', 'Apple Watch Series 11 42mm GPS'),

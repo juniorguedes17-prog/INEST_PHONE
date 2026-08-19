@@ -35,6 +35,17 @@ describe('Product variant attributes', () => {
     expect(base256.attributes).not.toHaveProperty('condition');
   });
 
+  it('materializes the Neo chip from the canonical model invariant when absent from text', () => {
+    expect(deriveVariantAttributes({
+      ...novo,
+      productDescription: 'MacBook Neo 13 8/256GB',
+    })).toMatchObject({
+      status: 'auto',
+      family: 'macbook',
+      attributes: { chip: 'A18 Pro', chipVariant: 'pro', screen: '13"', ram: '8GB' },
+    });
+  });
+
   it('persists only attributes that the Core determines for supported families', () => {
     expect(deriveVariantAttributes({ ...novo, productDescription: 'iPad 11 A16 128GB Wi-Fi' }))
       .toMatchObject({
