@@ -10,6 +10,7 @@ const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`
 const MONEY_VALUE = String.raw`\d(?:[\d.,]|\s(?=\d{3}(?:\D|$)))*`;
 const PRICE_PREFIX = new RegExp(`${CURRENCY_MARKER}\\s*(${MONEY_VALUE})`, 'iu');
 const PRICE_SUFFIX = new RegExp(`(${MONEY_VALUE})\\s*(?:R\\$|\\$R)`, 'iu');
+const PRICE_BARE_SUFFIX = new RegExp(`(?:^|\\s)(${MONEY_VALUE})\\s*$`, 'iu');
 const COLOR_MARKERS = [
   'preto',
   'black',
@@ -35,6 +36,7 @@ const COLOR_MARKERS = [
   'gold',
   'teal',
   'indigo',
+  'amarelo',
   'citrus',
   'blush',
   'lavender',
@@ -67,6 +69,7 @@ export function parseSupplierListText(
   let activeCategory: string | null = null;
   let activeCondition = 'NOVO';
   let currentCondition = 'NOVO';
+  let pendingColors: string[] = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -74,6 +77,7 @@ export function parseSupplierListText(
     const nextLine = lines[index + 1] ?? null;
     if (isContextBoundaryLine(line)) {
       currentProduct = null;
+      pendingColors = [];
       currentCondition = activeCondition;
       continue;
     }
@@ -82,6 +86,7 @@ export function parseSupplierListText(
       activeCategory = sectionCategory;
       activeCondition = detectCondition(line);
       currentProduct = null;
+      pendingColors = [];
       currentCondition = activeCondition;
       continue;
     }
@@ -96,19 +101,26 @@ export function parseSupplierListText(
       activeCondition = detectCondition(line);
       currentCondition = activeCondition;
       currentProduct = null;
+      pendingColors = [];
       continue;
     }
 
     const isProductCandidate = isProductHeading(line, activeCategory, currentProduct !== null, nextLine);
     if (isProductCandidate) {
       currentProduct = withCategoryPrefix(removePrice(line), activeCategory);
+      pendingColors = [];
       const productCondition = detectCondition(currentProduct);
       currentCondition = productCondition === 'NOVO' ? activeCondition : productCondition;
     }
 
-    const price = extractPrice(line);
+    const lineColor = extractColor(line);
+    const price = extractPrice(line, Boolean(currentProduct && lineColor));
     if (price === null) {
-      if (isProductCandidate && !hasPrice(nextLine ?? '')) {
+      if (currentProduct && lineColor) {
+        if (!pendingColors.includes(lineColor)) pendingColors.push(lineColor);
+        continue;
+      }
+      if (isProductCandidate && !hasPrice(nextLine ?? '') && !hasContextualBarePrice(nextLine ?? '')) {
         options.onLineRejected?.({ rawLine: line, reason: 'invalid_or_missing_price' });
       }
       continue;
@@ -119,8 +131,12 @@ export function parseSupplierListText(
     }
 
     const productName = canonicalizeProductName(removePrice(currentProduct));
-    const color = extractColor(line) ?? extractColor(productName);
-    const nameWithoutColor = color ? removeColor(productName, color) : productName;
+    const colors = lineColor
+      ? [lineColor]
+      : pendingColors.length > 0
+        ? [...pendingColors]
+        : [extractColor(productName)];
+    const nameWithoutColor = productName;
     const normalizedName = normalizeProductText(nameWithoutColor);
 
     if (!normalizedName) {
@@ -128,20 +144,24 @@ export function parseSupplierListText(
       continue;
     }
 
-    items.push({
-      productName: nameWithoutColor,
-      normalizedName,
-      category:
-        detectCategory(productName) ??
-        (PRODUCT_IDENTITY_MARKERS.test(productName) ? null : activeCategory),
-      model: extractModel(productName),
-      capacity: extractCapacity(productName),
-      color,
-      condition: currentCondition,
-      price,
-      availability: null,
-      rawLine: line,
-    });
+    for (const color of colors) {
+      const itemName = color ? removeColor(nameWithoutColor, color) : nameWithoutColor;
+      items.push({
+        productName: itemName,
+        normalizedName: normalizeProductText(itemName),
+        category:
+          detectCategory(productName) ??
+          (PRODUCT_IDENTITY_MARKERS.test(productName) ? null : activeCategory),
+        model: extractModel(productName),
+        capacity: extractCapacity(productName),
+        color,
+        condition: currentCondition,
+        price,
+        availability: null,
+        rawLine: line,
+      });
+    }
+    pendingColors = [];
   }
 
   return deduplicateItems(items);
@@ -151,7 +171,7 @@ export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[
   return (
     items.length > 0 &&
     items.every((item) => {
-      const rawLinePrice = extractPrice(item.rawLine);
+      const rawLinePrice = extractPrice(item.rawLine, Boolean(item.color));
       return (
         item.productName.trim().length > 0 &&
         item.normalizedName.trim().length > 0 &&
@@ -179,7 +199,9 @@ function isProductHeading(
   const candidate = removePrice(value);
   if (!candidate) return false;
   const hasProductIdentity =
-    PRODUCT_MARKERS.test(candidate) || PRODUCT_IDENTITY_MARKERS.test(candidate);
+    PRODUCT_MARKERS.test(candidate) ||
+    PRODUCT_IDENTITY_MARKERS.test(candidate) ||
+    isCompactAppleProductHeading(candidate);
   if (isNonProductText(candidate) && !hasProductIdentity) return false;
   if (isAttributeOnlyLine(candidate) && !hasProductIdentity) return false;
 
@@ -188,6 +210,7 @@ function isProductHeading(
   if (
     PRODUCT_MARKERS.test(candidate) ||
     PRODUCT_IDENTITY_MARKERS.test(candidate) ||
+    isCompactAppleProductHeading(candidate) ||
     isImplicitProductHeading(candidate, category)
   ) {
     return true;
@@ -196,6 +219,12 @@ function isProductHeading(
   return hasPrice(value)
     ? isUnknownProductQuote(candidate, hasCurrentProduct)
     : isUnknownProductHeading(candidate, nextLine);
+}
+
+function isCompactAppleProductHeading(value: string) {
+  return /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\s]*(?:iphone\s*)?(?:1[2-7]|17e)\b[\s\S]*\b(?:pro|max|air|plus|e)\b/iu.test(
+    value,
+  );
 }
 
 function isImplicitProductHeading(value: string, category: string | null) {
@@ -384,22 +413,35 @@ function removePrice(value: string) {
     .trim();
 }
 
-function extractPrice(value: string): number | null {
-  const raw = findPriceMatch(value)?.[1];
+function extractPrice(value: string, allowBarePrice = false): number | null {
+  const raw = findPriceMatch(value, allowBarePrice)?.[1];
   return raw ? parseMonetaryValue(raw) : null;
 }
 
-function findPriceMatch(value: string) {
-  return value.match(PRICE_PREFIX) ?? value.match(PRICE_SUFFIX);
+function findPriceMatch(value: string, allowBarePrice = false) {
+  return (
+    value.match(PRICE_PREFIX) ??
+    value.match(PRICE_SUFFIX) ??
+    (allowBarePrice ? value.match(PRICE_BARE_SUFFIX) : null)
+  );
 }
 
-function hasPrice(value: string) {
-  return findPriceMatch(value) !== null;
+function hasPrice(value: string, allowBarePrice = false) {
+  return findPriceMatch(value, allowBarePrice) !== null;
+}
+
+function hasContextualBarePrice(value: string) {
+  return Boolean(extractColor(value) && extractPrice(value, true) !== null);
 }
 
 function parseMonetaryValue(value: string): number | null {
   const compact = value.replace(/\s/g, '');
   if (!/^\d+(?:[.,]\d+)*$/.test(compact)) return null;
+
+  if (/^\d{1,3}(?:[.,]\d{3})+[.,]\d{2}$/.test(compact)) {
+    const digits = compact.replace(/[.,]/g, '');
+    return toPositiveNumber(`${digits.slice(0, -2)}.${digits.slice(-2)}`);
+  }
 
   const separators = [...compact.matchAll(/[.,]/g)].map((match) => match.index ?? -1);
   if (separators.length === 0) return toPositiveNumber(compact);
@@ -447,6 +489,7 @@ function toPositiveNumber(value: string) {
 
 function detectCategory(value: string): string | null {
   if (/\biphones?\b|\biph(?:one)?\s*\d/i.test(value)) return 'iPhone';
+  if (isCompactAppleProductHeading(value)) return 'iPhone';
   if (/ipad/i.test(value)) return 'iPad';
   if (/mac\s?book|macbook/i.test(value)) return 'MacBook';
   if (/mac\s?mini/i.test(value)) return 'Mac Mini';

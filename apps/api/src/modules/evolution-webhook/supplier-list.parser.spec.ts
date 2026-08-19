@@ -409,4 +409,94 @@ describe('supplier list parser', () => {
       { normalizedName: 'produto c 256gb', price: 3000 },
     ]);
   });
+
+  it('interpreta os blocos reais do Bakkour com preco sem marcador monetario', () => {
+    const items = parseSupplierListText(`
+      MACBOOK NEO 13” 8G 256
+      📍indigo       4500,00
+      📍amarelo    4450,00
+      📍blush          4500,00
+
+      MacBook NEO 13” 8G 512
+      📍silver
+      📍indigo
+      📍amarelo
+      💵5240,00
+    `);
+
+    expect(items).toHaveLength(6);
+    expect(
+      items.map(({ normalizedName, color, price }) => ({ normalizedName, color, price })),
+    ).toEqual([
+      { normalizedName: 'macbook neo 13 8g 256', color: 'indigo', price: 4500 },
+      { normalizedName: 'macbook neo 13 8g 256', color: 'amarelo', price: 4450 },
+      { normalizedName: 'macbook neo 13 8g 256', color: 'blush', price: 4500 },
+      { normalizedName: 'macbook neo 13 8g 512', color: 'silver', price: 5240 },
+      { normalizedName: 'macbook neo 13 8g 512', color: 'indigo', price: 5240 },
+      { normalizedName: 'macbook neo 13 8g 512', color: 'amarelo', price: 5240 },
+    ]);
+    expect(isValidParsedSupplierListSnapshot(items)).toBe(true);
+  });
+
+  it('interpreta a promocao do Emilio com moeda no sufixo', () => {
+    const [item] = parseSupplierListText(`
+      PROMOÇÃO
+      📱17 PRO MAX 256 AZUL 🇺🇸
+      6950,00$R
+    `);
+
+    expect(item).toMatchObject({
+      category: 'iPhone',
+      normalizedName: '17 pro max 256',
+      color: 'azul',
+      price: 6950,
+    });
+  });
+
+  it('interpreta promocoes e reposicoes do BrockTech com agrupamento monetario', () => {
+    const promotion = parseSupplierListText(`
+      🔥 PROMOÇÕES DO DIA 🔥
+      📲 *17 PRO MAX 256gb*
+      ⬜️ SILVER (PRATA)
+      🔥 *R$ 7.070.00*
+      🟦 DEEP BLUE
+      🔥 *R$ 7.030.00*
+      🟧 COSMIC ORANGE
+      🔥 *R$ 7.200.00*
+    `);
+    const replenishment = parseSupplierListText(`
+      🔥 REPOSICAO 🔥
+      📲 *17 PRO MAX 256gb*
+      🟦 DEEP BLUE
+      🔥 *R$ 7.030.00*
+      🟧 COSMIC ORANGE
+      🔥 *R$ 7.200.00*
+      ⬜️ SILVER (PRATA)
+      🔥 *R$ 7.070.00*
+    `);
+
+    expect(promotion.map(({ color, price }) => ({ color, price }))).toEqual([
+      { color: 'silver', price: 7070 },
+      { color: 'blue', price: 7030 },
+      { color: 'orange', price: 7200 },
+    ]);
+    expect(replenishment.map(({ color, price }) => ({ color, price }))).toEqual([
+      { color: 'blue', price: 7030 },
+      { color: 'orange', price: 7200 },
+      { color: 'silver', price: 7070 },
+    ]);
+  });
+
+  it('nao interpreta RAM, bateria ou quantidade como preco contextual', () => {
+    const items = parseSupplierListText(`
+      MacBook Neo 13” 8G 256
+      8G
+      Bateria 100
+      13 unidades
+      R$ 4.500
+    `);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ normalizedName: 'macbook neo 13 8g 256', price: 4500 });
+  });
 });
