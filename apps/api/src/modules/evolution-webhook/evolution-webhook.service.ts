@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ProductStatus } from '@prisma/client';
+import { Prisma, ProductStatus } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
@@ -13,6 +13,40 @@ import {
   SupplierLineRejection,
 } from './supplier-list.parser';
 import { EvolutionMessage, ParsedSupplierListItem } from './evolution-webhook.types';
+
+export type SupplierListUpdateMode = 'FULL_SNAPSHOT' | 'PARTIAL_UPDATE' | 'INCONCLUSIVE';
+
+const PARTIAL_UPDATE_MARKER =
+  /\b(?:promo(?:c|ç)[aã]o|oferta|baixou|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar)\b/i;
+const FULL_SNAPSHOT_MARKER =
+  /\b(?:lista\s+(?:completa|geral|atual)|tabela\s+(?:completa|geral)|todos?\s+os\s+produtos)\b/i;
+
+export function classifySupplierListUpdateMode(text: string): SupplierListUpdateMode {
+  const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text);
+  const hasFullMarker = FULL_SNAPSHOT_MARKER.test(text);
+
+  if (hasPartialMarker && hasFullMarker) return 'INCONCLUSIVE';
+  if (hasPartialMarker) return 'PARTIAL_UPDATE';
+  if (hasFullMarker) return 'FULL_SNAPSHOT';
+  return 'INCONCLUSIVE';
+}
+
+type SupplierListItemForMerge = {
+  id?: string;
+  productId?: string | null;
+  productName: string;
+  normalizedName: string;
+  category: string | null;
+  model: string | null;
+  capacity: string | null;
+  color: string | null;
+  condition: string | null;
+  price: number | { toString(): string };
+  availability: string | null;
+  rawLine: string;
+};
+
+type PersistedSupplierListItem = ParsedSupplierListItem & { productId: string | null };
 
 @Injectable()
 export class EvolutionWebhookService implements OnModuleInit {
@@ -32,6 +66,11 @@ export class EvolutionWebhookService implements OnModuleInit {
     let updated = 0;
 
     for (const currentList of currentLists) {
+      const updateMode = classifySupplierListUpdateMode(currentList.rawContent);
+      if (updateMode === 'INCONCLUSIVE') {
+        this.logger.warn(`Lista atual preservada: lista=${currentList.id} modo inconclusivo.`);
+        continue;
+      }
       const parsedItems = this.parseSupplierList(currentList.rawContent, currentList.sourceMessageId);
       if (!isValidParsedSupplierListSnapshot(parsedItems)) {
         this.logger.warn(
@@ -39,7 +78,7 @@ export class EvolutionWebhookService implements OnModuleInit {
         );
         continue;
       }
-      await this.processParsedSupplierItemsShadow(
+      const parsedItemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
         parsedItems,
         {
           supplierContactId: currentList.supplierContactId,
@@ -51,15 +90,35 @@ export class EvolutionWebhookService implements OnModuleInit {
       if (hasEquivalentSnapshot(currentList.items, parsedItems)) continue;
 
       try {
-        await this.prisma.supplierCurrentList.update({
-          where: { id: currentList.id },
-          data: {
-            items: {
-              deleteMany: {},
-              create: parsedItems,
+        if (updateMode === 'FULL_SNAPSHOT') {
+          await this.prisma.supplierCurrentList.update({
+            where: { id: currentList.id },
+            data: {
+              items: {
+                deleteMany: {},
+                create: parsedItems,
+              },
             },
-          },
-        });
+          });
+        } else {
+          await this.prisma.$transaction(async (transaction) => {
+            await transaction.supplierCurrentList.update({
+              where: { id: currentList.id },
+              data: {
+                sourceMessageId: currentList.sourceMessageId,
+                sourceType: 'text',
+                rawContent: currentList.rawContent,
+                receivedAt: currentList.receivedAt,
+              },
+            });
+            await this.applyPartialUpdate(
+              transaction,
+              currentList.id,
+              currentList.items,
+              parsedItemsWithResolvedProductId,
+            );
+          });
+        }
         updated += 1;
       } catch (error) {
         this.logger.error(`Falha ao reprocessar lista atual: lista=${currentList.id}.`, error);
@@ -123,6 +182,7 @@ export class EvolutionWebhookService implements OnModuleInit {
       );
       return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
+    const updateMode = classifySupplierListUpdateMode(text);
     const catalog = await this.loadProductShadowCatalog();
     const itemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
       items,
@@ -142,6 +202,45 @@ export class EvolutionWebhookService implements OnModuleInit {
             supplierContactId: supplier.id,
           },
         });
+
+        if (updateMode === 'INCONCLUSIVE') return;
+
+        if (updateMode === 'PARTIAL_UPDATE') {
+          const currentList = await transaction.supplierCurrentList.findUnique({
+            where: { supplierContactId: supplier.id },
+            include: { items: true },
+          });
+
+          if (currentList) {
+            await transaction.supplierCurrentList.update({
+              where: { id: currentList.id },
+              data: {
+                sourceMessageId: message.messageId,
+                sourceType: 'text',
+                rawContent: text,
+                receivedAt: message.receivedAt,
+              },
+            });
+            await this.applyPartialUpdate(
+              transaction,
+              currentList.id,
+              currentList.items,
+              itemsWithResolvedProductId,
+            );
+          } else {
+            await transaction.supplierCurrentList.create({
+              data: {
+                supplierContactId: supplier.id,
+                sourceMessageId: message.messageId,
+                sourceType: 'text',
+                rawContent: text,
+                receivedAt: message.receivedAt,
+                items: { create: itemsWithResolvedProductId },
+              },
+            });
+          }
+          return;
+        }
 
         await transaction.supplierCurrentList.upsert({
           where: { supplierContactId: supplier.id },
@@ -173,8 +272,43 @@ export class EvolutionWebhookService implements OnModuleInit {
       throw error;
     }
 
-    this.logger.log(`Lista atualizada: fornecedor=${supplier.id} itens=${items.length}`);
+    this.logger.log(
+      updateMode === 'INCONCLUSIVE'
+        ? `Lista preservada: fornecedor=${supplier.id} itens=${items.length} modo inconclusivo.`
+        : `Lista atualizada: fornecedor=${supplier.id} itens=${items.length}`,
+    );
     return { accepted: true, supplierId: supplier.id, items: items.length };
+  }
+
+  private async applyPartialUpdate(
+    transaction: Prisma.TransactionClient,
+    currentListId: string,
+    existingItems: readonly SupplierListItemForMerge[],
+    incomingItems: readonly PersistedSupplierListItem[],
+  ) {
+    const existingByKey = new Map(
+      existingItems
+        .filter((item): item is SupplierListItemForMerge & { id: string } => Boolean(item.id))
+        .map((item) => [supplierListItemMergeKey(item), item]),
+    );
+
+    for (const item of incomingItems) {
+      const existingItem = existingByKey.get(supplierListItemMergeKey(item));
+      if (existingItem) {
+        await transaction.supplierCurrentListItem.update({
+          where: { id: existingItem.id },
+          data: item,
+        });
+        continue;
+      }
+
+      await transaction.supplierCurrentListItem.create({
+        data: {
+          ...item,
+          supplierCurrentListId: currentListId,
+        },
+      });
+    }
   }
 
   private assertValidSecret(providedSecret: string) {
@@ -464,6 +598,23 @@ function snapshotKey(item: {
 
 function normalizedRawLine(value: string) {
   return value.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR');
+}
+
+export function supplierListItemMergeKey(item: SupplierListItemForMerge) {
+  // The current list is already scoped to one SupplierContact. Keep the
+  // remaining offer identity family-aware and independent from productId.
+  return [
+    `family:${normalizeMergeValue(item.category)}`,
+    `variant:${normalizeMergeValue(item.normalizedName)}`,
+    `model:${normalizeMergeValue(item.model)}`,
+    `capacity:${normalizeMergeValue(item.capacity)}`,
+    `color:${normalizeMergeValue(item.color)}`,
+    `condition:${normalizeMergeValue(item.condition)}`,
+  ].join('|');
+}
+
+function normalizeMergeValue(value: string | null | undefined) {
+  return value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') ?? '';
 }
 
 interface EvolutionExtraction {
