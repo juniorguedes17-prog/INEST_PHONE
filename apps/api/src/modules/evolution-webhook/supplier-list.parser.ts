@@ -458,7 +458,7 @@ function detectCondition(value: string): string {
 function deduplicateItems(items: ParsedSupplierListItem[]) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = `${item.normalizedName}|${item.color ?? ''}|${item.price}`;
+    const key = `${item.normalizedName}|${item.color ?? ''}|${item.price}|${item.condition ?? ''}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

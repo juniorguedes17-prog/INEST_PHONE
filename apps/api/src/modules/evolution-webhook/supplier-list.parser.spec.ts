@@ -67,6 +67,49 @@ describe('supplier list parser', () => {
     );
   });
 
+  it('deduplica ofertas equivalentes, mas preserva condicoes distintas em todas as familias', () => {
+    const duplicate = parseSupplierListText(`
+      iPhone 15 128GB
+      Preto R$ 3.000
+      iPhone 15 128GB
+      Preto R$ 3.000
+    `);
+    const novoAndCpo = parseSupplierListText(`
+      IPHONES LACRADOS
+      iPhone 15 128GB
+      Preto R$ 3.000
+      CPO
+      iPhone 15 128GB
+      Preto R$ 3.000
+    `);
+    const novoAndSeminovo = parseSupplierListText(`
+      IPAD
+      iPad 11 128GB
+      Azul R$ 2.000
+      IPAD
+      SEMINOVO
+      iPad 11 128GB
+      Azul R$ 2.000
+    `);
+    const cpoAndSeminovo = parseSupplierListText(`
+      CPO
+      MacBook Air M5 13 16/512GB
+      Midnight R$ 7.650
+      MACBOOK
+      SEMINOVO
+      MacBook Air M5 13 16/512GB
+      Midnight R$ 7.650
+    `);
+
+    expect(duplicate).toHaveLength(1);
+    expect(novoAndCpo).toHaveLength(2);
+    expect(novoAndCpo.map((item) => item.condition)).toEqual(expect.arrayContaining(['NOVO', 'CPO']));
+    expect(novoAndSeminovo).toHaveLength(2);
+    expect(novoAndSeminovo.map((item) => item.condition)).toEqual(expect.arrayContaining(['NOVO', 'SEMINOVO']));
+    expect(cpoAndSeminovo).toHaveLength(2);
+    expect(cpoAndSeminovo.map((item) => item.condition)).toEqual(expect.arrayContaining(['CPO', 'SEMINOVO']));
+  });
+
   it('preserva pontos como milhar quando a lista nao informa centavos', () => {
     const items = parseSupplierListText('iPhone 17 Pro Max 256GB\nSilver R$ 7.200');
 
