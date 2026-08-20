@@ -13,7 +13,9 @@ function catalogProduct(
   profitCondition = 'NOVO',
   variantAttributes: unknown = null,
 ): ProductIdShadowCandidate {
-  const storage = [...productDescription.matchAll(/\b(\d+)\s*GB\b/gi)].at(-1)?.[1] ?? null;
+  const storageMatch = [...productDescription.matchAll(/\b(\d+)\s*(GB|TB)\b/gi)].at(-1);
+  const storage = storageMatch?.[1] ?? null;
+  const storageUnit = storageMatch?.[2]?.toUpperCase() ?? null;
   return {
     id,
     productDescription,
@@ -31,7 +33,9 @@ function catalogProduct(
     category: null,
     model: null,
     color: null,
-    storage: storage ? { displayName: `${storage}GB`, value: storage, unit: 'GB' } : null,
+    storage: storage
+      ? { displayName: `${storage} ${storageUnit}`, value: storage, unit: storageUnit }
+      : null,
   };
 }
 
@@ -188,6 +192,43 @@ describe('product identity ingestion shadow', () => {
       status: 'AMBIGUOUS',
       candidates: ['air-256-new', 'air-256-new-duplicate'],
       candidateCount: 2,
+    });
+  });
+
+  it.each([
+    ['128', 'GB'],
+    ['256', 'GB'],
+    ['512', 'GB'],
+    ['1', 'TB'],
+    ['2', 'TB'],
+  ])('canonicalizes structured storage %s %s against the Core value', (value, unit) => {
+    const catalog = [catalogProduct('storage-match', `iPhone 17 Air ${value}${unit}`)];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity(`iPhone 17 Air ${value}${unit}`), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'storage-match' });
+  });
+
+  it('resolves the real MacBook Air 1TB catalog representation', () => {
+    const catalog: ProductIdShadowCandidate[] = [
+      {
+        id: '69d55709-9750-4eab-9ca5-de2713e22b02',
+        productDescription: 'MacBook Air M5 13 16/1TB',
+        productType: 'macbook',
+        profitCondition: 'novo',
+        variantAttributes: null,
+        category: { name: 'MacBook' },
+        model: { name: 'MacBook Air' },
+        color: null,
+        storage: { displayName: '1 TB', value: '1', unit: 'TB' },
+      },
+    ];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Air M5 13 16GB 1TB'), catalog),
+    ).toMatchObject({
+      status: 'FOUND',
+      productId: '69d55709-9750-4eab-9ca5-de2713e22b02',
     });
   });
 

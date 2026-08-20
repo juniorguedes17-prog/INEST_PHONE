@@ -114,8 +114,11 @@ function matchesCatalogProduct(
 
 function identityDimensions(identity: ExtendedProductIdentity, product?: ProductIdShadowCandidate) {
   const dimensions: Record<string, string> = { ...identity.profit.attributes };
+  if (dimensions.storage) {
+    dimensions.storage = normalizeStorageDimension(dimensions.storage);
+  }
   if (product?.storage?.displayName ?? product?.storage?.value) {
-    dimensions.storage = normalizeDimension(
+    dimensions.storage = normalizeStorageDimension(
       product.storage?.displayName ?? product.storage?.value ?? '',
     );
   }
@@ -132,6 +135,10 @@ function identityDimensions(identity: ExtendedProductIdentity, product?: Product
 
 function normalizeDimension(value: string) {
   return normalizeCanonicalText(value).replace(/\s+/g, '-');
+}
+
+function normalizeStorageDimension(value: string) {
+  return normalizeDimension(value).replace(/^(\d+(?:\.\d+)?)-(gb|tb)$/i, '$1$2');
 }
 
 function isStringRecord(value: unknown): value is Record<string, string> {
