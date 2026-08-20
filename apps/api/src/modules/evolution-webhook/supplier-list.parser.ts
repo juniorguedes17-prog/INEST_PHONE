@@ -610,9 +610,17 @@ function detectCategory(value: string): string | null {
   if (/mac\s?mini/i.test(value)) return 'Mac Mini';
   if (/imac/i.test(value)) return 'iMac';
   if (/watch|ultra|\bse\d/i.test(value)) return 'Apple Watch';
-  if (/air\s?pods|airpods|earpods/i.test(value)) return 'AirPods';
+  if (isAirPodsAccessory(value)) return 'Acessorio Apple';
+  if (/air\s?pods|airpods/i.test(value)) return 'Fones';
+  if (/earpods/i.test(value)) return 'Acessorio Apple';
   if (/airtag|pencil|magic\s?mouse/i.test(value)) return 'Acessorio Apple';
   return null;
+}
+
+function isAirPodsAccessory(value: string) {
+  return /\b(?:capa|case|cord(?:a|ã)o|estojo|protetor)\b[\s\S]{0,32}\bair\s?pods?\b|\bair\s?pods?\b[\s\S]{0,32}\b(?:capa|case|cord(?:a|ã)o|estojo|protetor)\b/i.test(
+    value,
+  );
 }
 
 function extractModel(value: string): string | null {

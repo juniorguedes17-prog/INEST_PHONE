@@ -202,7 +202,15 @@ export function buildBrazilRadarFacetsFromIndex(
 }
 
 const capacityOrder = ['64GB', '128GB', '256GB', '512GB', '1TB', '2TB'];
-const categoryOrder = ['iPhone', 'iPad', 'MacBook', 'Apple Watch', 'Eletronicos', 'Acessorios'];
+const categoryOrder = [
+  'iPhone',
+  'iPad',
+  'MacBook',
+  'Apple Watch',
+  'Fones',
+  'Eletronicos',
+  'Acessorios',
+];
 const conditionOrder = ['Novo', 'Seminovo', 'CPO'];
 
 export function isVisibleRadarQuote(quote: PriceQuoteItem) {
@@ -367,6 +375,7 @@ export function countActiveBrazilRadarFacets(filters: BrazilRadarFacetState) {
 }
 
 export function getCanonicalCategory(source: CatalogFacetSource) {
+  if (normalizeCatalogFilterText(source.category ?? '') === 'fones') return 'Fones';
   return normalizeCanonicalProductIdentity(source).canonicalCategory;
 }
 

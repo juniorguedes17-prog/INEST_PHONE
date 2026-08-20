@@ -150,6 +150,24 @@ test('consulta indexada intersecta o menor conjunto e nao canoniza durante a con
   assert.equal(index.rows.size, quotes.length);
 });
 
+test('preserva Fones como categoria explicita para AirPods no Radar', () => {
+  const airpods = quote({
+    id: 'airpods-pro-3',
+    productName: 'AirPods Pro 3',
+    category: 'Fones',
+    model: 'AirPods Pro 3',
+  });
+  const facets = buildBrazilRadarFacets([airpods]);
+
+  assert.deepEqual(facets.categories.map((item) => item.label), ['Fones']);
+  assert.deepEqual(
+    filterBrazilRadarQuotes([airpods], { ...emptyBrazilRadarFacetState, categories: ['Fones'] }).map(
+      (item) => item.id,
+    ),
+    ['airpods-pro-3'],
+  );
+});
+
 test('escala de 10 mil itens cria o indice uma vez e reutiliza as linhas normalizadas', () => {
   const dataset = Array.from({ length: 10_000 }, (_, index) =>
     quote({

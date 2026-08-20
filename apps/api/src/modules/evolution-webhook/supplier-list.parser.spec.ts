@@ -320,7 +320,7 @@ describe('supplier list parser', () => {
       'AirPods',
       'AIR PODS 4 ANC',
       'WHITE R$ 1.045',
-      { productName: 'AirPods 4 ANC', category: 'AirPods', capacity: null },
+      { productName: 'AirPods 4 ANC', category: 'Fones', capacity: null },
       1045,
     ],
   ])(
@@ -331,6 +331,45 @@ describe('supplier list parser', () => {
       expect(item).toMatchObject({ ...expected, price });
     },
   );
+
+  it.each([
+    'AirPods 4',
+    'AirPods 4 ANC',
+    'AirPods Pro',
+    'AirPods Pro 2',
+    'AirPods Pro 3',
+    'AirPods Max',
+  ])('classifica %s como Fones sem perder a identidade', (heading) => {
+    const [item] = parseSupplierListText(`${heading}\nWhite R$ 1.000`);
+
+    expect(item).toMatchObject({
+      productName: heading,
+      normalizedName: heading.toLowerCase(),
+      category: 'Fones',
+      model: heading,
+    });
+  });
+
+  it.each([
+    ['Apple Pencil Pro', 'Acessorio Apple'],
+    ['Apple Watch SE 3 GPS 40mm', 'Apple Watch'],
+    ['iPhone 17 Pro 256GB', 'iPhone'],
+    ['MacBook Air M5 13 16GB 512GB', 'MacBook'],
+    ['iPad Pro M5 11 256GB', 'iPad'],
+  ])('nao classifica %s como Fones', (heading, category) => {
+    const [item] = parseSupplierListText(`${heading}\nWhite R$ 1.000`);
+
+    expect(item?.category).toBe(category);
+  });
+
+  it('preserva acessorio explicitamente associado a AirPods', () => {
+    const [item] = parseSupplierListText('Capa para AirPods 4\nPreto R$ 100');
+
+    expect(item).toMatchObject({
+      normalizedName: 'capa para airpods 4',
+      category: 'Acessorio Apple',
+    });
+  });
 
   it('aceita uma cotacao valida desconhecida sem exigir categoria cadastrada', () => {
     const [item] = parseSupplierListText('Produto XYZ 512GB\nR$ 900');
