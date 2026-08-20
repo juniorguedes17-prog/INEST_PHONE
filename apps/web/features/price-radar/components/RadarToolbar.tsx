@@ -34,7 +34,10 @@ export function RadarToolbar({
   onOpenFilters,
 }: RadarToolbarProps) {
   return (
-    <section className="rounded-xl border border-inest-line bg-white p-3 shadow-card" aria-label="Ferramentas do Radar">
+    <section
+      className="rounded-xl border border-inest-line/80 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)]"
+      aria-label="Ferramentas do Radar"
+    >
       <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
         <SearchInput
           value={search}

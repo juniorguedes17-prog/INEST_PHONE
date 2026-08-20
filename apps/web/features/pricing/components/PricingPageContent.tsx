@@ -23,7 +23,10 @@ import {
   getCanonicalColors,
   getCatalogFacetLabel,
 } from '@/features/price-radar/utils/brazil-radar-facets';
-import { ProductFacetsDrawer, buildFacetOptions } from '@/features/price-radar/components/ProductFacetsDrawer';
+import {
+  ProductFacetsDrawer,
+  buildFacetOptions,
+} from '@/features/price-radar/components/ProductFacetsDrawer';
 import { getProductCardPresentation } from '@/utils/product-card-presentation';
 import { PricingOfferTarget } from '../types/pricing';
 
@@ -61,12 +64,11 @@ export function PricingPageContent() {
   const [profitValue, setProfitValue] = useState('');
   const [profitModalError, setProfitModalError] = useState<string | null>(null);
   const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(() => new Set());
-  const [profitItem, setProfitItem] = useState<ReturnType<typeof usePricing>['brazilRadarPricings'][number] | null>(null);
+  const [profitItem, setProfitItem] = useState<
+    ReturnType<typeof usePricing>['brazilRadarPricings'][number] | null
+  >(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
-  const models = useMemo(
-    () => buildCanonicalModelFacetOptions(pricing.items),
-    [pricing.items],
-  );
+  const models = useMemo(() => buildCanonicalModelFacetOptions(pricing.items), [pricing.items]);
   const colors = useUnique(pricing.items.flatMap((item) => getCanonicalColors(item)));
   const capacities = useUnique(pricing.items.flatMap((item) => getCanonicalCapacities(item)));
   const types = useUnique(pricing.items.map((item) => item.productType));
@@ -117,8 +119,15 @@ export function PricingPageContent() {
   );
   const selectedOfferTargets = useMemo<PricingOfferTarget[]>(() => {
     const catalogTargets = pricing.items
-      .filter((item) => item.googleSheetsReady && selectedOfferIds.has(catalogSelectionId(item.productId)))
-      .map((item) => ({ id: catalogSelectionId(item.productId), kind: 'catalog' as const, productId: item.productId }));
+      .filter(
+        (item) =>
+          item.googleSheetsReady && selectedOfferIds.has(catalogSelectionId(item.productId)),
+      )
+      .map((item) => ({
+        id: catalogSelectionId(item.productId),
+        kind: 'catalog' as const,
+        productId: item.productId,
+      }));
     const radarTargets = pricing.brazilRadarPricings
       .filter(
         (item) =>
@@ -126,7 +135,11 @@ export function PricingPageContent() {
           item.offerDraft !== null &&
           selectedOfferIds.has(radarSelectionId(item.sourceQuoteId)),
       )
-      .map((item) => ({ id: radarSelectionId(item.sourceQuoteId), kind: 'brazil-radar' as const, item }));
+      .map((item) => ({
+        id: radarSelectionId(item.sourceQuoteId),
+        kind: 'brazil-radar' as const,
+        item,
+      }));
 
     return [...catalogTargets, ...radarTargets];
   }, [pricing.brazilRadarPricings, pricing.items, selectedOfferIds]);
@@ -268,13 +281,18 @@ export function PricingPageContent() {
             />
             <span>Adicionar acrescimo a oferta</span>
             <span className="text-xs text-inest-muted">
-              {settingsPayload ? `+ ${formatCurrency(settingsPayload.pricing.offerIncrement)}` : 'Carregando acrescimo'}
+              {settingsPayload
+                ? `+ ${formatCurrency(settingsPayload.pricing.offerIncrement)}`
+                : 'Carregando acrescimo'}
             </span>
           </label>
           {selectedOfferTargets.length ? (
             <div className="sticky top-2 z-10 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-inest-blue/30 bg-white p-3 shadow-card">
               <strong className="text-sm text-inest-text">
-                {selectedOfferTargets.length} {selectedOfferTargets.length === 1 ? 'produto selecionado' : 'produtos selecionados'}
+                {selectedOfferTargets.length}{' '}
+                {selectedOfferTargets.length === 1
+                  ? 'produto selecionado'
+                  : 'produtos selecionados'}
               </strong>
               <div className="flex items-center gap-2">
                 <ActionButton
@@ -320,30 +338,29 @@ export function PricingPageContent() {
                 description="O produto precisa possuir preco valido no Radar para aparecer na Precificacao."
               />
             ) : null}
-            {!pricing.loading
-              ? (
-                  <>
-                    {pricing.brazilRadarPricings.map((item) => (
-                      <BrazilRadarQuotePricingCard
-                        key={item.sourceQuoteId}
-                        item={item}
-                        generating={pricing.saving}
-                        selected={selectedOfferIds.has(radarSelectionId(item.sourceQuoteId))}
-                        onSelect={(selected) =>
-                          setOfferSelection(radarSelectionId(item.sourceQuoteId), selected)
-                        }
-                        onGenerateOffer={() => pricing.generateBrazilRadarOffer(item)}
-                        onRegisterProfit={() => openProfitModal(item)}
-                      />
-                    ))}
-                    {pricing.temporaryImportPricing ? (
-                      <TemporaryImportPricingCard
-                        item={pricing.temporaryImportPricing}
-                        generating={pricing.saving}
-                        onGenerateOffer={pricing.generateTemporaryOffer}
-                      />
-                    ) : null}
-                    {paginatedItems.map((item) => (
+            {!pricing.loading ? (
+              <>
+                {pricing.brazilRadarPricings.map((item) => (
+                  <BrazilRadarQuotePricingCard
+                    key={item.sourceQuoteId}
+                    item={item}
+                    generating={pricing.saving}
+                    selected={selectedOfferIds.has(radarSelectionId(item.sourceQuoteId))}
+                    onSelect={(selected) =>
+                      setOfferSelection(radarSelectionId(item.sourceQuoteId), selected)
+                    }
+                    onGenerateOffer={() => pricing.generateBrazilRadarOffer(item)}
+                    onRegisterProfit={() => openProfitModal(item)}
+                  />
+                ))}
+                {pricing.temporaryImportPricing ? (
+                  <TemporaryImportPricingCard
+                    item={pricing.temporaryImportPricing}
+                    generating={pricing.saving}
+                    onGenerateOffer={pricing.generateTemporaryOffer}
+                  />
+                ) : null}
+                {paginatedItems.map((item) => (
                   <PricingProductCard
                     key={item.productId}
                     item={item}
@@ -354,10 +371,9 @@ export function PricingPageContent() {
                     }
                     onGenerateOffer={(productId) => void pricing.generateOffer(productId)}
                   />
-                    ))}
-                  </>
-                )
-              : null}
+                ))}
+              </>
+            ) : null}
           </div>
 
           {pricing.items.length ? (
@@ -387,11 +403,8 @@ export function PricingPageContent() {
           (category) => pricing.setFilters((current) => ({ ...current, category })),
         )}
         models={{
-          ...singleFilterGroup(
-            'Modelo',
-            models,
-            pricing.filters.model,
-            (model) => pricing.setFilters((current) => ({ ...current, model })),
+          ...singleFilterGroup('Modelo', models, pricing.filters.model, (model) =>
+            pricing.setFilters((current) => ({ ...current, model })),
           ),
           collapsible: true,
         }}
@@ -426,10 +439,8 @@ export function PricingPageContent() {
           max: priceBounds.max,
           minValue: pricing.filters.minPrice,
           maxValue: pricing.filters.maxPrice,
-          onMinChange: (minPrice) =>
-            pricing.setFilters((current) => ({ ...current, minPrice })),
-          onMaxChange: (maxPrice) =>
-            pricing.setFilters((current) => ({ ...current, maxPrice })),
+          onMinChange: (minPrice) => pricing.setFilters((current) => ({ ...current, minPrice })),
+          onMaxChange: (maxPrice) => pricing.setFilters((current) => ({ ...current, maxPrice })),
         }}
         onClear={clearFilters}
         onClose={() => setFiltersOpen(false)}
@@ -485,8 +496,11 @@ function BrazilRadarQuotePricingCard({
   const ready = item.calculationStatus === 'ready' && item.offerDraft !== null;
 
   return (
-    <article className="grid w-full gap-3 rounded-xl border border-green-200 bg-white p-3 shadow-card md:grid-cols-[28px_64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
-      <label className="flex h-8 w-8 items-center justify-center" aria-label={`Selecionar ${presentation.title}`}>
+    <article className="grid w-full gap-4 rounded-xl border border-green-200 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] md:grid-cols-[28px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+      <label
+        className="flex h-8 w-8 items-center justify-center"
+        aria-label={`Selecionar ${presentation.title}`}
+      >
         <input
           type="checkbox"
           className="h-4 w-4 accent-inest-blue"
@@ -495,9 +509,6 @@ function BrazilRadarQuotePricingCard({
           onChange={(event) => onSelect(event.target.checked)}
         />
       </label>
-      <div className="grid h-16 w-16 place-items-center rounded-lg bg-green-50 font-display text-lg font-black text-inest-green">
-        BR
-      </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
@@ -627,7 +638,9 @@ function MissingProfitModal({
             </div>
             {item.product.capacity ? (
               <div>
-                <span className="block text-xs font-black uppercase text-inest-muted">Capacidade</span>
+                <span className="block text-xs font-black uppercase text-inest-muted">
+                  Capacidade
+                </span>
                 <strong className="mt-1 block text-inest-text">{item.product.capacity}</strong>
               </div>
             ) : null}
@@ -646,7 +659,11 @@ function MissingProfitModal({
             className="field-control"
           />
         </label>
-        {error ? <p className="text-sm font-bold text-red-700" role="alert">{error}</p> : null}
+        {error ? (
+          <p className="text-sm font-bold text-red-700" role="alert">
+            {error}
+          </p>
+        ) : null}
       </form>
     </Modal>
   );
@@ -670,10 +687,7 @@ function TemporaryImportPricingCard({
   });
 
   return (
-    <article className="grid w-full gap-3 rounded-xl border border-blue-200 bg-white p-3 shadow-card md:grid-cols-[64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
-      <div className="grid h-16 w-16 place-items-center rounded-lg bg-blue-50 font-display text-lg font-black text-inest-blue">
-        PY
-      </div>
+    <article className="grid w-full gap-4 rounded-xl border border-blue-200 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] md:grid-cols-[minmax(220px,1fr)_170px_150px_170px] md:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
@@ -683,28 +697,45 @@ function TemporaryImportPricingCard({
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {presentation.attributes.map((tag) => (
-              <StatusBadge key={tag} tone="gray">
-                {tag}
-              </StatusBadge>
-            ))}
+            <StatusBadge key={tag} tone="gray">
+              {tag}
+            </StatusBadge>
+          ))}
         </div>
       </div>
       <div className="min-w-0">
         <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
-        <strong className="mt-0.5 block truncate text-sm text-inest-text">{item.product.supplier}</strong>
-        <p className="mt-1 truncate text-xs text-inest-muted">{item.product.city || item.product.store}</p>
+        <strong className="mt-0.5 block truncate text-sm text-inest-text">
+          {item.product.supplier}
+        </strong>
+        <p className="mt-1 truncate text-xs text-inest-muted">
+          {item.product.city || item.product.store}
+        </p>
       </div>
       <div className="min-w-0 md:text-right">
         <p className="text-[10px] font-black uppercase text-inest-muted">Custo final</p>
-        <strong className="mt-0.5 block text-sm text-inest-text">{formatCurrency(item.importCosts.totalCost)}</strong>
+        <strong className="mt-0.5 block text-sm text-inest-text">
+          {formatCurrency(item.importCosts.totalCost)}
+        </strong>
         <p className="mt-2 text-[10px] font-black uppercase text-inest-muted">Lucro</p>
-        <strong className="mt-0.5 block text-sm text-inest-green">{formatCurrency(item.desiredNetProfit)}</strong>
+        <strong className="mt-0.5 block text-sm text-inest-green">
+          {formatCurrency(item.desiredNetProfit)}
+        </strong>
       </div>
       <div className="flex min-w-0 flex-col items-start gap-1 md:items-end">
         <span className="text-[10px] font-black uppercase text-inest-muted">Preco de venda</span>
-        <strong className="font-display text-2xl font-black text-inest-text">{formatCurrency(item.salePrice)}</strong>
-        <span className="text-xs font-bold text-inest-muted">Margem {formatPercent(item.margin)}</span>
-        <ActionButton variant="success" className="mt-1 h-9 px-3 text-xs" disabled={generating} onClick={onGenerateOffer}>
+        <strong className="font-display text-2xl font-black text-inest-text">
+          {formatCurrency(item.salePrice)}
+        </strong>
+        <span className="text-xs font-bold text-inest-muted">
+          Margem {formatPercent(item.margin)}
+        </span>
+        <ActionButton
+          variant="success"
+          className="mt-1 h-9 px-3 text-xs"
+          disabled={generating}
+          onClick={onGenerateOffer}
+        >
           {generating ? 'Preparando...' : 'Gerar Oferta'}
         </ActionButton>
       </div>

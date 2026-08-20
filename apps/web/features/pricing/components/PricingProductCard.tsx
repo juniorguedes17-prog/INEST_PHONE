@@ -27,8 +27,11 @@ export const PricingProductCard = memo(function PricingProductCard({
   });
 
   return (
-    <article className="grid w-full gap-3 rounded-xl border border-inest-line bg-white p-3 shadow-card transition-colors hover:border-slate-300 hover:bg-slate-50/60 focus-within:ring-2 focus-within:ring-inest-blue/30 md:grid-cols-[28px_64px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
-      <label className="flex h-8 w-8 items-center justify-center" aria-label={`Selecionar ${presentation.title}`}>
+    <article className="grid w-full gap-4 rounded-xl border border-inest-line/80 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all hover:border-inest-blue/30 hover:shadow-card focus-within:ring-4 focus-within:ring-inest-blue/10 md:grid-cols-[28px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+      <label
+        className="flex h-8 w-8 items-center justify-center"
+        aria-label={`Selecionar ${presentation.title}`}
+      >
         <input
           type="checkbox"
           className="h-4 w-4 accent-inest-blue"
@@ -37,10 +40,6 @@ export const PricingProductCard = memo(function PricingProductCard({
           onChange={(event) => onSelect(item.productId, event.target.checked)}
         />
       </label>
-      <div className="grid h-16 w-16 place-items-center rounded-lg bg-inest-soft font-display text-lg font-black text-inest-blue">
-        {item.category?.slice(0, 2).toUpperCase() || 'IN'}
-      </div>
-
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
@@ -52,8 +51,8 @@ export const PricingProductCard = memo(function PricingProductCard({
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {presentation.attributes.map((tag) => (
-              <InfoTag key={tag}>{tag}</InfoTag>
-            ))}
+            <InfoTag key={tag}>{tag}</InfoTag>
+          ))}
         </div>
         {item.calculationError ? (
           <p className="mt-2 text-xs font-bold text-red-700" role="alert">
@@ -70,7 +69,9 @@ export const PricingProductCard = memo(function PricingProductCard({
         <strong className="mt-0.5 block truncate text-sm text-inest-text">
           {item.supplier.name}
         </strong>
-        {item.supplier.source ? <p className="mt-1 truncate text-xs text-inest-muted">{item.supplier.source}</p> : null}
+        {item.supplier.source ? (
+          <p className="mt-1 truncate text-xs text-inest-muted">{item.supplier.source}</p>
+        ) : null}
         {item.deliveryTime ? <InfoTag className="mt-2">{item.deliveryTime}</InfoTag> : null}
       </div>
 

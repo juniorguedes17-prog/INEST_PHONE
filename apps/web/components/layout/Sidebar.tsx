@@ -18,7 +18,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-full min-h-0 flex-col border-r border-inest-line bg-[var(--inest-sidebar)] px-3 py-4 transition-[width] duration-200',
+        'flex h-full min-h-0 flex-col border-r border-inest-line/80 bg-[var(--inest-sidebar)] px-3 py-4 transition-[width] duration-200',
         collapsed ? 'w-[76px]' : 'w-[244px]',
       )}
     >
@@ -60,7 +60,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
                 collapsed && 'justify-center',
               )}
             >
-              <span className="grid h-8 w-8 flex-none place-items-center rounded-md border border-inest-line bg-white text-xs font-black transition-colors group-hover:border-slate-300">
+              <span className="grid h-8 w-8 flex-none place-items-center rounded-md border border-inest-line bg-inest-surface text-xs font-black transition-colors group-hover:border-inest-blue/40 group-hover:text-inest-blue">
                 {item.icon}
               </span>
               {!collapsed ? (
@@ -71,7 +71,7 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         })}
       </nav>
 
-      <div className="mt-4 rounded-xl border border-inest-line bg-white p-2.5">
+      <div className="mt-4 rounded-xl border border-inest-line bg-inest-surface p-2.5 shadow-[0_8px_22px_rgba(16,24,40,0.035)]">
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
           <div className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-inest-soft text-xs font-black text-inest-blue">
             AD

@@ -22,7 +22,7 @@ export function KpiCard({ label, value, detail, tone = 'blue', icon }: KpiCardPr
   return (
     <article
       className={cn(
-        'relative min-h-[96px] overflow-hidden rounded-xl border border-inest-line bg-white px-4 py-3 shadow-card before:absolute before:inset-y-0 before:left-0 before:w-1',
+        'relative min-h-[96px] overflow-hidden rounded-xl border border-inest-line/80 bg-inest-surface px-4 py-3 shadow-[0_10px_30px_rgba(16,24,40,0.045)] before:absolute before:inset-y-0 before:left-0 before:w-1',
         accents[tone],
       )}
     >
@@ -33,7 +33,9 @@ export function KpiCard({ label, value, detail, tone = 'blue', icon }: KpiCardPr
       <strong className="mt-1.5 block font-display text-2xl font-black text-inest-text">
         {value}
       </strong>
-      {detail ? <small className="mt-1 block truncate text-xs text-inest-muted">{detail}</small> : null}
+      {detail ? (
+        <small className="mt-1 block truncate text-xs text-inest-muted">{detail}</small>
+      ) : null}
     </article>
   );
 }

@@ -4,14 +4,14 @@
 
 :root {
   color-scheme: light;
-  --inest-bg: #f4f7fb;
+  --inest-bg: #f5f7fa;
   --inest-surface: #ffffff;
-  --inest-soft: #edf1f7;
+  --inest-soft: #eef1f7;
   --inest-text: #101828;
   --inest-muted: #667085;
-  --inest-line: #dce3ef;
+  --inest-line: #e2e8f0;
   --inest-sidebar: #ffffff;
-  --inest-header: rgba(244, 247, 251, 0.94);
+  --inest-header: rgba(245, 247, 250, 0.92);
   background: var(--inest-bg);
 }
 
@@ -145,7 +145,7 @@ textarea {
   }
 
   .field-control {
-    @apply h-11 w-full rounded-lg border border-inest-line bg-inest-surface px-3.5 text-sm text-inest-text outline-none transition-colors placeholder:text-inest-muted hover:border-inest-blue focus:border-inest-blue focus:ring-2 focus:ring-inest-blue/15;
+    @apply h-11 w-full rounded-lg border border-inest-line bg-inest-surface px-3.5 text-sm text-inest-text outline-none transition-all placeholder:text-inest-muted hover:border-inest-blue/60 focus:border-inest-blue focus:ring-4 focus:ring-inest-blue/10;
   }
 }
 
@@ -193,6 +193,10 @@ button {
 
 button:disabled {
   cursor: not-allowed;
+}
+
+::selection {
+  background: rgb(95 124 255 / 0.18);
 }
 
 :focus-visible {

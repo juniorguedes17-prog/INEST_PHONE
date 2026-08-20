@@ -17,10 +17,14 @@ export function Drawer({ open, title, children, onClose, side = 'left' }: Drawer
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/40" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 bg-slate-950/45 backdrop-blur-[2px]"
+      role="dialog"
+      aria-modal="true"
+    >
       <aside
         className={cn(
-          'h-full w-[min(88vw,360px)] overflow-y-auto bg-white p-5 shadow-panel',
+          'h-full w-[min(88vw,360px)] overflow-y-auto border-r border-inest-line bg-inest-surface p-5 shadow-panel',
           side === 'left' ? 'mr-auto' : 'ml-auto',
         )}
       >

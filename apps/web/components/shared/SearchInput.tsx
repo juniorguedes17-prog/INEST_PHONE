@@ -5,7 +5,7 @@ export function SearchInput({ className, ...props }: InputHTMLAttributes<HTMLInp
   return (
     <label
       className={cn(
-        'flex h-10 items-center gap-2 rounded-lg border border-inest-line bg-white px-3 text-inest-muted transition-colors focus-within:border-inest-blue focus-within:ring-2 focus-within:ring-inest-blue/15',
+        'flex h-11 items-center gap-2 rounded-lg border border-inest-line/90 bg-inest-surface px-3.5 text-inest-muted transition-all focus-within:border-inest-blue focus-within:ring-4 focus-within:ring-inest-blue/10',
         className,
       )}
     >

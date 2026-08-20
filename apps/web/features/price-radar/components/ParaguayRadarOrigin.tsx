@@ -18,10 +18,7 @@ import {
   calculateImportCost,
   searchImportProducts,
 } from '@/features/import-radar/services/import-radar-service';
-import {
-  ImportCalculation,
-  ImportProduct,
-} from '@/features/import-radar/types/import-radar';
+import { ImportCalculation, ImportProduct } from '@/features/import-radar/types/import-radar';
 import { calculateTemporaryImportPricing } from '@/features/pricing/services/pricing-service';
 import {
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
@@ -113,10 +110,14 @@ export function ParaguayRadarOrigin() {
 
   const options = useMemo(
     () => ({
-      categories: uniqueValues(products.map((product) => getCanonicalCategory(toFacetSource(product)))),
+      categories: uniqueValues(
+        products.map((product) => getCanonicalCategory(toFacetSource(product))),
+      ),
       brands: uniqueValues(products.map((product) => product.brand)),
       models: buildCanonicalModelFacetOptions(products.map(toFacetSource)),
-      colors: uniqueValues(products.flatMap((product) => getCanonicalColors(toFacetSource(product)))),
+      colors: uniqueValues(
+        products.flatMap((product) => getCanonicalColors(toFacetSource(product))),
+      ),
       capacities: uniqueValues(
         products.flatMap((product) => getCanonicalCapacities(toFacetSource(product))),
       ),
@@ -163,7 +164,7 @@ export function ParaguayRadarOrigin() {
   const selectedProduct = products.find((product) => selectedIds.has(product.id));
   const priceValues = filteredProducts.map((product) => product.priceUsd);
   const namedSupplierCount = new Set(
-    filteredProducts.flatMap((product) => product.store ? [product.store] : []),
+    filteredProducts.flatMap((product) => (product.store ? [product.store] : [])),
   ).size;
   const supplierCount = Math.max(
     namedSupplierCount,
@@ -228,7 +229,11 @@ export function ParaguayRadarOrigin() {
             aria-label="Pesquisar produtos no Compras Paraguai"
           />
           <div className="grid grid-cols-2 gap-2 sm:flex">
-            <ActionButton variant="secondary" className="min-h-11" onClick={() => setFiltersOpen(true)}>
+            <ActionButton
+              variant="secondary"
+              className="min-h-11"
+              onClick={() => setFiltersOpen(true)}
+            >
               {activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}
             </ActionButton>
             <ActionButton variant="secondary" className="min-h-11" onClick={clearFilters}>
@@ -246,7 +251,11 @@ export function ParaguayRadarOrigin() {
               className="min-h-11"
               disabled={selectedIds.size !== 1 || calculating}
               onClick={() => void calculate()}
-              title={selectedIds.size > 1 ? 'Selecione apenas um produto para calcular o custo.' : undefined}
+              title={
+                selectedIds.size > 1
+                  ? 'Selecione apenas um produto para calcular o custo.'
+                  : undefined
+              }
             >
               {calculating ? 'Calculando...' : 'Calcular Custo'}
             </ActionButton>
@@ -256,24 +265,56 @@ export function ParaguayRadarOrigin() {
           <StatusBadge tone="blue">PY</StatusBadge>
           <StatusBadge tone="gray">Fonte: Compras Paraguai</StatusBadge>
           <span className="text-xs font-bold text-inest-muted">
-            {lastUpdated ? `Consultado em ${formatDateTime(lastUpdated)}` : 'Digite ao menos 2 caracteres para pesquisar'}
+            {lastUpdated
+              ? `Consultado em ${formatDateTime(lastUpdated)}`
+              : 'Digite ao menos 2 caracteres para pesquisar'}
           </span>
         </div>
       </section>
 
-      <section className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5" aria-label="Indicadores Paraguai">
-        <KpiCard label="Produtos" value={String(filteredProducts.length)} detail="Resultados reais" tone="blue" />
-        <KpiCard label="Fornecedores" value={String(supplierCount)} detail="Lojas identificadas" tone="purple" />
-        <KpiCard label="Menor preco" value={formatUsd(minimum(priceValues))} detail="Preco publicado" tone="green" />
-        <KpiCard label="Preco medio" value={formatUsd(average(priceValues))} detail="Produtos exibidos" tone="blue" />
-        <KpiCard label="Maior preco" value={formatUsd(maximum(priceValues))} detail="Preco publicado" tone="amber" />
+      <section
+        className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5"
+        aria-label="Indicadores Paraguai"
+      >
+        <KpiCard
+          label="Produtos"
+          value={String(filteredProducts.length)}
+          detail="Resultados reais"
+          tone="blue"
+        />
+        <KpiCard
+          label="Fornecedores"
+          value={String(supplierCount)}
+          detail="Lojas identificadas"
+          tone="purple"
+        />
+        <KpiCard
+          label="Menor preco"
+          value={formatUsd(minimum(priceValues))}
+          detail="Preco publicado"
+          tone="green"
+        />
+        <KpiCard
+          label="Preco medio"
+          value={formatUsd(average(priceValues))}
+          detail="Produtos exibidos"
+          tone="blue"
+        />
+        <KpiCard
+          label="Maior preco"
+          value={formatUsd(maximum(priceValues))}
+          detail="Preco publicado"
+          tone="amber"
+        />
       </section>
 
       {error ? (
         <ErrorState
           title="Nao foi possivel atualizar o Radar Paraguai"
           description={error}
-          action={<ActionButton onClick={() => void runSearch(search)}>Tentar novamente</ActionButton>}
+          action={
+            <ActionButton onClick={() => void runSearch(search)}>Tentar novamente</ActionButton>
+          }
         />
       ) : null}
 
@@ -283,11 +324,16 @@ export function ParaguayRadarOrigin() {
             <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-inest-text">
               <input
                 type="checkbox"
-                checked={visibleProducts.length > 0 && visibleProducts.every((product) => selectedIds.has(product.id))}
+                checked={
+                  visibleProducts.length > 0 &&
+                  visibleProducts.every((product) => selectedIds.has(product.id))
+                }
                 onChange={(event) => {
                   setSelectedIds((current) => {
                     const next = new Set(current);
-                    visibleProducts.forEach((product) => event.target.checked ? next.add(product.id) : next.delete(product.id));
+                    visibleProducts.forEach((product) =>
+                      event.target.checked ? next.add(product.id) : next.delete(product.id),
+                    );
                     return next;
                   });
                 }}
@@ -295,14 +341,24 @@ export function ParaguayRadarOrigin() {
               />
               {selectedIds.size ? `${selectedIds.size} selecionados` : 'Selecionar pagina'}
             </label>
-            <select value={sort} onChange={(event) => setSort(event.target.value as SortMode)} className="field-control min-h-11" aria-label="Ordenar resultados">
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as SortMode)}
+              className="field-control min-h-11"
+              aria-label="Ordenar resultados"
+            >
               <option value="lowest">Menor preco</option>
               <option value="highest">Maior preco</option>
               <option value="recent">Mais recentes</option>
               <option value="stores">Mais lojas</option>
               <option value="name">Produto</option>
             </select>
-            <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="field-control min-h-11" aria-label="Itens por pagina">
+            <select
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+              className="field-control min-h-11"
+              aria-label="Itens por pagina"
+            >
               <option value={10}>10 por pagina</option>
               <option value={20}>20 por pagina</option>
               <option value={30}>30 por pagina</option>
@@ -312,35 +368,58 @@ export function ParaguayRadarOrigin() {
           <div className="grid gap-3">
             {loading ? <LoadingState /> : null}
             {!loading && !submittedSearch ? (
-              <EmptyState title="Pesquise um produto no Paraguai." description="Informe modelo, capacidade ou categoria para consultar a fonte oficial." />
+              <EmptyState
+                title="Pesquise um produto no Paraguai."
+                description="Informe modelo, capacidade ou categoria para consultar a fonte oficial."
+              />
             ) : null}
             {!loading && submittedSearch && !products.length && !error ? (
-              <EmptyState title="Nenhum produto encontrado." description={`A fonte nao retornou resultados para "${submittedSearch}".`} />
+              <EmptyState
+                title="Nenhum produto encontrado."
+                description={`A fonte nao retornou resultados para "${submittedSearch}".`}
+              />
             ) : null}
             {!loading && products.length > 0 && !filteredProducts.length ? (
-              <EmptyState title="Nenhum resultado para estes filtros." description="Limpe os filtros ou amplie a faixa de preco." action={<ActionButton variant="secondary" onClick={clearFilters}>Limpar filtros</ActionButton>} />
-            ) : null}
-            {!loading ? visibleProducts.map((product) => (
-              <ParaguayProductCard
-                key={product.id}
-                product={product}
-                selected={selectedIds.has(product.id)}
-                onSelect={(checked) => setSelectedIds((current) => {
-                  const next = new Set(current);
-                  if (checked) {
-                    next.add(product.id);
-                  } else {
-                    next.delete(product.id);
-                  }
-                  return next;
-                })}
-                onCalculate={() => void calculate(product)}
+              <EmptyState
+                title="Nenhum resultado para estes filtros."
+                description="Limpe os filtros ou amplie a faixa de preco."
+                action={
+                  <ActionButton variant="secondary" onClick={clearFilters}>
+                    Limpar filtros
+                  </ActionButton>
+                }
               />
-            )) : null}
+            ) : null}
+            {!loading
+              ? visibleProducts.map((product) => (
+                  <ParaguayProductCard
+                    key={product.id}
+                    product={product}
+                    selected={selectedIds.has(product.id)}
+                    onSelect={(checked) =>
+                      setSelectedIds((current) => {
+                        const next = new Set(current);
+                        if (checked) {
+                          next.add(product.id);
+                        } else {
+                          next.delete(product.id);
+                        }
+                        return next;
+                      })
+                    }
+                    onCalculate={() => void calculate(product)}
+                  />
+                ))
+              : null}
           </div>
 
           <div className="mt-4 rounded-xl border border-inest-line bg-white p-4 shadow-card">
-            <Pagination page={page} totalPages={totalPages} totalItems={filteredProducts.length} onPageChange={setPage} />
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              totalItems={filteredProducts.length}
+              onPageChange={setPage}
+            />
           </div>
         </div>
       </section>
@@ -349,12 +428,59 @@ export function ParaguayRadarOrigin() {
         open={filtersOpen}
         ariaLabel="Filtros do Radar Paraguai"
         resultCount={filteredProducts.length}
-        categories={singleGroup('Categoria', buildFacetOptions(options.categories), filters.category, (category) => setFilters((current) => ({ ...current, category })))}
-        models={{ ...singleGroup('Modelo', options.models, filters.model, (model) => setFilters((current) => ({ ...current, model }))), collapsible: true }}
-        colors={singleGroup('Cor', buildFacetOptions(options.colors, getCatalogFacetLabel), filters.color, (color) => setFilters((current) => ({ ...current, color })))}
-        capacities={singleGroup('Armazenamento / Capacidade', buildFacetOptions(options.capacities), filters.capacity, (capacity) => setFilters((current) => ({ ...current, capacity })))}
-        additionalGroups={[singleGroup('Marca', buildFacetOptions(options.brands), filters.brand, (brand) => setFilters((current) => ({ ...current, brand }))), singleGroup('Loja / Fornecedor', buildFacetOptions(options.stores), filters.store, (store) => setFilters((current) => ({ ...current, store }))), singleGroup('Cidade', buildFacetOptions(options.cities), filters.city, (city) => setFilters((current) => ({ ...current, city }))), singleGroup('Disponibilidade', buildFacetOptions(options.availabilities), filters.availability, (availability) => setFilters((current) => ({ ...current, availability })))]}
-        price={{ min: priceBounds.min, max: priceBounds.max, minValue: filters.minPrice, maxValue: filters.maxPrice, currencyLabel: 'USD', onMinChange: (minPrice) => setFilters((current) => ({ ...current, minPrice })), onMaxChange: (maxPrice) => setFilters((current) => ({ ...current, maxPrice })) }}
+        categories={singleGroup(
+          'Categoria',
+          buildFacetOptions(options.categories),
+          filters.category,
+          (category) => setFilters((current) => ({ ...current, category })),
+        )}
+        models={{
+          ...singleGroup('Modelo', options.models, filters.model, (model) =>
+            setFilters((current) => ({ ...current, model })),
+          ),
+          collapsible: true,
+        }}
+        colors={singleGroup(
+          'Cor',
+          buildFacetOptions(options.colors, getCatalogFacetLabel),
+          filters.color,
+          (color) => setFilters((current) => ({ ...current, color })),
+        )}
+        capacities={singleGroup(
+          'Armazenamento / Capacidade',
+          buildFacetOptions(options.capacities),
+          filters.capacity,
+          (capacity) => setFilters((current) => ({ ...current, capacity })),
+        )}
+        additionalGroups={[
+          singleGroup('Marca', buildFacetOptions(options.brands), filters.brand, (brand) =>
+            setFilters((current) => ({ ...current, brand })),
+          ),
+          singleGroup(
+            'Loja / Fornecedor',
+            buildFacetOptions(options.stores),
+            filters.store,
+            (store) => setFilters((current) => ({ ...current, store })),
+          ),
+          singleGroup('Cidade', buildFacetOptions(options.cities), filters.city, (city) =>
+            setFilters((current) => ({ ...current, city })),
+          ),
+          singleGroup(
+            'Disponibilidade',
+            buildFacetOptions(options.availabilities),
+            filters.availability,
+            (availability) => setFilters((current) => ({ ...current, availability })),
+          ),
+        ]}
+        price={{
+          min: priceBounds.min,
+          max: priceBounds.max,
+          minValue: filters.minPrice,
+          maxValue: filters.maxPrice,
+          currencyLabel: 'USD',
+          onMinChange: (minPrice) => setFilters((current) => ({ ...current, minPrice })),
+          onMaxChange: (maxPrice) => setFilters((current) => ({ ...current, maxPrice })),
+        }}
         onClear={clearFilters}
         onClose={() => setFiltersOpen(false)}
       />
@@ -369,7 +495,17 @@ export function ParaguayRadarOrigin() {
   );
 }
 
-function ParaguayProductCard({ product, selected, onSelect, onCalculate }: { product: ImportProduct; selected: boolean; onSelect: (checked: boolean) => void; onCalculate: () => void }) {
+function ParaguayProductCard({
+  product,
+  selected,
+  onSelect,
+  onCalculate,
+}: {
+  product: ImportProduct;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onCalculate: () => void;
+}) {
   const presentation = getProductCardPresentation({
     rawDescription: product.name,
     condition: product.availability,
@@ -378,52 +514,90 @@ function ParaguayProductCard({ product, selected, onSelect, onCalculate }: { pro
   });
 
   return (
-    <article className={`grid min-w-0 gap-3 rounded-xl border bg-white p-3 shadow-card transition sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-center ${selected ? 'border-inest-blue ring-2 ring-blue-100' : 'border-inest-line hover:border-blue-200'}`}>
-      <div
-        className="aspect-square w-full max-w-[88px] rounded-lg border border-inest-line bg-contain bg-center bg-no-repeat"
-        style={product.imageUrl ? { backgroundImage: `url("${product.imageUrl}")` } : undefined}
-        role="img"
-        aria-label={`Imagem de ${presentation.title}`}
-      />
+    <article
+      className={`grid min-w-0 gap-4 rounded-xl border bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${selected ? 'border-inest-blue ring-2 ring-blue-100' : 'border-inest-line hover:border-blue-200'}`}
+    >
       <div className="min-w-0">
         <div className="flex min-w-0 items-start gap-2">
-          <input type="checkbox" checked={selected} onChange={(event) => onSelect(event.target.checked)} className="mt-1 h-5 w-5 shrink-0 accent-inest-blue" aria-label={`Selecionar ${presentation.title}`} />
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(event) => onSelect(event.target.checked)}
+            className="mt-1 h-5 w-5 shrink-0 accent-inest-blue"
+            aria-label={`Selecionar ${presentation.title}`}
+          />
           <div className="min-w-0">
-            <h3 className="text-sm font-extrabold text-inest-text sm:text-base">{presentation.title}</h3>
+            <h3 className="text-sm font-extrabold text-inest-text sm:text-base">
+              {presentation.title}
+            </h3>
             <div className="mt-1 flex flex-wrap gap-1.5">
               <StatusBadge tone="blue">PY</StatusBadge>
-              {presentation.attributes.map((attribute) => <StatusBadge key={attribute} tone="gray">{attribute}</StatusBadge>)}
+              {presentation.attributes.map((attribute) => (
+                <StatusBadge key={attribute} tone="gray">
+                  {attribute}
+                </StatusBadge>
+              ))}
             </div>
           </div>
         </div>
         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:grid-cols-4">
           {product.store ? <Info label="Fornecedor" value={product.store} /> : null}
           {product.city ? <Info label="Cidade" value={product.city} /> : null}
-          {product.consultedAt ? <Info label="Atualizado" value={formatDateTime(product.consultedAt)} /> : null}
+          {product.consultedAt ? (
+            <Info label="Atualizado" value={formatDateTime(product.consultedAt)} />
+          ) : null}
         </dl>
       </div>
       <div className="grid gap-2 sm:min-w-44 sm:text-right">
         <div>
           <span className="block text-xs font-bold text-inest-muted">Menor preco</span>
-          <strong className="text-xl font-black text-inest-text">{formatUsd(product.minimumPriceUsd ?? product.priceUsd)}</strong>
-          {product.averagePriceUsd ? <span className="block text-xs text-inest-muted">Media {formatUsd(product.averagePriceUsd)} - Max {formatUsd(product.maximumPriceUsd)}</span> : null}
+          <strong className="text-xl font-black text-inest-text">
+            {formatUsd(product.minimumPriceUsd ?? product.priceUsd)}
+          </strong>
+          {product.averagePriceUsd ? (
+            <span className="block text-xs text-inest-muted">
+              Media {formatUsd(product.averagePriceUsd)} - Max {formatUsd(product.maximumPriceUsd)}
+            </span>
+          ) : null}
         </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:justify-end">
-          <a href={product.productUrl} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center justify-center rounded-lg border border-inest-line px-3 text-xs font-extrabold text-inest-text hover:bg-inest-soft">Ver fonte</a>
-          <ActionButton className="min-h-11" onClick={onCalculate}>Calcular</ActionButton>
+          <a
+            href={product.productUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-inest-line px-3 text-xs font-extrabold text-inest-text hover:bg-inest-soft"
+          >
+            Ver fonte
+          </a>
+          <ActionButton className="min-h-11" onClick={onCalculate}>
+            Calcular
+          </ActionButton>
         </div>
       </div>
     </article>
   );
 }
 
-function singleGroup(title: string, options: ReturnType<typeof buildFacetOptions>, value: string, onChange: (value: string) => void) {
-  return { title, options, selected: value ? [value] : [], onToggle: (nextValue: string) => onChange(value === nextValue ? '' : nextValue) };
+function singleGroup(
+  title: string,
+  options: ReturnType<typeof buildFacetOptions>,
+  value: string,
+  onChange: (value: string) => void,
+) {
+  return {
+    title,
+    options,
+    selected: value ? [value] : [],
+    onToggle: (nextValue: string) => onChange(value === nextValue ? '' : nextValue),
+  };
 }
 
 function getPriceBounds(values: number[]) {
   const valid = values.filter((value) => Number.isFinite(value) && value >= 0);
-  return { min: valid.length ? Math.floor(Math.min(...valid)) : 0, max: valid.length ? Math.ceil(Math.max(...valid)) : 1 };
+  return {
+    min: valid.length ? Math.floor(Math.min(...valid)) : 0,
+    max: valid.length ? Math.ceil(Math.max(...valid)) : 1,
+  };
 }
 
 function CalculationModal({
@@ -441,7 +615,12 @@ function CalculationModal({
     <Modal open={Boolean(calculation)} title="Custo estimado - Paraguai" onClose={onClose}>
       {calculation ? (
         <div className="grid gap-4">
-          <div><strong className="block text-inest-text">{calculation.product.name}</strong><span className="text-sm text-inest-muted">Configuracao Financeira PY - {calculation.matchedProductType}</span></div>
+          <div>
+            <strong className="block text-inest-text">{calculation.product.name}</strong>
+            <span className="text-sm text-inest-muted">
+              Configuracao Financeira PY - {calculation.matchedProductType}
+            </span>
+          </div>
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <Cost label="Preco convertido" value={calculation.breakdown.convertedPrice} />
             <Cost label="Saida CDE" value={calculation.breakdown.cdeExit} />
@@ -450,9 +629,19 @@ function CalculationModal({
             <Cost label="Nota Fiscal" value={calculation.breakdown.invoiceTax} />
             <Cost label="Etiqueta" value={calculation.breakdown.correiosLabel} />
           </dl>
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4"><span className="block text-xs font-bold uppercase text-blue-700">Total estimado</span><strong className="text-2xl font-black text-blue-950">{formatBrl(calculation.total)}</strong></div>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <span className="block text-xs font-bold uppercase text-blue-700">Total estimado</span>
+            <strong className="text-2xl font-black text-blue-950">
+              {formatBrl(calculation.total)}
+            </strong>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <ActionButton variant="secondary" className="min-h-11" onClick={onClose} disabled={sending}>
+            <ActionButton
+              variant="secondary"
+              className="min-h-11"
+              onClick={onClose}
+              disabled={sending}
+            >
               Fechar
             </ActionButton>
             <ActionButton className="min-h-11" onClick={onSendToPricing} disabled={sending}>
@@ -465,7 +654,9 @@ function CalculationModal({
   );
 }
 
-function buildTemporaryPricingRequest(calculation: ImportCalculation): TemporaryImportPricingRequest {
+function buildTemporaryPricingRequest(
+  calculation: ImportCalculation,
+): TemporaryImportPricingRequest {
   const product = calculation.product;
   const supplier = toPlainText(product.store) || toPlainText(product.provider);
   return {
@@ -522,13 +713,54 @@ function matchesFacetText(value: string | undefined, selectedValue: string) {
   return normalizeCatalogFilterText(value) === normalizeCatalogFilterText(selectedValue);
 }
 
-function Info({ label, value }: { label: string; value: string }) { return <div className="min-w-0"><dt className="font-bold text-inest-muted">{label}</dt><dd className="truncate font-bold text-inest-text" title={value}>{value}</dd></div>; }
-function Cost({ label, value }: { label: string; value: number }) { return <div className="rounded-lg border border-inest-line p-3"><dt className="text-inest-muted">{label}</dt><dd className="font-extrabold text-inest-text">{formatBrl(value)}</dd></div>; }
-function uniqueValues(values: Array<string | undefined>) { return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort((a, b) => a.localeCompare(b)); }
-function minimum(values: number[]) { return values.length ? Math.min(...values) : 0; }
-function maximum(values: number[]) { return values.length ? Math.max(...values) : 0; }
-function average(values: number[]) { return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0; }
-function dateValue(value?: string) { return value ? new Date(value).getTime() : 0; }
-function formatUsd(value?: number) { return value ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value) : '--'; }
-function formatBrl(value: number) { return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value); }
-function formatDateTime(value: string) { return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).format(new Date(value)); }
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <dt className="font-bold text-inest-muted">{label}</dt>
+      <dd className="truncate font-bold text-inest-text" title={value}>
+        {value}
+      </dd>
+    </div>
+  );
+}
+function Cost({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-inest-line p-3">
+      <dt className="text-inest-muted">{label}</dt>
+      <dd className="font-extrabold text-inest-text">{formatBrl(value)}</dd>
+    </div>
+  );
+}
+function uniqueValues(values: Array<string | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value)))).sort(
+    (a, b) => a.localeCompare(b),
+  );
+}
+function minimum(values: number[]) {
+  return values.length ? Math.min(...values) : 0;
+}
+function maximum(values: number[]) {
+  return values.length ? Math.max(...values) : 0;
+}
+function average(values: number[]) {
+  return values.length ? values.reduce((total, value) => total + value, 0) / values.length : 0;
+}
+function dateValue(value?: string) {
+  return value ? new Date(value).getTime() : 0;
+}
+function formatUsd(value?: number) {
+  return value
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+    : '--';
+}
+function formatBrl(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}

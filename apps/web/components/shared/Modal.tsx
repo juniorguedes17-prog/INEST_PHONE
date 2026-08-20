@@ -28,12 +28,17 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/40 p-4"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-[2px]"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
-      <div className={cn('w-full max-w-xl rounded-2xl border border-inest-line bg-white p-6 shadow-panel', dialogClassName)}>
+      <div
+        className={cn(
+          'w-full max-w-xl rounded-xl border border-inest-line bg-inest-surface p-6 shadow-panel',
+          dialogClassName,
+        )}
+      >
         <div className="flex items-center justify-between gap-4">
           <h2 id="modal-title" className="font-display text-2xl font-black text-inest-text">
             {title}

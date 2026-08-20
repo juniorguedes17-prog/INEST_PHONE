@@ -30,14 +30,7 @@ export const OfferListCard = memo(function OfferListCard({
   });
 
   return (
-    <article className="grid w-full gap-3 rounded-xl border border-inest-line bg-white p-3 shadow-card transition-colors hover:border-slate-300 hover:bg-slate-50/60 focus-within:ring-2 focus-within:ring-inest-blue/30 lg:grid-cols-[64px_minmax(220px,1fr)_160px_180px] lg:items-center">
-      <div
-        className="grid h-16 w-16 place-items-center rounded-lg bg-inest-soft font-display text-lg font-black text-inest-blue"
-        aria-label="Imagem do produto"
-      >
-        {product?.category?.slice(0, 2).toUpperCase() || 'IN'}
-      </div>
-
+    <article className="grid w-full gap-4 rounded-xl border border-inest-line/80 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all hover:border-inest-blue/30 hover:shadow-card focus-within:ring-4 focus-within:ring-inest-blue/10 lg:grid-cols-[minmax(220px,1fr)_160px_180px] lg:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">

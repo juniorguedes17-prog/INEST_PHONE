@@ -86,14 +86,14 @@ export function Header({ onOpenMenu }: HeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-inest-line bg-[var(--inest-header)] backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-inest-line/80 bg-[var(--inest-header)] shadow-[0_1px_0_rgba(16,24,40,0.02)] backdrop-blur-xl">
       <ContentContainer className="flex min-h-[72px] items-center justify-between gap-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={onOpenMenu}
             aria-label="Abrir menu lateral"
-            className="grid h-10 w-10 place-items-center rounded-lg border border-inest-line bg-white text-xs font-black text-inest-text lg:hidden"
+            className="grid h-10 w-10 place-items-center rounded-lg border border-inest-line bg-inest-surface text-xs font-black text-inest-text transition-colors hover:bg-inest-soft lg:hidden"
           >
             Menu
           </button>
@@ -127,7 +127,7 @@ export function Header({ onOpenMenu }: HeaderProps) {
           >
             O
           </button>
-          <div className="hidden items-center gap-2 rounded-lg border border-inest-line bg-white px-2.5 py-1.5 lg:flex">
+          <div className="hidden items-center gap-2 rounded-lg border border-inest-line bg-inest-surface px-2.5 py-1.5 lg:flex">
             <span className="grid h-8 w-8 place-items-center rounded-md bg-inest-soft text-xs font-black text-inest-blue">
               AD
             </span>

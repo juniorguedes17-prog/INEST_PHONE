@@ -1,4 +1,3 @@
-import { ReactNode } from 'react';
 import { ActionButton } from './ActionButton';
 import { InfoTag } from './InfoTag';
 import { StatusBadge } from './StatusBadge';
@@ -11,7 +10,6 @@ interface ProductCardAction {
 }
 
 interface ProductCardProps {
-  image?: ReactNode;
   title: string;
   status?: string;
   tags?: string[];
@@ -28,7 +26,6 @@ interface ProductCardProps {
 }
 
 export function ProductCard({
-  image,
   title,
   status,
   tags = [],
@@ -42,14 +39,10 @@ export function ProductCard({
   return (
     <article
       className={cn(
-        'grid w-full max-w-full grid-cols-1 gap-3 rounded-xl border border-inest-line bg-white p-3 shadow-card md:grid-cols-[76px_minmax(0,1fr)] md:items-center xl:grid-cols-[76px_minmax(240px,1fr)_190px_220px]',
+        'grid w-full max-w-full grid-cols-1 gap-4 rounded-xl border border-inest-line/80 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] md:grid-cols-1 md:items-center xl:grid-cols-[minmax(240px,1fr)_190px_220px]',
         className,
       )}
     >
-      <div className="grid h-[76px] w-[76px] place-items-center overflow-hidden rounded-lg bg-slate-100 shadow-inner">
-        {image ?? <span className="text-2xl font-black text-slate-400">P</span>}
-      </div>
-
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="line-clamp-2 text-card-title">{title}</h3>
@@ -62,7 +55,9 @@ export function ProductCard({
             ))}
           </div>
         ) : null}
-        {meta ? <p className="mt-2 line-clamp-1 max-w-2xl text-xs text-inest-muted">{meta}</p> : null}
+        {meta ? (
+          <p className="mt-2 line-clamp-1 max-w-2xl text-xs text-inest-muted">{meta}</p>
+        ) : null}
       </div>
 
       <div className="min-w-0 rounded-lg bg-inest-soft p-3 xl:bg-transparent xl:p-0">
@@ -80,7 +75,9 @@ export function ProductCard({
         {priceLabel ? (
           <span className="text-sm font-bold text-inest-muted">{priceLabel}</span>
         ) : null}
-        <strong className="break-words font-display text-2xl font-black text-inest-text">{price}</strong>
+        <strong className="break-words font-display text-2xl font-black text-inest-text">
+          {price}
+        </strong>
         <div className="flex w-full flex-wrap gap-1.5 xl:w-auto xl:justify-end">
           {actions.map((action) => (
             <ActionButton

@@ -40,7 +40,7 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
 
   return (
     <article
-      className={`grid w-full gap-3 rounded-xl border bg-white p-3 shadow-card transition-colors focus-within:ring-2 focus-within:ring-inest-blue/30 md:grid-cols-[28px_64px_minmax(220px,1fr)_180px_170px] md:items-center ${
+      className={`grid w-full gap-4 rounded-xl border bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all focus-within:ring-4 focus-within:ring-inest-blue/10 md:grid-cols-[28px_minmax(220px,1fr)_180px_170px] md:items-center ${
         selected
           ? 'border-inest-blue bg-blue-50/30'
           : 'border-inest-line hover:border-slate-300 hover:bg-slate-50/60'
@@ -56,13 +56,11 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
         />
       </label>
 
-      <div className="grid h-16 w-16 place-items-center rounded-lg bg-inest-soft font-display text-lg font-black text-inest-blue">
-        {quote.category?.slice(0, 2).toUpperCase() || 'IN'}
-      </div>
-
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
-          <h3 className="line-clamp-2 text-base font-black text-inest-text">{presentation.title}</h3>
+          <h3 className="line-clamp-2 text-base font-black text-inest-text">
+            {presentation.title}
+          </h3>
           <StatusBadge tone={quote.status === 'hidden' ? 'gray' : 'green'}>
             {quote.status === 'hidden' ? 'Ocultado' : 'Valido'}
           </StatusBadge>
@@ -80,8 +78,14 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
 
       <div className="min-w-0">
         <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
-        <strong className="mt-0.5 block truncate text-sm text-inest-text">{quote.supplier.name}</strong>
-        {quote.city || quote.supplier.source ? <p className="mt-1 truncate text-xs text-inest-muted">{quote.city || quote.supplier.source}</p> : null}
+        <strong className="mt-0.5 block truncate text-sm text-inest-text">
+          {quote.supplier.name}
+        </strong>
+        {quote.city || quote.supplier.source ? (
+          <p className="mt-1 truncate text-xs text-inest-muted">
+            {quote.city || quote.supplier.source}
+          </p>
+        ) : null}
         {quote.deliveryTime ? <InfoTag className="mt-2">{quote.deliveryTime}</InfoTag> : null}
       </div>
 
@@ -121,7 +125,15 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
   );
 });
 
-function QuickAction({ label, title, onClick }: { label: string; title: string; onClick: () => void }) {
+function QuickAction({
+  label,
+  title,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+}) {
   return (
     <ActionButton
       variant="secondary"

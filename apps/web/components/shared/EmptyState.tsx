@@ -8,7 +8,7 @@ interface EmptyStateProps {
 
 export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="grid min-h-60 place-items-center rounded-xl border border-dashed border-inest-line bg-white p-8 text-center">
+    <div className="grid min-h-60 place-items-center rounded-xl border border-dashed border-inest-line bg-inest-surface p-8 text-center">
       <div>
         <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-inest-soft text-xl font-black text-inest-muted">
           +

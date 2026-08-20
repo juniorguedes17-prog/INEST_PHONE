@@ -19,7 +19,7 @@ export function ListHeader({
   return (
     <div
       className={cn(
-        'rounded-xl border border-inest-line bg-white px-4 py-3 shadow-card',
+        'rounded-xl border border-inest-line/80 bg-inest-surface px-4 py-3 shadow-[0_10px_30px_rgba(16,24,40,0.045)]',
         sticky && 'sticky top-0 z-10',
       )}
     >
