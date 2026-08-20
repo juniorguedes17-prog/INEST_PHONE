@@ -63,6 +63,48 @@ describe('supplier list parser', () => {
     expect(items[0]).toMatchObject({ condition: 'CPO', price: 4950, color: 'preto' });
   });
 
+  it('interpreta produtos Apple compactos com CPO inline sem perder o contexto', () => {
+    const rejections: Array<{ rawLine: string; reason: string }> = [];
+    const items = parseSupplierListText(
+      `
+        _________CPO
+        📳16 PRO MAX 512 CPO
+        ⚓️NATURAL/ 💲5.930
+        📳15 PRO 128 CPO
+        ⚓️PRETO/ 💲3.850 - 1
+      `,
+      { onLineRejected: (rejection) => rejections.push(rejection) },
+    );
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          normalizedName: '16 pro max 512',
+          color: 'natural',
+          price: 5930,
+          condition: 'CPO',
+        }),
+        expect.objectContaining({
+          normalizedName: '15 pro 128',
+          color: 'preto',
+          price: 3850,
+          condition: 'CPO',
+        }),
+      ]),
+    );
+    expect(items).toHaveLength(2);
+    expect(rejections).not.toContainEqual(
+      expect.objectContaining({ reason: 'missing_product_context' }),
+    );
+  });
+
+  it.each(['CPO', 'LISTA CPO', 'CPO DISPONÍVEL'])(
+    'mantem %s como contexto isolado e nao como produto',
+    (heading) => {
+      expect(parseSupplierListText(heading)).toEqual([]);
+    },
+  );
+
   it.each(['LISTA SWAP', 'LISTA-SWAP', 'SWAP'])(
     'trata %s como contexto SEMINOVO e nao como produto',
     (heading) => {

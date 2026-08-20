@@ -109,7 +109,7 @@ export function parseSupplierListText(
       continue;
     }
 
-    if (isConditionSectionHeading(line)) {
+    if (isConditionSectionHeading(line) && !isCompactAppleProductHeading(line)) {
       activeCondition = detectCondition(line);
       currentCondition = activeCondition;
       currentProduct = null;
