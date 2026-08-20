@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { DashboardQueryDto } from '../dto/dashboard.dto';
 import {
@@ -37,6 +37,7 @@ export interface DashboardOverview {
 
 @Injectable()
 export class DashboardService {
+  private readonly logger = new Logger(DashboardService.name);
   private readonly cache = new Map<string, CacheEntry>();
 
   constructor(
@@ -45,7 +46,6 @@ export class DashboardService {
   ) {}
 
   async overview(query: DashboardQueryDto, user: AuthenticatedUser): Promise<DashboardOverview> {
-    const sheetSnapshot = await this.googleSheetsProvider.getSnapshot();
     const cacheKey = JSON.stringify({ ...query, sheetVersion: this.googleSheetsProvider.version });
     const cached = this.cache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -53,6 +53,7 @@ export class DashboardService {
     }
 
     const snapshot = await this.dashboardRepository.snapshot(query);
+    const sheetSnapshot = await this.getSheetSnapshot();
     const value = {
       ...this.buildDashboard(snapshot),
       sheet: sheetSnapshot.metrics,
@@ -62,6 +63,31 @@ export class DashboardService {
     this.cache.set(cacheKey, { value, expiresAt: Date.now() + 30_000 });
     await this.dashboardRepository.createAccessAudit({ userId: user.id, filters: query });
     return value;
+  }
+
+  private async getSheetSnapshot() {
+    try {
+      return await this.googleSheetsProvider.getSnapshot();
+    } catch (error) {
+      this.logger.warn({
+        event: 'dashboard.google_sheets_unavailable',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return {
+        records: [],
+        customers: [],
+        metrics: {
+          totalCustomers: 0,
+          totalSales: 0,
+          totalRevenue: 0,
+          totalProfit: 0,
+          averageTicket: 0,
+          productsSold: 0,
+          lastSale: null,
+          lastSync: '',
+        },
+      };
+    }
   }
 
   async kpis(query: DashboardQueryDto, user: AuthenticatedUser) {

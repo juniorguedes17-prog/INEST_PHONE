@@ -30,12 +30,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen bg-inest-bg px-6 py-8 text-inest-text">
-      <section className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl items-center gap-10 lg:grid-cols-[1fr_440px]">
+    <main className="min-h-screen bg-inest-bg px-4 py-4 text-inest-text sm:px-6 sm:py-8">
+      <section className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl items-center gap-5 lg:min-h-[calc(100vh-4rem)] lg:gap-10 lg:grid-cols-[1fr_440px]">
         <div className="max-w-2xl">
           <p className="text-sm font-bold uppercase tracking-wide text-inest-blue">Acesso seguro</p>
           <INestLogo variant="login" priority className="mt-4" />
-          <p className="mt-5 text-lg leading-8 text-inest-muted">
+          <p className="mt-3 text-sm leading-6 text-inest-muted sm:mt-5 sm:text-lg sm:leading-8">
             Plataforma comercial preparada para radar de precos, precificacao, ofertas e gestao
             operacional com controle de acesso por perfil.
           </p>
@@ -43,14 +43,14 @@ export default function LoginPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border border-slate-200 bg-white p-8 shadow-panel"
+          className="rounded-2xl border border-slate-200 bg-white p-5 shadow-panel sm:p-8"
         >
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-inest-blue">Login</p>
             <h2 className="mt-2 font-display text-3xl font-black">Entrar no sistema</h2>
           </div>
 
-          <label className="mt-8 block">
+          <label className="mt-5 block sm:mt-8">
             <span className="text-sm font-bold text-inest-muted">E-mail</span>
             <input
               value={email}
@@ -83,7 +83,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-7 h-12 w-full rounded-xl bg-inest-blue px-5 text-base font-black text-white shadow-soft transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 h-12 w-full rounded-xl bg-inest-blue px-5 text-base font-black text-white shadow-soft transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-60 sm:mt-7"
           >
             {isSubmitting ? 'Entrando...' : 'Entrar'}
           </button>

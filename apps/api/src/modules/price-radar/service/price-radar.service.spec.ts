@@ -82,4 +82,27 @@ describe('PriceRadarService automated quotes', () => {
       productId: null,
     });
   });
+
+  it('compartilha a carga concorrente entre lista e KPIs equivalentes', async () => {
+    const repository = {
+      listQuotes: vi.fn().mockResolvedValue([]),
+      listAutomatedQuotes: vi.fn().mockResolvedValue([]),
+    };
+    const service = new PriceRadarService(repository as unknown as PriceRadarRepository);
+
+    const [quotes, kpis] = await Promise.all([
+      service.list({ sort: 'lowest_price' }),
+      service.kpis({ sort: 'lowest_price' }),
+    ]);
+
+    expect(quotes).toEqual([]);
+    expect(kpis).toEqual({
+      lowestValidPrice: 0,
+      averagePrice: 0,
+      highestPrice: 0,
+      hiddenCount: 0,
+    });
+    expect(repository.listQuotes).toHaveBeenCalledOnce();
+    expect(repository.listAutomatedQuotes).toHaveBeenCalledOnce();
+  });
 });

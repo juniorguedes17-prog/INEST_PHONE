@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
@@ -49,7 +49,7 @@ type SupplierListItemForMerge = {
 type PersistedSupplierListItem = ParsedSupplierListItem & { productId: string | null };
 
 @Injectable()
-export class EvolutionWebhookService implements OnModuleInit {
+export class EvolutionWebhookService {
   private readonly logger = new Logger(EvolutionWebhookService.name);
 
   constructor(
@@ -58,7 +58,7 @@ export class EvolutionWebhookService implements OnModuleInit {
     @Inject(SupplierContactsService) private readonly supplierContacts: SupplierContactsService,
   ) {}
 
-  async onModuleInit() {
+  async repairCurrentLists() {
     const currentLists = await this.prisma.supplierCurrentList.findMany({
       include: { items: true },
     });

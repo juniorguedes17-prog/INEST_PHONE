@@ -19,11 +19,33 @@ import {
 } from '../validators/price-radar.validators';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 
+type PriceRadarListItem =
+  | ReturnType<PriceRadarService['toResponse']>
+  | ReturnType<PriceRadarService['toAutomatedResponse']>;
+
 @Injectable()
 export class PriceRadarService {
+  private readonly inFlightLists = new Map<string, Promise<PriceRadarListItem[]>>();
+
   constructor(@Inject(PriceRadarRepository) private readonly repository: PriceRadarRepository) {}
 
   async list(query: PriceRadarQueryDto) {
+    const requestKey = JSON.stringify(query);
+    const inFlight = this.inFlightLists.get(requestKey);
+    if (inFlight) return inFlight;
+
+    const request = this.loadList(query);
+    this.inFlightLists.set(requestKey, request);
+    try {
+      return await request;
+    } finally {
+      if (this.inFlightLists.get(requestKey) === request) {
+        this.inFlightLists.delete(requestKey);
+      }
+    }
+  }
+
+  private async loadList(query: PriceRadarQueryDto): Promise<PriceRadarListItem[]> {
     const [records, automatedRecords] = await Promise.all([
       this.repository.listQuotes(query),
       this.repository.listAutomatedQuotes(query),

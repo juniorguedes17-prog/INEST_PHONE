@@ -64,6 +64,13 @@ body {
   max-width: 100%;
 }
 
+@media (max-width: 1023px) {
+  .inest-logo--login {
+    width: min(360px, 100%);
+    height: clamp(112px, 32vw, 160px);
+  }
+}
+
 .inest-logo__asset {
   position: absolute;
   inset: 0;

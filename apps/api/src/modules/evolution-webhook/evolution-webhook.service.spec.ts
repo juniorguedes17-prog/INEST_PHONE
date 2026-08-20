@@ -607,7 +607,7 @@ describe('EvolutionWebhookService', () => {
       },
     ]);
 
-    await service.onModuleInit();
+    await service.repairCurrentLists();
 
     expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
     expect(debug).toHaveBeenCalledWith(expect.stringContaining('evolution.product_id.shadow'));
@@ -637,7 +637,7 @@ describe('EvolutionWebhookService', () => {
       },
     ]);
 
-    await service.onModuleInit();
+    await service.repairCurrentLists();
 
     expect(prisma.supplierCurrentList.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -689,7 +689,7 @@ describe('EvolutionWebhookService', () => {
       },
     ]);
 
-    await service.onModuleInit();
+    await service.repairCurrentLists();
 
     expect(prisma.supplierCurrentList.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -732,8 +732,8 @@ describe('EvolutionWebhookService', () => {
       },
     ]);
 
-    await service.onModuleInit();
-    await service.onModuleInit();
+    await service.repairCurrentLists();
+    await service.repairCurrentLists();
 
     expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
   });
@@ -762,7 +762,7 @@ describe('EvolutionWebhookService', () => {
       },
     ]);
 
-    await service.onModuleInit();
+    await service.repairCurrentLists();
 
     expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
   });
