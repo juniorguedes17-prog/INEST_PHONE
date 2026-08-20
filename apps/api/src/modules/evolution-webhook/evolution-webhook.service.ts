@@ -17,9 +17,9 @@ import { EvolutionMessage, ParsedSupplierListItem } from './evolution-webhook.ty
 export type SupplierListUpdateMode = 'FULL_SNAPSHOT' | 'PARTIAL_UPDATE' | 'INCONCLUSIVE';
 
 const PARTIAL_UPDATE_MARKER =
-  /\b(?:promo(?:c|ç)[aã]o|oferta|baixou|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar)\b/i;
+  /\b(?:promo(?:c|ç)(?:[aã]o|ões)|ofertas?|baix(?:ou|amos)|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar|reposi(?:c|ç)(?:[aã]o|ões)|chegou\s+lacrad[oa]s?|remessas?)\b/i;
 const FULL_SNAPSHOT_MARKER =
-  /\b(?:lista\s+(?:completa|geral|atual)|tabela\s+(?:completa|geral)|todos?\s+os\s+produtos)\b/i;
+  /\b(?:lista(?:\s+(?:completa|geral|atual(?:izada)?|unificada|di[aá]ria|de\s+pre[cç]os?))?|tabela\s+(?:completa|geral)|todos?\s+os\s+produtos|(?:aparelhos?|produtos?)\s+(?:dispon[ií]veis?|lacrad[oa]s?|novos?\s+lacrad[oa]s?|semi[-\s]?novos?)|(?:iphone|iphones|xiaomis?)\s+(?:lacrad[oa]s?|semi[-\s]?novos?|swap\s+americanos?))\b/i;
 
 export function classifySupplierListUpdateMode(text: string): SupplierListUpdateMode {
   const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text);
