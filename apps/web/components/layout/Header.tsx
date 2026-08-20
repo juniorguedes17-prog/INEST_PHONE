@@ -140,7 +140,7 @@ export function Header({ onOpenMenu }: HeaderProps) {
             variant="ghost"
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="hidden sm:inline-flex"
+            className="inline-flex"
           >
             {isLoggingOut ? 'Saindo...' : 'Sair'}
           </ActionButton>
