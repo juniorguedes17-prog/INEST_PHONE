@@ -63,6 +63,38 @@ describe('supplier list parser', () => {
     expect(items[0]).toMatchObject({ condition: 'CPO', price: 4950, color: 'preto' });
   });
 
+  it.each(['LISTA SWAP', 'LISTA-SWAP', 'SWAP'])(
+    'trata %s como contexto SEMINOVO e nao como produto',
+    (heading) => {
+      const items = parseSupplierListText(`${heading}\niPhone 15 Pro 256GB\nNatural R$ 3.800`);
+
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        productName: 'iPhone 15 Pro 256GB',
+        normalizedName: 'iphone 15 pro 256gb',
+        capacity: '256GB',
+        color: 'natural',
+        condition: 'SEMINOVO',
+        price: 3800,
+      });
+      expect(items.some((item) => /lista[- ]swap/i.test(item.productName))).toBe(false);
+    },
+  );
+
+  it('mantem SEMINOVO para todos os produtos dentro do contexto SWAP', () => {
+    const items = parseSupplierListText(`
+      LISTA SWAP
+      iPhone 15 Pro 256GB
+      Natural R$ 3.800
+      iPhone 16 Pro Max 256GB
+      Desert R$ 4.900
+    `);
+
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.condition)).toEqual(['SEMINOVO', 'SEMINOVO']);
+    expect(items.map((item) => item.price)).toEqual([3800, 4900]);
+  });
+
   it.each([
     ['R$ 6.650,00', 6650],
     ['\u{1F4B0}6,150', 6150],

@@ -296,7 +296,9 @@ function isConditionDescriptor(value: string) {
 
 function isConditionSectionHeading(value: string) {
   const hasCondition =
-    /\bcpo\b|refurbished|pre[-\s]?owned/i.test(value) || USED_CONDITION_MARKERS.test(value);
+    isSwapConditionHeading(value) ||
+    /\bcpo\b|refurbished|pre[-\s]?owned/i.test(value) ||
+    USED_CONDITION_MARKERS.test(value);
   return (
     hasCondition &&
     !hasPrice(value) &&
@@ -304,6 +306,17 @@ function isConditionSectionHeading(value: string) {
     !PRODUCT_IDENTITY_MARKERS.test(value) &&
     !hasTechnicalSpecifier(value)
   );
+}
+
+function isSwapConditionHeading(value: string) {
+  const normalized = value
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/[-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  return normalized === 'swap' || normalized === 'lista swap';
 }
 
 function isAttributeOnlyLine(value: string) {
@@ -546,6 +559,7 @@ function removeColor(value: string, color: string) {
 }
 
 function detectCondition(value: string): string {
+  if (isSwapConditionHeading(value)) return 'SEMINOVO';
   if (/\bcpo\b|refurbished|pre[-\s]?owned/i.test(value)) return 'CPO';
   if (USED_CONDITION_MARKERS.test(value)) return 'SEMINOVO';
   return 'NOVO';
