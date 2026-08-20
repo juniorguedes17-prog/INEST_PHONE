@@ -6,6 +6,7 @@ const PRODUCT_IDENTITY_MARKERS =
   /(?:\b(?:produto|dispositivo|garmin|fenix|forerunner|venu|dji|drone|xiaomi|redmi|poco|realme|motorola|moto|huawei|infinix|honor|samsung|galaxy|nintendo|switch|vacuum|aspirador|backbone|fire\s?tv|cabo|fonte|carregador|capa|teclado|keyboard|mouse)\b|\busb[-\s]?c\s*\/)/i;
 const USED_CONDITION_MARKERS =
   /\b(?:seminovo|semi\s?novo|usado|vitrine|open\s?box|as[-\s]?is|no\s?active|not\s?active|never\s?activ(?:e|ated)|nunca\s?(?:active|ativado)|nao\s?ativado|não\s?ativado)\b/i;
+const GRADE_MARKER = /\bgrade\s*(a\s*\+|ab|b|c|a)(?=\s|[^a-z0-9]|$)/gi;
 const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`;
 const MONEY_VALUE = String.raw`\d(?:[\d.,]|\s(?=\d{3}(?:\D|$)))*`;
 const PRICE_PREFIX = new RegExp(`${CURRENCY_MARKER}\\s*(${MONEY_VALUE})`, 'iu');
@@ -69,6 +70,8 @@ export function parseSupplierListText(
   let activeCategory: string | null = null;
   let activeCondition = 'NOVO';
   let currentCondition = 'NOVO';
+  let activeGrade: ProductGrade | null = null;
+  let currentGrade: ProductGrade | null = null;
   let pendingColors: string[] = [];
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -77,6 +80,8 @@ export function parseSupplierListText(
     const nextLine = lines[index + 1] ?? null;
     if (isContextBoundaryLine(line)) {
       currentProduct = null;
+      activeGrade = null;
+      currentGrade = null;
       pendingColors = [];
       currentCondition = activeCondition;
       continue;
@@ -86,6 +91,8 @@ export function parseSupplierListText(
       activeCategory = sectionCategory;
       activeCondition = detectCondition(line);
       currentProduct = null;
+      activeGrade = null;
+      currentGrade = null;
       pendingColors = [];
       currentCondition = activeCondition;
       continue;
@@ -94,7 +101,11 @@ export function parseSupplierListText(
     if (isConditionDescriptor(line)) {
       currentCondition = detectCondition(line);
       pendingColors = [];
-      if (!currentProduct) activeCondition = currentCondition;
+      if (!currentProduct) {
+        activeCondition = currentCondition;
+        activeGrade = null;
+        currentGrade = null;
+      }
       continue;
     }
 
@@ -102,16 +113,32 @@ export function parseSupplierListText(
       activeCondition = detectCondition(line);
       currentCondition = activeCondition;
       currentProduct = null;
+      activeGrade = null;
+      currentGrade = null;
       pendingColors = [];
       continue;
     }
 
-    const isProductCandidate = isProductHeading(line, activeCategory, currentProduct !== null, nextLine);
+    const lineGrade = extractGrade(line);
+    if (lineGrade && isGradeSectionHeading(line)) {
+      activeGrade = lineGrade;
+      currentGrade = activeGrade;
+      currentProduct = null;
+      pendingColors = [];
+      continue;
+    }
+
+    const isGradeQualifier = Boolean(lineGrade && currentProduct && isGradeQualifierLine(line));
+    const isProductCandidate =
+      !isGradeQualifier && isProductHeading(line, activeCategory, currentProduct !== null, nextLine);
     if (isProductCandidate) {
       currentProduct = withCategoryPrefix(removePrice(line), activeCategory);
       pendingColors = [];
+      currentGrade = lineGrade ?? activeGrade;
       const productCondition = detectCondition(currentProduct);
       currentCondition = productCondition === 'NOVO' ? activeCondition : productCondition;
+    } else if (lineGrade && currentProduct) {
+      currentGrade = lineGrade;
     }
 
     const lineColor = extractColor(line);
@@ -146,6 +173,11 @@ export function parseSupplierListText(
       continue;
     }
 
+    if (currentGrade && !isEligibleGrade(currentGrade)) {
+      pendingColors = [];
+      continue;
+    }
+
     for (const color of colors) {
       const itemName = color ? removeColor(nameWithoutColor, color) : nameWithoutColor;
       items.push({
@@ -167,6 +199,51 @@ export function parseSupplierListText(
   }
 
   return deduplicateItems(items);
+}
+
+type ProductGrade = 'A' | 'A+' | 'AB' | 'B' | 'C';
+
+function isGradeSectionHeading(value: string) {
+  const grade = extractGrade(value);
+  if (!grade || hasPrice(value)) return false;
+
+  return removeGradeMarker(value)
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/[()[\]{}:;,./\\|•*_~\-–—]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() === '';
+}
+
+function isGradeQualifierLine(value: string) {
+  if (!extractGrade(value)) return false;
+
+  return removeGradeMarker(removePrice(value))
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/[()[\]{}:;,./\\|•*_~\-–—]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() === '';
+}
+
+function extractGrade(value: string): ProductGrade | null {
+  const matches = [...value.matchAll(GRADE_MARKER)]
+    .map((match) => match[1])
+    .filter((grade): grade is string => Boolean(grade))
+    .map(normalizeGrade);
+  if (matches.length !== 1) return null;
+  return matches[0] ?? null;
+}
+
+function normalizeGrade(value: string): ProductGrade {
+  const normalized = value.replace(/\s+/g, '').toUpperCase();
+  return normalized === 'A+' ? 'A+' : (normalized as ProductGrade);
+}
+
+function removeGradeMarker(value: string) {
+  return value.replace(GRADE_MARKER, ' ');
+}
+
+function isEligibleGrade(grade: ProductGrade) {
+  return grade === 'A' || grade === 'A+';
 }
 
 export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[]) {
@@ -378,9 +455,11 @@ function cleanLine(line: string) {
 }
 
 function canonicalizeProductName(value: string) {
-  const withoutDecorations = value
+  const withoutGrade = extractGrade(value) ? removeGradeMarker(value) : value;
+  const withoutDecorations = withoutGrade
     .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
     .replace(/[•|_~*]+/g, ' ')
+    .replace(/\(\s*\)/g, ' ')
     .replace(/\b(?:oferta|promocao|promocao|disponivel|estoque|lista atualizada)\b/gi, ' ')
     .replace(
       /\b(?:cpo|refurbished|pre[-\s]?owned|seminovo|semi\s?novo|usado|vitrine|open box)\b/gi,

@@ -95,6 +95,106 @@ describe('supplier list parser', () => {
     expect(items.map((item) => item.price)).toEqual([3800, 4900]);
   });
 
+  it.each(['GRADE A', 'GRADE A+', 'GRADE AB', 'GRADE B', 'GRADE C'])(
+    'nao transforma %s em produto',
+    (grade) => {
+      expect(parseSupplierListText(grade)).toEqual([]);
+    },
+  );
+
+  it('aceita grades A e A+ e remove a grade da identidade do produto', () => {
+    const items = parseSupplierListText(`
+      GRADE A
+      iPhone 15 Pro 256GB
+      Natural R$ 3.800
+      GRADE A+
+      iPhone 16 Pro Max 256GB
+      Desert R$ 4.900
+    `);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          normalizedName: 'iphone 15 pro 256gb',
+          condition: 'NOVO',
+          color: 'natural',
+          price: 3800,
+        }),
+        expect.objectContaining({
+          normalizedName: 'iphone 16 pro max 256gb',
+          condition: 'NOVO',
+          color: 'desert',
+          price: 4900,
+        }),
+      ]),
+    );
+    expect(items.every((item) => !/grade\s*[abc]/i.test(item.productName))).toBe(true);
+  });
+
+  it('descarta AB, B e C sem descartar as secoes A e A+', () => {
+    const items = parseSupplierListText(`
+      LISTA SWAP
+      GRADE A+
+      iPhone 16 Pro Max 256GB
+      Natural R$ 4.800
+      GRADE AB
+      iPhone 15 Pro 256GB
+      Blue R$ 3.300
+      GRADE B
+      iPhone 14 Pro 128GB
+      Black R$ 2.500
+      GRADE C
+      iPhone 13 128GB
+      Green R$ 1.800
+      GRADE A
+      iPhone 15 128GB
+      Black R$ 2.400
+    `);
+
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.normalizedName)).toEqual([
+      'iphone 16 pro max 256gb',
+      'iphone 15 128gb',
+    ]);
+    expect(items.every((item) => item.condition === 'SEMINOVO')).toBe(true);
+  });
+
+  it('aplica a grade qualificadora a oferta atual sem contaminar o produto seguinte', () => {
+    const items = parseSupplierListText(`
+      LISTA SWAP
+      iPhone 15 Pro 256GB
+      Grade A+ — R$ 3.800
+      iPhone 16 Pro Max 256GB
+      Grade AB — R$ 3.300
+    `);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      normalizedName: 'iphone 15 pro 256gb',
+      condition: 'SEMINOVO',
+      price: 3800,
+    });
+  });
+
+  it('distingue A+ de AB em qualificadores inline', () => {
+    const items = parseSupplierListText(`
+      LISTA SWAP
+      iPhone 16 Pro Max 256GB (Grade A+)
+      Natural R$ 4.800
+      iPhone 15 Pro 256GB (Grade AB)
+      Blue R$ 3.300
+    `);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      productName: 'iPhone 16 Pro Max 256GB',
+      normalizedName: 'iphone 16 pro max 256gb',
+      condition: 'SEMINOVO',
+      color: 'natural',
+      price: 4800,
+    });
+  });
+
   it.each([
     ['R$ 6.650,00', 6650],
     ['\u{1F4B0}6,150', 6150],
