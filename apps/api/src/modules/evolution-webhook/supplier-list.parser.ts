@@ -34,6 +34,8 @@ const COLOR_MARKERS = [
   'green',
   'space gray',
   'space grey',
+  'graphite gray',
+  'graphite grey',
   'gold',
   'teal',
   'indigo',
@@ -139,6 +141,11 @@ export function parseSupplierListText(
       currentCondition = productCondition === 'NOVO' ? activeCondition : productCondition;
     } else if (lineGrade && currentProduct) {
       currentGrade = lineGrade;
+    }
+
+    if (!isProductCandidate && isNonProductText(line)) {
+      pendingColors = [];
+      continue;
     }
 
     const lineColor = extractColor(line);
@@ -277,6 +284,7 @@ function isProductHeading(
 ) {
   const candidate = removePrice(value);
   if (!candidate) return false;
+  if (isCommercialPriceLabel(candidate)) return false;
   const hasProductIdentity =
     PRODUCT_MARKERS.test(candidate) ||
     PRODUCT_IDENTITY_MARKERS.test(candidate) ||
@@ -301,7 +309,7 @@ function isProductHeading(
 }
 
 function isCompactAppleProductHeading(value: string) {
-  return /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\s]*(?:iphone\s*)?(?:1[2-7]|17e)\b[\s\S]*\b(?:pro|max|air|plus|e)\b/iu.test(
+  return /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\s]*(?:iphone\s*)?(?:1[2-7]|17e)\b[\s\S]*\b(?:pro|max|air|plus|e|128|256|512|1tb|2tb)\b/iu.test(
     value,
   );
 }
@@ -398,19 +406,27 @@ function isSwapConditionHeading(value: string) {
 
 function isAttributeOnlyLine(value: string) {
   if (extractColor(value)) return false;
+  const withoutDecorations = value.replace(
+    /[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu,
+    ' ',
+  ).replace(/^[\s•|*_~\-–—]+/, ' ');
   return (
     /\b(?:cpu|gpu|ram|ssd|chip\s+(?:fisico|físico|virtual)|bateria|battery|controle|oculos|óculos|ocean\s+band|alpine\s+loop|pulseira|solar|sapphire|garantia|meses?|dias?|minutos?|unidades?|pecas?|peças?)\b/i.test(
-      value,
-    ) ||
-    /^\s*\d+\s*(?:c\s*)?(?:cpu|gpu|baterias?)\b/i.test(value) ||
-    /^\s*modelo\s+[a-z]?\d+[a-z0-9-]*\s*$/i.test(value)
+    withoutDecorations,
+  ) ||
+    /^\s*\d+\s*(?:c\s*)?(?:cpu|gpu|baterias?)\b/i.test(withoutDecorations) ||
+    /^\s*modelo\s+[a-z]?\d+[a-z0-9-]*\s*$/i.test(withoutDecorations)
   );
+}
+
+function isCommercialPriceLabel(value: string) {
+  return /^\s*(?:r\$\s*)?(?:varejo|atacado)\s*$/i.test(value);
 }
 
 function isNonProductText(value: string) {
   if (/^\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s|$)/.test(value)) return true;
   if (/^\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s|$)/.test(value)) return true;
-  return /\b(?:atencao|atencao|garantia|correios|transportadora|nota fiscal|pagamento|conta|horario|obrigado|boas vendas|lista atualizada|disponivel|estoque)\b/i.test(
+  return /\b(?:atencao|atencao|garantia|qualidade garantida|correios|transportadora|nota fiscal|pagamento|conta|horario|obrigado|boas vendas|lista atualizada|disponivel|estoque|pra cima|sinal de reserva|reserva)\b/i.test(
     value,
   );
 }
@@ -427,9 +443,14 @@ function isContextBoundaryLine(value: string) {
 }
 
 function withCategoryPrefix(value: string, category: string | null) {
-  if (!category || PRODUCT_IDENTITY_MARKERS.test(value)) return value;
-  if (/^\s*iphone\b/i.test(value)) return value;
-  if (isCompactAppleProductHeading(value)) return category === 'iPhone' ? `${category} ${value}` : value;
+  const compactAppleProduct = isCompactAppleProductHeading(value);
+  if ((!category && !compactAppleProduct) || PRODUCT_IDENTITY_MARKERS.test(value)) return value;
+  const withoutDecorations = value
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (/^iphone\b/i.test(withoutDecorations)) return value;
+  if (compactAppleProduct) return `${category ?? 'iPhone'} ${value}`;
   if (detectCategory(value)) return value;
   return `${category} ${value}`;
 }
@@ -468,6 +489,8 @@ function canonicalizeProductName(value: string) {
     .replace(/\s+/g, ' ')
     .replace(/^[\s:;,.\-–—]+|[\s:;,.\-–—]+$/g, '')
     .replace(/\biph(?:one)?\s*(?=\d)/gi, 'iPhone ')
+    .replace(/\bpro\s*max\b/gi, 'Pro Max')
+    .replace(/\bpromax\b/gi, 'Pro Max')
     .replace(/\bair\s*pods\b/gi, 'AirPods')
     .replace(/\bmac\s*book\b/gi, 'MacBook')
     .replace(/\bmac\s*mini\b/gi, 'Mac Mini')
@@ -482,7 +505,14 @@ function canonicalizeProductName(value: string) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  return withoutDecorations
+  const compactIPhone = /\biphone\s+(?:1[2-7]|17e)\b[\s\S]*\b(?:pro|max|air|plus|e|128|256|512|1tb|2tb)\b/i.test(
+    withoutDecorations,
+  );
+  const withCompactStorage = compactIPhone
+    ? withoutDecorations.replace(/\b(128|256|512)\b(?!\s*(?:gb|tb))/gi, '$1GB')
+    : withoutDecorations;
+
+  return withCompactStorage
     .split(' ')
     .filter(Boolean)
     .map((token) => formatProductToken(token))

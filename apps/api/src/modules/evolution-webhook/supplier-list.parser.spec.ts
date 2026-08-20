@@ -79,13 +79,15 @@ describe('supplier list parser', () => {
     expect(items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          normalizedName: '16 pro max 512',
+          normalizedName: 'iphone 16 pro max 512gb',
+          capacity: '512GB',
           color: 'natural',
           price: 5930,
           condition: 'CPO',
         }),
         expect.objectContaining({
-          normalizedName: '15 pro 128',
+          normalizedName: 'iphone 15 pro 128gb',
+          capacity: '128GB',
           color: 'preto',
           price: 3850,
           condition: 'CPO',
@@ -660,10 +662,36 @@ describe('supplier list parser', () => {
 
     expect(item).toMatchObject({
       category: 'iPhone',
-      normalizedName: '17 pro max 256',
+      normalizedName: 'iphone 17 pro max 256gb',
+      capacity: '256GB',
       color: 'azul',
       price: 6950,
     });
+  });
+
+  it('normaliza cabecalhos compactos de iPhone sem familia ou unidade explicita', () => {
+    const items = parseSupplierListText(`
+      IPHONES LACRADOS
+      17 PRO MAX 512 LL/A
+      Azul R$ 7.900
+      16 128 HN/A
+      Preto R$ 3.500
+    `);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          normalizedName: 'iphone 17 pro max 512gb ll a',
+          capacity: '512GB',
+          color: 'azul',
+        }),
+        expect.objectContaining({
+          normalizedName: 'iphone 16 128gb hn a',
+          capacity: '128GB',
+          color: 'preto',
+        }),
+      ]),
+    );
   });
 
   it('interpreta promocoes e reposicoes do BrockTech com agrupamento monetario', () => {
@@ -711,6 +739,25 @@ describe('supplier list parser', () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ normalizedName: 'macbook neo 13 8g 256', price: 4500 });
+  });
+
+  it('nao promove rotulos comerciais, garantia ou informacao operacional a produto', () => {
+    const items = parseSupplierListText(`
+      AIR PODS MAX
+      VAREJO R$ 180,00
+      ATACADO R$ 120,00
+      QUALIDADE GARANTIDA POR 1 ANO
+      03 BATERIAS
+      SINAL DE RESERVA R$ 200
+    `);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ normalizedName: 'airpods max', price: 180 }),
+        expect.objectContaining({ normalizedName: 'airpods max', price: 120 }),
+      ]),
+    );
+    expect(items).toHaveLength(2);
   });
 
   it('preserva a familia legada ao reconhecer cabecalho compacto', () => {
