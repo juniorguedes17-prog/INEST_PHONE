@@ -112,7 +112,10 @@ function watch(
   const aliasesWithUnits = aliases.flatMap((alias) =>
     /\s\d{2}$/.test(alias) ? [alias, `${alias}mm`] : [alias],
   );
-  return entry(key, label, 'Apple Watch', aliasesWithUnits, metadata);
+  return entry(key, label, 'Apple Watch', aliasesWithUnits, {
+    ...metadata,
+    safeDefaults: { connectivity: 'GPS', ...metadata?.safeDefaults },
+  });
 }
 
 function accessory(

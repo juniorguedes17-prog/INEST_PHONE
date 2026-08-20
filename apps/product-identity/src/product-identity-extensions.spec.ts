@@ -397,8 +397,14 @@ test('audita os 129 produtos sem alterar a fixture', () => {
   const audit = auditProfitIdentityCatalog(records);
 
   assert.equal(audit.total, 129);
-  assert.equal(audit.valid, 126);
-  assert.equal(audit.insufficient, 3);
+  assert.equal(audit.valid, 128);
+  assert.equal(audit.insufficient, 1);
   assert.equal(audit.ambiguous, 0);
-  assert.equal(audit.collisions.length, 0);
+  assert.deepEqual(
+    audit.collisions.map(({ key }) => key),
+    [
+      'apple-watch|model=apple-watch-series-11-42|screen=42mm|condition=novo|connectivity=gps',
+      'apple-watch|model=apple-watch-series-11-46|screen=46mm|condition=novo|connectivity=gps',
+    ],
+  );
 });

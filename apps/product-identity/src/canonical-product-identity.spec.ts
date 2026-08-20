@@ -109,6 +109,7 @@ test('completa conectividade iPad no nível da família e preserva Cellular expl
   const wifi = normalizeCanonicalProductIdentity('iPad 11 128GB');
   const wifiComplete = normalizeCanonicalProductIdentity('iPad 11 A16 128GB 11" Wi-Fi');
   const cellular = normalizeCanonicalProductIdentity('iPad 11 128GB Cellular');
+  const wifiCellular = normalizeCanonicalProductIdentity('iPad Air M4 11 128GB WiFi/Cellular');
   const air = normalizeCanonicalProductIdentity('iPad Air M4 11 128GB');
   const pro = normalizeCanonicalProductIdentity('iPad Pro M5 13 256GB Cellular');
 
@@ -122,6 +123,7 @@ test('completa conectividade iPad no nível da família e preserva Cellular expl
     ['A16', '11"', 'Wi-Fi'],
   );
   assert.equal(cellular.canonicalConnectivity, 'Wi-Fi + Cellular');
+  assert.equal(wifiCellular.canonicalConnectivity, 'Wi-Fi + Cellular');
   assert.deepEqual(
     [air.canonicalModelKey, air.canonicalChip, air.canonicalScreen, air.canonicalConnectivity],
     ['ipad-air-m4-11', 'M4', '11"', 'Wi-Fi'],
@@ -130,6 +132,23 @@ test('completa conectividade iPad no nível da família e preserva Cellular expl
     [pro.canonicalModelKey, pro.canonicalChip, pro.canonicalScreen, pro.canonicalConnectivity],
     ['ipad-pro-m5-13', 'M5', '13"', 'Wi-Fi + Cellular'],
   );
+});
+
+test('aplica GPS por default para Apple Watch e preserva a precedência de Cellular', () => {
+  const absent = normalizeCanonicalProductIdentity('Apple Watch SE 3 44mm');
+  const gps = normalizeCanonicalProductIdentity('Apple Watch SE 3 44mm GPS');
+  const cellular = normalizeCanonicalProductIdentity('Apple Watch SE 3 44mm Cellular');
+  const gpsCellular = normalizeCanonicalProductIdentity('Apple Watch SE 3 44mm GPS + Cellular');
+  const slashCellular = normalizeCanonicalProductIdentity('Apple Watch SE 3 44mm GPS/Cellular');
+  const portugueseCellular = normalizeCanonicalProductIdentity('Apple Watch SE 3 44mm com celular');
+
+  assert.equal(absent.canonicalConnectivity, 'GPS');
+  assert.equal(absent.canonicalConnectivitySource, 'safe_default');
+  assert.equal(gps.canonicalConnectivity, 'GPS');
+  assert.equal(cellular.canonicalConnectivity, 'GPS + Cellular');
+  assert.equal(gpsCellular.canonicalConnectivity, 'GPS + Cellular');
+  assert.equal(slashCellular.canonicalConnectivity, 'GPS + Cellular');
+  assert.equal(portugueseCellular.canonicalConnectivity, 'GPS + Cellular');
 });
 
 test('falha fechada quando atributo explícito contradiz invariant do modelo', () => {

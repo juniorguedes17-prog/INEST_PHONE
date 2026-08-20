@@ -161,6 +161,17 @@ describe('product identity ingestion shadow', () => {
     ).toMatchObject({ status: 'FOUND', productId: 'watch-42-cellular' });
   });
 
+  it('resolves Apple Watch without connectivity to the GPS catalog variant', () => {
+    const catalog = [
+      catalogProduct('watch-se-3-44-gps', 'Apple Watch SE 3 44mm GPS'),
+      catalogProduct('watch-se-3-44-cellular', 'Apple Watch SE 3 44mm GPS + Cellular'),
+    ];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity('Apple Watch SE 3 44mm'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'watch-se-3-44-gps', candidateCount: 1 });
+  });
+
   it('keeps storage and condition variants distinct and fails closed for missing or ambiguous candidates', () => {
     const catalog = [
       catalogProduct('air-256-new', 'iPhone 17 Air 256GB'),
