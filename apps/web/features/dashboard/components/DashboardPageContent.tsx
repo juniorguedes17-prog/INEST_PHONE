@@ -69,48 +69,56 @@ export function DashboardPageContent() {
               label="Total de clientes"
               value={formatNumber(data.sheet.totalCustomers)}
               tone="blue"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Total de vendas"
               value={formatNumber(data.sheet.totalSales)}
               tone="green"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Receita total"
               value={formatCurrency(data.sheet.totalRevenue)}
               tone="purple"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Lucro total"
               value={formatCurrency(data.sheet.totalProfit)}
               tone="green"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Ticket médio"
               value={formatCurrency(data.sheet.averageTicket)}
               tone="amber"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Produtos vendidos"
               value={formatNumber(data.sheet.productsSold)}
               tone="blue"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Última venda"
               value={formatDate(data.sheet.lastSale)}
               tone="purple"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Última sincronização"
               value={lastUpdated}
               tone="amber"
+              mobileCompact
               className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
           </div>

@@ -10,6 +10,7 @@ interface KpiCardProps {
   tone?: KpiTone;
   icon?: ReactNode;
   className?: string;
+  mobileCompact?: boolean;
 }
 
 const accents: Record<KpiTone, string> = {
@@ -19,7 +20,15 @@ const accents: Record<KpiTone, string> = {
   amber: 'before:bg-amber-500',
 };
 
-export function KpiCard({ label, value, detail, tone = 'blue', icon, className }: KpiCardProps) {
+export function KpiCard({
+  label,
+  value,
+  detail,
+  tone = 'blue',
+  icon,
+  className,
+  mobileCompact = false,
+}: KpiCardProps) {
   return (
     <article
       className={cn(
@@ -29,12 +38,26 @@ export function KpiCard({ label, value, detail, tone = 'blue', icon, className }
       )}
     >
       <div className="flex items-start justify-between gap-4">
-        <span className="text-xs font-semibold uppercase tracking-[0.06em] text-inest-muted">
+        <span
+          className={cn(
+            'font-semibold uppercase text-inest-muted',
+            mobileCompact
+              ? 'text-[10px] tracking-[0.04em] sm:text-xs sm:tracking-[0.06em]'
+              : 'text-xs tracking-[0.06em]',
+          )}
+        >
           {label}
         </span>
         {icon ? <span className="text-inest-muted">{icon}</span> : null}
       </div>
-      <strong className="mt-2 block break-words font-display text-2xl font-bold leading-tight text-inest-text sm:text-[28px] sm:leading-none">
+      <strong
+        className={cn(
+          'block break-words font-display font-bold text-inest-text',
+          mobileCompact
+            ? 'mt-1 text-xl leading-tight sm:mt-2 sm:text-[28px] sm:leading-none'
+            : 'mt-2 text-2xl leading-tight sm:text-[28px] sm:leading-none',
+        )}
+      >
         {value}
       </strong>
       {detail ? (
