@@ -25,6 +25,12 @@ export interface OfferRecord {
     productId: string;
     salePrice: number | string;
     offerPrice: number | string;
+    product?: {
+      id: string;
+      productDescription?: string | null;
+      model?: { name: string };
+      color?: { name: string } | null;
+    };
   }>;
 }
 

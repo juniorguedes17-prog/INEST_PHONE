@@ -14,6 +14,7 @@ import {
 import { useOffers } from '../hooks/useOffers';
 import { renderTemporaryOfferMessage } from '../utils/temporary-offer-consolidation';
 import { OfferListCard } from './OfferListCard';
+import { InstallmentSimulatorCard } from './InstallmentSimulatorCard';
 import { OffersToolbar } from './OffersToolbar';
 import {
   buildCanonicalModelFacetOptions,
@@ -170,6 +171,13 @@ export function OffersPageContent() {
         onSortChange={setSort}
         onPageSizeChange={setPageSize}
         onOpenFilters={() => setFiltersOpen(true)}
+      />
+
+      <InstallmentSimulatorCard
+        offers={offers.offers}
+        drafts={offers.temporaryOfferDrafts}
+        loading={offers.loading}
+        error={offers.error}
       />
 
       {offers.consolidatedTemporaryOffers.length ? (

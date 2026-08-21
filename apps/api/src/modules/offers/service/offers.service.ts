@@ -174,6 +174,8 @@ export class OffersService {
   }
 
   private toResponse(offer: OfferRecord) {
+    const product = offer.items?.[0]?.product;
+
     return {
       id: offer.id,
       template: offer.commercialTemplate,
@@ -183,6 +185,14 @@ export class OffersService {
       offerPrice: Number(offer.offerPrice),
       whatsappUrl: getWhatsappShareLink(offer.message),
       productId: offer.items?.[0]?.productId ?? null,
+      product: product
+        ? {
+            id: product.id,
+            name: product.productDescription ?? product.model?.name ?? '',
+            model: product.model?.name ?? null,
+            color: product.color?.name ?? null,
+          }
+        : null,
       createdAt: offer.createdAt,
     };
   }

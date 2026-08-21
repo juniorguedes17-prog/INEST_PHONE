@@ -74,7 +74,21 @@ export class OffersRepository {
   listOffers() {
     return this.prisma.offer.findMany({
       where: { deletedAt: null },
-      include: { commercialTemplate: true, items: true },
+      include: {
+        commercialTemplate: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                productDescription: true,
+                model: { select: { name: true } },
+                color: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

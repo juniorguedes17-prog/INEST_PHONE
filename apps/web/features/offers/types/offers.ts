@@ -9,6 +9,13 @@ export interface CommercialTemplate {
   status: string;
 }
 
+export interface OfferProductSummary {
+  id: string;
+  name: string;
+  model: string | null;
+  color: string | null;
+}
+
 export interface OfferItem {
   id: string;
   template?: CommercialTemplate;
@@ -18,6 +25,7 @@ export interface OfferItem {
   offerPrice: number;
   whatsappUrl: string;
   productId?: string | null;
+  product?: OfferProductSummary | null;
   createdAt: string;
 }
 

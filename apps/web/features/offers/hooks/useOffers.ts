@@ -139,6 +139,7 @@ export function useOffers() {
     templates,
     offers,
     currentOffer,
+    temporaryOfferDrafts,
     consolidatedTemporaryOffers,
     loading,
     saving,
