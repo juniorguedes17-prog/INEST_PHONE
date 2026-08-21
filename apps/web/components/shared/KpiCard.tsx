@@ -9,6 +9,7 @@ interface KpiCardProps {
   detail?: string;
   tone?: KpiTone;
   icon?: ReactNode;
+  className?: string;
 }
 
 const accents: Record<KpiTone, string> = {
@@ -18,12 +19,13 @@ const accents: Record<KpiTone, string> = {
   amber: 'before:bg-amber-500',
 };
 
-export function KpiCard({ label, value, detail, tone = 'blue', icon }: KpiCardProps) {
+export function KpiCard({ label, value, detail, tone = 'blue', icon, className }: KpiCardProps) {
   return (
     <article
       className={cn(
         'relative min-h-[116px] overflow-hidden rounded-2xl border border-inest-line/60 bg-inest-surface px-5 py-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)] before:absolute before:inset-x-0 before:top-0 before:h-1',
         accents[tone],
+        className,
       )}
     >
       <div className="flex items-start justify-between gap-4">
@@ -32,7 +34,7 @@ export function KpiCard({ label, value, detail, tone = 'blue', icon }: KpiCardPr
         </span>
         {icon ? <span className="text-inest-muted">{icon}</span> : null}
       </div>
-      <strong className="mt-2 block font-display text-[28px] font-bold leading-none text-inest-text">
+      <strong className="mt-2 block break-words font-display text-2xl font-bold leading-tight text-inest-text sm:text-[28px] sm:leading-none">
         {value}
       </strong>
       {detail ? (

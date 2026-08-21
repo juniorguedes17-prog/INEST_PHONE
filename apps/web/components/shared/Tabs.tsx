@@ -17,7 +17,7 @@ interface TabsProps {
 export function Tabs({ items, value, onChange, label = 'Visualizacao' }: TabsProps) {
   return (
     <div
-      className="inline-flex h-10 items-center rounded-lg border border-inest-line bg-inest-soft p-1"
+      className="grid w-full grid-cols-3 gap-1 rounded-2xl border border-inest-line/70 bg-inest-surface p-1.5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] sm:inline-grid sm:w-auto"
       role="tablist"
       aria-label={label}
     >
@@ -29,11 +29,13 @@ export function Tabs({ items, value, onChange, label = 'Visualizacao' }: TabsPro
           aria-selected={item.value === value}
           onClick={() => onChange(item.value)}
           className={cn(
-            'h-8 rounded-md px-3 text-sm font-bold text-inest-muted transition-colors',
-            item.value === value && 'bg-white text-inest-text shadow-sm',
+            'min-h-11 min-w-0 rounded-xl px-3 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-1',
+            item.value === value
+              ? 'bg-gradient-to-r from-inest-blue to-inest-purple text-white shadow-soft'
+              : 'text-inest-muted hover:bg-inest-soft hover:text-inest-text',
           )}
         >
-          {item.label}
+          <span className="truncate">{item.label}</span>
         </button>
       ))}
     </div>

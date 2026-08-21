@@ -34,7 +34,7 @@ export function DashboardPageContent() {
     ? formatDateTime(data.sheet.lastSync)
     : 'Aguardando sincronização';
   return (
-    <div className="grid min-w-0 gap-4 overflow-x-hidden">
+    <div className="grid min-w-0 gap-5 overflow-x-hidden sm:gap-4">
       <PageHeader
         eyebrow="Operação comercial"
         title="Dashboard"
@@ -57,50 +57,68 @@ export function DashboardPageContent() {
       ) : null}
       {data ? (
         <PageSection
+          className="gap-3 sm:gap-4"
           title="Resumo operacional"
           description="Dados calculados exclusivamente a partir da planilha oficial."
         >
           <div
-            className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            className="grid grid-cols-2 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4"
             aria-label="Indicadores do Google Sheets"
           >
             <KpiCard
               label="Total de clientes"
               value={formatNumber(data.sheet.totalCustomers)}
               tone="blue"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Total de vendas"
               value={formatNumber(data.sheet.totalSales)}
               tone="green"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Receita total"
               value={formatCurrency(data.sheet.totalRevenue)}
               tone="purple"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Lucro total"
               value={formatCurrency(data.sheet.totalProfit)}
               tone="green"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Ticket médio"
               value={formatCurrency(data.sheet.averageTicket)}
               tone="amber"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
             <KpiCard
               label="Produtos vendidos"
               value={formatNumber(data.sheet.productsSold)}
               tone="blue"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
             />
-            <KpiCard label="Última venda" value={formatDate(data.sheet.lastSale)} tone="purple" />
-            <KpiCard label="Última sincronização" value={lastUpdated} tone="amber" />
+            <KpiCard
+              label="Última venda"
+              value={formatDate(data.sheet.lastSale)}
+              tone="purple"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
+            />
+            <KpiCard
+              label="Última sincronização"
+              value={lastUpdated}
+              tone="amber"
+              className="min-h-[104px] px-3 py-3 sm:min-h-[116px] sm:px-5 sm:py-4"
+            />
           </div>
         </PageSection>
       ) : null}
       {data ? (
         <PageSection
+          className="gap-3 sm:gap-4"
           title="Evolução das vendas"
           description="Indicadores atualizados a partir do mesmo snapshot sincronizado."
         >

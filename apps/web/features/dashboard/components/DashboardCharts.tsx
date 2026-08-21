@@ -21,7 +21,7 @@ const PLOT = { left: 56, right: 18, top: 18, bottom: 42 };
 
 function ChartCard({ title, description, children }: ChartCardProps) {
   return (
-    <Card className="min-w-0 p-5 sm:p-6">
+    <Card className="min-w-0 p-4 sm:p-6">
       <div className="mb-4">
         <h3 className="text-card-title">{title}</h3>
         <p className="mt-1.5 text-sm leading-6 text-inest-muted">{description}</p>

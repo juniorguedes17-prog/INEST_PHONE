@@ -128,6 +128,56 @@ test('keeps the one-draft message identical', () => {
   assert.equal(consolidated.message, prepared.message);
 });
 
+test('does not repeat storage already present in the product name', () => {
+  const cases: Array<[string, string, string]> = [
+    ['iPhone 16 128GB', '128 GB', '128GB'],
+    ['iPhone 16 128 GB', '128GB', '128 GB'],
+    ['iPhone 17 Pro 256GB', '256 GB', '256GB'],
+    ['MacBook Air M5 512GB', '512GB', '512GB'],
+    ['MacBook Pro 1TB', '1 TB', '1TB'],
+  ];
+
+  cases.forEach(([productName, capacity, representedCapacity]) => {
+    const prepared = prepareTemporaryOffer(
+      draftForProduct({
+        id: productName,
+        productId: productName,
+        productName,
+        color: 'Branco',
+        capacity,
+        offerPrice: 5000,
+      }),
+      [sealedTemplate],
+    );
+
+    assert.ok(prepared);
+    assert.equal(countNormalizedStorage(prepared.message, representedCapacity), 1);
+  });
+});
+
+test('adds storage when it is absent from the product name', () => {
+  const prepared = prepareTemporaryOffer(
+    draftForProduct({
+      id: 'iphone-16',
+      productId: 'iphone-16',
+      productName: 'iPhone 16',
+      color: 'Branco',
+      capacity: '128GB',
+      offerPrice: 5000,
+    }),
+    [sealedTemplate],
+  );
+
+  assert.ok(prepared);
+  assert.equal(countNormalizedStorage(prepared.message, '128GB'), 1);
+});
+
+function countNormalizedStorage(message: string, capacity: string) {
+  const normalizedMessage = message.toLocaleLowerCase('pt-BR').replace(/[\s-]+/g, '');
+  const normalizedCapacity = capacity.toLocaleLowerCase('pt-BR').replace(/[\s-]+/g, '');
+  return normalizedMessage.split(normalizedCapacity).length - 1;
+}
+
 test('preserves the creation timestamp carried by a new draft', () => {
   const createdAt = '2026-08-21T16:30:00.000Z';
   const prepared = prepareTemporaryOffer({ ...draft(1), createdAt }, [sealedTemplate]);

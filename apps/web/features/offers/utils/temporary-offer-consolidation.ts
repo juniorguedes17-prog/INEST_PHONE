@@ -232,11 +232,12 @@ function findFirstMarkerIndexAfter(template: string, markers: string[], fromInde
 
 function toTemplateVariables(draft: OfferDraft, deliveryTime?: string): Record<string, string> {
   const payload = draft.payload;
+  const capacity = getUnrepresentedCapacity(payload.productName, payload.capacity);
   return {
     produto: payload.productName,
     modelo: payload.productName,
     cor: payload.color,
-    capacidade: payload.capacity,
+    capacidade: capacity,
     preco: formatCurrency(payload.salePrice),
     preco_oferta: formatCurrency(payload.offerPrice),
     prazo: deliveryTime || payload.deliveryTime || 'Prazo conforme oferta',
@@ -249,9 +250,10 @@ function toConsolidatedTemplateVariables(
   deliveryTime?: string,
 ): Record<string, string> {
   const payload = draft.payload;
+  const capacity = getUnrepresentedCapacity(payload.productName, payload.capacity);
   return {
     ...toTemplateVariables(draft, deliveryTime),
-    cores: [payload.color, payload.capacity].filter(Boolean).join(' '),
+    cores: [payload.color, capacity].filter(Boolean).join(' '),
   };
 }
 
@@ -261,7 +263,7 @@ function toProductHeadingVariables(
 ): Record<string, string> {
   const payload = draft.payload;
   const productName = payload.productName.trim();
-  const capacity = payload.capacity.trim();
+  const capacity = getUnrepresentedCapacity(productName, payload.capacity);
   const productLabel =
     capacity &&
     !productName.toLocaleLowerCase('pt-BR').includes(capacity.toLocaleLowerCase('pt-BR'))
@@ -273,6 +275,19 @@ function toProductHeadingVariables(
     produto: productLabel,
     modelo: productLabel,
   };
+}
+
+function getUnrepresentedCapacity(productName: string, capacity: string) {
+  const trimmedCapacity = capacity.trim();
+  if (!trimmedCapacity) return '';
+
+  const normalizedName = normalizeStorageForComparison(productName);
+  const normalizedCapacity = normalizeStorageForComparison(trimmedCapacity);
+  return normalizedName.includes(normalizedCapacity) ? '' : trimmedCapacity;
+}
+
+function normalizeStorageForComparison(value: string) {
+  return value.toLocaleLowerCase('pt-BR').replace(/[\s-]+/g, '');
 }
 
 function renderTemplate(template: string, variables: Record<string, string>) {
