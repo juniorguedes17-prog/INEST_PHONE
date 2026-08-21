@@ -432,7 +432,7 @@ function normalizeBrazilRadarFilterRow(quote: PriceQuoteItem): BrazilRadarFilter
   return {
     id: quote.id,
     quote,
-    category: identity.canonicalCategory,
+    category: getCanonicalCategory(quote),
     model: identity.canonicalModelKey,
     modelLabel: identity.canonicalModelMatched ? identity.canonicalModelLabel : '',
     condition: identity.canonicalCondition,

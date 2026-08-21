@@ -150,21 +150,55 @@ test('consulta indexada intersecta o menor conjunto e nao canoniza durante a con
   assert.equal(index.rows.size, quotes.length);
 });
 
-test('preserva Fones como categoria explicita para AirPods no Radar', () => {
-  const airpods = quote({
-    id: 'airpods-pro-3',
+test('preserva Fones como categoria estruturada no indice do Radar', () => {
+  const airpodsNovo = quote({
+    id: 'airpods-pro-3-novo',
     productName: 'AirPods Pro 3',
     category: 'Fones',
     model: 'AirPods Pro 3',
+    quality: 'Novo',
   });
-  const facets = buildBrazilRadarFacets([airpods]);
+  const airpodsCpo = quote({
+    id: 'airpods-pro-3-cpo',
+    productName: 'AirPods Pro 3',
+    category: 'Fones',
+    model: 'AirPods Pro 3',
+    quality: 'CPO',
+  });
+  const airpodsMisclassified = quote({
+    id: 'airpods-misclassified',
+    productName: 'AirPods Pro 3',
+    category: 'iPhone',
+    model: 'AirPods Pro 3',
+  });
+  const index = buildBrazilRadarFacetIndex([airpodsNovo, airpodsCpo, airpodsMisclassified]);
+  const facets = buildBrazilRadarFacetsFromIndex(index);
 
-  assert.deepEqual(facets.categories.map((item) => item.label), ['Fones']);
   assert.deepEqual(
-    filterBrazilRadarQuotes([airpods], { ...emptyBrazilRadarFacetState, categories: ['Fones'] }).map(
-      (item) => item.id,
-    ),
-    ['airpods-pro-3'],
+    facets.categories.map((item) => item.label),
+    ['Fones', 'Acessorios'],
+  );
+  assert.deepEqual(
+    filterBrazilRadarQuotesByIndex(index, {
+      ...emptyBrazilRadarFacetState,
+      categories: ['Fones'],
+    }).map((item) => item.id),
+    ['airpods-pro-3-novo', 'airpods-pro-3-cpo'],
+  );
+  assert.deepEqual(
+    filterBrazilRadarQuotesByIndex(index, {
+      ...emptyBrazilRadarFacetState,
+      categories: ['Fones'],
+      condition: 'Novo',
+    }).map((item) => item.id),
+    ['airpods-pro-3-novo'],
+  );
+  assert.deepEqual(
+    filterBrazilRadarQuotesByIndex(index, {
+      ...emptyBrazilRadarFacetState,
+      categories: ['Fones'],
+    }).some((item) => item.id === 'airpods-misclassified'),
+    false,
   );
 });
 
