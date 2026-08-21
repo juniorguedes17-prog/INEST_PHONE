@@ -18,7 +18,8 @@ export interface InstallmentRates {
 
 export const INSTALLMENT_RATES_CONFIGURATION_KEY = 'installmentRates';
 export const INSTALLMENT_MESSAGE_TEMPLATE_CONFIGURATION_KEY = 'installmentMessageTemplate';
-export const DEFAULT_INSTALLMENT_MESSAGE_TEMPLATE = '{{produto}}\n\n{{cor}}\n\n{{parcelas}}';
+export const DEFAULT_INSTALLMENT_MESSAGE_TEMPLATE =
+  '📱 *{{produto}}*\nCor: {{cor}}\n\n💳 *Condições de Pagamento*\n\n{{parcelas}}\n\nQual dessas opções fica melhor para você?';
 
 const PAGBANK_CALIBRATION_DESIRED_AMOUNT = 3049;
 const PAGBANK_CALIBRATION_TOTALS = [

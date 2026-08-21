@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   ActionButton,
+  CurrencyInput,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -19,6 +20,11 @@ import {
   simulateInstallments,
 } from '../utils/installment-simulation';
 import { buildInstallmentAvailability } from '../utils/installment-availability';
+import {
+  formatTradeInAmountInput,
+  getRemainingAmountCents,
+  parseTradeInAmount,
+} from '../utils/installment-trade-in';
 import {
   formatCurrencyCents,
   formatDebitOption,
@@ -50,6 +56,7 @@ export function InstallmentSimulatorCard({
   const [productKey, setProductKey] = useState('');
   const [colorKey, setColorKey] = useState('');
   const [provider, setProvider] = useState<InstallmentProvider>('infinityPay');
+  const [tradeInInput, setTradeInInput] = useState('0,00');
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const products = useMemo(() => buildInstallmentAvailability(offers, drafts), [offers, drafts]);
@@ -57,11 +64,22 @@ export function InstallmentSimulatorCard({
   const selectedColor = selectedProduct?.colors.find((color) => color.key === colorKey);
   const selectedEntry = selectedColor?.entry ?? null;
   const selectedPriceCents = selectedEntry ? Math.round(selectedEntry.offerPrice * 100) : null;
+  const parsedTradeIn = useMemo(() => parseTradeInAmount(tradeInInput), [tradeInInput]);
+  const remainingAmount = useMemo(
+    () =>
+      selectedPriceCents === null || parsedTradeIn.error
+        ? null
+        : getRemainingAmountCents(selectedPriceCents, parsedTradeIn.cents),
+    [parsedTradeIn, selectedPriceCents],
+  );
+  const tradeInError = parsedTradeIn.error ?? remainingAmount?.error ?? null;
+  const remainingAmountCents =
+    remainingAmount && !remainingAmount.error ? remainingAmount.cents : null;
 
   const simulations = useMemo(() => {
-    if (!settings || selectedPriceCents === null) return [];
-    return simulateInstallments(selectedPriceCents, settings.installmentRates);
-  }, [selectedPriceCents, settings]);
+    if (!settings || remainingAmountCents === null || remainingAmountCents === 0) return [];
+    return simulateInstallments(remainingAmountCents, settings.installmentRates);
+  }, [remainingAmountCents, settings]);
   const selectedSimulation = simulations.find((item) => item.provider === provider) ?? null;
   const message =
     settings && selectedEntry && selectedSimulation
@@ -69,6 +87,14 @@ export function InstallmentSimulatorCard({
           productName: selectedEntry.productName,
           color: selectedEntry.color || 'Sem cor informada',
           simulation: selectedSimulation,
+          tradeIn:
+            parsedTradeIn.cents > 0 && remainingAmountCents !== null
+              ? {
+                  offerPriceCents: selectedPriceCents!,
+                  tradeInAmountCents: parsedTradeIn.cents,
+                  remainingAmountCents,
+                }
+              : undefined,
         })
       : '';
 
@@ -76,11 +102,15 @@ export function InstallmentSimulatorCard({
     if (productKey && !selectedProduct) {
       setProductKey('');
       setColorKey('');
+      setTradeInInput('0,00');
     }
   }, [productKey, selectedProduct]);
 
   useEffect(() => {
-    if (colorKey && !selectedColor) setColorKey('');
+    if (colorKey && !selectedColor) {
+      setColorKey('');
+      setTradeInInput('0,00');
+    }
   }, [colorKey, selectedColor]);
 
   async function copyMessage() {
@@ -114,13 +144,14 @@ export function InstallmentSimulatorCard({
       ) : null}
       {!offersLoading && !settingsLoading && !offersError && !settingsError && products.length ? (
         <div className="grid gap-5">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
             <Select
               label="Produto"
               value={productKey}
               onChange={(event) => {
                 setProductKey(event.target.value);
                 setColorKey('');
+                setTradeInInput('0,00');
                 setFeedback(null);
               }}
             >
@@ -137,6 +168,7 @@ export function InstallmentSimulatorCard({
               disabled={!selectedProduct}
               onChange={(event) => {
                 setColorKey(event.target.value);
+                setTradeInInput('0,00');
                 setFeedback(null);
               }}
             >
@@ -155,12 +187,43 @@ export function InstallmentSimulatorCard({
                   : 'Selecione produto e cor'}
               </div>
             </div>
+            <CurrencyInput
+              label="Aparelho de entrada"
+              value={tradeInInput}
+              disabled={!selectedEntry}
+              aria-invalid={Boolean(tradeInError)}
+              onChange={(event) => {
+                setTradeInInput(event.target.value);
+                setFeedback(null);
+              }}
+              onBlur={() => {
+                if (!parsedTradeIn.error)
+                  setTradeInInput(formatTradeInAmountInput(parsedTradeIn.cents));
+              }}
+            />
           </div>
+
+          {tradeInError ? <p className="text-sm font-medium text-red-600">{tradeInError}</p> : null}
 
           {selectedColor?.isAmbiguous ? (
             <ErrorState
               title="Oferta atual não determinada"
               description="As ocorrências disponíveis não possuem timestamps comparáveis para definir a oferta mais recente."
+            />
+          ) : null}
+
+          {selectedEntry && parsedTradeIn.cents > 0 && !tradeInError ? (
+            <div className="grid gap-3 border-y border-inest-line py-4 sm:grid-cols-3">
+              <AmountSummary label="Valor da oferta" value={selectedPriceCents!} />
+              <AmountSummary label="Aparelho de entrada" value={parsedTradeIn.cents} />
+              <AmountSummary emphasized label="Saldo a parcelar" value={remainingAmountCents!} />
+            </div>
+          ) : null}
+
+          {selectedEntry && remainingAmountCents === 0 && !tradeInError ? (
+            <EmptyState
+              title="Sem saldo a parcelar"
+              description="O valor do aparelho de entrada cobre integralmente o valor da oferta."
             />
           ) : null}
 
@@ -193,6 +256,31 @@ export function InstallmentSimulatorCard({
         </div>
       ) : null}
     </SettingsCard>
+  );
+}
+
+function AmountSummary({
+  label,
+  value,
+  emphasized = false,
+}: {
+  label: string;
+  value: number;
+  emphasized?: boolean;
+}) {
+  return (
+    <div className={emphasized ? 'rounded-lg bg-inest-soft p-3' : 'p-3'}>
+      <p className="text-xs font-semibold uppercase tracking-[0.06em] text-inest-muted">{label}</p>
+      <p
+        className={
+          emphasized
+            ? 'mt-1 text-lg font-bold text-inest-text'
+            : 'mt-1 font-semibold text-inest-text'
+        }
+      >
+        {formatCurrencyCents(value)}
+      </p>
+    </div>
   );
 }
 

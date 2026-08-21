@@ -26,7 +26,7 @@ const rates: InstallmentRates = {
   },
 };
 
-test('renders the configured template with the selected provider simulation', () => {
+test('renders the configured template with commercial payment formatting', () => {
   const simulations = simulateInstallments(10001, rates);
   const infinityPay = simulations.find((item) => item.provider === 'infinityPay');
   const pagBank = simulations.find((item) => item.provider === 'pagBank');
@@ -39,16 +39,22 @@ test('renders the configured template with the selected provider simulation', ()
   assert.equal(pagBank.options.length, 18);
   assert.equal(nubank.options.length, 12);
 
-  const message = renderInstallmentMessage('Produto: {{produto}}\nCor: {{cor}}\n{{parcelas}}', {
-    productName: 'iPhone 17 Pro Max 256GB',
-    color: 'Azul',
-    simulation: infinityPay,
-  });
+  const message = renderInstallmentMessage(
+    '📱 *{{produto}}*\nCor: {{cor}}\n\n💳 *Condições de Pagamento*\n\n{{parcelas}}\n\nQual dessas opções fica melhor para você?',
+    {
+      productName: 'iPhone 17 Pro Max 256GB',
+      color: 'azul',
+      simulation: infinityPay,
+    },
+  );
 
-  assert.match(message, /Produto: iPhone 17 Pro Max 256GB/);
+  assert.match(message, /📱 \*iPhone 17 Pro Max 256GB\*/);
   assert.match(message, /Cor: Azul/);
-  assert.match(message, /Débito:/);
-  assert.match(message, /12x:/);
+  assert.match(message, /💳 \*Condições de Pagamento\*/);
+  assert.match(message, /• \*Débito:\* R\$/);
+  assert.match(message, /• \*12x\* de R\$/);
+  assert.match(message, /Qual dessas opções fica melhor para você\?/);
+  assert.doesNotMatch(message, /Seu aparelho na troca|Saldo a pagar/);
 });
 
 test('encodes the installment message for WhatsApp sharing', () => {
@@ -58,7 +64,7 @@ test('encodes the installment message for WhatsApp sharing', () => {
   );
 });
 
-test('keeps the final cent residual visible in the message', () => {
+test('keeps the cent residual internal while presenting the commercial base installment', () => {
   const simulations = simulateInstallments(10001, {
     ...rates,
     infinityPay: { debitRatePercent: 0, installments: [{ installments: 3, ratePercent: 0 }] },
@@ -72,5 +78,29 @@ test('keeps the final cent residual visible in the message', () => {
     simulation: infinityPay,
   });
 
-  assert.match(message, /3x: 2x de R\$\s?33,33 \+ última de R\$\s?33,35/);
+  assert.match(message, /• \*3x\* de R\$\s?33,33/);
+  assert.doesNotMatch(message, /última de|2x de R\$\s?33,33 \+/);
+});
+
+test('adds the trade-in summary without changing the configured template text', () => {
+  const simulations = simulateInstallments(334900, rates);
+  const infinityPay = simulations.find((item) => item.provider === 'infinityPay');
+  assert.ok(infinityPay);
+
+  const message = renderInstallmentMessage('{{produto}}\nCor: {{cor}}\n{{parcelas}}', {
+    productName: 'iPhone 16 128GB',
+    color: 'branco',
+    simulation: infinityPay,
+    tradeIn: {
+      offerPriceCents: 534900,
+      tradeInAmountCents: 200000,
+      remainingAmountCents: 334900,
+    },
+  });
+
+  assert.match(message, /iPhone 16 128GB\nCor: Branco/);
+  assert.match(message, /Valor do aparelho:\* R\$\s?5\.349,00/);
+  assert.match(message, /Seu aparelho na troca:\* R\$\s?2\.000,00/);
+  assert.match(message, /Saldo a pagar:\* R\$\s?3\.349,00/);
+  assert.match(message, /• \*1x\* de R\$/);
 });

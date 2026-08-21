@@ -10,12 +10,17 @@ import { SettingsRepository } from '../repository/settings.repository';
 import { defaultSettings } from '../settings.defaults';
 import { SettingsService } from './settings.service';
 
-function createRepository(pricingConfigurations: Array<{ key: string; value: string }> = []) {
+function createRepository(
+  pricingConfigurations: Array<{ key: string; value: string }> = [],
+  globalConfigurations: Array<{ key: string; value: string }> = [],
+) {
   return {
     findSystemConfigurations: vi
       .fn()
       .mockImplementation((scope?: string) =>
-        Promise.resolve(scope === PRICING_CONFIGURATION_SCOPE ? pricingConfigurations : []),
+        Promise.resolve(
+          scope === PRICING_CONFIGURATION_SCOPE ? pricingConfigurations : globalConfigurations,
+        ),
       ),
     findFinancialConfiguration: vi.fn().mockResolvedValue(null),
     findImportConfiguration: vi.fn().mockResolvedValue(null),
@@ -158,7 +163,9 @@ describe('SettingsService commercial price endings', () => {
       installments: 12,
       ratePercent: 12.38,
     });
-    expect(settings.installmentMessageTemplate).toBe('{{produto}}\n\n{{cor}}\n\n{{parcelas}}');
+    expect(settings.installmentMessageTemplate).toBe(
+      '📱 *{{produto}}*\nCor: {{cor}}\n\n💳 *Condições de Pagamento*\n\n{{parcelas}}\n\nQual dessas opções fica melhor para você?',
+    );
   });
 
   it('persists valid installment rates and the message template through SystemConfiguration', async () => {
@@ -183,6 +190,23 @@ describe('SettingsService commercial price endings', () => {
       '{{produto}}\n{{parcelas}}',
       'texto_longo',
     );
+  });
+
+  it('preserves a valid customized installment template already stored by the user', async () => {
+    const repository = createRepository(
+      [],
+      [
+        {
+          key: 'installmentMessageTemplate',
+          value: 'Condição especial para {{produto}}\n{{parcelas}}',
+        },
+      ],
+    );
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(service.getSettings()).resolves.toMatchObject({
+      installmentMessageTemplate: 'Condição especial para {{produto}}\n{{parcelas}}',
+    });
   });
 
   it.each([

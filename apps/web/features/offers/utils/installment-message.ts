@@ -6,11 +6,25 @@ import {
 
 export function renderInstallmentMessage(
   template: string,
-  values: { productName: string; color: string; simulation: ProviderSimulation },
+  values: {
+    productName: string;
+    color: string;
+    simulation: ProviderSimulation;
+    tradeIn?: {
+      offerPriceCents: number;
+      tradeInAmountCents: number;
+      remainingAmountCents: number;
+    };
+  },
 ) {
-  return template
+  const tradeInBlock = values.tradeIn ? formatTradeInBlock(values.tradeIn) : '';
+  const hasColorPlaceholder = /\{\{cor\}\}/.test(template);
+  const withTradeIn = hasColorPlaceholder
+    ? template.replace(/\{\{cor\}\}/g, `${formatColor(values.color)}${tradeInBlock}`)
+    : `${template}${tradeInBlock}`;
+
+  return withTradeIn
     .replace(/\{\{produto\}\}/g, values.productName)
-    .replace(/\{\{cor\}\}/g, values.color)
     .replace(/\{\{parcelas\}\}/g, formatInstallmentLines(values.simulation))
     .trim();
 }
@@ -40,6 +54,26 @@ export function formatDebitOption(option: DebitSimulationOption) {
 }
 
 function formatInstallmentLines(simulation: ProviderSimulation) {
-  const lines = simulation.debitOption ? [formatDebitOption(simulation.debitOption)] : [];
-  return [...lines, ...simulation.options.map(formatInstallmentOption)].join('\n');
+  const debit = simulation.debitOption
+    ? [`• *Débito:* ${formatCurrencyCents(simulation.debitOption.totalAmountCents)}`, '']
+    : [];
+  const installments = simulation.options.map(
+    (option) =>
+      `• *${option.installments}x* de ${formatCurrencyCents(option.installmentAmountsCents[0]!)}`,
+  );
+
+  return [...debit, '*Parcelado no Cartão:*', ...installments].join('\n');
+}
+
+function formatTradeInBlock(
+  values: NonNullable<Parameters<typeof renderInstallmentMessage>[1]['tradeIn']>,
+) {
+  return `\n\n💰 *Valor do aparelho:* ${formatCurrencyCents(values.offerPriceCents)}\n🔄 *Seu aparelho na troca:* ${formatCurrencyCents(values.tradeInAmountCents)}\n*Saldo a pagar:* ${formatCurrencyCents(values.remainingAmountCents)}`;
+}
+
+function formatColor(value: string) {
+  const trimmed = value.trim();
+  return trimmed
+    ? `${trimmed.charAt(0).toLocaleUpperCase('pt-BR')}${trimmed.slice(1)}`
+    : 'Sem cor informada';
 }
