@@ -22,15 +22,17 @@ export function KpiCard({ label, value, detail, tone = 'blue', icon }: KpiCardPr
   return (
     <article
       className={cn(
-        'relative min-h-[96px] overflow-hidden rounded-xl border border-inest-line/80 bg-inest-surface px-4 py-3 shadow-[0_10px_30px_rgba(16,24,40,0.045)] before:absolute before:inset-y-0 before:left-0 before:w-1',
+        'relative min-h-[116px] overflow-hidden rounded-2xl border border-inest-line/60 bg-inest-surface px-5 py-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)] before:absolute before:inset-x-0 before:top-0 before:h-1',
         accents[tone],
       )}
     >
       <div className="flex items-start justify-between gap-4">
-        <span className="text-sm font-bold text-inest-muted">{label}</span>
+        <span className="text-xs font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          {label}
+        </span>
         {icon ? <span className="text-inest-muted">{icon}</span> : null}
       </div>
-      <strong className="mt-1.5 block font-display text-2xl font-black text-inest-text">
+      <strong className="mt-2 block font-display text-[28px] font-bold leading-none text-inest-text">
         {value}
       </strong>
       {detail ? (

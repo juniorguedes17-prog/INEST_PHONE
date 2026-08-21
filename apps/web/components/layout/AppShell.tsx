@@ -26,15 +26,15 @@ export function AppShell({ children }: AppShellProps) {
           <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} />
         </div>
 
-        <div className="min-w-0">
+        <div className="min-w-0 border-l border-white/40">
           <Header onOpenMenu={() => setDrawerOpen(true)} />
-          <main className="min-w-0 py-6 lg:py-8">
+          <main className="min-w-0 py-7 lg:py-9">
             <ContentContainer>{children}</ContentContainer>
           </main>
         </div>
       </div>
 
-      <Drawer open={drawerOpen} title="Menu" onClose={() => setDrawerOpen(false)}>
+      <Drawer open={drawerOpen} title="Menu" onClose={() => setDrawerOpen(false)} dark>
         <Sidebar
           collapsed={false}
           onToggle={() => undefined}

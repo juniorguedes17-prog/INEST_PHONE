@@ -5,7 +5,7 @@ export function InfoTag({ className, children, ...props }: HTMLAttributes<HTMLSp
   return (
     <span
       className={cn(
-        'inline-flex min-h-7 items-center rounded-full border border-inest-line/90 bg-inest-soft/70 px-2.5 text-xs font-bold text-inest-text',
+        'inline-flex min-h-6 items-center rounded-lg border border-inest-line/80 bg-inest-soft/75 px-2.5 text-[11px] font-medium text-inest-text',
         className,
       )}
       {...props}

@@ -65,12 +65,16 @@ export function SuppliersPageContent() {
 
       {error ? <ErrorState title="Atencao" description={error} /> : null}
 
-      <section className="grid gap-4 rounded-xl border border-inest-line bg-white p-4 shadow-card lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+      <section className="grid gap-4 rounded-2xl border border-inest-line/70 bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
         <label className="block">
-          <span className="mb-2 block text-sm font-bold text-inest-muted">Buscar fornecedor, telefone ou endereco</span>
+          <span className="mb-2 block text-sm font-bold text-inest-muted">
+            Buscar fornecedor, telefone ou endereco
+          </span>
           <input
             value={filters.search}
-            onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+            onChange={(event) =>
+              setFilters((current) => ({ ...current, search: event.target.value }))
+            }
             className="field-control"
             placeholder="Ex.: Elite Shop ou 5511943020886"
           />
@@ -97,7 +101,8 @@ export function SuppliersPageContent() {
       <section className="grid gap-3" aria-live="polite">
         {!loading ? (
           <p className="text-sm font-bold text-inest-muted">
-            {contacts.length} {contacts.length === 1 ? 'contato encontrado' : 'contatos encontrados'}
+            {contacts.length}{' '}
+            {contacts.length === 1 ? 'contato encontrado' : 'contatos encontrados'}
           </p>
         ) : null}
         {loading ? <LoadingState /> : null}
@@ -109,7 +114,7 @@ export function SuppliersPageContent() {
           />
         ) : null}
         {contacts.map((contact) => (
-          <Card key={contact.id} className="p-4">
+          <Card key={contact.id} className="p-5">
             <article className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)_auto] md:items-center">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -118,10 +123,14 @@ export function SuppliersPageContent() {
                     {contact.isActive ? 'Ativo' : 'Inativo'}
                   </StatusBadge>
                 </div>
-                <p className="mt-1 text-sm text-inest-muted">{contact.address || 'Endereco nao informado'}</p>
+                <p className="mt-1 text-sm text-inest-muted">
+                  {contact.address || 'Endereco nao informado'}
+                </p>
               </div>
-              <div>
-                <p className="text-xs font-black uppercase text-inest-muted">WhatsApp identificado</p>
+              <div className="border-t border-inest-line/70 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+                  WhatsApp identificado
+                </p>
                 <a
                   href={`https://wa.me/${contact.whatsappNumber}`}
                   target="_blank"
@@ -130,10 +139,16 @@ export function SuppliersPageContent() {
                 >
                   +{formatPhone(contact.whatsappNumber)}
                 </a>
-                <p className="mt-1 text-xs text-inest-muted">Somente digitos: {contact.whatsappNumber}</p>
+                <p className="mt-1 text-xs text-inest-muted">
+                  Somente digitos: {contact.whatsappNumber}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2 md:justify-end">
-                <ActionButton variant="secondary" onClick={() => openEditModal(contact)} disabled={saving}>
+                <ActionButton
+                  variant="secondary"
+                  onClick={() => openEditModal(contact)}
+                  disabled={saving}
+                >
                   Editar
                 </ActionButton>
                 <ActionButton

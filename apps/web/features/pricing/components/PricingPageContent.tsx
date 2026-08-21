@@ -272,7 +272,7 @@ export function PricingPageContent() {
 
       <section className="min-h-[calc(100vh-330px)]">
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
-          <label className="mb-3 flex w-fit items-center gap-2 rounded-xl border border-inest-line bg-white px-3 py-2 text-sm font-bold text-inest-text shadow-card">
+          <label className="mb-3 flex w-fit items-center gap-2 rounded-xl border border-inest-line/70 bg-inest-surface px-3 py-2 text-sm font-semibold text-inest-text shadow-[0_4px_12px_rgba(16,24,40,0.035)]">
             <input
               type="checkbox"
               className="h-4 w-4 accent-inest-green"
@@ -377,7 +377,7 @@ export function PricingPageContent() {
           </div>
 
           {pricing.items.length ? (
-            <div className="mt-4 rounded-xl border border-inest-line bg-white p-4 shadow-card">
+            <div className="mt-4 rounded-2xl border border-inest-line/70 bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)]">
               <Pagination
                 page={page}
                 totalPages={totalPages}

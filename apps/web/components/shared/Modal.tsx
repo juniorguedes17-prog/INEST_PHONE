@@ -28,26 +28,26 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-slate-950/55 p-4 backdrop-blur-md"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-title"
     >
       <div
         className={cn(
-          'w-full max-w-xl rounded-xl border border-inest-line bg-inest-surface p-6 shadow-panel',
+          'w-full max-w-xl rounded-2xl border border-inest-line/80 bg-inest-surface p-6 shadow-panel',
           dialogClassName,
         )}
       >
         <div className="flex items-center justify-between gap-4">
-          <h2 id="modal-title" className="font-display text-2xl font-black text-inest-text">
+          <h2 id="modal-title" className="font-display text-2xl font-bold text-inest-text">
             {title}
           </h2>
           <button
             type="button"
             aria-label="Fechar modal"
             onClick={onClose}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-inest-line text-inest-muted hover:bg-inest-soft"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-inest-line text-inest-muted transition-colors hover:bg-inest-soft"
           >
             ×
           </button>

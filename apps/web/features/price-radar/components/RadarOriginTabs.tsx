@@ -18,7 +18,7 @@ interface RadarOriginTabsProps {
 export function RadarOriginTabs({ value, onChange }: RadarOriginTabsProps) {
   return (
     <nav
-      className="grid grid-cols-3 gap-1 rounded-xl border border-inest-line bg-white p-1 shadow-card"
+      className="grid grid-cols-3 gap-1 rounded-2xl border border-inest-line/70 bg-inest-surface p-1.5 shadow-[0_14px_34px_rgba(16,24,40,0.055)]"
       aria-label="Origem do Radar de Precos"
     >
       {origins.map((origin) => (
@@ -29,13 +29,13 @@ export function RadarOriginTabs({ value, onChange }: RadarOriginTabsProps) {
           aria-selected={value === origin.value}
           onClick={() => onChange(origin.value)}
           className={cn(
-            'flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg px-2 text-sm font-black transition-colors focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-1',
+            'flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl px-2 text-sm font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-1',
             value === origin.value
-              ? 'bg-inest-blue text-white shadow-soft'
+              ? 'bg-gradient-to-r from-inest-blue to-[#6b69ec] text-white shadow-soft'
               : 'text-inest-muted hover:bg-inest-soft hover:text-inest-text',
           )}
         >
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-current/20 text-[10px]">
+          <span className="grid h-6 w-5 shrink-0 place-items-center text-[10px] font-bold">
             {origin.shortLabel}
           </span>
           <span className="truncate">{origin.label}</span>

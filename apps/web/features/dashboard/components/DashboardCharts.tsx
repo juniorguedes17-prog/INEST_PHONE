@@ -21,10 +21,10 @@ const PLOT = { left: 56, right: 18, top: 18, bottom: 42 };
 
 function ChartCard({ title, description, children }: ChartCardProps) {
   return (
-    <Card className="min-w-0 p-4 sm:p-5">
+    <Card className="min-w-0 p-5 sm:p-6">
       <div className="mb-4">
         <h3 className="text-card-title">{title}</h3>
-        <p className="mt-1 text-sm text-inest-muted">{description}</p>
+        <p className="mt-1.5 text-sm leading-6 text-inest-muted">{description}</p>
       </div>
       {children}
     </Card>
@@ -33,7 +33,7 @@ function ChartCard({ title, description, children }: ChartCardProps) {
 
 function EmptyChart() {
   return (
-    <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-inest-line bg-inest-soft/40 px-4 text-center text-sm font-semibold text-inest-muted">
+    <div className="grid min-h-56 place-items-center rounded-xl border border-dashed border-inest-line bg-inest-soft/50 px-4 text-center text-sm font-medium text-inest-muted">
       Sem dados sincronizados para este grafico.
     </div>
   );

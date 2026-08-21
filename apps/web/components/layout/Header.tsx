@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ActionButton, ContentContainer, SearchInput } from '@/components/shared';
-import { INestLogo } from '@/components/shared/INestLogo';
 import { getSettings, updateUserTheme } from '@/features/settings/services/settings-service';
 import {
   applyThemePreference,
@@ -86,26 +85,25 @@ export function Header({ onOpenMenu }: HeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-30 border-b border-inest-line/80 bg-[var(--inest-header)] shadow-[0_1px_0_rgba(16,24,40,0.02)] backdrop-blur-xl">
-      <ContentContainer className="flex min-h-[72px] items-center justify-between gap-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
+    <header className="sticky top-0 z-30 border-b border-inest-line/70 bg-[var(--inest-header)] backdrop-blur-2xl">
+      <ContentContainer className="flex min-h-[78px] items-center justify-between gap-4 py-3">
+        <div className="flex min-w-0 items-center gap-3.5">
           <button
             type="button"
             onClick={onOpenMenu}
             aria-label="Abrir menu lateral"
-            className="grid h-10 w-10 place-items-center rounded-lg border border-inest-line bg-inest-surface text-xs font-black text-inest-text transition-colors hover:bg-inest-soft lg:hidden"
+            className="grid h-10 w-10 place-items-center rounded-xl border border-inest-line bg-inest-surface text-xs font-bold text-inest-text shadow-[0_4px_12px_rgba(16,24,40,0.04)] transition-colors hover:bg-inest-soft lg:hidden"
           >
             Menu
           </button>
-          <INestLogo variant="compact" priority className="hidden sm:block" />
           <div className="min-w-0">
             <nav
               aria-label="Breadcrumb"
-              className="text-[11px] font-black uppercase text-inest-blue"
+              className="text-[10px] font-bold uppercase tracking-[0.08em] text-inest-blue"
             >
               Operacao Comercial / {item.eyebrow ?? 'Sistema'}
             </nav>
-            <h1 className="truncate font-display text-xl font-black text-inest-text sm:text-2xl">
+            <h1 className="truncate font-display text-xl font-bold text-inest-text sm:text-[26px]">
               {item.label}
             </h1>
           </div>
@@ -123,16 +121,16 @@ export function Header({ onOpenMenu }: HeaderProps) {
             disabled={isUpdatingTheme}
             aria-label="Alternar tema"
             title={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
-            className="hidden h-10 w-10 place-items-center rounded-lg border border-inest-line bg-white text-sm font-black text-inest-text transition-colors hover:bg-inest-soft sm:grid"
+            className="hidden h-10 w-10 place-items-center rounded-xl border border-inest-line bg-inest-surface text-sm font-bold text-inest-text shadow-[0_4px_12px_rgba(16,24,40,0.04)] transition-colors hover:bg-inest-soft sm:grid"
           >
             O
           </button>
-          <div className="hidden items-center gap-2 rounded-lg border border-inest-line bg-inest-surface px-2.5 py-1.5 lg:flex">
-            <span className="grid h-8 w-8 place-items-center rounded-md bg-inest-soft text-xs font-black text-inest-blue">
+          <div className="hidden items-center gap-2.5 rounded-xl border border-inest-line/80 bg-inest-surface px-2.5 py-1.5 shadow-[0_4px_12px_rgba(16,24,40,0.035)] lg:flex">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-inest-blue/10 text-xs font-bold text-inest-blue">
               AD
             </span>
             <div className="leading-tight">
-              <strong className="block text-sm font-black text-inest-text">Admin</strong>
+              <strong className="block text-sm font-semibold text-inest-text">Admin</strong>
               <span className="text-xs text-inest-muted">Administrador</span>
             </div>
           </div>

@@ -220,7 +220,7 @@ export function ParaguayRadarOrigin() {
 
   return (
     <div className="grid min-w-0 gap-4">
-      <section className="rounded-xl border border-inest-line bg-white p-3 shadow-card">
+      <section className="rounded-2xl border border-inest-line/70 bg-inest-surface p-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)]">
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
           <SearchInput
             value={search}
@@ -228,7 +228,7 @@ export function ParaguayRadarOrigin() {
             placeholder="Pesquisar no Compras Paraguai"
             aria-label="Pesquisar produtos no Compras Paraguai"
           />
-          <div className="grid grid-cols-2 gap-2 sm:flex">
+          <div className="grid grid-cols-2 gap-2 border-t border-inest-line/70 pt-3 sm:flex lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
             <ActionButton
               variant="secondary"
               className="min-h-11"
@@ -320,7 +320,7 @@ export function ParaguayRadarOrigin() {
 
       <section className="min-w-0">
         <div className="min-w-0">
-          <div className="mb-3 grid gap-2 rounded-xl border border-inest-line bg-white p-3 shadow-card sm:grid-cols-[1fr_auto_auto] sm:items-center">
+          <div className="mb-3 grid gap-2 rounded-2xl border border-inest-line/70 bg-inest-surface p-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)] sm:grid-cols-[1fr_auto_auto] sm:items-center">
             <label className="flex min-h-11 items-center gap-2 text-sm font-bold text-inest-text">
               <input
                 type="checkbox"

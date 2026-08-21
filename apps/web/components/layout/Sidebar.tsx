@@ -18,15 +18,15 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'flex h-full min-h-0 flex-col border-r border-inest-line/80 bg-[var(--inest-sidebar)] px-3 py-4 transition-[width] duration-200',
+        'inest-sidebar flex h-full min-h-0 flex-col border-r border-white/10 bg-[var(--inest-sidebar)] px-3.5 py-5 text-white transition-[width] duration-200',
         collapsed ? 'w-[76px]' : 'w-[244px]',
       )}
     >
-      <div className={cn('flex min-h-16 items-center gap-2', collapsed && 'justify-center')}>
+      <div className={cn('flex min-h-16 items-center gap-2.5', collapsed && 'justify-center')}>
         <INestLogo variant={collapsed ? 'compact' : 'navigation'} priority />
         {!collapsed ? (
           <div className="min-w-0 flex-1">
-            <span className="block whitespace-nowrap text-xs font-semibold text-inest-muted">
+            <span className="block whitespace-nowrap text-[11px] font-medium tracking-wide text-[var(--inest-sidebar-muted)]">
               Gestão Comercial
             </span>
           </div>
@@ -37,12 +37,12 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
         type="button"
         onClick={onToggle}
         aria-label={collapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
-        className="mt-4 hidden h-9 items-center justify-center rounded-lg border border-inest-line text-inest-muted transition-colors hover:bg-inest-soft hover:text-inest-text lg:flex"
+        className="mt-6 hidden h-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-xs font-bold text-[var(--inest-sidebar-muted)] transition-colors hover:bg-white/10 hover:text-white lg:flex"
       >
         {collapsed ? '>' : '<'}
       </button>
 
-      <nav className="mt-4 grid gap-1 overflow-y-auto pr-1" aria-label="Modulos">
+      <nav className="mt-7 grid gap-1.5 overflow-y-auto pr-1" aria-label="Modulos">
         {visibleNavigationItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -53,33 +53,42 @@ export function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
               onClick={onNavigate}
               title={item.label}
               className={cn(
-                'group flex min-h-11 items-center gap-3 rounded-lg px-2.5 text-inest-muted transition-colors focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-1',
+                'group relative flex min-h-11 items-center gap-3 rounded-xl px-3 text-[var(--inest-sidebar-muted)] transition-all focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-2 focus:ring-offset-[#080a0f]',
                 active
-                  ? 'bg-inest-blue/10 text-inest-blue'
-                  : 'hover:bg-inest-soft hover:text-inest-text',
+                  ? 'bg-gradient-to-r from-inest-blue/25 to-inest-purple/15 text-white shadow-[0_10px_22px_rgba(0,0,0,0.20)] before:absolute before:inset-y-3 before:left-0 before:w-0.5 before:rounded-r-full before:bg-inest-blue'
+                  : 'hover:bg-white/[0.06] hover:text-white',
                 collapsed && 'justify-center',
               )}
             >
-              <span className="grid h-8 w-8 flex-none place-items-center rounded-md border border-inest-line bg-inest-surface text-xs font-black transition-colors group-hover:border-inest-blue/40 group-hover:text-inest-blue">
+              <span
+                className={cn(
+                  'grid h-7 w-6 flex-none place-items-center text-[10px] font-bold tracking-wide transition-colors',
+                  active
+                    ? 'text-white'
+                    : 'text-[var(--inest-sidebar-muted)] group-hover:text-white',
+                )}
+              >
                 {item.icon}
               </span>
               {!collapsed ? (
-                <span className="truncate text-sm font-semibold">{item.label}</span>
+                <span className="truncate text-sm font-medium">{item.label}</span>
               ) : null}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-4 rounded-xl border border-inest-line bg-inest-surface p-2.5 shadow-[0_8px_22px_rgba(16,24,40,0.035)]">
+      <div className="mt-5 rounded-2xl border border-white/10 bg-[var(--inest-sidebar-surface)] p-3 shadow-[0_18px_34px_rgba(0,0,0,0.22)]">
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center')}>
-          <div className="grid h-9 w-9 flex-none place-items-center rounded-lg bg-inest-soft text-xs font-black text-inest-blue">
+          <div className="grid h-9 w-9 flex-none place-items-center rounded-xl bg-white/10 text-xs font-bold text-white">
             AD
           </div>
           {!collapsed ? (
             <div className="min-w-0">
-              <strong className="block truncate text-sm font-black text-inest-text">Admin</strong>
-              <span className="block truncate text-xs text-inest-muted">Online agora</span>
+              <strong className="block truncate text-sm font-semibold text-white">Admin</strong>
+              <span className="block truncate text-xs text-[var(--inest-sidebar-muted)]">
+                Online agora
+              </span>
             </div>
           ) : null}
         </div>

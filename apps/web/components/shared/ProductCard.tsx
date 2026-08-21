@@ -39,7 +39,7 @@ export function ProductCard({
   return (
     <article
       className={cn(
-        'grid w-full max-w-full grid-cols-1 gap-4 rounded-xl border border-inest-line/80 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] md:grid-cols-1 md:items-center xl:grid-cols-[minmax(240px,1fr)_190px_220px]',
+        'grid w-full max-w-full grid-cols-1 gap-5 rounded-2xl border border-inest-line/70 bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] transition-all hover:-translate-y-px hover:border-inest-blue/25 hover:shadow-card md:grid-cols-1 md:items-center xl:grid-cols-[minmax(240px,1fr)_190px_220px]',
         className,
       )}
     >
@@ -60,9 +60,11 @@ export function ProductCard({
         ) : null}
       </div>
 
-      <div className="min-w-0 rounded-lg bg-inest-soft p-3 xl:bg-transparent xl:p-0">
-        <p className="text-xs font-bold uppercase text-inest-muted">Fornecedor</p>
-        <strong className="mt-0.5 block truncate text-sm font-black text-inest-text">
+      <div className="min-w-0 border-t border-inest-line/70 pt-4 xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Fornecedor
+        </p>
+        <strong className="mt-1 block truncate text-sm font-semibold text-inest-text">
           {supplier?.name ?? 'Nao informado'}
         </strong>
         {supplier?.location ? (
@@ -71,11 +73,13 @@ export function ProductCard({
         {supplier?.delivery ? <InfoTag className="mt-2">{supplier.delivery}</InfoTag> : null}
       </div>
 
-      <div className="flex min-w-0 flex-col items-start gap-1.5 xl:items-end">
+      <div className="flex min-w-0 flex-col items-start gap-1.5 border-t border-inest-line/70 pt-4 xl:items-end xl:border-l xl:border-t-0 xl:pl-5 xl:pt-0">
         {priceLabel ? (
-          <span className="text-sm font-bold text-inest-muted">{priceLabel}</span>
+          <span className="text-xs font-semibold uppercase tracking-[0.06em] text-inest-muted">
+            {priceLabel}
+          </span>
         ) : null}
-        <strong className="break-words font-display text-2xl font-black text-inest-text">
+        <strong className="break-words font-display text-[28px] font-bold leading-none text-inest-text">
           {price}
         </strong>
         <div className="flex w-full flex-wrap gap-1.5 xl:w-auto xl:justify-end">

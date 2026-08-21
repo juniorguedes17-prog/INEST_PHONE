@@ -56,7 +56,9 @@ export function ProductsPageContent() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const activeFilterCount = Object.entries(filters).filter(([key, value]) => key !== 'search' && Boolean(value)).length;
+  const activeFilterCount = Object.entries(filters).filter(
+    ([key, value]) => key !== 'search' && Boolean(value),
+  ).length;
   const modelOptions = useMemo(
     () => buildCanonicalModelFacetOptions(allProducts.map(toProductFacetSource)),
     [allProducts],
@@ -108,9 +110,19 @@ export function ProductsPageContent() {
       {error ? <ErrorState title="Atencao" description={error} /> : null}
 
       <section className="min-h-[calc(100vh-220px)]">
-        <div className="mb-3 flex flex-col gap-2 rounded-xl border border-inest-line bg-white p-3 shadow-card sm:flex-row sm:items-center">
-          <SearchInput value={filters.search} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))} placeholder="Pesquisar produto" aria-label="Pesquisar produtos" className="min-w-0 flex-1" />
-          <ActionButton variant="secondary" onClick={() => setFiltersOpen(true)}>{activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}</ActionButton>
+        <div className="mb-4 flex flex-col gap-2 rounded-2xl border border-inest-line/70 bg-inest-surface p-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)] sm:flex-row sm:items-center">
+          <SearchInput
+            value={filters.search}
+            onChange={(event) =>
+              setFilters((current) => ({ ...current, search: event.target.value }))
+            }
+            placeholder="Pesquisar produto"
+            aria-label="Pesquisar produtos"
+            className="min-w-0 flex-1"
+          />
+          <ActionButton variant="secondary" onClick={() => setFiltersOpen(true)}>
+            {activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}
+          </ActionButton>
         </div>
         <div className="min-h-0 overflow-y-auto pr-1 scrollbar-stable">
           <ListHeader
@@ -178,21 +190,52 @@ export function ProductsPageContent() {
         open={filtersOpen}
         ariaLabel="Filtros de produtos"
         resultCount={products.length}
-        categories={referenceGroup('Categoria', references.categories, filters.categoryId, (categoryId) => setFilters((current) => ({ ...current, categoryId, modelId: '' })))}
+        categories={referenceGroup(
+          'Categoria',
+          references.categories,
+          filters.categoryId,
+          (categoryId) => setFilters((current) => ({ ...current, categoryId, modelId: '' })),
+        )}
         models={{
           title: 'Modelo',
           options: modelOptions,
           selected: filters.modelId ? [filters.modelId] : [],
-          onToggle: (modelId) => setFilters((current) => ({
-            ...current,
-            modelId: modelId === current.modelId ? '' : modelId,
-          })),
+          onToggle: (modelId) =>
+            setFilters((current) => ({
+              ...current,
+              modelId: modelId === current.modelId ? '' : modelId,
+            })),
           collapsible: true,
         }}
-        colors={referenceGroup('Cor', references.colors, filters.colorId, (colorId) => setFilters((current) => ({ ...current, colorId })))}
-        capacities={referenceGroup('Armazenamento / Capacidade', references.storages, filters.storageId, (storageId) => setFilters((current) => ({ ...current, storageId })))}
-        additionalGroups={[pairGroup('Tipo', productTypes, filters.productType, (productType) => setFilters((current) => ({ ...current, productType }))), pairGroup('Status', statuses, filters.status, (status) => setFilters((current) => ({ ...current, status })))]}
-        onClear={() => setFilters((current) => ({ ...current, search: '', categoryId: '', modelId: '', colorId: '', storageId: '', productType: '', status: '' }))}
+        colors={referenceGroup('Cor', references.colors, filters.colorId, (colorId) =>
+          setFilters((current) => ({ ...current, colorId })),
+        )}
+        capacities={referenceGroup(
+          'Armazenamento / Capacidade',
+          references.storages,
+          filters.storageId,
+          (storageId) => setFilters((current) => ({ ...current, storageId })),
+        )}
+        additionalGroups={[
+          pairGroup('Tipo', productTypes, filters.productType, (productType) =>
+            setFilters((current) => ({ ...current, productType })),
+          ),
+          pairGroup('Status', statuses, filters.status, (status) =>
+            setFilters((current) => ({ ...current, status })),
+          ),
+        ]}
+        onClear={() =>
+          setFilters((current) => ({
+            ...current,
+            search: '',
+            categoryId: '',
+            modelId: '',
+            colorId: '',
+            storageId: '',
+            productType: '',
+            status: '',
+          }))
+        }
         onClose={() => setFiltersOpen(false)}
       />
 
@@ -254,7 +297,9 @@ function referenceGroup(
   return {
     title,
     options: items
-      .filter((item): item is { id: string; name?: string | null; displayName?: string | null } => Boolean(item.id))
+      .filter((item): item is { id: string; name?: string | null; displayName?: string | null } =>
+        Boolean(item.id),
+      )
       .map((item) => ({
         value: item.id,
         label: item.displayName ?? item.name ?? item.id,
@@ -336,13 +381,17 @@ function ProductFormModal({
           label="Categoria"
           value={form.categoryId}
           options={references.categories.map((item) => [item.id, item.name ?? item.id])}
-          onChange={(value) => setForm((current) => ({
-            ...current,
-            categoryId: value,
-            modelId: references.models.some((item) => item.id === current.modelId && item.categoryId === value)
-              ? current.modelId
-              : references.models.find((item) => item.categoryId === value)?.id ?? '',
-          }))}
+          onChange={(value) =>
+            setForm((current) => ({
+              ...current,
+              categoryId: value,
+              modelId: references.models.some(
+                (item) => item.id === current.modelId && item.categoryId === value,
+              )
+                ? current.modelId
+                : (references.models.find((item) => item.categoryId === value)?.id ?? ''),
+            }))
+          }
         />
         <TextInput
           label="Descricao do produto"
@@ -359,7 +408,12 @@ function ProductFormModal({
               ['SEMINOVO', 'Seminovo'],
               ['CPO', 'CPO'],
             ]}
-            onChange={(value) => setForm((current) => ({ ...current, profitCondition: value as ProductFormPayload['profitCondition'] }))}
+            onChange={(value) =>
+              setForm((current) => ({
+                ...current,
+                profitCondition: value as ProductFormPayload['profitCondition'],
+              }))
+            }
           />
           <NumberInput
             label="Lucro liquido"

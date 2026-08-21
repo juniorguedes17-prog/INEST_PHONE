@@ -44,8 +44,10 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
 
   return (
     <article
-      className={`radar-product-card relative grid min-w-0 gap-4 rounded-xl border bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all focus-within:ring-4 focus-within:ring-inest-blue/10 lg:grid-cols-[28px_minmax(220px,1fr)_160px_190px] lg:items-center ${
-        selected ? 'border-inest-blue bg-blue-50/30' : 'border-inest-line hover:border-slate-300'
+      className={`radar-product-card relative grid min-w-0 gap-5 rounded-2xl border bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] transition-all focus-within:ring-4 focus-within:ring-inest-blue/10 lg:grid-cols-[28px_minmax(220px,1fr)_minmax(150px,0.65fr)_220px] lg:items-center ${
+        selected
+          ? 'border-inest-blue bg-blue-50/45 shadow-[0_16px_36px_rgba(95,124,255,0.12)]'
+          : 'border-inest-line/70 hover:-translate-y-px hover:border-inest-blue/25 hover:shadow-card'
       }`}
     >
       <label
@@ -75,8 +77,10 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
         </div>
       </div>
 
-      <div className="min-w-0 lg:col-span-1">
-        <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
+      <div className="min-w-0 border-t border-inest-line/70 pt-4 lg:col-span-1 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Fornecedor
+        </p>
         <strong
           className="mt-1 block truncate text-sm text-inest-text"
           title={product.referenceQuote.supplier.name}
@@ -93,9 +97,11 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
         ) : null}
       </div>
 
-      <div className="min-w-0 lg:col-span-1 lg:text-right">
-        <span className="text-[10px] font-black uppercase text-inest-muted">Custo informado</span>
-        <strong className="mt-1 block font-display text-2xl font-black text-inest-text">
+      <div className="min-w-0 border-t border-inest-line/70 pt-4 lg:col-span-1 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 lg:text-right">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Custo informado
+        </span>
+        <strong className="mt-1.5 block font-display text-[28px] font-bold leading-none text-inest-text">
           {formatCurrency(product.lowestCost)}
         </strong>
         <span className="text-xs text-inest-muted">

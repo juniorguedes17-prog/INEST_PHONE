@@ -27,7 +27,7 @@ export const PricingProductCard = memo(function PricingProductCard({
   });
 
   return (
-    <article className="grid w-full gap-4 rounded-xl border border-inest-line/80 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all hover:border-inest-blue/30 hover:shadow-card focus-within:ring-4 focus-within:ring-inest-blue/10 md:grid-cols-[28px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
+    <article className="grid w-full gap-5 rounded-2xl border border-inest-line/70 bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] transition-all hover:-translate-y-px hover:border-inest-blue/25 hover:shadow-card focus-within:ring-4 focus-within:ring-inest-blue/10 md:grid-cols-[28px_minmax(220px,1fr)_170px_150px_170px] md:items-center">
       <label
         className="flex h-8 w-8 items-center justify-center"
         aria-label={`Selecionar ${presentation.title}`}
@@ -64,8 +64,10 @@ export const PricingProductCard = memo(function PricingProductCard({
         </p>
       </div>
 
-      <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
+      <div className="min-w-0 border-t border-inest-line/70 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Fornecedor
+        </p>
         <strong className="mt-0.5 block truncate text-sm text-inest-text">
           {item.supplier.name}
         </strong>
@@ -75,8 +77,10 @@ export const PricingProductCard = memo(function PricingProductCard({
         {item.deliveryTime ? <InfoTag className="mt-2">{item.deliveryTime}</InfoTag> : null}
       </div>
 
-      <div className="min-w-0 md:text-right">
-        <p className="text-[10px] font-black uppercase text-inest-muted">Custo</p>
+      <div className="min-w-0 border-t border-inest-line/70 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0 md:text-right">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Custo
+        </p>
         <strong className="mt-0.5 block text-sm text-inest-text">
           {formatCurrency(item.costProduct)}
         </strong>
@@ -86,9 +90,11 @@ export const PricingProductCard = memo(function PricingProductCard({
         </strong>
       </div>
 
-      <div className="flex min-w-0 flex-col items-start gap-1 md:items-end">
-        <span className="text-[10px] font-black uppercase text-inest-muted">Preco de venda</span>
-        <strong className="font-display text-2xl font-black text-inest-text">
+      <div className="flex min-w-0 flex-col items-start gap-1 border-t border-inest-line/70 pt-4 md:items-end md:border-l md:border-t-0 md:pl-5 md:pt-0">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Preco de venda
+        </span>
+        <strong className="font-display text-[28px] font-bold leading-none text-inest-text">
           {formatCurrency(item.salePrice)}
         </strong>
         <span className="text-xs font-bold text-inest-muted">

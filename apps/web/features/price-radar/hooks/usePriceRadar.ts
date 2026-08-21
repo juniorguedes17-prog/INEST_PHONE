@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import {
-  createPriceQuote,
   hidePriceQuote,
   importPriceRadarCsv,
   updatePriceQuote,
@@ -69,18 +68,13 @@ export function usePriceRadar() {
     };
   }, [hasSnapshot, load, snapshot.filters]);
 
-  async function save(payload: PriceQuoteFormPayload, id?: string) {
+  async function save(payload: PriceQuoteFormPayload, id: string) {
     setSaving(true);
     setActionError(null);
     setSuccess(null);
     try {
-      if (id) {
-        await updatePriceQuote(id, payload);
-        setSuccess('Cotacao atualizada com sucesso.');
-      } else {
-        await createPriceQuote(payload);
-        setSuccess('Cotacao cadastrada com sucesso.');
-      }
+      await updatePriceQuote(id, payload);
+      setSuccess('Cotacao atualizada com sucesso.');
       await load();
     } catch (priceRadarError) {
       setActionError(

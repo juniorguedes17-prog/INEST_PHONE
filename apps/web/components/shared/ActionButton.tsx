@@ -10,8 +10,9 @@ interface ActionButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variants: Record<ActionButtonVariant, string> = {
   primary:
-    'border-transparent bg-inest-blue text-white shadow-soft hover:-translate-y-px hover:bg-[#526ee8] hover:shadow-[0_14px_30px_rgba(95,124,255,0.25)]',
-  secondary: 'border-inest-line bg-white text-inest-text hover:bg-inest-soft',
+    'border-transparent bg-gradient-to-r from-inest-blue to-[#6b69ec] text-white shadow-soft hover:-translate-y-px hover:brightness-[0.97] hover:shadow-[0_16px_32px_rgba(95,124,255,0.28)]',
+  secondary:
+    'border-inest-line bg-inest-surface text-inest-text shadow-[0_4px_12px_rgba(16,24,40,0.035)] hover:-translate-y-px hover:bg-inest-soft hover:shadow-[0_8px_18px_rgba(16,24,40,0.07)]',
   success:
     'border-transparent bg-inest-green text-white shadow-[0_12px_28px_rgba(14,163,113,0.18)] hover:-translate-y-px hover:shadow-[0_14px_30px_rgba(14,163,113,0.24)]',
   ghost:
@@ -31,7 +32,7 @@ export function ActionButton({
     <button
       type={type}
       className={cn(
-        'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-black transition-all focus:outline-none focus:ring-4 focus:ring-inest-blue/15 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none',
+        'inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-semibold transition-all focus:outline-none focus:ring-4 focus:ring-inest-blue/15 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none',
         variants[variant],
         className,
       )}

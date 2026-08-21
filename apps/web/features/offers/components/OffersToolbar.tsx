@@ -27,7 +27,7 @@ export function OffersToolbar({
 }: OffersToolbarProps) {
   return (
     <section
-      className="rounded-xl border border-inest-line bg-white p-3 shadow-card"
+      className="rounded-2xl border border-inest-line/70 bg-inest-surface p-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)]"
       aria-label="Ferramentas do Gerador de Ofertas"
     >
       <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
@@ -41,7 +41,7 @@ export function OffersToolbar({
 
         <StatusBadge tone="blue">{total} ofertas</StatusBadge>
 
-        <div className="flex flex-wrap items-end gap-2 2xl:ml-auto">
+        <div className="flex flex-wrap items-end gap-2 border-t border-inest-line/70 pt-3 2xl:ml-auto 2xl:border-l 2xl:border-t-0 2xl:pl-4 2xl:pt-0">
           <CompactSelect
             label="Ordenacao"
             value={sort}
@@ -88,11 +88,13 @@ function CompactSelect({
 }) {
   return (
     <label className="min-w-36">
-      <span className="mb-1 block text-[10px] font-black uppercase text-inest-muted">{label}</span>
+      <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+        {label}
+      </span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-lg border border-inest-line bg-white px-3 text-sm font-bold text-inest-text outline-none focus:border-inest-blue focus:ring-2 focus:ring-inest-blue/20"
+        className="h-10 w-full rounded-xl border border-inest-line bg-inest-surface px-3 text-sm font-medium text-inest-text outline-none transition focus:border-inest-blue focus:ring-2 focus:ring-inest-blue/20"
       >
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>

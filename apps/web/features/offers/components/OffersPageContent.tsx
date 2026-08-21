@@ -54,7 +54,7 @@ export function OffersPageContent() {
   const [temporaryDeliveryTimes, setTemporaryDeliveryTimes] = useState<Record<string, string>>({});
   const showingTemporaryOffer = Boolean(
     offers.currentOffer &&
-      offers.consolidatedTemporaryOffers.some((offer) => offer.id === offers.currentOffer?.id),
+    offers.consolidatedTemporaryOffers.some((offer) => offer.id === offers.currentOffer?.id),
   );
   const showingPersistedPreview = Boolean(offers.currentOffer && !showingTemporaryOffer);
   const [filters, setFilters] = useState(initialFilters);
@@ -76,16 +76,18 @@ export function OffersPageContent() {
       const product = offer.productId ? productsById.get(offer.productId) : undefined;
       const productFacetSource = product ? toFacetSource(product) : undefined;
       const origin = offer.template?.productType || 'Precificacao';
-      const searchable = normalizeCatalogFilterText([
-        product?.productName,
-        product?.model,
-        product?.color,
-        product?.capacity,
-        offer.template?.name,
-        offer.status,
-      ]
-        .filter(Boolean)
-        .join(' '));
+      const searchable = normalizeCatalogFilterText(
+        [
+          product?.productName,
+          product?.model,
+          product?.color,
+          product?.capacity,
+          offer.template?.name,
+          offer.status,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      );
 
       return (
         (!normalizedSearch || searchable.includes(normalizedSearch)) &&
@@ -107,7 +109,9 @@ export function OffersPageContent() {
     });
   }, [filters, offers.offers, productsById, sort]);
 
-  const categories = useCatalogFacetOptions(offers.pricingItems, (item) => [toFacetSource(item).category]);
+  const categories = useCatalogFacetOptions(offers.pricingItems, (item) => [
+    toFacetSource(item).category,
+  ]);
   const models = useMemo(
     () => buildCanonicalModelFacetOptions(offers.pricingItems),
     [offers.pricingItems],
@@ -150,9 +154,7 @@ export function OffersPageContent() {
         eyebrow="Comercial"
         title="Gerador de Ofertas"
         description="Mensagens comerciais geradas a partir da Precificacao oficial."
-        actions={
-          offers.success ? <StatusBadge tone="green">{offers.success}</StatusBadge> : null
-        }
+        actions={offers.success ? <StatusBadge tone="green">{offers.success}</StatusBadge> : null}
       />
 
       {offers.error ? <ErrorState title="Atencao" description={offers.error} /> : null}
@@ -278,7 +280,7 @@ export function OffersPageContent() {
             </div>
 
             {filteredOffers.length ? (
-              <div className="mt-4 rounded-xl border border-inest-line bg-white p-4 shadow-card">
+              <div className="mt-4 rounded-2xl border border-inest-line/70 bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)]">
                 <Pagination
                   page={page}
                   totalPages={totalPages}
@@ -286,7 +288,9 @@ export function OffersPageContent() {
                   onPageChange={setPage}
                 />
                 {totalPages === 1 ? (
-                  <p className="text-sm text-inest-muted">{filteredOffers.length} ofertas exibidas</p>
+                  <p className="text-sm text-inest-muted">
+                    {filteredOffers.length} ofertas exibidas
+                  </p>
                 ) : null}
               </div>
             ) : null}

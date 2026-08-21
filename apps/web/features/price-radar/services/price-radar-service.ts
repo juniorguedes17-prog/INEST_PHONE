@@ -44,15 +44,6 @@ export async function getPriceRadarKpis(filters: PriceRadarFilters): Promise<Pri
   return parseResponse<PriceRadarKpis>(response);
 }
 
-export async function createPriceQuote(payload: PriceQuoteFormPayload): Promise<PriceQuoteItem> {
-  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/quotes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return parseResponse<PriceQuoteItem>(response);
-}
-
 export async function updatePriceQuote(
   id: string,
   payload: PriceQuoteFormPayload,

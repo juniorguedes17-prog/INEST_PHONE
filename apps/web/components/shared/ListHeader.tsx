@@ -19,14 +19,16 @@ export function ListHeader({
   return (
     <div
       className={cn(
-        'rounded-xl border border-inest-line/80 bg-inest-surface px-4 py-3 shadow-[0_10px_30px_rgba(16,24,40,0.045)]',
+        'rounded-2xl border border-inest-line/70 bg-inest-surface px-5 py-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)]',
         sticky && 'sticky top-0 z-10',
       )}
     >
       <div className="flex min-h-12 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
         <div>
           {eyebrow ? (
-            <p className="text-xs font-black uppercase tracking-wide text-inest-blue">{eyebrow}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-inest-blue">
+              {eyebrow}
+            </p>
           ) : null}
           <h2 className="mt-0.5 text-card-title">{title}</h2>
           {description ? <p className="mt-1 text-sm text-inest-muted">{description}</p> : null}

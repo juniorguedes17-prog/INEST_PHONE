@@ -316,14 +316,6 @@ export function PriceRadarPageContent() {
               <ActionButton variant="secondary" onClick={() => setImportModalOpen(true)}>
                 Importar CSV
               </ActionButton>
-              <ActionButton
-                onClick={() => {
-                  setEditingQuote(null);
-                  setQuoteModalOpen(true);
-                }}
-              >
-                Nova cotacao
-              </ActionButton>
             </>
           ) : origin === 'paraguai' ? (
             <StatusBadge tone="green">Fonte oficial ativa</StatusBadge>
@@ -527,14 +519,14 @@ export function PriceRadarPageContent() {
 
       <QuoteFormModal
         open={quoteModalOpen}
-        quote={editingQuote}
         initialForm={initialForm}
         products={products}
         suppliers={suppliers}
         saving={radar.saving}
         onClose={() => setQuoteModalOpen(false)}
         onSave={async (payload) => {
-          await radar.save(payload, editingQuote?.id);
+          if (!editingQuote) return;
+          await radar.save(payload, editingQuote.id);
           setQuoteModalOpen(false);
         }}
       />
@@ -569,7 +561,6 @@ function arraysEqual(left: string[], right: string[]) {
 
 function QuoteFormModal({
   open,
-  quote,
   initialForm,
   products,
   suppliers,
@@ -578,7 +569,6 @@ function QuoteFormModal({
   onSave,
 }: {
   open: boolean;
-  quote: PriceQuoteItem | null;
   initialForm: PriceQuoteFormPayload;
   products: ProductItem[];
   suppliers: SupplierItem[];
@@ -602,7 +592,7 @@ function QuoteFormModal({
   }
 
   return (
-    <Modal open={open} title={quote ? 'Editar cotacao' : 'Nova cotacao'} onClose={onClose}>
+    <Modal open={open} title="Editar cotacao" onClose={onClose}>
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <SelectInput
           label="Produto"

@@ -30,7 +30,7 @@ export const OfferListCard = memo(function OfferListCard({
   });
 
   return (
-    <article className="grid w-full gap-4 rounded-xl border border-inest-line/80 bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all hover:border-inest-blue/30 hover:shadow-card focus-within:ring-4 focus-within:ring-inest-blue/10 lg:grid-cols-[minmax(220px,1fr)_160px_180px] lg:items-center">
+    <article className="grid w-full gap-5 rounded-2xl border border-inest-line/70 bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] transition-all hover:-translate-y-px hover:border-inest-blue/25 hover:shadow-card focus-within:ring-4 focus-within:ring-inest-blue/10 lg:grid-cols-[minmax(220px,1fr)_160px_180px] lg:items-center">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
@@ -48,8 +48,10 @@ export const OfferListCard = memo(function OfferListCard({
         </p>
       </div>
 
-      <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase text-inest-muted">Condicoes comerciais</p>
+      <div className="min-w-0 border-t border-inest-line/70 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Condicoes comerciais
+        </p>
         <strong className="mt-1 block truncate text-sm text-inest-text">
           {product?.deliveryTime || 'Prazo conforme oferta'}
         </strong>
@@ -57,9 +59,11 @@ export const OfferListCard = memo(function OfferListCard({
         <p className="mt-1 text-xs text-inest-muted">Criada {formatDateTime(offer.createdAt)}</p>
       </div>
 
-      <div className="flex min-w-0 flex-col items-start gap-2 lg:items-end">
-        <span className="text-[10px] font-black uppercase text-inest-muted">Preco final</span>
-        <strong className="font-display text-2xl font-black text-inest-text">
+      <div className="flex min-w-0 flex-col items-start gap-2 border-t border-inest-line/70 pt-4 lg:items-end lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Preco final
+        </span>
+        <strong className="font-display text-[28px] font-bold leading-none text-inest-text">
           {formatCurrency(offer.offerPrice)}
         </strong>
         <div className="flex flex-wrap gap-1.5 lg:justify-end">

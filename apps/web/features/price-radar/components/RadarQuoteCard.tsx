@@ -40,10 +40,10 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
 
   return (
     <article
-      className={`grid w-full gap-4 rounded-xl border bg-inest-surface p-4 shadow-[0_10px_30px_rgba(16,24,40,0.045)] transition-all focus-within:ring-4 focus-within:ring-inest-blue/10 md:grid-cols-[28px_minmax(220px,1fr)_180px_170px] md:items-center ${
+      className={`grid w-full gap-5 rounded-2xl border bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] transition-all focus-within:ring-4 focus-within:ring-inest-blue/10 md:grid-cols-[28px_minmax(220px,1fr)_180px_170px] md:items-center ${
         selected
-          ? 'border-inest-blue bg-blue-50/30'
-          : 'border-inest-line hover:border-slate-300 hover:bg-slate-50/60'
+          ? 'border-inest-blue bg-blue-50/45 shadow-[0_16px_36px_rgba(95,124,255,0.12)]'
+          : 'border-inest-line/70 hover:-translate-y-px hover:border-inest-blue/25 hover:shadow-card'
       }`}
     >
       <label className="grid h-8 w-8 place-items-center" title="Selecionar produto">
@@ -76,8 +76,10 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
         ) : null}
       </div>
 
-      <div className="min-w-0">
-        <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
+      <div className="min-w-0 border-t border-inest-line/70 pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Fornecedor
+        </p>
         <strong className="mt-0.5 block truncate text-sm text-inest-text">
           {quote.supplier.name}
         </strong>
@@ -89,9 +91,11 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
         {quote.deliveryTime ? <InfoTag className="mt-2">{quote.deliveryTime}</InfoTag> : null}
       </div>
 
-      <div className="flex min-w-0 flex-col items-start gap-1 md:items-end">
-        <span className="text-[10px] font-black uppercase text-inest-muted">Preco fornecedor</span>
-        <strong className="font-display text-2xl font-black text-inest-text">
+      <div className="flex min-w-0 flex-col items-start gap-1 border-t border-inest-line/70 pt-4 md:items-end md:border-l md:border-t-0 md:pl-5 md:pt-0">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
+          Preco fornecedor
+        </span>
+        <strong className="font-display text-[28px] font-bold leading-none text-inest-text">
           {formatCurrency(quote.costProduct)}
         </strong>
         <span className="text-xs text-inest-muted">{formatDateTime(quote.updatedAt)}</span>
