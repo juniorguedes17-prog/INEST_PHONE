@@ -1,6 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsNumber, IsOptional, IsString, IsUUID, IsUrl, Min } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  IsUrl,
+  Min,
+} from 'class-validator';
 
 export class PricingQueryDto {
   @ApiPropertyOptional()
@@ -85,6 +95,14 @@ export class BrazilRadarQuotePricingDto {
   @ApiProperty()
   @IsUUID()
   sourceQuoteId!: string;
+}
+
+export class ReplaceBrazilRadarWorkSnapshotDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID(undefined, { each: true })
+  sourceQuoteIds!: string[];
 }
 
 export class TemporaryImportPricingDto {

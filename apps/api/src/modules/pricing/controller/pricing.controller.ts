@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -7,22 +18,43 @@ import {
   BrazilRadarQuotePricingDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
+  ReplaceBrazilRadarWorkSnapshotDto,
   TemporaryImportPricingDto,
   UpdateModelProfitDto,
 } from '../dto/pricing.dto';
 import { PricingService } from '../service/pricing.service';
+import { PricingWorkSnapshotService } from '../service/pricing-work-snapshot.service';
 
 @ApiTags('Pricing')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('pricing')
 export class PricingController {
-  constructor(@Inject(PricingService) private readonly pricingService: PricingService) {}
+  constructor(
+    @Inject(PricingService) private readonly pricingService: PricingService,
+    @Inject(PricingWorkSnapshotService)
+    private readonly pricingWorkSnapshots: PricingWorkSnapshotService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Lista precos calculados dinamicamente.' })
   list(@Query() query: PricingQueryDto) {
     return this.pricingService.list(query);
+  }
+
+  @Get('work-snapshot/radar')
+  @ApiOperation({ summary: 'Retorna o conjunto atual do Radar Brasil para Precificação.' })
+  workSnapshot(@CurrentUser() user: AuthenticatedUser) {
+    return this.pricingWorkSnapshots.get(user);
+  }
+
+  @Put('work-snapshot/radar')
+  @ApiOperation({ summary: 'Substitui o conjunto atual do Radar Brasil para Precificação.' })
+  replaceWorkSnapshot(
+    @Body() dto: ReplaceBrazilRadarWorkSnapshotDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pricingWorkSnapshots.replaceFromRadar(dto, user);
   }
 
   @Get(':productId')

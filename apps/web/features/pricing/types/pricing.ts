@@ -105,11 +105,7 @@ export interface BrazilRadarQuotePricing {
     updatedAt: string;
   };
   calculationStatus:
-    | 'ready'
-    | 'missing_profit'
-    | 'insufficient_identity'
-    | 'ambiguous_identity'
-    | 'collision';
+    'ready' | 'missing_profit' | 'insufficient_identity' | 'ambiguous_identity' | 'collision';
   calculationError: string | null;
   offerDraft: OfferDraft | null;
 }
@@ -201,5 +197,3 @@ export interface TemporaryImportPricing {
 }
 
 export const TEMPORARY_IMPORT_PRICING_STORAGE_KEY = 'inest.temporary-import-pricing';
-export const BRAZIL_RADAR_PRICING_STORAGE_KEY = 'inest.brazil-radar-pricing';
-export const TEMPORARY_OFFER_DRAFT_STORAGE_KEY = 'inest.temporary-offer-draft';

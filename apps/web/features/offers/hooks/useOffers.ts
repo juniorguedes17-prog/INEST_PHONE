@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   deleteOffer,
   duplicateOffer,
+  getOffersWorkSnapshot,
   listOfferProducts,
   listOffers,
   listTemplates,
@@ -11,12 +12,7 @@ import {
   shareOffer,
 } from '../services/offers-service';
 import { CommercialTemplate, OfferItem } from '../types/offers';
-import {
-  OfferDraft,
-  OfferDraftBatchStorage,
-  PricingItem,
-  TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
-} from '@/features/pricing/types/pricing';
+import { OfferDraft, PricingItem } from '@/features/pricing/types/pricing';
 import {
   PreparedTemporaryOffer,
   TemporaryOfferItem,
@@ -39,33 +35,21 @@ export function useOffers() {
   >([]);
   const [temporaryOfferFailedCount, setTemporaryOfferFailedCount] = useState(0);
 
-  useEffect(() => {
-    const storedDraft = window.sessionStorage.getItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
-    if (!storedDraft) return;
-
-    window.sessionStorage.removeItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY);
-    try {
-      const prepared = JSON.parse(storedDraft) as OfferDraft | OfferDraftBatchStorage;
-      const batch = toOfferDraftBatch(prepared);
-      setTemporaryOfferDrafts(batch.drafts);
-      setTemporaryOfferFailedCount(batch.failedCount);
-    } catch {
-      setError('Não foi possível carregar a oferta preparada pela Precificação.');
-    }
-  }, []);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [nextProducts, nextTemplates, nextOffers] = await Promise.all([
+      const [nextProducts, nextTemplates, nextOffers, workSnapshot] = await Promise.all([
         listOfferProducts(),
         listTemplates(),
         listOffers(),
+        getOffersWorkSnapshot(),
       ]);
       setPricingItems(nextProducts);
       setTemplates(nextTemplates);
       setOffers(nextOffers);
+      setTemporaryOfferDrafts(workSnapshot?.drafts ?? []);
+      setTemporaryOfferFailedCount(workSnapshot?.failedCount ?? 0);
     } catch (offersError) {
       setError(
         offersError instanceof Error
@@ -166,12 +150,4 @@ export function useOffers() {
     duplicate,
     remove,
   };
-}
-
-function toOfferDraftBatch(prepared: OfferDraft | OfferDraftBatchStorage): OfferDraftBatchStorage {
-  if ('drafts' in prepared && Array.isArray(prepared.drafts)) {
-    return prepared;
-  }
-
-  return { drafts: [prepared as OfferDraft], failedCount: 0 };
 }

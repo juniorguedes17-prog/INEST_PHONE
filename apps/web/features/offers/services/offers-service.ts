@@ -1,6 +1,6 @@
 import { env } from '@/lib/env';
 import { authenticatedFetch } from '@/services/authenticated-fetch';
-import { PricingItem } from '@/features/pricing/types/pricing';
+import { OfferDraftBatchStorage, PricingItem } from '@/features/pricing/types/pricing';
 import { listPricing } from '@/features/pricing/services/pricing-service';
 import { CommercialTemplate, GenerateOfferPayload, OfferItem } from '../types/offers';
 
@@ -53,6 +53,22 @@ export async function updateOfferTemplate(
 export async function listOffers(): Promise<OfferItem[]> {
   const response = await authenticatedFetch(`${env.apiUrl}/offers`);
   return parseResponse<OfferItem[]>(response);
+}
+
+export async function getOffersWorkSnapshot(): Promise<OfferDraftBatchStorage | null> {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/work-snapshot`);
+  return parseResponse<OfferDraftBatchStorage | null>(response);
+}
+
+export async function replaceOffersWorkSnapshot(
+  snapshot: OfferDraftBatchStorage,
+): Promise<OfferDraftBatchStorage> {
+  const response = await authenticatedFetch(`${env.apiUrl}/offers/work-snapshot`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(snapshot),
+  });
+  return parseResponse<OfferDraftBatchStorage>(response);
 }
 
 export async function generateOffer(payload: GenerateOfferPayload): Promise<OfferItem> {

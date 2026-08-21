@@ -5,13 +5,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   calculateBrazilRadarQuotePricing,
   generateOfferDraft,
+  getBrazilRadarPricingWorkSnapshot,
   listPricing,
   recalculatePricing,
 } from '../services/pricing-service';
+import { replaceOffersWorkSnapshot } from '@/features/offers/services/offers-service';
 import {
   BrazilRadarQuotePricing,
-  BrazilRadarPricingBatchStorage,
-  BRAZIL_RADAR_PRICING_STORAGE_KEY,
   OfferDraft,
   OfferDraftBatchStorage,
   PricingFilters,
@@ -19,7 +19,6 @@ import {
   PricingOfferTarget,
   TemporaryImportPricing,
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
-  TEMPORARY_OFFER_DRAFT_STORAGE_KEY,
 } from '../types/pricing';
 import { prepareOfferDraftBatch } from '../services/offer-draft-batch';
 import { applyOfferDraftPrice } from '../services/offer-draft-price';
@@ -87,24 +86,30 @@ export function usePricing({
   }, [pathname]);
 
   useEffect(() => {
-    const stored = window.sessionStorage.getItem(BRAZIL_RADAR_PRICING_STORAGE_KEY);
-    if (!stored) return;
+    let active = true;
 
-    window.sessionStorage.removeItem(BRAZIL_RADAR_PRICING_STORAGE_KEY);
-    try {
-      const prepared = JSON.parse(stored) as BrazilRadarQuotePricing | BrazilRadarPricingBatchStorage;
-      const batch = toBrazilRadarPricingBatch(prepared);
-      setBrazilRadarPricings(batch.items);
-      setSuccess(
-        batch.failedCount
-          ? `${batch.items.length} cotacoes carregadas; ${batch.failedCount} nao puderam ser enviadas.`
-          : batch.items.length === 1
-            ? 'Cotacao do Radar Brasil carregada.'
-            : `${batch.items.length} cotacoes do Radar Brasil carregadas.`,
-      );
-    } catch {
-      setError('Nao foi possivel carregar a cotacao do Radar Brasil.');
+    async function loadWorkSnapshot() {
+      try {
+        const batch = await getBrazilRadarPricingWorkSnapshot();
+        if (!active || !batch) return;
+
+        setBrazilRadarPricings(batch.items);
+        setSuccess(
+          batch.failedCount
+            ? `${batch.items.length} cotacoes carregadas; ${batch.failedCount} nao puderam ser enviadas.`
+            : batch.items.length === 1
+              ? 'Cotacao do Radar Brasil carregada.'
+              : `${batch.items.length} cotacoes do Radar Brasil carregadas.`,
+        );
+      } catch {
+        if (active) setError('Nao foi possivel carregar a cotacao do Radar Brasil.');
+      }
     }
+
+    void loadWorkSnapshot();
+    return () => {
+      active = false;
+    };
   }, [pathname]);
 
   useEffect(() => {
@@ -165,7 +170,7 @@ export function usePricing({
     setSuccess(null);
     try {
       const draft = await generateOfferDraft(productId);
-      sendOfferDraft(applyOfferPrice({ ...draft, source: 'pricing' }));
+      await sendOfferDraft(applyOfferPrice({ ...draft, source: 'pricing' }));
     } catch (pricingError) {
       setError(
         pricingError instanceof Error ? pricingError.message : 'Nao foi possivel gerar a oferta.',
@@ -175,7 +180,7 @@ export function usePricing({
     }
   }
 
-  function generateTemporaryOffer() {
+  async function generateTemporaryOffer() {
     if (!temporaryImportPricing) return;
     const isIphone = /iphone/i.test(temporaryImportPricing.product.name);
     const productType = isIphone
@@ -184,13 +189,17 @@ export function usePricing({
         : 'IPHONE_USED'
       : 'ACCESSORY';
 
-    sendOfferDraft(
-      applyOfferPrice({ ...temporaryImportPricing.offerDraft, productType, source: 'temporary-import' }),
+    await sendOfferDraft(
+      applyOfferPrice({
+        ...temporaryImportPricing.offerDraft,
+        productType,
+        source: 'temporary-import',
+      }),
     );
   }
 
-  function generateBrazilRadarOffer(item: BrazilRadarQuotePricing) {
-    sendOfferDraft(applyOfferPrice(toBrazilRadarOfferDraft(item)));
+  async function generateBrazilRadarOffer(item: BrazilRadarQuotePricing) {
+    await sendOfferDraft(applyOfferPrice(toBrazilRadarOfferDraft(item)));
   }
 
   async function prepareOfferBatch(targets: PricingOfferTarget[]) {
@@ -203,7 +212,10 @@ export function usePricing({
     try {
       const result = await prepareOfferDraftBatch(targets, async (target) => {
         if (target.kind === 'catalog') {
-          return applyOfferPrice({ ...(await generateOfferDraft(target.productId)), source: 'pricing' });
+          return applyOfferPrice({
+            ...(await generateOfferDraft(target.productId)),
+            source: 'pricing',
+          });
         }
 
         return applyOfferPrice(toBrazilRadarOfferDraft(target.item));
@@ -220,9 +232,9 @@ export function usePricing({
     }
   }
 
-  function sendOfferDraftBatch(drafts: OfferDraft[], failedCount: number) {
+  async function sendOfferDraftBatch(drafts: OfferDraft[], failedCount: number) {
     const batch: OfferDraftBatchStorage = { drafts, failedCount };
-    window.sessionStorage.setItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY, JSON.stringify(batch));
+    await replaceOffersWorkSnapshot(batch);
     router.push('/offers');
   }
 
@@ -249,9 +261,7 @@ export function usePricing({
     setSaving(true);
     setSuccess(null);
     try {
-      const catalogProduct = item.catalogProductId
-        ? await getProduct(item.catalogProductId)
-        : null;
+      const catalogProduct = item.catalogProductId ? await getProduct(item.catalogProductId) : null;
       const [products, references] = catalogProduct
         ? [[], { categories: [], models: [], colors: [], storages: [] }]
         : await Promise.all([listProducts(emptyProductFilters), getProductReferences()]);
@@ -317,8 +327,8 @@ export function usePricing({
     }
   }
 
-  function sendOfferDraft(draft: OfferDraft) {
-    window.sessionStorage.setItem(TEMPORARY_OFFER_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  async function sendOfferDraft(draft: OfferDraft) {
+    await replaceOffersWorkSnapshot({ drafts: [draft], failedCount: 0 });
     router.push(draft.route);
   }
 
@@ -346,20 +356,8 @@ export function usePricing({
   };
 }
 
-function toBrazilRadarPricingBatch(
-  prepared: BrazilRadarQuotePricing | BrazilRadarPricingBatchStorage,
-): BrazilRadarPricingBatchStorage {
-  if ('items' in prepared && Array.isArray(prepared.items)) {
-    return prepared;
-  }
-
-  return { items: [prepared as BrazilRadarQuotePricing], failedCount: 0 };
-}
-
 function isUuid(value: string) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function toPricingRequestFilters(filters: PricingFilters): PricingFilters {

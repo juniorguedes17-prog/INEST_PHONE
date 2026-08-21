@@ -1,22 +1,58 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
-import { DuplicateOfferDto, GenerateOfferDto, UpdateOfferTemplateDto } from '../dto/offers.dto';
+import {
+  DuplicateOfferDto,
+  GenerateOfferDto,
+  ReplaceOffersWorkSnapshotDto,
+  UpdateOfferTemplateDto,
+} from '../dto/offers.dto';
 import { OffersService } from '../service/offers.service';
+import { OffersWorkSnapshotService } from '../service/offers-work-snapshot.service';
 
 @ApiTags('Offers')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('offers')
 export class OffersController {
-  constructor(@Inject(OffersService) private readonly offersService: OffersService) {}
+  constructor(
+    @Inject(OffersService) private readonly offersService: OffersService,
+    @Inject(OffersWorkSnapshotService)
+    private readonly offersWorkSnapshots: OffersWorkSnapshotService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Lista ofertas geradas.' })
   list() {
     return this.offersService.list();
+  }
+
+  @Get('work-snapshot')
+  @ApiOperation({ summary: 'Retorna o conjunto atual da Precificação para Ofertas.' })
+  workSnapshot(@CurrentUser() user: AuthenticatedUser) {
+    return this.offersWorkSnapshots.get(user);
+  }
+
+  @Put('work-snapshot')
+  @ApiOperation({ summary: 'Substitui o conjunto atual da Precificação para Ofertas.' })
+  replaceWorkSnapshot(
+    @Body() dto: ReplaceOffersWorkSnapshotDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.offersWorkSnapshots.replace(dto, user);
   }
 
   @Get('templates')

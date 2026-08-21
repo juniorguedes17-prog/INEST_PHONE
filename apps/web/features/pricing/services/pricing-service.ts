@@ -2,6 +2,7 @@ import { env } from '@/lib/env';
 import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
   BrazilRadarQuotePricing,
+  BrazilRadarPricingBatchStorage,
   BrazilRadarQuotePricingRequest,
   OfferDraft,
   PricingFilters,
@@ -78,4 +79,20 @@ export async function calculateBrazilRadarQuotePricing(
     body: JSON.stringify(payload),
   });
   return parseResponse<BrazilRadarQuotePricing>(response);
+}
+
+export async function getBrazilRadarPricingWorkSnapshot(): Promise<BrazilRadarPricingBatchStorage | null> {
+  const response = await authenticatedFetch(`${env.apiUrl}/pricing/work-snapshot/radar`);
+  return parseResponse<BrazilRadarPricingBatchStorage | null>(response);
+}
+
+export async function replaceBrazilRadarPricingWorkSnapshot(
+  sourceQuoteIds: string[],
+): Promise<BrazilRadarPricingBatchStorage> {
+  const response = await authenticatedFetch(`${env.apiUrl}/pricing/work-snapshot/radar`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceQuoteIds }),
+  });
+  return parseResponse<BrazilRadarPricingBatchStorage>(response);
 }

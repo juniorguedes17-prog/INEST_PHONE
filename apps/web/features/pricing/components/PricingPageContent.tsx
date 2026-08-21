@@ -185,7 +185,7 @@ export function PricingPageContent() {
     });
 
     if (result.drafts.length) {
-      pricing.sendOfferDraftBatch(result.drafts, result.failedIds.length);
+      await pricing.sendOfferDraftBatch(result.drafts, result.failedIds.length);
     }
   }
 

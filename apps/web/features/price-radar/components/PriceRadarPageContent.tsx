@@ -15,9 +15,7 @@ import {
 } from '@/components/shared';
 import { listProducts } from '@/features/products/services/products-service';
 import { ProductItem } from '@/features/products/types/products';
-import { calculateBrazilRadarQuotePricing } from '@/features/pricing/services/pricing-service';
-import { prepareBrazilRadarPricingBatch } from '@/features/pricing/services/brazil-radar-pricing-batch';
-import { BRAZIL_RADAR_PRICING_STORAGE_KEY } from '@/features/pricing/types/pricing';
+import { replaceBrazilRadarPricingWorkSnapshot } from '@/features/pricing/services/pricing-service';
 import { listSuppliers } from '@/features/suppliers/services/suppliers-service';
 import { SupplierItem } from '@/features/suppliers/types/suppliers';
 import { usePriceRadar } from '../hooks/usePriceRadar';
@@ -245,10 +243,7 @@ export function PriceRadarPageContent() {
       if (!quote.sourceQuoteId) {
         throw new Error('Cotação do Radar Brasil sem identificador de origem.');
       }
-      const prepared = await calculateBrazilRadarQuotePricing({
-        sourceQuoteId: quote.sourceQuoteId,
-      });
-      window.sessionStorage.setItem(BRAZIL_RADAR_PRICING_STORAGE_KEY, JSON.stringify(prepared));
+      await replaceBrazilRadarPricingWorkSnapshot([quote.sourceQuoteId]);
       router.push('/pricing?source=br-radar');
     } catch (error) {
       setHandoffError(
@@ -270,24 +265,15 @@ export function PriceRadarPageContent() {
     setHandoffSending(true);
     setHandoffError(null);
     try {
-      const result = await prepareBrazilRadarPricingBatch(selectedQuotes, (sourceQuoteId) =>
-        calculateBrazilRadarQuotePricing({ sourceQuoteId }),
-      );
-      if (!result.items.length) {
-        throw new Error(
-          result.errors[0] ?? 'Não foi possível enviar as cotações para Precificação.',
-        );
+      const sourceQuoteIds = selectedQuotes
+        .map((quote) => quote.sourceQuoteId)
+        .filter((sourceQuoteId): sourceQuoteId is string => Boolean(sourceQuoteId));
+      if (sourceQuoteIds.length !== selectedQuotes.length) {
+        throw new Error('Cotação do Radar Brasil sem identificador de origem.');
       }
 
-      window.sessionStorage.setItem(
-        BRAZIL_RADAR_PRICING_STORAGE_KEY,
-        JSON.stringify({ items: result.items, failedCount: result.failedQuoteIds.length }),
-      );
-      setSelectedIds((current) => {
-        const next = new Set(current);
-        result.successfulQuoteIds.forEach((id) => next.delete(id));
-        return next;
-      });
+      await replaceBrazilRadarPricingWorkSnapshot(sourceQuoteIds);
+      setSelectedIds(new Set());
       router.push('/pricing?source=br-radar');
     } catch (error) {
       setHandoffError(
