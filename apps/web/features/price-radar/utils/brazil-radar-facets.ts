@@ -379,6 +379,7 @@ export function getCanonicalCategory(source: CatalogFacetSource) {
   const structuredCategory = normalizeCatalogFilterText(source.category ?? '');
   if (structuredCategory === 'fones') return 'Fones';
   if (structuredCategory === 'garmin') return 'Garmin';
+  if (structuredCategory === 'eletronicos') return 'Eletronicos';
   return normalizeCanonicalProductIdentity(source).canonicalCategory;
 }
 

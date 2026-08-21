@@ -247,6 +247,63 @@ test('preserva Garmin como categoria estruturada e filtra sem Product vinculado'
   );
 });
 
+test('preserva Eletronicos como categoria estruturada e filtra somente esses itens', () => {
+  const index = buildBrazilRadarFacetIndex([
+    quote({
+      id: 'iphone-17',
+      productName: 'iPhone 17',
+      category: 'iPhone',
+      model: 'iPhone 17',
+    }),
+    quote({
+      id: 'fones-airpods',
+      productName: 'AirPods Pro',
+      category: 'Fones',
+      model: 'AirPods Pro',
+    }),
+    quote({
+      id: 'garmin-alpha',
+      productName: 'Garmin Alpha 300',
+      category: 'Garmin',
+      model: 'Garmin Alpha 300',
+    }),
+    quote({
+      id: 'xiaomi-redmi-pad',
+      productName: 'Xiaomi Redmi Pad',
+      category: 'Eletronicos',
+      model: 'Xiaomi Redmi Pad',
+      productId: null,
+    }),
+    quote({
+      id: 'jbl-flip',
+      productName: 'JBL Flip 6',
+      category: 'Eletronicos',
+      model: 'JBL Flip 6',
+      productId: null,
+    }),
+    quote({
+      id: 'macbook-air',
+      productName: 'MacBook Air M5',
+      category: 'MacBook',
+      model: 'MacBook Air M5',
+    }),
+  ]);
+
+  const facets = buildBrazilRadarFacetsFromIndex(index);
+
+  assert.equal(
+    facets.categories.some((item) => item.label === 'Eletronicos'),
+    true,
+  );
+  assert.deepEqual(
+    filterBrazilRadarQuotesByIndex(index, {
+      ...emptyBrazilRadarFacetState,
+      categories: ['Eletronicos'],
+    }).map((item) => item.id),
+    ['xiaomi-redmi-pad', 'jbl-flip'],
+  );
+});
+
 test('escala de 10 mil itens cria o indice uma vez e reutiliza as linhas normalizadas', () => {
   const dataset = Array.from({ length: 10_000 }, (_, index) =>
     quote({

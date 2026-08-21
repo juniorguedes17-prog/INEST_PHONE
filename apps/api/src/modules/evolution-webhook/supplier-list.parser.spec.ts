@@ -572,8 +572,8 @@ describe('supplier list parser', () => {
 
   it.each([
     ['Apple Watch Ultra', 'Apple Watch'],
-    ['Xiaomi Redmi Pad', null],
-    ['Tecno Spark', null],
+    ['Xiaomi Redmi Pad', 'Eletronicos'],
+    ['Tecno Spark', 'Eletronicos'],
   ])('nao classifica %s como Garmin', (heading, category) => {
     const [item] = parseSupplierListText(`${heading}\nBlack R$ 1.000`);
 
@@ -584,6 +584,34 @@ describe('supplier list parser', () => {
     const [item] = parseSupplierListText(`${condition}\nGarmin Alpha 300\nBlack R$ 1.000`);
 
     expect(item).toMatchObject({ category: 'Garmin', condition });
+  });
+
+  it.each([
+    ['Xiaomi Redmi Pad', 'Eletronicos'],
+    ['Xiaomi Vacuum S40 Pro', 'Eletronicos'],
+    ['Realme GT Neo', 'Eletronicos'],
+    ['Samsung Galaxy S25', 'Eletronicos'],
+    ['Samsung Galaxy Watch 7', 'Eletronicos'],
+    ['Tecno Spark', 'Eletronicos'],
+    ['JBL Flip 6', 'Eletronicos'],
+  ])('classifica %s como Eletronicos', (heading, category) => {
+    const [item] = parseSupplierListText(`${heading}\nBlack R$ 1.000`);
+
+    expect(item?.category).toBe(category);
+  });
+
+  it('preserva a condicao ao classificar marcas como Eletronicos', () => {
+    const [xiaomi] = parseSupplierListText('NOVO\nXiaomi Redmi Pad\nBlack R$ 1.000');
+    const [samsung] = parseSupplierListText('SEMINOVOS\nSamsung Galaxy S25\nBlack R$ 2.000');
+
+    expect(xiaomi).toMatchObject({ category: 'Eletronicos', condition: 'NOVO' });
+    expect(samsung).toMatchObject({ category: 'Eletronicos', condition: 'SEMINOVO' });
+  });
+
+  it('nao transforma produto desconhecido em Eletronicos no parser', () => {
+    const [item] = parseSupplierListText('Produto XYZ 512GB\nBlack R$ 900');
+
+    expect(item?.category).toBeNull();
   });
 
   it('preserva acessorio explicitamente associado a AirPods', () => {

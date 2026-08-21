@@ -3,7 +3,7 @@ import { ParsedSupplierListItem } from './evolution-webhook.types';
 const PRODUCT_MARKERS =
   /\b(iph(?:one)?\s*\d|ipad|mac\s?book|macbook|mac\s?mini|imac|watch|airpods|air\s?pods|airtag|pencil|magic\s?mouse|earpods)\b/i;
 const PRODUCT_IDENTITY_MARKERS =
-  /(?:\b(?:produto|dispositivo|garmin|fenix|forerunner|venu|dji|drone|xiaomi|redmi|poco|realme|motorola|moto|huawei|infinix|honor|samsung|galaxy|nintendo|switch|vacuum|aspirador|backbone|fire\s?tv|cabo|fonte|carregador|capa|teclado|keyboard|mouse)\b|\busb[-\s]?c\s*\/)/i;
+  /(?:\b(?:produto|dispositivo|garmin|fenix|forerunner|venu|dji|drone|xiaomi|redmi|poco|realme|motorola|moto|huawei|infinix|honor|samsung|galaxy|tecno|jbl|nintendo|switch|vacuum|aspirador|backbone|fire\s?tv|cabo|fonte|carregador|capa|teclado|keyboard|mouse)\b|\busb[-\s]?c\s*\/)/i;
 const USED_CONDITION_MARKERS =
   /\b(?:seminovos?|semi\s*novos?|usado|vitrine|open\s?box|as[-\s]?is|no\s?active|not\s?active|never\s?activ(?:e|ated)|nunca\s?(?:active|ativado)|nao\s?ativado|não\s?ativado)\b/i;
 const CPO_CONDITION_MARKERS =
@@ -285,6 +285,7 @@ export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[
 function isCategoryHeading(value: string, category: string | null) {
   if (!category) return false;
   if (category === 'Garmin' && !/^\s*garmin\s*$/i.test(value)) return false;
+  if (category === 'Eletronicos' && !/^\s*eletronicos?\s*$/i.test(value)) return false;
   if (/\b(?:pencil|airtag|magic\s?mouse|earpods)\b/i.test(value)) return false;
   if (/\bair\s?pods\s+(?:pro|max|regular|anc)\b/i.test(value)) return false;
   if (/\b(?:watch\s+)?(?:se|series|ultra|s\d+)\b/i.test(value)) return false;
@@ -668,6 +669,7 @@ function detectCategory(value: string): string | null {
   if (/mac\s?book|macbook/i.test(value)) return 'MacBook';
   if (/mac\s?mini/i.test(value)) return 'Mac Mini';
   if (/imac/i.test(value)) return 'iMac';
+  if (/\b(?:xiaomi|realme|samsung|tecno|jbl)\b/i.test(value)) return 'Eletronicos';
   if (/watch|ultra|\bse\d/i.test(value)) return 'Apple Watch';
   if (isAirPodsAccessory(value)) return 'Acessorio Apple';
   if (/air\s?pods|airpods/i.test(value)) return 'Fones';
