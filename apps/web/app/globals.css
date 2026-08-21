@@ -121,16 +121,15 @@ body {
   opacity: 1;
 }
 
-@media (min-width: 1024px) {
-  .inest-login-brand .inest-logo__asset--light {
-    visibility: hidden;
-    opacity: 0;
-  }
+/* The institutional login panel uses the light logo on every breakpoint. */
+.inest-login-brand .inest-logo__asset--light {
+  visibility: hidden;
+  opacity: 0;
+}
 
-  .inest-login-brand .inest-logo__asset--dark {
-    visibility: visible;
-    opacity: 1;
-  }
+.inest-login-brand .inest-logo__asset--dark {
+  visibility: visible;
+  opacity: 1;
 }
 
 .radar-product-card {

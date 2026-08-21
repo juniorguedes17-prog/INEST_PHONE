@@ -31,13 +31,13 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen bg-inest-bg px-4 py-4 text-inest-text sm:px-6 sm:py-8">
-      <section className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl items-center gap-5 lg:min-h-[calc(100vh-4rem)] lg:gap-8 lg:grid-cols-[minmax(0,1fr)_440px]">
-        <div className="inest-login-brand max-w-2xl lg:rounded-[28px] lg:bg-[#080a0f] lg:p-10 lg:text-white xl:p-14">
-          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-inest-blue lg:text-[#9eb0ff]">
+      <section className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl items-center gap-4 sm:gap-5 lg:min-h-[calc(100vh-4rem)] lg:gap-8 lg:grid-cols-[minmax(0,1fr)_440px]">
+        <div className="inest-login-brand w-full max-w-2xl rounded-[24px] bg-[#080a0f] p-5 text-white lg:rounded-[28px] lg:p-10 xl:p-14">
+          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-[#9eb0ff]">
             Acesso seguro
           </p>
-          <INestLogo variant="login" priority className="mt-4" />
-          <p className="mt-3 text-sm leading-6 text-inest-muted sm:mt-5 sm:text-lg sm:leading-8 lg:text-slate-300">
+          <INestLogo variant="login" priority className="mt-3 sm:mt-4" />
+          <p className="mt-3 text-sm leading-6 text-slate-300 sm:mt-5 sm:text-lg sm:leading-8">
             Plataforma comercial preparada para radar de preços, precificação, ofertas e gestão
             operacional com controle de acesso por perfil.
           </p>
@@ -51,7 +51,7 @@ export default function LoginPage() {
             <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-inest-blue">
               Login
             </p>
-            <h2 className="mt-2 font-display text-3xl font-bold">Entrar no sistema</h2>
+            <h2 className="mt-2 font-display text-2xl font-bold sm:text-3xl">Entrar no sistema</h2>
           </div>
 
           <label className="mt-5 block sm:mt-8">
