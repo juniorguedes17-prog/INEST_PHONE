@@ -56,10 +56,57 @@ test('preserva RAM, armazenamento, tela e chip de MacBook', () => {
 });
 
 test('normaliza RAM quando o marcador precede a capacidade', () => {
-  const result = normalizeCanonicalProductIdentity('MacBook Air M5 13" RAM 8GB 256GB');
+  const cases = [
+    'MacBook Air M5 13" RAM 8GB 256GB',
+    'MacBook Air M5 13" RAM 8 GB 256GB',
+    'MacBook Air M5 13" 8GB RAM 256GB',
+    'MacBook Air M5 13" 8 GB RAM 256GB',
+    'MacBook Air M5 13" 8 RAM 256GB',
+  ];
 
-  assert.equal(result.canonicalRam, '8GB');
-  assert.equal(result.canonicalStorage, '256GB');
+  for (const description of cases) {
+    const result = normalizeCanonicalProductIdentity(description);
+    assert.equal(result.canonicalRam, '8GB');
+    assert.equal(result.canonicalStorage, '256GB');
+  }
+});
+
+test('normaliza storage com unidade, sem unidade e em posições equivalentes', () => {
+  const cases = [
+    ['iPhone 16 64', '64GB'],
+    ['iPhone 16 64GB', '64GB'],
+    ['iPhone 16 64 GB', '64GB'],
+    ['iPhone 16 128', '128GB'],
+    ['iPhone 16 128GB', '128GB'],
+    ['iPhone 16 128 GB', '128GB'],
+    ['iPhone 16 256', '256GB'],
+    ['iPhone 16 256GB', '256GB'],
+    ['iPhone 16 256 GB', '256GB'],
+    ['iPhone 16 512', '512GB'],
+    ['iPhone 16 512GB', '512GB'],
+    ['iPhone 16 512 GB', '512GB'],
+    ['iPhone 16 1TB', '1TB'],
+    ['iPhone 16 1 TB', '1TB'],
+    ['iPhone 16 2TB', '2TB'],
+    ['iPhone 16 2 TB', '2TB'],
+    ['iPad 11 256 Wi Fi', '256GB'],
+  ] as const;
+
+  for (const [description, storage] of cases) {
+    assert.equal(normalizeCanonicalProductIdentity(description).canonicalStorage, storage);
+  }
+});
+
+test('preserva proteção de preço e falha fechada para storage nu conflitante', () => {
+  const currency = normalizeCanonicalProductIdentity('iPhone 16 R$ 512');
+  const decimal = normalizeCanonicalProductIdentity('iPhone 16 512,00');
+  const moneyEmoji = normalizeCanonicalProductIdentity('iPhone 16 💰 512');
+  const conflict = normalizeCanonicalProductIdentity('iPhone 16 128 256');
+
+  assert.equal(currency.canonicalStorage, null);
+  assert.equal(decimal.canonicalStorage, null);
+  assert.equal(moneyEmoji.canonicalStorage, null);
+  assert.equal(conflict.canonicalStorage, null);
 });
 
 test('completa invariantes seguras de MacBook Air e Pro', () => {
@@ -97,6 +144,7 @@ test('enriquece memoria abreviada de MacBook somente em pares inequívocos', () 
     ['MacBook Neo 13" 16G 256', '16GB', '256GB'],
     ['MacBook Neo 13" 16 512', '16GB', '512GB'],
     ['MacBook Neo 13" 24 1TB', '24GB', '1TB'],
+    ['MacBook Neo 13" 8 G 512', '8GB', '512GB'],
   ] as const;
 
   for (const [description, ram, storage] of cases) {
@@ -115,6 +163,7 @@ test('enriquece memoria abreviada de MacBook somente em pares inequívocos', () 
 test('resolve tela explícita de MacBook independentemente da posição dos atributos', () => {
   const before = normalizeCanonicalProductIdentity('MacBook Neo 13" 8/256GB');
   const afterStraightQuotes = normalizeCanonicalProductIdentity('MacBook Neo 8/256GB 13"');
+  const afterDoublePrime = normalizeCanonicalProductIdentity('MacBook Neo 8 / 256 13″');
   const afterCurvedQuotes = normalizeCanonicalProductIdentity(
     'MacBook Neo A18 Pro 8GB / 256GB 13”',
   );
@@ -124,6 +173,10 @@ test('resolve tela explícita de MacBook independentemente da posição dos atri
   assert.deepEqual([before.canonicalModelKey, before.canonicalScreen], ['macbook-neo-13', '13"']);
   assert.deepEqual(
     [afterStraightQuotes.canonicalModelKey, afterStraightQuotes.canonicalScreen],
+    ['macbook-neo-13', '13"'],
+  );
+  assert.deepEqual(
+    [afterDoublePrime.canonicalModelKey, afterDoublePrime.canonicalScreen],
     ['macbook-neo-13', '13"'],
   );
   assert.deepEqual(
@@ -265,6 +318,6 @@ test('preserva o comportamento fail-closed para produto desconhecido', () => {
 test('preserva a normalizacao textual pura', () => {
   assert.equal(
     normalizeCanonicalText('  📱 iPhone 17 Pro-Max  256 GB  '),
-    'iphone 17 pro max 256 gb',
+    'iphone 17 pro max 256gb',
   );
 });

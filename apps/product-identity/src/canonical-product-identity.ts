@@ -137,13 +137,16 @@ export function normalizeCanonicalText(value: string | null | undefined) {
     .toString()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u{1F4B0}\u{1F4B2}\u{1F4B5}]\s*\d[\d.,]*\b/gu, ' ')
     .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, ' ')
     .replace(/\*|~|`/g, ' ')
     .replace(/\b\d{1,2}[\s/.-]+\d{1,2}[\s/.-]+20\d{2}\b/g, ' ')
-    .replace(/\br\$?\s*\d[\d.,]*\b|\$\s*\d[\d.,]*/g, ' ')
+    .replace(/\br\$?\s*\d[\d.,]*\b|\$\s*\d[\d.,]*/gi, ' ')
+    .replace(/\b\d{2,4}[.,]\d{2}\b/g, ' ')
     .replace(/[|_()[\]{}:;,+-]/g, ' ')
-    .replace(/\b(\d+)\s*(gb|tb|mm)\b/g, '$1$2')
-    .replace(/\b(\d+(?:\.\d+)?)\s*(?:inch|inches|polegadas?)\b/g, '$1inch')
+    .replace(/\b(\d+)\s*(gb|tb|mm)\b/gi, '$1$2')
+    .replace(/\b(\d+)\s*g\b/gi, '$1g')
+    .replace(/\b(\d+(?:\.\d+)?)\s*(?:inch|inches|polegadas?)\b/gi, '$1inch')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
@@ -408,6 +411,7 @@ function resolveStorage(text: string, ram: string | null, category: string) {
   if (compactMemory.conflict || hasUnsupportedCompactMemoryPair(text, category)) return null;
 
   const terabytes = Array.from(text.matchAll(/\b([1248])tb\b/g), (match) => `${match[1]}TB`);
+  const bareStorage = resolveBareStorage(text, category);
 
   const candidates = Array.from(text.matchAll(/\b(\d{2,4})gb\b/g), (match) => Number(match[1]));
   const ramValue = ram ? Number(ram.replace('GB', '')) : null;
@@ -419,9 +423,46 @@ function resolveStorage(text: string, ram: string | null, category: string) {
   return resolveUnambiguousAttribute([
     compactMemory.storage,
     ...terabytes,
+    ...bareStorage,
     ...storage,
     abbreviated?.storage,
   ]);
+}
+
+function resolveBareStorage(text: string, category: string) {
+  if (!['iPhone', 'iPad', 'MacBook', 'Mac Mini', 'iMac', 'Mac Studio'].includes(category)) {
+    return [];
+  }
+
+  const protectedNeighbors = new Set([
+    'id',
+    'sku',
+    'cod',
+    'codigo',
+    'tel',
+    'telefone',
+    'whatsapp',
+    'preco',
+    'valor',
+    'ram',
+    'memory',
+    'memoria',
+  ]);
+  const bareRamValues = new Set(['8', '12', '16', '18', '24', '32', '36', '48', '64']);
+  const tokens = text.split(' ').filter(Boolean);
+
+  return tokens.flatMap((token, index) => {
+    if (!/^(64|128|256|512)$/.test(token)) return [];
+    const previous = tokens[index - 1] ?? '';
+    const previousPrevious = tokens[index - 2] ?? '';
+    if (protectedNeighbors.has(previous) || protectedNeighbors.has(tokens[index + 1] ?? '')) {
+      return [];
+    }
+    if (bareRamValues.has(previous) && !(category === 'iPhone' && previousPrevious === 'iphone')) {
+      return [];
+    }
+    return [`${token}GB`];
+  });
 }
 
 function resolveCompactMemory(text: string, category: string) {
@@ -500,7 +541,7 @@ function resolveScreen(text: string, category: string) {
     ? '(?:1[7-9]|2[0-9]|3[0-2])'
     : '1[0-6]';
   const explicitMatch = text.match(
-    new RegExp(`\\b(${sizePattern}(?:\\.\\d+)?)inch\\b|\\b(${sizePattern}(?:\\.\\d+)?)\\s*["”]`),
+    new RegExp(`\\b(${sizePattern}(?:\\.\\d+)?)inch\\b|\\b(${sizePattern}(?:\\.\\d+)?)\\s*["”″]`),
   );
   const explicit = explicitMatch?.[1] ?? explicitMatch?.[2];
   if (explicit) return `${explicit.replace(/\.\d$/, '')}"`;
