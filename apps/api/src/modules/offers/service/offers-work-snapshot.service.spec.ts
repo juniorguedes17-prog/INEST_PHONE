@@ -6,6 +6,7 @@ import { OffersWorkSnapshotService } from './offers-work-snapshot.service';
 const draft = {
   targetModule: 'pricing',
   route: '/pricing',
+  createdAt: '2026-08-21T16:30:00.000Z',
   source: 'pricing' as const,
   payload: {
     productName: 'iPhone 17 Pro Max 256GB',
@@ -40,5 +41,14 @@ describe('OffersWorkSnapshotService', () => {
       service.replace({ drafts: [], failedCount: 1 }, { id: 'user-a' } as never),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(snapshots.replace).not.toHaveBeenCalled();
+  });
+
+  it('returns a draft timestamp exactly as persisted', async () => {
+    const stored = { drafts: [draft], failedCount: 0 };
+    const snapshots = { get: vi.fn().mockResolvedValue(stored) };
+    const service = new OffersWorkSnapshotService(snapshots as never);
+
+    await expect(service.get({ id: 'user-a' } as never)).resolves.toEqual(stored);
+    expect(snapshots.get).toHaveBeenCalledWith('user-a', WORK_SNAPSHOT_SCOPES.OFFERS_PRICING);
   });
 });

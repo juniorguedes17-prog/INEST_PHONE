@@ -24,7 +24,7 @@ export function useOffers() {
   const [pricingItems, setPricingItems] = useState<PricingItem[]>([]);
   const [templates, setTemplates] = useState<CommercialTemplate[]>([]);
   const [offers, setOffers] = useState<OfferItem[]>([]);
-  const [currentOffer, setCurrentOffer] = useState<OfferItem | null>(null);
+  const [currentOffer, setCurrentOffer] = useState<OfferItem | TemporaryOfferItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export function useOffers() {
     );
   }, [templates, temporaryOfferDrafts, temporaryOfferFailedCount]);
 
-  async function copy(offer: OfferItem) {
+  async function copy(offer: OfferItem | TemporaryOfferItem) {
     await navigator.clipboard.writeText(offer.message);
     if (offer.productId && !('sourceDrafts' in offer)) {
       await registerOfferCopy(offer.id);
@@ -102,7 +102,7 @@ export function useOffers() {
     setSuccess('Texto copiado.');
   }
 
-  async function share(offer: OfferItem) {
+  async function share(offer: OfferItem | TemporaryOfferItem) {
     if (!offer.productId || 'sourceDrafts' in offer) {
       window.open(`https://wa.me/?text=${encodeURIComponent(offer.message)}`, '_blank');
       return;

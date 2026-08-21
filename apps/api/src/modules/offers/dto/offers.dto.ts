@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsIn,
   IsInt,
   IsNotEmpty,
@@ -91,6 +92,11 @@ class OfferDraftDto {
   @ApiProperty()
   @IsString()
   route!: string;
+
+  @ApiPropertyOptional({ description: 'Momento imutável em que o rascunho foi criado.' })
+  @IsOptional()
+  @IsDateString()
+  createdAt?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

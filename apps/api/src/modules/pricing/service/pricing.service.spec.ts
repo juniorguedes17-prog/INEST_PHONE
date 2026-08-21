@@ -54,6 +54,37 @@ function pricingSettings() {
 }
 
 describe('PricingService native product profit integration', () => {
+  it('assigns an immutable ISO timestamp when a catalog offer draft is created', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-21T16:30:00.000Z'));
+
+    const repository = { createAuditLog: vi.fn() };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      {} as SettingsService,
+      {} as ProductProfitProvider,
+    );
+    vi.spyOn(service, 'findOne').mockResolvedValue({
+      productId: CATALOG_PRODUCT_ID,
+      productName: 'iPhone 17 Pro Max 256GB',
+      color: 'Azul',
+      capacity: '256GB',
+      salePrice: 6999,
+      offerPrice: 7099,
+      deliveryTime: 'Entrega imediata',
+    } as never);
+
+    try {
+      const draft = await service.generateOfferDraft({ productId: CATALOG_PRODUCT_ID }, {
+        id: 'user-a',
+      } as never);
+
+      expect(draft.createdAt).toBe('2026-08-21T16:30:00.000Z');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('uses the exact native net profit in the existing pricing formula', async () => {
     const repository = {
       listPricingConfigurations: vi

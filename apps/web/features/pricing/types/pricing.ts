@@ -50,6 +50,7 @@ export interface PricingFilters {
 export interface OfferDraft {
   targetModule: string;
   route: string;
+  createdAt?: string;
   productType?: string;
   source?: 'pricing' | 'temporary-import' | 'radar-quote';
   payload: {

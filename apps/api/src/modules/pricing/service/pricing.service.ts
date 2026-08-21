@@ -236,6 +236,7 @@ export class PricingService {
     const draft = {
       targetModule: 'offers',
       route: '/offers',
+      createdAt: new Date().toISOString(),
       payload: {
         productId: pricing.productId,
         productName: pricing.productName,
@@ -334,6 +335,7 @@ export class PricingService {
       offerDraft: {
         targetModule: 'offers',
         route: '/offers',
+        createdAt: new Date().toISOString(),
         payload: {
           productId: null,
           sourceQuoteId: `temporary-py-${dto.productId}`,
@@ -509,6 +511,7 @@ export class PricingService {
           ? {
               targetModule: 'offers',
               route: '/offers',
+              createdAt: new Date().toISOString(),
               payload: {
                 productId: catalogProduct?.id ?? null,
                 sourceQuoteId: quote.id,

@@ -128,6 +128,21 @@ test('keeps the one-draft message identical', () => {
   assert.equal(consolidated.message, prepared.message);
 });
 
+test('preserves the creation timestamp carried by a new draft', () => {
+  const createdAt = '2026-08-21T16:30:00.000Z';
+  const prepared = prepareTemporaryOffer({ ...draft(1), createdAt }, [sealedTemplate]);
+
+  assert.ok(prepared);
+  assert.equal(prepared.createdAt, createdAt);
+});
+
+test('keeps legacy drafts without a creation timestamp absent', () => {
+  const prepared = prepareTemporaryOffer(draft(1), [sealedTemplate]);
+
+  assert.ok(prepared);
+  assert.equal(prepared.createdAt, undefined);
+});
+
 test('consolidates five runtime drafts with the same editable template id', () => {
   const drafts = Array.from({ length: 5 }, (_, index) => draft(index + 1));
   const input = prepareWithTemplate(drafts, runtimeSealedTemplate);
@@ -205,7 +220,9 @@ test('groups four colors of the same product configuration into one variant bloc
   const positions = ['Preto', 'Azul', 'Lavender', 'Branco'].map((color) =>
     consolidated.message.indexOf(color),
   );
-  assert.ok(positions[0]! < positions[1]! && positions[1]! < positions[2]! && positions[2]! < positions[3]!);
+  assert.ok(
+    positions[0]! < positions[1]! && positions[1]! < positions[2]! && positions[2]! < positions[3]!,
+  );
 });
 
 test('rerenders the consolidated message with each supported delivery time', () => {
@@ -333,13 +350,18 @@ test('separates five sealed and three used drafts by resolved template', () => {
   );
 
   assert.equal(consolidated.length, 2);
-  assert.deepEqual(consolidated.map((item) => item.template?.id), ['sealed', 'used']);
+  assert.deepEqual(
+    consolidated.map((item) => item.template?.id),
+    ['sealed', 'used'],
+  );
   assert.equal(occurrences(consolidated[0]?.message ?? '', 'HEADER'), 1);
   assert.equal(occurrences(consolidated[1]?.message ?? '', 'HEADER USADO'), 1);
 });
 
 test('keeps draft order inside a consolidated template group', () => {
-  const [consolidated] = prepareConsolidatedTemporaryOffers(prepare([draft(4), draft(2), draft(9)]));
+  const [consolidated] = prepareConsolidatedTemporaryOffers(
+    prepare([draft(4), draft(2), draft(9)]),
+  );
   assert.ok(consolidated);
 
   const positions = ['iPhone 4', 'iPhone 2', 'iPhone 9'].map((name) =>

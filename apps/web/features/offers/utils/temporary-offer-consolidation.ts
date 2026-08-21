@@ -1,7 +1,8 @@
 import { OfferDraft } from '@/features/pricing/types/pricing';
 import { CommercialTemplate, OfferItem } from '../types/offers';
 
-export interface TemporaryOfferItem extends OfferItem {
+export interface TemporaryOfferItem extends Omit<OfferItem, 'createdAt'> {
+  createdAt?: string;
   template: CommercialTemplate;
   sourceDrafts: OfferDraft[];
 }
@@ -32,7 +33,7 @@ export function prepareTemporaryOffer(
     offerPrice: payload.offerPrice,
     whatsappUrl: `https://wa.me/?text=${encodeURIComponent(message)}`,
     productId: payload.productId,
-    createdAt: new Date().toISOString(),
+    createdAt: draft.createdAt,
     sourceDrafts: [draft],
     sourceDraft: draft,
   };
@@ -73,17 +74,11 @@ function consolidateTemplateGroup(group: PreparedTemporaryOffer[]): TemporaryOff
   };
 }
 
-export function renderTemporaryOfferMessage(
-  offer: TemporaryOfferItem,
-  deliveryTime: string,
-) {
+export function renderTemporaryOfferMessage(offer: TemporaryOfferItem, deliveryTime: string) {
   if (offer.sourceDrafts.length === 1) {
     const [draft] = offer.sourceDrafts;
     if (!draft) return offer.message;
-    return renderOfferMessage(
-      offer.template.content,
-      toTemplateVariables(draft, deliveryTime),
-    );
+    return renderOfferMessage(offer.template.content, toTemplateVariables(draft, deliveryTime));
   }
 
   const preparedOffers = offer.sourceDrafts.map((draft) => ({
@@ -260,12 +255,16 @@ function toConsolidatedTemplateVariables(
   };
 }
 
-function toProductHeadingVariables(draft: OfferDraft, deliveryTime?: string): Record<string, string> {
+function toProductHeadingVariables(
+  draft: OfferDraft,
+  deliveryTime?: string,
+): Record<string, string> {
   const payload = draft.payload;
   const productName = payload.productName.trim();
   const capacity = payload.capacity.trim();
   const productLabel =
-    capacity && !productName.toLocaleLowerCase('pt-BR').includes(capacity.toLocaleLowerCase('pt-BR'))
+    capacity &&
+    !productName.toLocaleLowerCase('pt-BR').includes(capacity.toLocaleLowerCase('pt-BR'))
       ? `${productName} ${capacity}`
       : productName;
 
@@ -350,7 +349,8 @@ function formatCurrency(value: number) {
 export function findTemplateForProductType(templates: CommercialTemplate[], productType?: string) {
   const usedProduct = productType === 'IPHONE_USED' || productType === 'APPLE_CPO';
   return (
-    templates.find((template) => template.productType === (usedProduct ? 'IPHONE_USED' : 'IPHONE_SEALED')) ??
-    templates[0]
+    templates.find(
+      (template) => template.productType === (usedProduct ? 'IPHONE_USED' : 'IPHONE_SEALED'),
+    ) ?? templates[0]
   );
 }
