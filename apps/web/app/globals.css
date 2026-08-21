@@ -151,23 +151,28 @@ textarea {
   }
 
   .text-page-title {
-    @apply font-display text-3xl font-bold leading-tight text-inest-text;
+    @apply font-display text-3xl font-bold leading-tight;
+    color: var(--inest-text);
   }
 
   .text-section-title {
-    @apply font-display text-xl font-bold leading-tight text-inest-text;
+    @apply font-display text-xl font-bold leading-tight;
+    color: var(--inest-text);
   }
 
   .text-card-title {
-    @apply font-display text-lg font-bold leading-tight text-inest-text;
+    @apply font-display text-lg font-bold leading-tight;
+    color: var(--inest-text);
   }
 
   .text-body-muted {
-    @apply text-sm leading-6 text-inest-muted;
+    @apply text-sm leading-6;
+    color: var(--inest-muted);
   }
 
   .field-label {
-    @apply mb-2 block text-xs font-bold uppercase text-inest-muted;
+    @apply mb-2 block text-xs font-bold uppercase;
+    color: var(--inest-muted);
   }
 
   .field-control {
