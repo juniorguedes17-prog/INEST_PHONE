@@ -5,7 +5,10 @@ const PRODUCT_MARKERS =
 const PRODUCT_IDENTITY_MARKERS =
   /(?:\b(?:produto|dispositivo|garmin|fenix|forerunner|venu|dji|drone|xiaomi|redmi|poco|realme|motorola|moto|huawei|infinix|honor|samsung|galaxy|nintendo|switch|vacuum|aspirador|backbone|fire\s?tv|cabo|fonte|carregador|capa|teclado|keyboard|mouse)\b|\busb[-\s]?c\s*\/)/i;
 const USED_CONDITION_MARKERS =
-  /\b(?:seminovo|semi\s?novo|usado|vitrine|open\s?box|as[-\s]?is|no\s?active|not\s?active|never\s?activ(?:e|ated)|nunca\s?(?:active|ativado)|nao\s?ativado|não\s?ativado)\b/i;
+  /\b(?:seminovos?|semi\s*novos?|usado|vitrine|open\s?box|as[-\s]?is|no\s?active|not\s?active|never\s?activ(?:e|ated)|nunca\s?(?:active|ativado)|nao\s?ativado|não\s?ativado)\b/i;
+const CPO_CONDITION_MARKERS =
+  /\b(?:cpo|refurbished|pre[-\s]?owned|certified\s+pre[-\s]?owned|recondicionado\s+(?:pela\s+)?apple)\b/i;
+const NEW_CONDITION_MARKERS = /\b(?:novo|novos|lacrad[oa]s?|new|sealed)\b/i;
 const GRADE_MARKER = /\bgrade\s*(a\s*\+|ab|b|c|a)(?=\s|[^a-z0-9]|$)/gi;
 const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`;
 const MONEY_VALUE = String.raw`\d(?:[\d.,]|\s(?=\d{3}(?:\D|$)))*`;
@@ -46,9 +49,7 @@ const COLOR_MARKERS = [
 ];
 
 export type SupplierLineRejectionReason =
-  | 'invalid_or_missing_price'
-  | 'missing_product_context'
-  | 'empty_normalized_product';
+  'invalid_or_missing_price' | 'missing_product_context' | 'empty_normalized_product';
 
 export interface SupplierLineRejection {
   rawLine: string;
@@ -91,7 +92,8 @@ export function parseSupplierListText(
     const sectionCategory = detectCategory(line);
     if (isCategoryHeading(line, sectionCategory)) {
       activeCategory = sectionCategory;
-      activeCondition = detectCondition(line);
+      const sectionCondition = detectCondition(line);
+      if (sectionCondition !== 'NONE') activeCondition = sectionCondition;
       currentProduct = null;
       activeGrade = null;
       currentGrade = null;
@@ -101,7 +103,9 @@ export function parseSupplierListText(
     }
 
     if (isConditionDescriptor(line)) {
-      currentCondition = detectCondition(line);
+      const detectedCondition = detectCondition(line);
+      if (detectedCondition === 'NONE') continue;
+      currentCondition = detectedCondition;
       pendingColors = [];
       if (!currentProduct) {
         activeCondition = currentCondition;
@@ -111,8 +115,10 @@ export function parseSupplierListText(
       continue;
     }
 
-    if (isConditionSectionHeading(line) && !isCompactAppleProductHeading(line)) {
-      activeCondition = detectCondition(line);
+    if (isConditionSectionHeading(line, activeCondition) && !isCompactAppleProductHeading(line)) {
+      const sectionCondition = detectCondition(line);
+      if (sectionCondition === 'NONE') continue;
+      activeCondition = sectionCondition;
       currentCondition = activeCondition;
       currentProduct = null;
       activeGrade = null;
@@ -132,13 +138,13 @@ export function parseSupplierListText(
 
     const isGradeQualifier = Boolean(lineGrade && currentProduct && isGradeQualifierLine(line));
     const isProductCandidate =
-      !isGradeQualifier && isProductHeading(line, activeCategory, currentProduct !== null, nextLine);
+      !isGradeQualifier &&
+      isProductHeading(line, activeCategory, currentProduct !== null, nextLine);
     if (isProductCandidate) {
       currentProduct = withCategoryPrefix(removePrice(line), activeCategory);
       pendingColors = [];
       currentGrade = lineGrade ?? activeGrade;
-      const productCondition = detectCondition(currentProduct);
-      currentCondition = productCondition === 'NOVO' ? activeCondition : productCondition;
+      currentCondition = resolveProductCondition(currentProduct, activeCondition);
     } else if (lineGrade && currentProduct) {
       currentGrade = lineGrade;
     }
@@ -156,7 +162,11 @@ export function parseSupplierListText(
         continue;
       }
       if (pendingColors.length > 0) pendingColors = [];
-      if (isProductCandidate && !hasPrice(nextLine ?? '') && !hasContextualBarePrice(nextLine ?? '')) {
+      if (
+        isProductCandidate &&
+        !hasPrice(nextLine ?? '') &&
+        !hasContextualBarePrice(nextLine ?? '')
+      ) {
         options.onLineRejected?.({ rawLine: line, reason: 'invalid_or_missing_price' });
       }
       continue;
@@ -214,21 +224,25 @@ function isGradeSectionHeading(value: string) {
   const grade = extractGrade(value);
   if (!grade || hasPrice(value)) return false;
 
-  return removeGradeMarker(value)
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
-    .replace(/[()[\]{}:;,./\\|•*_~\-–—]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim() === '';
+  return (
+    removeGradeMarker(value)
+      .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+      .replace(/[()[\]{}:;,./\\|•*_~\-–—]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() === ''
+  );
 }
 
 function isGradeQualifierLine(value: string) {
   if (!extractGrade(value)) return false;
 
-  return removeGradeMarker(removePrice(value))
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
-    .replace(/[()[\]{}:;,./\\|•*_~\-–—]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim() === '';
+  return (
+    removeGradeMarker(removePrice(value))
+      .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+      .replace(/[()[\]{}:;,./\\|•*_~\-–—]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() === ''
+  );
 }
 
 function extractGrade(value: string): ProductGrade | null {
@@ -316,7 +330,10 @@ function isCompactAppleProductHeading(value: string) {
 
 function isStandaloneColorLine(value: string) {
   const normalized = normalizeProductText(value)
-    .replace(/\b(?:prata|cinza|cinzento|gray|grey|yellow|spacegray|jetblack|skyblue|deepblue)\b/gi, ' ')
+    .replace(
+      /\b(?:prata|cinza|cinzento|gray|grey|yellow|spacegray|jetblack|skyblue|deepblue)\b/gi,
+      ' ',
+    )
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -376,16 +393,18 @@ function isConditionDescriptor(value: string) {
     .replace(/\b(?:bateria|battery)?\s*100\s*%?\b/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  return USED_CONDITION_MARKERS.test(value) && withoutCondition.length === 0;
+  return (
+    USED_CONDITION_MARKERS.test(value) &&
+    withoutCondition.length === 0 &&
+    !/^\s*semi\s*novos?\s*$/i.test(value)
+  );
 }
 
-function isConditionSectionHeading(value: string) {
-  const hasCondition =
-    isSwapConditionHeading(value) ||
-    /\bcpo\b|refurbished|pre[-\s]?owned/i.test(value) ||
-    USED_CONDITION_MARKERS.test(value);
+function isConditionSectionHeading(value: string, activeCondition: string) {
+  const hasCondition = detectCondition(value) !== 'NONE';
   return (
     hasCondition &&
+    !isDescriptiveNewLineWithinCpo(value, activeCondition) &&
     !hasPrice(value) &&
     !PRODUCT_MARKERS.test(value) &&
     !PRODUCT_IDENTITY_MARKERS.test(value) &&
@@ -404,16 +423,23 @@ function isSwapConditionHeading(value: string) {
   return normalized === 'swap' || normalized === 'lista swap';
 }
 
+function isDescriptiveNewLineWithinCpo(value: string, activeCondition: string) {
+  return (
+    activeCondition === 'CPO' &&
+    NEW_CONDITION_MARKERS.test(value) &&
+    /\b(?:garantia|recondicionad[oa])\b/i.test(value)
+  );
+}
+
 function isAttributeOnlyLine(value: string) {
   if (extractColor(value)) return false;
-  const withoutDecorations = value.replace(
-    /[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu,
-    ' ',
-  ).replace(/^[\s•|*_~\-–—]+/, ' ');
+  const withoutDecorations = value
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/^[\s•|*_~\-–—]+/, ' ');
   return (
     /\b(?:cpu|gpu|ram|ssd|chip\s+(?:fisico|físico|virtual)|bateria|battery|controle|oculos|óculos|ocean\s+band|alpine\s+loop|pulseira|solar|sapphire|garantia|meses?|dias?|minutos?|unidades?|pecas?|peças?)\b/i.test(
-    withoutDecorations,
-  ) ||
+      withoutDecorations,
+    ) ||
     /^\s*\d+\s*(?:c\s*)?(?:cpu|gpu|baterias?)\b/i.test(withoutDecorations) ||
     /^\s*modelo\s+[a-z]?\d+[a-z0-9-]*\s*$/i.test(withoutDecorations)
   );
@@ -505,9 +531,10 @@ function canonicalizeProductName(value: string) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  const compactIPhone = /\biphone\s+(?:1[2-7]|17e)\b[\s\S]*\b(?:pro|max|air|plus|e|128|256|512|1tb|2tb)\b/i.test(
-    withoutDecorations,
-  );
+  const compactIPhone =
+    /\biphone\s+(?:1[2-7]|17e)\b[\s\S]*\b(?:pro|max|air|plus|e|128|256|512|1tb|2tb)\b/i.test(
+      withoutDecorations,
+    );
   const withCompactStorage = compactIPhone
     ? withoutDecorations.replace(/\b(128|256|512)\b(?!\s*(?:gb|tb))/gi, '$1GB')
     : withoutDecorations;
@@ -675,11 +702,21 @@ function removeColor(value: string, color: string) {
     .trim();
 }
 
-function detectCondition(value: string): string {
-  if (isSwapConditionHeading(value)) return 'SEMINOVO';
-  if (/\bcpo\b|refurbished|pre[-\s]?owned/i.test(value)) return 'CPO';
+type DetectedCondition = 'NONE' | 'NOVO' | 'CPO' | 'SEMINOVO';
+
+function detectCondition(value: string): DetectedCondition {
+  if (isSwapConditionHeading(value) || /\bswap\b/i.test(value)) return 'SEMINOVO';
+  if (CPO_CONDITION_MARKERS.test(value)) return 'CPO';
   if (USED_CONDITION_MARKERS.test(value)) return 'SEMINOVO';
-  return 'NOVO';
+  if (NEW_CONDITION_MARKERS.test(value)) return 'NOVO';
+  return 'NONE';
+}
+
+function resolveProductCondition(value: string, activeCondition: string) {
+  const detectedCondition = detectCondition(value);
+  if (detectedCondition === 'NONE') return activeCondition;
+  if (detectedCondition !== 'NOVO') return detectedCondition;
+  return isDescriptiveNewLineWithinCpo(value, activeCondition) ? activeCondition : 'NOVO';
 }
 
 function deduplicateItems(items: ParsedSupplierListItem[]) {

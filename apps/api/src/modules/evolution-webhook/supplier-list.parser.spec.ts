@@ -30,22 +30,26 @@ describe('supplier list parser', () => {
     const rejections: Array<{ rawLine: string; reason: string }> = [];
     const headerRejections: Array<{ rawLine: string; reason: string }> = [];
 
-    expect(parseSupplierListText(input, { onLineRejected: (rejection) => rejections.push(rejection) })).toEqual(
-      parseSupplierListText(input),
-    );
+    expect(
+      parseSupplierListText(input, { onLineRejected: (rejection) => rejections.push(rejection) }),
+    ).toEqual(parseSupplierListText(input));
     expect(rejections).toHaveLength(0);
-    expect(parseSupplierListText('IPHONES LACRADOS', {
-      onLineRejected: (rejection) => headerRejections.push(rejection),
-    })).toEqual([]);
+    expect(
+      parseSupplierListText('IPHONES LACRADOS', {
+        onLineRejected: (rejection) => headerRejections.push(rejection),
+      }),
+    ).toEqual([]);
     expect(headerRejections).toHaveLength(0);
   });
 
   it('observa preco sem contexto e produto sem preco nos branches existentes', () => {
     const rejections: Array<{ rawLine: string; reason: string }> = [];
 
-    expect(parseSupplierListText('R$ 6.650\niPhone 17 Pro 256GB', {
-      onLineRejected: (rejection) => rejections.push(rejection),
-    })).toEqual([]);
+    expect(
+      parseSupplierListText('R$ 6.650\niPhone 17 Pro 256GB', {
+        onLineRejected: (rejection) => rejections.push(rejection),
+      }),
+    ).toEqual([]);
     expect(rejections).toEqual([
       { rawLine: 'R$ 6.650', reason: 'missing_product_context' },
       { rawLine: 'iPhone 17 Pro 256GB', reason: 'invalid_or_missing_price' },
@@ -61,6 +65,144 @@ describe('supplier list parser', () => {
 
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ condition: 'CPO', price: 4950, color: 'preto' });
+  });
+
+  it('reconhece SEMI NOVOS no cabecalho e nao usa bateria como evidencia', () => {
+    const items = parseSupplierListText(`
+      IPHONES SEMI NOVOS - bateria 85% - 100%
+      iPhone 16 Pro 256GB
+      Preto R$ 4.500
+      iPhone 15 128GB
+      Azul R$ 3.500
+    `);
+
+    expect(items).toHaveLength(2);
+    expect(items.every((item) => item.condition === 'SEMINOVO')).toBe(true);
+  });
+
+  it('reconhece SEMINOVOS como contexto SEMINOVO', () => {
+    const [item] = parseSupplierListText('SEMINOVOS\niPhone 16 128GB\nPreto R$ 3.500');
+
+    expect(item).toMatchObject({ condition: 'SEMINOVO', price: 3500 });
+  });
+
+  it('trata SEMINOVOS como nova secao mesmo apos um produto anterior', () => {
+    const items = parseSupplierListText(`
+      iPhone 15 128GB
+      Preto R$ 3.000
+      SEMINOVOS
+      iPhone 16 128GB
+      Azul R$ 4.000
+    `);
+
+    expect(items.map((item) => item.condition)).toEqual(['NOVO', 'SEMINOVO']);
+  });
+
+  it('permite que uma nova secao NOVO substitua o contexto CPO', () => {
+    const items = parseSupplierListText(`
+      APARELHOS CPO
+      iPhone 14 Pro 256GB
+      Preto R$ 3.500
+      iPhone 13 128GB
+      Azul R$ 2.500
+      IPHONES LACRADOS
+      iPhone 16 128GB
+      Branco R$ 4.000
+      iPhone 15 128GB
+      Natural R$ 3.200
+    `);
+
+    expect(items.map((item) => item.condition)).toEqual(['CPO', 'CPO', 'NOVO', 'NOVO']);
+  });
+
+  it('nao deixa CPO vazar apos uma secao explicita de outra condicao', () => {
+    const items = parseSupplierListText(`
+      APARELHOS CPO
+      iPhone 14 Pro 256GB
+      Preto R$ 3.500
+      IPHONES NOVOS
+      iPhone 16 128GB
+      Branco R$ 4.000
+      iPad 11 128GB
+      Azul R$ 2.500
+    `);
+
+    expect(items.map((item) => item.condition)).toEqual(['CPO', 'NOVO', 'NOVO']);
+  });
+
+  it('preserva CPO em texto descritivo de novo lacrado dentro da secao CPO', () => {
+    const items = parseSupplierListText(`
+      APARELHOS CPO
+      Recondicionado pela apple
+      Novo lacrado e com garantia apple
+      iPhone 15 Pro 256GB
+      Preto R$ 3.500
+    `);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ condition: 'CPO', price: 3500 });
+  });
+
+  it('preserva a sequencia de contexto SWAP, lacrados e CPO', () => {
+    const items = parseSupplierListText(`
+      LISTA-SWAP
+      iPhone 15 128GB
+      Preto R$ 3.000
+      IPHONES LACRADOS
+      iPhone 16 128GB
+      Azul R$ 4.000
+      CPO
+      iPhone 14 Pro 256GB
+      Natural R$ 3.500
+    `);
+
+    expect(items.map((item) => item.condition)).toEqual(['SEMINOVO', 'NOVO', 'CPO']);
+  });
+
+  it('preserva a sequencia de secoes Apple lacrados e Apple CPO lacrados', () => {
+    const items = parseSupplierListText(`
+      LISTA APPLE LACRADOS
+      iPhone 16 128GB
+      Preto R$ 4.000
+      LISTA APPLE CPO LACRADOS
+      iPhone 15 Pro 256GB
+      Natural R$ 3.500
+    `);
+
+    expect(items.map((item) => item.condition)).toEqual(['NOVO', 'CPO']);
+  });
+
+  it('permite que Apple lacrados abra uma nova secao apos CPO', () => {
+    const items = parseSupplierListText(`
+      APARELHOS CPO
+      iPhone 14 Pro 256GB
+      Preto R$ 3.500
+      LISTA APPLE LACRADOS
+      iPhone 16 128GB
+      Azul R$ 4.000
+    `);
+
+    expect(items.map((item) => item.condition)).toEqual(['CPO', 'NOVO']);
+  });
+
+  it('mantem NOVO quando a linha informa somente bateria', () => {
+    const [item] = parseSupplierListText('iPhone 16 128GB\nBateria 100%\nPreto R$ 4.000');
+
+    expect(item).toMatchObject({ condition: 'NOVO', price: 4000 });
+  });
+
+  it('reconhece recondicionado pela apple como CPO', () => {
+    const [item] = parseSupplierListText(
+      'Recondicionado pela Apple iPhone 15 Pro 256GB\nPreto R$ 3.500',
+    );
+
+    expect(item).toMatchObject({ condition: 'CPO', price: 3500 });
+  });
+
+  it('reconhece SWAP inline como SEMINOVO sem alterar a identidade por downstream', () => {
+    const [item] = parseSupplierListText('iPhone 15 256GB SWAP\nPreto R$ 3.000');
+
+    expect(item).toMatchObject({ condition: 'SEMINOVO', price: 3000 });
   });
 
   it('interpreta produtos Apple compactos com CPO inline sem perder o contexto', () => {
@@ -306,11 +448,17 @@ describe('supplier list parser', () => {
 
     expect(duplicate).toHaveLength(1);
     expect(novoAndCpo).toHaveLength(2);
-    expect(novoAndCpo.map((item) => item.condition)).toEqual(expect.arrayContaining(['NOVO', 'CPO']));
+    expect(novoAndCpo.map((item) => item.condition)).toEqual(
+      expect.arrayContaining(['NOVO', 'CPO']),
+    );
     expect(novoAndSeminovo).toHaveLength(2);
-    expect(novoAndSeminovo.map((item) => item.condition)).toEqual(expect.arrayContaining(['NOVO', 'SEMINOVO']));
+    expect(novoAndSeminovo.map((item) => item.condition)).toEqual(
+      expect.arrayContaining(['NOVO', 'SEMINOVO']),
+    );
     expect(cpoAndSeminovo).toHaveLength(2);
-    expect(cpoAndSeminovo.map((item) => item.condition)).toEqual(expect.arrayContaining(['CPO', 'SEMINOVO']));
+    expect(cpoAndSeminovo.map((item) => item.condition)).toEqual(
+      expect.arrayContaining(['CPO', 'SEMINOVO']),
+    );
   });
 
   it('preserva pontos como milhar quando a lista nao informa centavos', () => {
