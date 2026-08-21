@@ -462,6 +462,10 @@ function resolveIgnoredDescriptors(text: string, family: ProductIdentityFamily) 
     ['americano', 'americano'],
     ['usa', 'usa'],
     ['eua', 'eua'],
+    ['ll/a', 'll/a'],
+    ['ll a', 'll/a'],
+    ['hn/a', 'hn/a'],
+    ['hn a', 'hn/a'],
   ] as const;
   return descriptors.filter(([term]) => containsPhrase(text, term)).map(([, label]) => label);
 }

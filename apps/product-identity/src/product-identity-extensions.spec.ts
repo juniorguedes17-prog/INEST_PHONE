@@ -63,6 +63,48 @@ test('iPhone protege armazenamento e ignora descritores nao financeiros', () => 
   assert.notEqual(external.key, proMax.key);
 });
 
+test('separa códigos regionais comprovados da identidade financeira do iPhone', () => {
+  const base = deriveExtendedProductIdentity(novo('iPhone 17 Pro 256GB'));
+  const regional = [
+    ['iPhone 17 Pro 256GB LL/A', 'll/a'],
+    ['iPhone 17 Pro 256GB HN/A', 'hn/a'],
+  ] as const;
+
+  for (const [productName, descriptor] of regional) {
+    const qualified = deriveExtendedProductIdentity(novo(productName));
+
+    assert.equal(qualified.canonical.canonicalModelKey, base.canonical.canonicalModelKey);
+    assert.equal(qualified.canonical.canonicalStorage, base.canonical.canonicalStorage);
+    assert.equal(qualified.canonical.canonicalCondition, base.canonical.canonicalCondition);
+    assert.equal(qualified.profit.key, base.profit.key);
+    assert.deepEqual(qualified.profit.ignoredDescriptors, [descriptor]);
+  }
+});
+
+test('preserva atributos canônicos quando metadado não comprovado acompanha MacBook', () => {
+  const base = deriveExtendedProductIdentity(novo('MacBook Neo A18 Pro 13" 8GB/512GB'));
+  const qualified = deriveExtendedProductIdentity(
+    novo('MacBook Neo A18 Pro 13" 8GB/512GB Touch ID'),
+  );
+
+  assert.deepEqual(
+    [
+      qualified.canonical.canonicalModelKey,
+      qualified.canonical.canonicalRam,
+      qualified.canonical.canonicalStorage,
+      qualified.canonical.canonicalScreen,
+      qualified.canonical.canonicalChip,
+    ],
+    [
+      base.canonical.canonicalModelKey,
+      base.canonical.canonicalRam,
+      base.canonical.canonicalStorage,
+      base.canonical.canonicalScreen,
+      base.canonical.canonicalChip,
+    ],
+  );
+});
+
 test('iPad protege familia, chip, tela e armazenamento', () => {
   const air11 = deriveProfitLookupIdentity(novo('iPad Air M4 11" 128GB'));
   const air13 = deriveProfitLookupIdentity(novo('iPad Air M4 13" 128GB'));
