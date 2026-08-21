@@ -126,7 +126,7 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
             className="col-span-2 min-h-11 px-3 lg:col-auto"
             onClick={() => onSendToPricing(product.referenceQuote)}
           >
-            Enviar para Precificacao
+            Enviar para Precificação
           </ActionButton>
         </div>
       </div>

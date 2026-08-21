@@ -6,10 +6,7 @@ import {
   importPriceRadarCsv,
   updatePriceQuote,
 } from '../services/price-radar-service';
-import {
-  CsvImportResult,
-  PriceQuoteFormPayload,
-} from '../types/price-radar';
+import { CsvImportResult, PriceQuoteFormPayload } from '../types/price-radar';
 import {
   BRAZIL_RADAR_REVALIDATE_INTERVAL_MS,
   getBrazilRadarSnapshotCache,
@@ -74,13 +71,13 @@ export function usePriceRadar() {
     setSuccess(null);
     try {
       await updatePriceQuote(id, payload);
-      setSuccess('Cotacao atualizada com sucesso.');
+      setSuccess('Cotação atualizada com sucesso.');
       await load();
     } catch (priceRadarError) {
       setActionError(
         priceRadarError instanceof Error
           ? priceRadarError.message
-          : 'Nao foi possivel salvar a cotacao.',
+          : 'Não foi possível salvar a cotação.',
       );
     } finally {
       setSaving(false);
@@ -93,13 +90,13 @@ export function usePriceRadar() {
     setSuccess(null);
     try {
       await hidePriceQuote(id);
-      setSuccess('Cotacao ocultada logicamente.');
+      setSuccess('Cotação ocultada logicamente.');
       await load();
     } catch (priceRadarError) {
       setActionError(
         priceRadarError instanceof Error
           ? priceRadarError.message
-          : 'Nao foi possivel ocultar a cotacao.',
+          : 'Não foi possível ocultar a cotação.',
       );
     } finally {
       setSaving(false);
@@ -115,14 +112,14 @@ export function usePriceRadar() {
       const result = await importPriceRadarCsv(csvContent);
       setLastImport(result);
       setSuccess(
-        `Importacao concluida: ${result.validRecords} validos, ${result.invalidRecords} inconsistencias.`,
+        `Importação concluída: ${result.validRecords} válidos, ${result.invalidRecords} inconsistências.`,
       );
       await load();
     } catch (priceRadarError) {
       setActionError(
         priceRadarError instanceof Error
           ? priceRadarError.message
-          : 'Nao foi possivel importar o CSV.',
+          : 'Não foi possível importar o CSV.',
       );
     } finally {
       setSaving(false);

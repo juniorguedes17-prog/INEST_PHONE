@@ -36,27 +36,27 @@ export function PricingToolbar({
   return (
     <section
       className="rounded-2xl border border-inest-line/70 bg-inest-surface p-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)]"
-      aria-label="Ferramentas da Precificacao"
+      aria-label="Ferramentas da Precificação"
     >
       <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-center">
         <SearchInput
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Pesquisar produto, modelo ou fornecedor"
-          aria-label="Pesquisar na Precificacao"
+          aria-label="Pesquisar na Precificação"
           className="min-w-0 flex-1 2xl:max-w-xl"
         />
 
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone="blue">{total} encontrados</StatusBadge>
           <span className="text-xs font-bold text-inest-muted">
-            {lastUpdated ? `Atualizado ${lastUpdated}` : 'Sem atualizacao'}
+            {lastUpdated ? `Atualizado ${lastUpdated}` : 'Sem atualização'}
           </span>
         </div>
 
         <div className="flex flex-wrap items-end gap-2 border-t border-inest-line/70 pt-3 2xl:ml-auto 2xl:border-l 2xl:border-t-0 2xl:pl-4 2xl:pt-0">
           <CompactSelect
-            label="Ordenacao"
+            label="Ordenação"
             value={sort}
             options={sortOptions}
             onChange={onSortChange}
@@ -65,9 +65,9 @@ export function PricingToolbar({
             label="Itens"
             value={String(pageSize)}
             options={[
-              ['10', '10 por pagina'],
-              ['20', '20 por pagina'],
-              ['50', '50 por pagina'],
+              ['10', '10 por página'],
+              ['20', '20 por página'],
+              ['50', '50 por página'],
             ]}
             onChange={(value) => onPageSizeChange(Number(value))}
           />

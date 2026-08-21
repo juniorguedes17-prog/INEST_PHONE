@@ -44,8 +44,8 @@ import {
 } from '../state/brazil-radar-snapshot-cache';
 
 const sortOptions = [
-  ['lowest_price', 'Menor preco'],
-  ['highest_price', 'Maior preco'],
+  ['lowest_price', 'Menor preço'],
+  ['highest_price', 'Maior preço'],
   ['recent', 'Mais recentes'],
   ['supplier', 'Fornecedor'],
   ['product', 'Produto'],
@@ -62,8 +62,8 @@ export function PriceRadarPageContent() {
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<PriceQuoteItem | null>(null);
-  const [facetFilters, setFacetFilters] = useState<BrazilRadarFacetState>(() =>
-    getBrazilRadarSnapshotCache().ui.facetFilters ?? createEmptyFacetFilters(),
+  const [facetFilters, setFacetFilters] = useState<BrazilRadarFacetState>(
+    () => getBrazilRadarSnapshotCache().ui.facetFilters ?? createEmptyFacetFilters(),
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(() => getBrazilRadarSnapshotCache().ui.page);
@@ -236,14 +236,14 @@ export function PriceRadarPageContent() {
     try {
       if (quote.source !== 'BRAZIL_RADAR') {
         if (!quote.productId) {
-          throw new Error('Produto do catalogo nao identificado para Precificacao.');
+          throw new Error('Produto do catálogo não identificado para Precificação.');
         }
         router.push(`/pricing?productId=${encodeURIComponent(quote.productId)}`);
         return;
       }
 
       if (!quote.sourceQuoteId) {
-        throw new Error('Cotacao do Radar Brasil sem identificador de origem.');
+        throw new Error('Cotação do Radar Brasil sem identificador de origem.');
       }
       const prepared = await calculateBrazilRadarQuotePricing({
         sourceQuoteId: quote.sourceQuoteId,
@@ -254,7 +254,7 @@ export function PriceRadarPageContent() {
       setHandoffError(
         error instanceof Error
           ? error.message
-          : 'Nao foi possivel enviar a cotacao para Precificacao.',
+          : 'Não foi possível enviar a cotação para Precificação.',
       );
     }
   }
@@ -275,7 +275,7 @@ export function PriceRadarPageContent() {
       );
       if (!result.items.length) {
         throw new Error(
-          result.errors[0] ?? 'Nao foi possivel enviar as cotacoes para Precificacao.',
+          result.errors[0] ?? 'Não foi possível enviar as cotações para Precificação.',
         );
       }
 
@@ -293,7 +293,7 @@ export function PriceRadarPageContent() {
       setHandoffError(
         error instanceof Error
           ? error.message
-          : 'Nao foi possivel enviar as cotacoes para Precificacao.',
+          : 'Não foi possível enviar as cotações para Precificação.',
       );
     } finally {
       setHandoffSending(false);
@@ -303,15 +303,15 @@ export function PriceRadarPageContent() {
   return (
     <div className="grid min-w-0 gap-4">
       <PageHeader
-        eyebrow="Inteligencia comercial"
-        title="Radar de Precos"
+        eyebrow="Inteligência comercial"
+        title="Radar de Preços"
         description="Central de custos de fornecedores para identificar melhores oportunidades."
         actions={
           origin === 'brasil' ? (
             <>
               {radar.success ? <StatusBadge tone="green">{radar.success}</StatusBadge> : null}
               {radar.revalidationError ? (
-                <StatusBadge tone="amber">Atualizacao pendente</StatusBadge>
+                <StatusBadge tone="amber">Atualização pendente</StatusBadge>
               ) : null}
               <ActionButton variant="secondary" onClick={() => setImportModalOpen(true)}>
                 Importar CSV
@@ -326,10 +326,10 @@ export function PriceRadarPageContent() {
       />
 
       {origin === 'brasil' && radar.error ? (
-        <ErrorState title="Atencao" description={radar.error} />
+        <ErrorState title="Atenção" description={radar.error} />
       ) : null}
       {origin === 'brasil' && handoffError ? (
-        <ErrorState title="Atencao" description={handoffError} />
+        <ErrorState title="Atenção" description={handoffError} />
       ) : null}
 
       <RadarOriginTabs
@@ -375,29 +375,29 @@ export function PriceRadarPageContent() {
             <KpiCard
               label="Atualizados hoje"
               value={String(updatedToday)}
-              detail="Ultimas 24 horas"
+              detail="Últimas 24 horas"
               tone="green"
             />
             <KpiCard
               label="Fornecedores ativos"
               value={String(activeSuppliers)}
-              detail="Com cotacoes no Radar"
+              detail="Com cotações no Radar"
               tone="purple"
             />
             <KpiCard
-              label="Menor preco"
+              label="Menor preço"
               value={formatCurrency(displayKpis.lowest)}
-              detail="Apenas registros validos"
+              detail="Apenas registros válidos"
               tone="green"
             />
             <KpiCard
-              label="Preco medio"
+              label="Preço médio"
               value={formatCurrency(displayKpis.average)}
-              detail="Base de cotacoes validas"
+              detail="Base de cotações válidas"
               tone="blue"
             />
             <KpiCard
-              label="Maior preco"
+              label="Maior preço"
               value={formatCurrency(displayKpis.highest)}
               detail={`${displayKpis.hidden} registros ocultados`}
               tone="amber"
@@ -426,10 +426,10 @@ export function PriceRadarPageContent() {
                     }}
                     className="h-4 w-4 accent-inest-blue"
                   />
-                  Selecionar pagina
+                  Selecionar página
                 </label>
                 <span className="text-xs font-bold text-inest-muted">
-                  Pagina {page} de {totalPages}
+                  Página {page} de {totalPages}
                 </span>
               </div>
 
@@ -443,10 +443,10 @@ export function PriceRadarPageContent() {
                       disabled={handoffSending}
                       onClick={() => void sendSelectedToPricing()}
                     >
-                      {handoffSending ? 'Enviando...' : 'Enviar para Precificacao'}
+                      {handoffSending ? 'Enviando...' : 'Enviar para Precificação'}
                     </ActionButton>
                     <ActionButton variant="ghost" onClick={() => setSelectedIds(new Set())}>
-                      Limpar selecao
+                      Limpar seleção
                     </ActionButton>
                   </div>
                 </div>
@@ -456,14 +456,14 @@ export function PriceRadarPageContent() {
                 {radar.loading ? <LoadingState /> : null}
                 {!radar.loading && !visibleRadarQuotes.length ? (
                   <EmptyState
-                    title="Radar ainda sem cotacoes."
-                    description="Cadastre uma cotacao ou importe uma lista CSV para iniciar."
+                    title="Radar ainda sem cotações."
+                    description="Cadastre uma cotação ou importe uma lista CSV para iniciar."
                   />
                 ) : null}
                 {!radar.loading && visibleRadarQuotes.length > 0 && !filteredQuotes.length ? (
                   <EmptyState
                     title="Nenhum resultado para estes filtros."
-                    description="Limpe os filtros ou amplie os criterios da consulta."
+                    description="Limpe os filtros ou amplie os critérios da consulta."
                     action={
                       <ActionButton variant="secondary" onClick={clearFilters}>
                         Limpar filtros
@@ -592,7 +592,7 @@ function QuoteFormModal({
   }
 
   return (
-    <Modal open={open} title="Editar cotacao" onClose={onClose}>
+    <Modal open={open} title="Editar cotação" onClose={onClose}>
       <form className="grid gap-4" onSubmit={handleSubmit}>
         <SelectInput
           label="Produto"
@@ -608,7 +608,7 @@ function QuoteFormModal({
         />
         <div className="grid gap-4 md:grid-cols-2">
           <NumberInput
-            label="Preco de custo"
+            label="Preço de custo"
             value={form.costProduct}
             onChange={(value) => setForm((current) => ({ ...current, costProduct: value }))}
           />
@@ -631,13 +631,13 @@ function QuoteFormModal({
           />
         </div>
         <TextInput
-          label="Data da cotacao"
+          label="Data da cotação"
           type="date"
           value={form.quoteDate ?? ''}
           onChange={(value) => setForm((current) => ({ ...current, quoteDate: value }))}
         />
         <TextArea
-          label="Observacoes"
+          label="Observações"
           value={form.notes ?? ''}
           onChange={(value) => setForm((current) => ({ ...current, notes: value }))}
         />
@@ -682,8 +682,8 @@ function CsvImportModal({
         <TextArea label="Conteudo CSV" value={csvContent} onChange={setCsvContent} rows={8} />
         {lastImport ? (
           <div className="rounded-xl border border-inest-line bg-inest-soft p-4 text-sm text-inest-muted">
-            <strong className="block text-inest-text">Resultado da ultima importacao</strong>
-            {lastImport.validRecords} validos, {lastImport.invalidRecords} inconsistencias de{' '}
+            <strong className="block text-inest-text">Resultado da última importação</strong>
+            {lastImport.validRecords} válidos, {lastImport.invalidRecords} inconsistências de{' '}
             {lastImport.totalRecords} linhas.
           </div>
         ) : null}
@@ -741,7 +741,7 @@ function openWhatsapp(quote: PriceQuoteItem) {
   if (!quote.supplier.whatsappLink) {
     return;
   }
-  const message = `Ola! Tenho interesse no ${quote.productName} que encontrei no Radar de Precos da iNest. Poderia confirmar disponibilidade e valor?`;
+  const message = `Olá! Tenho interesse no ${quote.productName} que encontrei no Radar de Preços da iNest. Poderia confirmar disponibilidade e valor?`;
   window.open(`${quote.supplier.whatsappLink}?text=${encodeURIComponent(message)}`, '_blank');
 }
 

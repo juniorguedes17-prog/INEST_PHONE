@@ -153,11 +153,11 @@ export function OffersPageContent() {
       <PageHeader
         eyebrow="Comercial"
         title="Gerador de Ofertas"
-        description="Mensagens comerciais geradas a partir da Precificacao oficial."
+        description="Mensagens comerciais geradas a partir da Precificação oficial."
         actions={offers.success ? <StatusBadge tone="green">{offers.success}</StatusBadge> : null}
       />
 
-      {offers.error ? <ErrorState title="Atencao" description={offers.error} /> : null}
+      {offers.error ? <ErrorState title="Atenção" description={offers.error} /> : null}
 
       <OffersToolbar
         search={filters.search}
@@ -178,8 +178,8 @@ export function OffersPageContent() {
             <SettingsCard
               key={offer.id}
               eyebrow="Oferta preparada"
-              title="Template comercial da Precificacao"
-              description="Rascunho temporario pronto para envio, sem gravacao no banco."
+              title="Template comercial da Precificação"
+              description="Rascunho temporário pronto para envio, sem gravação no banco."
             >
               <div className="grid gap-3">
                 <p className="text-sm font-bold text-inest-text">

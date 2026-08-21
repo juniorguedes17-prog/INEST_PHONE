@@ -46,7 +46,7 @@ export function useImportRadar() {
       setError(
         importRadarError instanceof Error
           ? importRadarError.message
-          : 'Nao foi possivel carregar o Radar de Importacao.',
+          : 'Não foi possível carregar o Radar de Importação.',
       );
     } finally {
       setLoading(false);
@@ -67,7 +67,7 @@ export function useImportRadar() {
       setError(
         importRadarError instanceof Error
           ? importRadarError.message
-          : 'Nao foi possivel calcular o custo de importacao.',
+          : 'Não foi possível calcular o custo de importação.',
       );
     } finally {
       setSaving(false);

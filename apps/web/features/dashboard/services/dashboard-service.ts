@@ -9,7 +9,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const message =
       typeof payload === 'object' && payload && 'message' in payload
         ? String(payload.message)
-        : 'Nao foi possivel carregar o Dashboard.';
+        : 'Não foi possível carregar o Dashboard.';
     throw new Error(message);
   }
 
@@ -38,6 +38,6 @@ export async function syncDashboardSource(): Promise<void> {
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => null)) as { message?: string } | null;
-    throw new Error(payload?.message ?? 'Nao foi possivel sincronizar o Google Sheets.');
+    throw new Error(payload?.message ?? 'Não foi possível sincronizar o Google Sheets.');
   }
 }

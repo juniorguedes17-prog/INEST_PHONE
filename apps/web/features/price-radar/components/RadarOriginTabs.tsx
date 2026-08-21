@@ -19,7 +19,7 @@ export function RadarOriginTabs({ value, onChange }: RadarOriginTabsProps) {
   return (
     <nav
       className="grid grid-cols-3 gap-1 rounded-2xl border border-inest-line/70 bg-inest-surface p-1.5 shadow-[0_14px_34px_rgba(16,24,40,0.055)]"
-      aria-label="Origem do Radar de Precos"
+      aria-label="Origem do Radar de Preços"
     >
       {origins.map((origin) => (
         <button

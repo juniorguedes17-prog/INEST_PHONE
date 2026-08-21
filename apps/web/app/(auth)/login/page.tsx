@@ -23,7 +23,7 @@ export default function LoginPage() {
       router.push('/dashboard');
       router.refresh();
     } catch (loginError) {
-      setError(loginError instanceof Error ? loginError.message : 'Nao foi possivel acessar.');
+      setError(loginError instanceof Error ? loginError.message : 'Não foi possível acessar.');
     } finally {
       setIsSubmitting(false);
     }
@@ -38,7 +38,7 @@ export default function LoginPage() {
           </p>
           <INestLogo variant="login" priority className="mt-4" />
           <p className="mt-3 text-sm leading-6 text-inest-muted sm:mt-5 sm:text-lg sm:leading-8 lg:text-slate-300">
-            Plataforma comercial preparada para radar de precos, precificacao, ofertas e gestao
+            Plataforma comercial preparada para radar de preços, precificação, ofertas e gestão
             operacional com controle de acesso por perfil.
           </p>
         </div>

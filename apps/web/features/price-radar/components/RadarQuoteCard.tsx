@@ -62,7 +62,7 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
             {presentation.title}
           </h3>
           <StatusBadge tone={quote.status === 'hidden' ? 'gray' : 'green'}>
-            {quote.status === 'hidden' ? 'Ocultado' : 'Valido'}
+            {quote.status === 'hidden' ? 'Ocultado' : 'Válido'}
           </StatusBadge>
           {favorite ? <StatusBadge tone="amber">Favorito</StatusBadge> : null}
         </div>
@@ -72,7 +72,7 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
           ))}
         </div>
         {quote.inconsistencies.length ? (
-          <p className="mt-1.5 text-xs font-bold text-amber-700">Pendente de revisao</p>
+          <p className="mt-1.5 text-xs font-bold text-amber-700">Pendente de revisão</p>
         ) : null}
       </div>
 
@@ -93,15 +93,15 @@ export const RadarQuoteCard = memo(function RadarQuoteCard({
 
       <div className="flex min-w-0 flex-col items-start gap-1 border-t border-inest-line/70 pt-4 md:items-end md:border-l md:border-t-0 md:pl-5 md:pt-0">
         <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
-          Preco fornecedor
+          Preço fornecedor
         </span>
         <strong className="font-display text-[28px] font-bold leading-none text-inest-text">
           {formatCurrency(quote.costProduct)}
         </strong>
         <span className="text-xs text-inest-muted">{formatDateTime(quote.updatedAt)}</span>
         <div className="mt-1.5 flex flex-wrap gap-1 md:justify-end">
-          <QuickAction label="Ver" title="Visualizar cotacao" onClick={() => onView(quote)} />
-          <QuickAction label="Precificar" title="Abrir Precificacao" onClick={onPricing} />
+          <QuickAction label="Ver" title="Visualizar cotação" onClick={() => onView(quote)} />
+          <QuickAction label="Precificar" title="Abrir Precificação" onClick={onPricing} />
           <QuickAction label="Oferta" title="Adicionar a oferta" onClick={onOffer} />
           <QuickAction
             label={favorite ? 'Salvo' : 'Favoritar'}

@@ -11,7 +11,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const message =
       typeof payload === 'object' && payload && 'message' in payload
         ? String(payload.message)
-        : 'Nao foi possivel concluir a operacao.';
+        : 'Não foi possível concluir a operação.';
     throw new Error(message);
   }
 

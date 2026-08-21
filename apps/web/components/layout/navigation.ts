@@ -1,32 +1,70 @@
 import { FeatureKey, isFeatureEnabled } from '@/lib/features';
 
+export type SidebarIconName =
+  | 'dashboard'
+  | 'radar'
+  | 'import'
+  | 'pricing'
+  | 'offers'
+  | 'products'
+  | 'customers'
+  | 'suppliers'
+  | 'finance'
+  | 'bi'
+  | 'integrations'
+  | 'settings';
+
 export interface NavigationItem {
   label: string;
   href: string;
-  icon: string;
+  icon: SidebarIconName;
   eyebrow?: string;
   feature?: FeatureKey;
 }
 
 export const navigationItems: NavigationItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: 'D', eyebrow: 'Operacao comercial' },
-  { label: 'Radar de Precos', href: '/price-radar', icon: 'R', eyebrow: 'Fornecedores' },
+  { label: 'Dashboard', href: '/dashboard', icon: 'dashboard', eyebrow: 'Operação comercial' },
+  { label: 'Radar de Preços', href: '/price-radar', icon: 'radar', eyebrow: 'Fornecedores' },
   {
-    label: 'Radar de Importacao',
+    label: 'Radar de Importação',
     href: '/import-radar',
-    icon: 'I',
-    eyebrow: 'Importacao',
+    icon: 'import',
+    eyebrow: 'Importação',
     feature: 'importRadar',
   },
-  { label: 'Precificacao', href: '/pricing', icon: '%', eyebrow: 'Catalogo' },
-  { label: 'Ofertas', href: '/offers', icon: 'O', eyebrow: 'Comercial' },
-  { label: 'Produtos', href: '/products', icon: 'P', eyebrow: 'Catalogo' },
-  { label: 'Clientes', href: '/customers', icon: 'C', eyebrow: 'Relacionamento' },
-  { label: 'Fornecedores', href: '/suppliers', icon: 'F', eyebrow: 'Cadastro', feature: 'suppliers' },
-  { label: 'Financeiro', href: '/finance', icon: '$', eyebrow: 'Gestao', feature: 'financial' },
-  { label: 'Dashboard BI', href: '/bi', icon: 'BI', eyebrow: 'Inteligencia', feature: 'dashboardBI' },
-  { label: 'Integracoes', href: '/integrations', icon: 'IN', eyebrow: 'Arquitetura', feature: 'integrations' },
-  { label: 'Configuracoes', href: '/settings', icon: '*', eyebrow: 'Sistema' },
+  { label: 'Precificação', href: '/pricing', icon: 'pricing', eyebrow: 'Catálogo' },
+  { label: 'Ofertas', href: '/offers', icon: 'offers', eyebrow: 'Comercial' },
+  { label: 'Produtos', href: '/products', icon: 'products', eyebrow: 'Catálogo' },
+  { label: 'Clientes', href: '/customers', icon: 'customers', eyebrow: 'Relacionamento' },
+  {
+    label: 'Fornecedores',
+    href: '/suppliers',
+    icon: 'suppliers',
+    eyebrow: 'Cadastro',
+    feature: 'suppliers',
+  },
+  {
+    label: 'Financeiro',
+    href: '/finance',
+    icon: 'finance',
+    eyebrow: 'Gestão',
+    feature: 'financial',
+  },
+  {
+    label: 'Dashboard BI',
+    href: '/bi',
+    icon: 'bi',
+    eyebrow: 'Inteligência',
+    feature: 'dashboardBI',
+  },
+  {
+    label: 'Integrações',
+    href: '/integrations',
+    icon: 'integrations',
+    eyebrow: 'Arquitetura',
+    feature: 'integrations',
+  },
+  { label: 'Configurações', href: '/settings', icon: 'settings', eyebrow: 'Sistema' },
 ];
 
 export const visibleNavigationItems = navigationItems.filter((item) =>

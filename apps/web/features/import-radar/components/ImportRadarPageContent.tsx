@@ -27,18 +27,18 @@ export function ImportRadarPageContent() {
   return (
     <div className="grid gap-6">
       <PageHeader
-        eyebrow="Importacao"
-        title="Radar de Importacao"
-        description="Pesquisa internacional simulada com calculo automatico de custo estimado."
+        eyebrow="Importação"
+        title="Radar de Importação"
+        description="Pesquisa internacional simulada com cálculo automático de custo estimado."
         actions={
           <>
-            <StatusBadge tone="blue">Dolar {formatCurrency(radar.dollarQuote)}</StatusBadge>
+            <StatusBadge tone="blue">Dólar {formatCurrency(radar.dollarQuote)}</StatusBadge>
             <StatusBadge tone="green">{radar.history.length} eventos registrados</StatusBadge>
           </>
         }
       />
 
-      {radar.error ? <ErrorState title="Atencao" description={radar.error} /> : null}
+      {radar.error ? <ErrorState title="Atenção" description={radar.error} /> : null}
 
       <section className="grid min-h-[calc(100vh-220px)] grid-cols-1 gap-4 xl:grid-cols-[288px_minmax(0,1fr)_320px]">
         <FilterSidebar eyebrow="Radar" title="Filtros">
@@ -70,12 +70,12 @@ export function ImportRadarPageContent() {
 
           <FilterSection title="Cambio">
             <div className="rounded-xl border border-inest-line bg-inest-soft p-4">
-              <p className="text-sm font-bold text-inest-muted">Cotacao cadastrada</p>
+              <p className="text-sm font-bold text-inest-muted">Cotação cadastrada</p>
               <strong className="mt-1 block font-display text-3xl font-black text-inest-text">
                 {formatCurrency(radar.dollarQuote)}
               </strong>
               <p className="mt-2 text-sm text-inest-muted">
-                Valor consumido de Custos Operacionais de Importacao.
+                Valor consumido de Custos Operacionais de Importação.
               </p>
             </div>
           </FilterSection>
@@ -104,13 +104,13 @@ export function ImportRadarPageContent() {
                     title={product.name}
                     status={product.category}
                     tags={[product.store, product.provider, product.productUrl].filter(Boolean)}
-                    meta={`Preco em dolar: ${formatUsd(product.priceUsd)} - Convertido: ${formatCurrency(
+                    meta={`Preço em dólar: ${formatUsd(product.priceUsd)} - Convertido: ${formatCurrency(
                       product.priceBrl,
                     )}`}
                     supplier={{
                       name: product.store,
                       location: 'Marketplace internacional',
-                      delivery: 'Calculo sob demanda',
+                      delivery: 'Cálculo sob demanda',
                     }}
                     price={formatCurrency(product.priceBrl)}
                     priceLabel={formatUsd(product.priceUsd)}
@@ -154,15 +154,15 @@ function CalculationPanel({
   return (
     <aside className="min-h-0 overflow-y-auto scrollbar-stable">
       <SettingsCard
-        eyebrow="Calculo"
+        eyebrow="Cálculo"
         title="Custo estimado"
-        description="Detalhamento baseado nas configuracoes operacionais de importacao."
+        description="Detalhamento baseado nas configurações operacionais de importação."
       >
         {loading ? <LoadingState /> : null}
         {!product && !loading ? (
           <EmptyState
             title="Selecione um produto."
-            description="O total estimado aparecera aqui automaticamente."
+            description="O total estimado aparecerá aqui automaticamente."
           />
         ) : null}
         {product && calculation ? (
@@ -171,12 +171,12 @@ function CalculationPanel({
               <strong className="font-display text-xl text-inest-text">{product.name}</strong>
               <div className="mt-3 flex flex-wrap gap-2">
                 <InfoTag>{calculation.matchedProductType}</InfoTag>
-                <InfoTag>Dolar {formatCurrency(calculation.dollarQuote)}</InfoTag>
+                <InfoTag>Dólar {formatCurrency(calculation.dollarQuote)}</InfoTag>
               </div>
             </div>
 
             <BreakdownRow label="Produto convertido" value={calculation.breakdown.convertedPrice} />
-            <BreakdownRow label="Saida CDE" value={calculation.breakdown.cdeExit} />
+            <BreakdownRow label="Saída CDE" value={calculation.breakdown.cdeExit} />
             <BreakdownRow label="Redirecionamento" value={calculation.breakdown.redirectCost} />
             <BreakdownRow label="Despacho Brasil" value={calculation.breakdown.brazilDispatch} />
             <BreakdownRow label="Nota Fiscal" value={calculation.breakdown.invoiceTax} />
@@ -184,7 +184,7 @@ function CalculationPanel({
 
             <div className="rounded-xl bg-inest-text p-5 text-white">
               <p className="text-xs font-black uppercase tracking-wide text-white/70">
-                Total estimado de importacao
+                Total estimado de importação
               </p>
               <strong className="mt-2 block font-display text-4xl font-black">
                 {formatCurrency(calculation.total)}

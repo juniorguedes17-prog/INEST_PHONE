@@ -7,10 +7,7 @@ import {
   ImportSearchResponse,
 } from '../types/import-radar';
 
-type CalculateImportCostPayload = Omit<
-  ImportProduct,
-  'provider' | 'priceBrl' | 'dollarQuote'
->;
+type CalculateImportCostPayload = Omit<ImportProduct, 'provider' | 'priceBrl' | 'dollarQuote'>;
 
 function toCalculateImportCostPayload(product: ImportProduct): CalculateImportCostPayload {
   return {
@@ -47,7 +44,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const message =
       typeof payload === 'object' && payload && 'message' in payload
         ? String(payload.message)
-        : 'Nao foi possivel concluir a operacao.';
+        : 'Não foi possível concluir a operação.';
     throw new Error(message);
   }
 
@@ -68,7 +65,9 @@ export async function searchImportProducts(
   filters: ImportRadarFilters,
 ): Promise<ImportSearchResponse> {
   const query = buildQuery(filters);
-  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/search${query ? `?${query}` : ''}`);
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/import-radar/search${query ? `?${query}` : ''}`,
+  );
   return parseResponse<ImportSearchResponse>(response);
 }
 

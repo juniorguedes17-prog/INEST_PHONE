@@ -69,9 +69,9 @@ export function PreparedRadarOrigin({ origin }: PreparedRadarOriginProps) {
         aria-label={`Indicadores ${config.name}`}
       >
         <KpiCard label="Produtos" value="0" detail="Nenhum registro" tone="blue" />
-        <KpiCard label="Selecionados" value="0" detail="Selecao multipla" tone="purple" />
+        <KpiCard label="Selecionados" value="0" detail="Seleção múltipla" tone="purple" />
         <KpiCard label="Menor custo" value="â€”" detail="Aguardando dados" tone="green" />
-        <KpiCard label="Atualizacao" value="â€”" detail="Sem sincronizacao" tone="amber" />
+        <KpiCard label="Atualização" value="â€”" detail="Sem sincronização" tone="amber" />
       </section>
 
       <section className="min-w-0">
@@ -85,7 +85,7 @@ export function PreparedRadarOrigin({ origin }: PreparedRadarOriginProps) {
           </div>
           <EmptyState
             title={`Radar ${config.name} preparado.`}
-            description="A pesquisa, os filtros, a selecao multipla e o calculo serao ativados quando a fonte oficial de dados estiver integrada."
+            description="A pesquisa, os filtros, a seleção múltipla e o cálculo serão ativados quando a fonte oficial de dados estiver integrada."
           />
           <div className="mt-4 rounded-2xl border border-inest-line/70 bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)]">
             <Pagination page={1} totalPages={1} totalItems={0} />

@@ -31,7 +31,7 @@ export function useDashboard() {
       setError(
         dashboardError instanceof Error
           ? dashboardError.message
-          : 'Nao foi possivel carregar o Dashboard.',
+          : 'Não foi possível carregar o Dashboard.',
       );
     } finally {
       setLoading(false);
@@ -49,7 +49,7 @@ export function useDashboard() {
       await syncDashboardSource();
       await load();
     } catch (syncError) {
-      setError(syncError instanceof Error ? syncError.message : 'Nao foi possivel sincronizar.');
+      setError(syncError instanceof Error ? syncError.message : 'Não foi possível sincronizar.');
     } finally {
       setSyncing(false);
     }

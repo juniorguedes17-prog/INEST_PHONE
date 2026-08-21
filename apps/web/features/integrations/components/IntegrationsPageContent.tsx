@@ -37,8 +37,8 @@ export function IntegrationsPageContent() {
     <div className="grid gap-6">
       <PageHeader
         eyebrow="Arquitetura"
-        title="Integracoes"
-        description="Providers desacoplados para Google Sheets, WhatsApp, Compras Paraguai, importacoes e exportacoes."
+        title="Integrações"
+        description="Providers desacoplados para Google Sheets, WhatsApp, Compras Paraguai, importações e exportações."
         actions={
           <>
             {integrations.success ? (
@@ -51,14 +51,14 @@ export function IntegrationsPageContent() {
         }
       />
 
-      {integrations.error ? <ErrorState title="Atencao" description={integrations.error} /> : null}
+      {integrations.error ? <ErrorState title="Atenção" description={integrations.error} /> : null}
       {integrations.loading ? <LoadingState /> : null}
 
       {!integrations.loading ? (
         <div className="grid gap-6">
           <ListHeader
             eyebrow="Providers"
-            title={`${integrations.integrations.length} integracoes disponiveis`}
+            title={`${integrations.integrations.length} integrações disponíveis`}
             description="Toda comunicacao externa passa por interfaces e providers."
           />
 
@@ -76,7 +76,7 @@ export function IntegrationsPageContent() {
 
           <div className="grid gap-6 xl:grid-cols-3">
             <SettingsCard
-              eyebrow="Exportacoes"
+              eyebrow="Exportações"
               title="Gerar arquivo"
               description="Exportacao centralizada para CSV, Excel e PDF."
             >
@@ -102,7 +102,7 @@ export function IntegrationsPageContent() {
             </SettingsCard>
 
             <SettingsCard
-              eyebrow="Importacoes"
+              eyebrow="Importações"
               title="Preparar entrada"
               description="Entrada centralizada para CSV, Excel e Google Sheets."
             >
@@ -143,12 +143,12 @@ export function IntegrationsPageContent() {
 
           <SettingsCard
             eyebrow="Historico"
-            title="Auditoria de integracoes"
-            description="Chamadas, sincronizacoes, importacoes e exportacoes registradas."
+            title="Auditoria de integrações"
+            description="Chamadas, sincronizações, importações e exportações registradas."
           >
             {integrations.history.length ? (
               <p className="text-sm text-inest-muted">
-                {integrations.history.length} eventos recentes registrados para integracoes.
+                {integrations.history.length} eventos recentes registrados para integrações.
               </p>
             ) : (
               <EmptyState
@@ -182,7 +182,7 @@ function IntegrationCard({
     >
       <div className="grid gap-4">
         <StatusBadge tone={integration.status.success ? 'green' : 'amber'}>
-          {integration.status.success ? 'Disponivel' : 'Atencao'}
+          {integration.status.success ? 'Disponível' : 'Atenção'}
         </StatusBadge>
         <div className="grid gap-3 sm:grid-cols-2">
           <ActionButton variant="secondary" disabled={saving} onClick={onTest}>

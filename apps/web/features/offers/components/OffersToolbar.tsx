@@ -43,13 +43,13 @@ export function OffersToolbar({
 
         <div className="flex flex-wrap items-end gap-2 border-t border-inest-line/70 pt-3 2xl:ml-auto 2xl:border-l 2xl:border-t-0 2xl:pl-4 2xl:pt-0">
           <CompactSelect
-            label="Ordenacao"
+            label="Ordenação"
             value={sort}
             options={[
               ['recent', 'Mais recentes'],
               ['oldest', 'Mais antigas'],
-              ['highest_price', 'Maior preco'],
-              ['lowest_price', 'Menor preco'],
+              ['highest_price', 'Maior preço'],
+              ['lowest_price', 'Menor preço'],
             ]}
             onChange={onSortChange}
           />
@@ -57,9 +57,9 @@ export function OffersToolbar({
             label="Itens"
             value={String(pageSize)}
             options={[
-              ['10', '10 por pagina'],
-              ['20', '20 por pagina'],
-              ['50', '50 por pagina'],
+              ['10', '10 por página'],
+              ['20', '20 por página'],
+              ['50', '50 por página'],
             ]}
             onChange={(value) => onPageSizeChange(Number(value))}
           />

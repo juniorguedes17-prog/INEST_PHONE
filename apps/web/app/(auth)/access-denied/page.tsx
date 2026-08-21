@@ -7,7 +7,7 @@ export default function AccessDeniedPage() {
         <p className="text-sm font-bold uppercase tracking-wide text-red-600">Acesso negado</p>
         <h1 className="mt-3 font-display text-3xl font-black">Permissao insuficiente</h1>
         <p className="mt-4 leading-7 text-inest-muted">
-          Seu perfil nao possui permissao para acessar esta area. Entre em contato com um
+          Seu perfil não possui permissão para acessar esta área. Entre em contato com um
           administrador caso precise de acesso.
         </p>
         <Link

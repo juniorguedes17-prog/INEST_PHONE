@@ -31,9 +31,9 @@ import { getProductCardPresentation } from '@/utils/product-card-presentation';
 import { PricingOfferTarget } from '../types/pricing';
 
 const sortOptions = [
-  ['lowest_price', 'Menor preco'],
-  ['highest_price', 'Maior preco'],
-  ['recent', 'Ultima atualizacao'],
+  ['lowest_price', 'Menor preço'],
+  ['highest_price', 'Maior preço'],
+  ['recent', 'Última atualização'],
   ['highest_profit', 'Maior lucro'],
 ];
 
@@ -207,7 +207,7 @@ export function PricingPageContent() {
       setProfitModalError(
         profitError instanceof Error
           ? profitError.message
-          : 'Nao foi possivel salvar o Lucro Liquido.',
+          : 'Não foi possível salvar o Lucro Líquido.',
       );
     }
   }
@@ -216,12 +216,12 @@ export function PricingPageContent() {
     <div className="grid gap-4">
       <PageHeader
         eyebrow="Catalogo inteligente"
-        title="Precificacao"
-        description="Precos calculados automaticamente com Radar, Configuracoes e lucro por modelo."
+        title="Precificação"
+        description="Preços calculados automaticamente com Radar, Configurações e lucro por modelo."
         actions={pricing.success ? <StatusBadge tone="green">{pricing.success}</StatusBadge> : null}
       />
 
-      {pricing.error ? <ErrorState title="Atencao" description={pricing.error} /> : null}
+      {pricing.error ? <ErrorState title="Atenção" description={pricing.error} /> : null}
 
       <PricingToolbar
         search={pricing.filters.search}
@@ -242,7 +242,7 @@ export function PricingPageContent() {
 
       <section
         className="grid grid-cols-2 gap-3 lg:grid-cols-4"
-        aria-label="Indicadores da Precificacao"
+        aria-label="Indicadores da Precificação"
       >
         <KpiCard
           label="Produtos encontrados"
@@ -251,9 +251,9 @@ export function PricingPageContent() {
           tone="blue"
         />
         <KpiCard
-          label="Preco medio"
+          label="Preço médio"
           value={formatCurrency(metrics.averageSalePrice)}
-          detail="Preco de venda calculado"
+          detail="Preço de venda calculado"
           tone="purple"
         />
         <KpiCard
@@ -324,7 +324,7 @@ export function PricingPageContent() {
                 )}
                 onChange={(event) => selectCurrentPage(event.target.checked)}
               />
-              Selecionar pagina
+              Selecionar página
             </label>
           ) : null}
           <div className="grid gap-3">
@@ -335,7 +335,7 @@ export function PricingPageContent() {
             !pricing.brazilRadarPricings.length ? (
               <EmptyState
                 title="Nenhum produto encontrado."
-                description="O produto precisa possuir preco valido no Radar para aparecer na Precificacao."
+                description="O produto precisa possuir preço válido no Radar para aparecer na Precificação."
               />
             ) : null}
             {!pricing.loading ? (
@@ -547,7 +547,7 @@ function BrazilRadarQuotePricingCard({
         </strong>
       </div>
       <div className="flex min-w-0 flex-col items-start gap-1 md:items-end">
-        <span className="text-[10px] font-black uppercase text-inest-muted">Preco de venda</span>
+        <span className="text-[10px] font-black uppercase text-inest-muted">Preço de venda</span>
         <strong className="font-display text-2xl font-black text-inest-text">
           {formatCurrency(item.salePrice)}
         </strong>
@@ -723,7 +723,7 @@ function TemporaryImportPricingCard({
         </strong>
       </div>
       <div className="flex min-w-0 flex-col items-start gap-1 md:items-end">
-        <span className="text-[10px] font-black uppercase text-inest-muted">Preco de venda</span>
+        <span className="text-[10px] font-black uppercase text-inest-muted">Preço de venda</span>
         <strong className="font-display text-2xl font-black text-inest-text">
           {formatCurrency(item.salePrice)}
         </strong>

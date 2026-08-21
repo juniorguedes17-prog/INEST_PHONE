@@ -105,10 +105,12 @@ function updateCache(nextCache: BrazilRadarSnapshotCache) {
 }
 
 function defaultSnapshotFetcher(filters: PriceRadarFilters): Promise<PriceRadarSnapshotResponse> {
-  return Promise.all([listPriceQuotes(filters), getPriceRadarKpis(filters)]).then(([items, kpis]) => ({
-    items,
-    kpis,
-  }));
+  return Promise.all([listPriceQuotes(filters), getPriceRadarKpis(filters)]).then(
+    ([items, kpis]) => ({
+      items,
+      kpis,
+    }),
+  );
 }
 
 function serializeFilters(filters: PriceRadarFilters): string {
@@ -191,7 +193,7 @@ function areKpisEqual(left: PriceRadarKpis, right: PriceRadarKpis): boolean {
 }
 
 function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Nao foi possivel carregar o Radar de Precos.';
+  return error instanceof Error ? error.message : 'Não foi possível carregar o Radar de Preços.';
 }
 
 export function getBrazilRadarSnapshotCache(): BrazilRadarSnapshotCache {
@@ -211,18 +213,18 @@ export function hasBrazilRadarSnapshot(filters: PriceRadarFilters): boolean {
   return cache.requestKey === getPriceRadarRequestKey(filters) && cache.loadedAt !== null;
 }
 
-export function isBrazilRadarSnapshotStale(
-  filters: PriceRadarFilters,
-  now = Date.now(),
-): boolean {
-  return !hasBrazilRadarSnapshot(filters) || !cache.loadedAt || now - cache.loadedAt >= BRAZIL_RADAR_STALE_TIME_MS;
+export function isBrazilRadarSnapshotStale(filters: PriceRadarFilters, now = Date.now()): boolean {
+  return (
+    !hasBrazilRadarSnapshot(filters) ||
+    !cache.loadedAt ||
+    now - cache.loadedAt >= BRAZIL_RADAR_STALE_TIME_MS
+  );
 }
 
 export function setBrazilRadarFilters(
   nextFilters: PriceRadarFilters | ((current: PriceRadarFilters) => PriceRadarFilters),
 ) {
-  const filters =
-    typeof nextFilters === 'function' ? nextFilters(cache.filters) : nextFilters;
+  const filters = typeof nextFilters === 'function' ? nextFilters(cache.filters) : nextFilters;
 
   if (getPriceRadarRequestKey(filters) === getPriceRadarRequestKey(cache.filters)) {
     return;

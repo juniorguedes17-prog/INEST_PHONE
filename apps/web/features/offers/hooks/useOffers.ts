@@ -34,7 +34,9 @@ export function useOffers() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [temporaryOfferDrafts, setTemporaryOfferDrafts] = useState<OfferDraft[]>([]);
-  const [consolidatedTemporaryOffers, setConsolidatedTemporaryOffers] = useState<TemporaryOfferItem[]>([]);
+  const [consolidatedTemporaryOffers, setConsolidatedTemporaryOffers] = useState<
+    TemporaryOfferItem[]
+  >([]);
   const [temporaryOfferFailedCount, setTemporaryOfferFailedCount] = useState(0);
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export function useOffers() {
       setTemporaryOfferDrafts(batch.drafts);
       setTemporaryOfferFailedCount(batch.failedCount);
     } catch {
-      setError('Nao foi possivel carregar a oferta preparada pela Precificacao.');
+      setError('Não foi possível carregar a oferta preparada pela Precificação.');
     }
   }, []);
 
@@ -68,7 +70,7 @@ export function useOffers() {
       setError(
         offersError instanceof Error
           ? offersError.message
-          : 'Nao foi possivel carregar o Gerador de Ofertas.',
+          : 'Não foi possível carregar o Gerador de Ofertas.',
       );
     } finally {
       setLoading(false);
@@ -101,7 +103,7 @@ export function useOffers() {
     setCurrentOffer(firstConsolidatedOffer);
     setSuccess(
       temporaryOfferFailedCount
-        ? `${preparedOffers.length} ofertas preparadas. ${temporaryOfferFailedCount} item(ns) nao puderam ser processados.`
+        ? `${preparedOffers.length} ofertas preparadas. ${temporaryOfferFailedCount} item(ns) não puderam ser processados.`
         : preparedOffers.length === 1
           ? 'Oferta preparada com o template comercial padrao.'
           : `${preparedOffers.length} ofertas preparadas com o template comercial padrao.`,

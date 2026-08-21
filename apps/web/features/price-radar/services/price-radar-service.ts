@@ -15,7 +15,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
     const message =
       typeof payload === 'object' && payload && 'message' in payload
         ? String(payload.message)
-        : 'Nao foi possivel concluir a operacao.';
+        : 'Não foi possível concluir a operação.';
     throw new Error(message);
   }
 
@@ -34,13 +34,17 @@ function buildQuery(filters: Partial<PriceRadarFilters>) {
 
 export async function listPriceQuotes(filters: PriceRadarFilters): Promise<PriceQuoteItem[]> {
   const query = buildQuery(filters);
-  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/quotes${query ? `?${query}` : ''}`);
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/price-radar/quotes${query ? `?${query}` : ''}`,
+  );
   return parseResponse<PriceQuoteItem[]>(response);
 }
 
 export async function getPriceRadarKpis(filters: PriceRadarFilters): Promise<PriceRadarKpis> {
   const query = buildQuery(filters);
-  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/kpis${query ? `?${query}` : ''}`);
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/price-radar/kpis${query ? `?${query}` : ''}`,
+  );
   return parseResponse<PriceRadarKpis>(response);
 }
 

@@ -61,7 +61,7 @@ export const OfferListCard = memo(function OfferListCard({
 
       <div className="flex min-w-0 flex-col items-start gap-2 border-t border-inest-line/70 pt-4 lg:items-end lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
         <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
-          Preco final
+          Preço final
         </span>
         <strong className="font-display text-[28px] font-bold leading-none text-inest-text">
           {formatCurrency(offer.offerPrice)}
@@ -74,7 +74,7 @@ export const OfferListCard = memo(function OfferListCard({
             variant="secondary"
             className="h-8 px-2.5 text-xs"
             disabled
-            title="Edicao nao disponivel no fluxo atual"
+            title="Edição não disponível no fluxo atual"
           >
             Editar
           </ActionButton>

@@ -95,7 +95,7 @@ export function ParaguayRadarOrigin() {
       setError(
         searchError instanceof Error
           ? searchError.message
-          : 'Nao foi possivel consultar o Compras Paraguai.',
+          : 'Não foi possível consultar o Compras Paraguai.',
       );
     } finally {
       setLoading(false);
@@ -184,7 +184,7 @@ export function ParaguayRadarOrigin() {
       setError(
         calculationError instanceof Error
           ? calculationError.message
-          : 'Nao foi possivel calcular o custo do produto.',
+          : 'Não foi possível calcular o custo do produto.',
       );
     } finally {
       setCalculating(false);
@@ -206,7 +206,7 @@ export function ParaguayRadarOrigin() {
       setError(
         pricingError instanceof Error
           ? pricingError.message
-          : 'Nao foi possivel enviar este produto para a Precificacao.',
+          : 'Não foi possível enviar este produto para a Precificação.',
       );
     } finally {
       setSendingToPricing(false);
@@ -289,28 +289,28 @@ export function ParaguayRadarOrigin() {
           tone="purple"
         />
         <KpiCard
-          label="Menor preco"
+          label="Menor preço"
           value={formatUsd(minimum(priceValues))}
-          detail="Preco publicado"
+          detail="Preço publicado"
           tone="green"
         />
         <KpiCard
-          label="Preco medio"
+          label="Preço médio"
           value={formatUsd(average(priceValues))}
           detail="Produtos exibidos"
           tone="blue"
         />
         <KpiCard
-          label="Maior preco"
+          label="Maior preço"
           value={formatUsd(maximum(priceValues))}
-          detail="Preco publicado"
+          detail="Preço publicado"
           tone="amber"
         />
       </section>
 
       {error ? (
         <ErrorState
-          title="Nao foi possivel atualizar o Radar Paraguai"
+          title="Não foi possível atualizar o Radar Paraguai"
           description={error}
           action={
             <ActionButton onClick={() => void runSearch(search)}>Tentar novamente</ActionButton>
@@ -339,7 +339,7 @@ export function ParaguayRadarOrigin() {
                 }}
                 className="h-5 w-5 accent-inest-blue"
               />
-              {selectedIds.size ? `${selectedIds.size} selecionados` : 'Selecionar pagina'}
+              {selectedIds.size ? `${selectedIds.size} selecionados` : 'Selecionar página'}
             </label>
             <select
               value={sort}
@@ -347,8 +347,8 @@ export function ParaguayRadarOrigin() {
               className="field-control min-h-11"
               aria-label="Ordenar resultados"
             >
-              <option value="lowest">Menor preco</option>
-              <option value="highest">Maior preco</option>
+              <option value="lowest">Menor preço</option>
+              <option value="highest">Maior preço</option>
               <option value="recent">Mais recentes</option>
               <option value="stores">Mais lojas</option>
               <option value="name">Produto</option>
@@ -357,11 +357,11 @@ export function ParaguayRadarOrigin() {
               value={pageSize}
               onChange={(event) => setPageSize(Number(event.target.value))}
               className="field-control min-h-11"
-              aria-label="Itens por pagina"
+              aria-label="Itens por página"
             >
-              <option value={10}>10 por pagina</option>
-              <option value={20}>20 por pagina</option>
-              <option value={30}>30 por pagina</option>
+              <option value={10}>10 por página</option>
+              <option value={20}>20 por página</option>
+              <option value={30}>30 por página</option>
             </select>
           </div>
 
@@ -376,13 +376,13 @@ export function ParaguayRadarOrigin() {
             {!loading && submittedSearch && !products.length && !error ? (
               <EmptyState
                 title="Nenhum produto encontrado."
-                description={`A fonte nao retornou resultados para "${submittedSearch}".`}
+                description={`A fonte não retornou resultados para "${submittedSearch}".`}
               />
             ) : null}
             {!loading && products.length > 0 && !filteredProducts.length ? (
               <EmptyState
                 title="Nenhum resultado para estes filtros."
-                description="Limpe os filtros ou amplie a faixa de preco."
+                description="Limpe os filtros ou amplie a faixa de preço."
                 action={
                   <ActionButton variant="secondary" onClick={clearFilters}>
                     Limpar filtros
@@ -550,7 +550,7 @@ function ParaguayProductCard({
       </div>
       <div className="grid gap-2 sm:min-w-44 sm:text-right">
         <div>
-          <span className="block text-xs font-bold text-inest-muted">Menor preco</span>
+          <span className="block text-xs font-bold text-inest-muted">Menor preço</span>
           <strong className="text-xl font-black text-inest-text">
             {formatUsd(product.minimumPriceUsd ?? product.priceUsd)}
           </strong>
@@ -618,11 +618,11 @@ function CalculationModal({
           <div>
             <strong className="block text-inest-text">{calculation.product.name}</strong>
             <span className="text-sm text-inest-muted">
-              Configuracao Financeira PY - {calculation.matchedProductType}
+              Configuração Financeira PY - {calculation.matchedProductType}
             </span>
           </div>
           <dl className="grid grid-cols-2 gap-3 text-sm">
-            <Cost label="Preco convertido" value={calculation.breakdown.convertedPrice} />
+            <Cost label="Preço convertido" value={calculation.breakdown.convertedPrice} />
             <Cost label="Saida CDE" value={calculation.breakdown.cdeExit} />
             <Cost label="Redirecionamento" value={calculation.breakdown.redirectCost} />
             <Cost label="Despacho Brasil" value={calculation.breakdown.brazilDispatch} />
@@ -645,7 +645,7 @@ function CalculationModal({
               Fechar
             </ActionButton>
             <ActionButton className="min-h-11" onClick={onSendToPricing} disabled={sending}>
-              {sending ? 'Preparando...' : 'Enviar para Precificacao'}
+              {sending ? 'Preparando...' : 'Enviar para Precificação'}
             </ActionButton>
           </div>
         </div>

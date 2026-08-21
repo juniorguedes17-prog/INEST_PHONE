@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActionButton,
   CurrencyInput,
@@ -22,7 +22,17 @@ import { ImportRedirectRule, SettingsPayload } from '../types/settings';
 import { OfferTemplatesSettingsCard } from './OfferTemplatesSettingsCard';
 import { UsersAccessSettingsCard } from './UsersAccessSettingsCard';
 
+type SettingsSection = 'general' | 'pricing' | 'importation' | 'offers';
+
+const settingsSections: Array<{ id: SettingsSection; label: string }> = [
+  { id: 'general', label: 'Geral' },
+  { id: 'pricing', label: 'Precificação' },
+  { id: 'importation', label: 'Importação' },
+  { id: 'offers', label: 'Ofertas' },
+];
+
 export function SettingsPageContent() {
+  const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const { settings, setSettings, loading, saving, error, success, reload, save, resetDefaults } =
     useSettings();
 
@@ -34,9 +44,7 @@ export function SettingsPageContent() {
 
   useEffect(() => {
     function handleThemeChange(event: Event) {
-      const theme = normalizeThemePreference(
-        (event as CustomEvent<ThemePreference>).detail,
-      );
+      const theme = normalizeThemePreference((event as CustomEvent<ThemePreference>).detail);
 
       setSettings((current) =>
         current
@@ -57,8 +65,8 @@ export function SettingsPageContent() {
       <div className="grid gap-6">
         <PageHeader
           eyebrow="Sistema"
-          title="Configuracoes"
-          description="Carregando parametros globais da aplicacao."
+          title="Configurações"
+          description="Carregando parâmetros globais da aplicação."
         />
         <LoadingState />
       </div>
@@ -68,8 +76,8 @@ export function SettingsPageContent() {
   if (!settings) {
     return (
       <ErrorState
-        title="Configuracoes indisponiveis"
-        description={error ?? 'Nao foi possivel carregar os parametros do sistema.'}
+        title="Configurações indisponíveis"
+        description={error ?? 'Não foi possível carregar os parâmetros do sistema.'}
       />
     );
   }
@@ -141,8 +149,8 @@ export function SettingsPageContent() {
     <div className="grid gap-6">
       <PageHeader
         eyebrow="Sistema"
-        title="Configuracoes"
-        description="Fonte unica dos parametros gerais, financeiros, operacionais e comerciais da plataforma."
+        title="Configurações"
+        description="Fonte única dos parâmetros gerais, financeiros, operacionais e comerciais da plataforma."
         actions={
           <>
             {success ? <StatusBadge tone="green">{success}</StatusBadge> : null}
@@ -151,585 +159,640 @@ export function SettingsPageContent() {
               onClick={() => void resetDefaults()}
               disabled={saving}
             >
-              Restaurar padroes
+              Restaurar padrões
             </ActionButton>
             <ActionButton onClick={() => void save(settings)} disabled={saving}>
-              {saving ? 'Salvando...' : 'Salvar alteracoes'}
+              {saving ? 'Salvando...' : 'Salvar alterações'}
             </ActionButton>
           </>
         }
       />
 
-      {error ? <ErrorState title="Atencao" description={error} /> : null}
+      {error ? <ErrorState title="Atenção" description={error} /> : null}
+
+      <div
+        aria-label="Categorias de configurações"
+        className="-mx-1 overflow-x-auto px-1 pb-1 scrollbar-stable"
+        role="tablist"
+      >
+        <div className="inline-flex min-w-full gap-1 rounded-2xl border border-inest-line bg-inest-soft p-1 sm:min-w-0">
+          {settingsSections.map((section) => {
+            const isActive = activeSection === section.id;
+
+            return (
+              <button
+                key={section.id}
+                id={`settings-tab-${section.id}`}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveSection(section.id)}
+                className={[
+                  'min-h-11 shrink-0 rounded-xl px-4 text-sm font-black transition focus:outline-none focus:ring-2 focus:ring-inest-blue focus:ring-offset-2',
+                  isActive
+                    ? 'bg-gradient-to-br from-inest-blue to-inest-purple text-white shadow-soft'
+                    : 'text-inest-muted hover:bg-white hover:text-inest-text',
+                ].join(' ')}
+              >
+                {section.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <SettingsCard
-          eyebrow="Dados gerais"
-          title="Configuracoes gerais"
-          description="Dados institucionais utilizados como referencia em toda a aplicacao."
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextInput
-              label="Nome da empresa"
-              value={settings.general.companyName}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  general: { ...current.general, companyName: value },
-                }))
-              }
-            />
-            <TextInput
-              label="Nome fantasia"
-              value={settings.general.tradeName}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  general: { ...current.general, tradeName: value },
-                }))
-              }
-            />
-            <TextInput
-              label="CNPJ"
-              value={settings.general.cnpj}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  general: { ...current.general, cnpj: value },
-                }))
-              }
-            />
-            <TextInput
-              label="E-mail"
-              type="email"
-              value={settings.general.email}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  general: { ...current.general, email: value },
-                }))
-              }
-            />
-            <TextInput
-              label="WhatsApp principal"
-              value={settings.general.mainWhatsapp}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  general: { ...current.general, mainWhatsapp: value },
-                }))
-              }
-            />
-            <div className="grid grid-cols-[1fr_96px] gap-3">
+        <div className={activeSection === 'general' ? '' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Dados gerais"
+            title="Configurações gerais"
+            description="Dados institucionais utilizados como referência em toda a aplicação."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
               <TextInput
-                label="Cidade"
-                value={settings.general.city}
+                label="Nome da empresa"
+                value={settings.general.companyName}
                 onChange={(value) =>
                   updateSettings((current) => ({
                     ...current,
-                    general: { ...current.general, city: value },
+                    general: { ...current.general, companyName: value },
                   }))
                 }
               />
               <TextInput
-                label="Estado"
-                value={settings.general.state}
+                label="Nome fantasia"
+                value={settings.general.tradeName}
                 onChange={(value) =>
                   updateSettings((current) => ({
                     ...current,
-                    general: { ...current.general, state: value },
+                    general: { ...current.general, tradeName: value },
+                  }))
+                }
+              />
+              <TextInput
+                label="CNPJ"
+                value={settings.general.cnpj}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    general: { ...current.general, cnpj: value },
+                  }))
+                }
+              />
+              <TextInput
+                label="E-mail"
+                type="email"
+                value={settings.general.email}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    general: { ...current.general, email: value },
+                  }))
+                }
+              />
+              <TextInput
+                label="WhatsApp principal"
+                value={settings.general.mainWhatsapp}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    general: { ...current.general, mainWhatsapp: value },
+                  }))
+                }
+              />
+              <div className="grid grid-cols-[1fr_96px] gap-3">
+                <TextInput
+                  label="Cidade"
+                  value={settings.general.city}
+                  onChange={(value) =>
+                    updateSettings((current) => ({
+                      ...current,
+                      general: { ...current.general, city: value },
+                    }))
+                  }
+                />
+                <TextInput
+                  label="Estado"
+                  value={settings.general.state}
+                  onChange={(value) =>
+                    updateSettings((current) => ({
+                      ...current,
+                      general: { ...current.general, state: value },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+          </SettingsCard>
+        </div>
+
+        <div className={activeSection === 'pricing' ? '' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Precificação"
+            title="Configuração financeira"
+            description="Parâmetros financeiros globais que serão consumidos pela precificação."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <CurrencyInput
+                label="Custo Fixo Global"
+                value={settings.financial.globalFixedCost}
+                onChange={(event) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    financial: {
+                      ...current.financial,
+                      globalFixedCost: toNumber(event.target.value),
+                    },
+                  }))
+                }
+              />
+              <CurrencyInput
+                label="Frete padrão"
+                value={settings.financial.defaultFreight}
+                onChange={(event) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    financial: {
+                      ...current.financial,
+                      defaultFreight: toNumber(event.target.value),
+                    },
+                  }))
+                }
+              />
+              <CurrencyInput
+                label="Taxa padrão"
+                value={settings.financial.defaultPaymentFee}
+                onChange={(event) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    financial: {
+                      ...current.financial,
+                      defaultPaymentFee: toNumber(event.target.value),
+                    },
+                  }))
+                }
+              />
+              <CurrencyInput
+                label="Margem padrão"
+                value={settings.financial.defaultMargin}
+                onChange={(event) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    financial: {
+                      ...current.financial,
+                      defaultMargin: toNumber(event.target.value),
+                    },
+                  }))
+                }
+              />
+              <CurrencyInput
+                label="Desconto padrão"
+                value={settings.financial.defaultDiscount}
+                onChange={(event) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    financial: {
+                      ...current.financial,
+                      defaultDiscount: toNumber(event.target.value),
+                    },
                   }))
                 }
               />
             </div>
-          </div>
-        </SettingsCard>
+          </SettingsCard>
+        </div>
 
-        <SettingsCard
-          eyebrow="Precificacao"
-          title="Configuracao financeira"
-          description="Parametros financeiros globais que serao consumidos pela precificacao."
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <CurrencyInput
-              label="Custo Fixo Global"
-              value={settings.financial.globalFixedCost}
-              onChange={(event) =>
-                updateSettings((current) => ({
-                  ...current,
-                  financial: {
-                    ...current.financial,
-                    globalFixedCost: toNumber(event.target.value),
-                  },
-                }))
-              }
-            />
-            <CurrencyInput
-              label="Frete Padrao"
-              value={settings.financial.defaultFreight}
-              onChange={(event) =>
-                updateSettings((current) => ({
-                  ...current,
-                  financial: {
-                    ...current.financial,
-                    defaultFreight: toNumber(event.target.value),
-                  },
-                }))
-              }
-            />
-            <CurrencyInput
-              label="Taxa Padrao"
-              value={settings.financial.defaultPaymentFee}
-              onChange={(event) =>
-                updateSettings((current) => ({
-                  ...current,
-                  financial: {
-                    ...current.financial,
-                    defaultPaymentFee: toNumber(event.target.value),
-                  },
-                }))
-              }
-            />
-            <CurrencyInput
-              label="Margem padrao"
-              value={settings.financial.defaultMargin}
-              onChange={(event) =>
-                updateSettings((current) => ({
-                  ...current,
-                  financial: {
-                    ...current.financial,
-                    defaultMargin: toNumber(event.target.value),
-                  },
-                }))
-              }
-            />
-            <CurrencyInput
-              label="Desconto padrao"
-              value={settings.financial.defaultDiscount}
-              onChange={(event) =>
-                updateSettings((current) => ({
-                  ...current,
-                  financial: {
-                    ...current.financial,
-                    defaultDiscount: toNumber(event.target.value),
-                  },
-                }))
-              }
-            />
-          </div>
-        </SettingsCard>
+        <div className={activeSection === 'pricing' ? '' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Precificação"
+            title="Arredondamento de preço"
+            description="Finais comerciais aplicados para cima ao preço de venda."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextInput
+                label="Final comercial 1"
+                type="number"
+                value={String(settings.pricing.commercialRoundingEnding1)}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    pricing: { ...current.pricing, commercialRoundingEnding1: toNumber(value) },
+                  }))
+                }
+              />
+              <TextInput
+                label="Final comercial 2"
+                type="number"
+                value={String(settings.pricing.commercialRoundingEnding2)}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    pricing: { ...current.pricing, commercialRoundingEnding2: toNumber(value) },
+                  }))
+                }
+              />
+            </div>
+          </SettingsCard>
+        </div>
 
-        <SettingsCard
-          eyebrow="Precificacao"
-          title="Arredondamento de preco"
-          description="Finais comerciais aplicados para cima ao preco de venda."
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            <TextInput
-              label="Final comercial 1"
-              type="number"
-              value={String(settings.pricing.commercialRoundingEnding1)}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  pricing: { ...current.pricing, commercialRoundingEnding1: toNumber(value) },
-                }))
-              }
-            />
-            <TextInput
-              label="Final comercial 2"
-              type="number"
-              value={String(settings.pricing.commercialRoundingEnding2)}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  pricing: { ...current.pricing, commercialRoundingEnding2: toNumber(value) },
-                }))
-              }
-            />
-          </div>
-        </SettingsCard>
+        <div className={activeSection === 'pricing' ? '' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Precificação"
+            title="Acréscimo padrão da oferta"
+            description="Valor opcional adicionado ao preço ao gerar uma oferta."
+          >
+            <div className="max-w-sm">
+              <CurrencyInput
+                label="Acréscimo padrão"
+                value={settings.pricing.offerIncrement}
+                onChange={(event) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    pricing: { ...current.pricing, offerIncrement: toNumber(event.target.value) },
+                  }))
+                }
+              />
+            </div>
+          </SettingsCard>
+        </div>
+      </div>
 
+      <div className={activeSection === 'importation' ? '' : 'hidden'}>
         <SettingsCard
-          eyebrow="Precificacao"
-          title="Acrescimo padrao da oferta"
-          description="Valor opcional adicionado ao preco ao gerar uma oferta."
+          eyebrow="Radar de Importação"
+          title="Custos operacionais de importação"
+          description="Parâmetros que serão utilizados pelo Radar de Importação em etapa futura."
         >
-          <div className="max-w-sm">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <CurrencyInput
-              label="Acrescimo padrao"
-              value={settings.pricing.offerIncrement}
+              label="Cotação do dólar"
+              value={settings.importation.dollarQuote}
               onChange={(event) =>
                 updateSettings((current) => ({
                   ...current,
-                  pricing: { ...current.pricing, offerIncrement: toNumber(event.target.value) },
+                  importation: {
+                    ...current.importation,
+                    dollarQuote: toNumber(event.target.value),
+                  },
+                }))
+              }
+            />
+            <CurrencyInput
+              label="Saída de CDE"
+              value={settings.importation.cdeExitPerBox}
+              onChange={(event) =>
+                updateSettings((current) => ({
+                  ...current,
+                  importation: {
+                    ...current.importation,
+                    cdeExitPerBox: toNumber(event.target.value),
+                  },
+                }))
+              }
+            />
+            <CurrencyInput
+              label="Despacho Brasil"
+              value={settings.importation.brazilDispatchPerBox}
+              onChange={(event) =>
+                updateSettings((current) => ({
+                  ...current,
+                  importation: {
+                    ...current.importation,
+                    brazilDispatchPerBox: toNumber(event.target.value),
+                  },
+                }))
+              }
+            />
+            <CurrencyInput
+              label="Etiqueta Correios"
+              value={settings.importation.correiosLabel}
+              onChange={(event) =>
+                updateSettings((current) => ({
+                  ...current,
+                  importation: {
+                    ...current.importation,
+                    correiosLabel: toNumber(event.target.value),
+                  },
+                }))
+              }
+            />
+            <PercentageInput
+              label="Nota Fiscal"
+              value={settings.importation.invoiceTaxPercent}
+              onChange={(event) =>
+                updateSettings((current) => ({
+                  ...current,
+                  importation: {
+                    ...current.importation,
+                    invoiceTaxPercent: toNumber(event.target.value),
+                  },
                 }))
               }
             />
           </div>
+
+          <div className="mt-6 overflow-hidden rounded-xl border border-inest-line">
+            <div className="grid grid-cols-[1.4fr_1.2fr_160px_110px_96px] gap-3 bg-inest-soft px-4 py-3 text-sm font-black text-inest-muted">
+              <span>Categoria</span>
+              <span>Termos</span>
+              <span>Custo</span>
+              <span>Prioridade</span>
+              <span>Ações</span>
+            </div>
+            <div className="divide-y divide-inest-line">
+              {settings.importation.redirectRules.map((rule, index) => (
+                <div
+                  key={`${rule.productType}-${index}`}
+                  className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[1.4fr_1.2fr_160px_110px_96px]"
+                >
+                  <TextInput
+                    label="Categoria"
+                    value={rule.productType}
+                    onChange={(value) => updateRedirectRule(index, { ...rule, productType: value })}
+                  />
+                  <TextInput
+                    label="Termos separados por vírgula"
+                    value={rule.matchTerms.join(', ')}
+                    onChange={(value) =>
+                      updateRedirectRule(index, {
+                        ...rule,
+                        matchTerms: value
+                          .split(',')
+                          .map((term) => term.trim())
+                          .filter(Boolean),
+                      })
+                    }
+                  />
+                  <CurrencyInput
+                    label="Custo"
+                    value={rule.redirectCost}
+                    onChange={(event) =>
+                      updateRedirectRule(index, {
+                        ...rule,
+                        redirectCost: toNumber(event.target.value),
+                      })
+                    }
+                  />
+                  <TextInput
+                    label="Prioridade"
+                    type="number"
+                    value={String(rule.priority)}
+                    onChange={(value) =>
+                      updateRedirectRule(index, {
+                        ...rule,
+                        priority: toNumber(value),
+                      })
+                    }
+                  />
+                  <div className="flex items-end">
+                    <ActionButton variant="secondary" onClick={() => removeRedirectRule(index)}>
+                      Remover
+                    </ActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <ActionButton className="mt-5" variant="secondary" onClick={addRedirectRule}>
+            Adicionar categoria
+          </ActionButton>
         </SettingsCard>
       </div>
 
-      <SettingsCard
-        eyebrow="Radar de Importacao"
-        title="Custos operacionais de importacao"
-        description="Parametros que serao utilizados pelo Radar de Importacao em etapa futura."
-      >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <CurrencyInput
-            label="Cotacao do Dolar"
-            value={settings.importation.dollarQuote}
-            onChange={(event) =>
-              updateSettings((current) => ({
-                ...current,
-                importation: {
-                  ...current.importation,
-                  dollarQuote: toNumber(event.target.value),
-                },
-              }))
-            }
-          />
-          <CurrencyInput
-            label="Saida de CDE"
-            value={settings.importation.cdeExitPerBox}
-            onChange={(event) =>
-              updateSettings((current) => ({
-                ...current,
-                importation: {
-                  ...current.importation,
-                  cdeExitPerBox: toNumber(event.target.value),
-                },
-              }))
-            }
-          />
-          <CurrencyInput
-            label="Despacho Brasil"
-            value={settings.importation.brazilDispatchPerBox}
-            onChange={(event) =>
-              updateSettings((current) => ({
-                ...current,
-                importation: {
-                  ...current.importation,
-                  brazilDispatchPerBox: toNumber(event.target.value),
-                },
-              }))
-            }
-          />
-          <CurrencyInput
-            label="Etiqueta Correios"
-            value={settings.importation.correiosLabel}
-            onChange={(event) =>
-              updateSettings((current) => ({
-                ...current,
-                importation: {
-                  ...current.importation,
-                  correiosLabel: toNumber(event.target.value),
-                },
-              }))
-            }
-          />
-          <PercentageInput
-            label="Nota Fiscal"
-            value={settings.importation.invoiceTaxPercent}
-            onChange={(event) =>
-              updateSettings((current) => ({
-                ...current,
-                importation: {
-                  ...current.importation,
-                  invoiceTaxPercent: toNumber(event.target.value),
-                },
-              }))
-            }
-          />
-        </div>
-
-        <div className="mt-6 overflow-hidden rounded-xl border border-inest-line">
-          <div className="grid grid-cols-[1.4fr_1.2fr_160px_110px_96px] gap-3 bg-inest-soft px-4 py-3 text-sm font-black text-inest-muted">
-            <span>Categoria</span>
-            <span>Termos</span>
-            <span>Custo</span>
-            <span>Prioridade</span>
-            <span>Acoes</span>
+      <div className={activeSection === 'importation' ? '' : 'hidden'}>
+        <SettingsCard
+          eyebrow="Radar USA"
+          title="Configuração Financeira USA"
+          description="Parâmetros editáveis para a futura composição do custo de importação dos Estados Unidos."
+        >
+          <div className="mb-5 flex flex-col gap-3 border-b border-inest-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase text-inest-muted">Última atualização</p>
+              <p className="mt-1 text-sm font-bold text-inest-text">
+                {formatLastUpdated(settings.usaFinancial.lastUpdated)}
+              </p>
+            </div>
+            <StatusBadge tone="blue">USD / Importação</StatusBadge>
           </div>
-          <div className="divide-y divide-inest-line">
-            {settings.importation.redirectRules.map((rule, index) => (
-              <div
-                key={`${rule.productType}-${index}`}
-                className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[1.4fr_1.2fr_160px_110px_96px]"
-              >
-                <TextInput
-                  label="Categoria"
-                  value={rule.productType}
-                  onChange={(value) => updateRedirectRule(index, { ...rule, productType: value })}
-                />
-                <TextInput
-                  label="Termos separados por virgula"
-                  value={rule.matchTerms.join(', ')}
-                  onChange={(value) =>
-                    updateRedirectRule(index, {
-                      ...rule,
-                      matchTerms: value
-                        .split(',')
-                        .map((term) => term.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                />
-                <CurrencyInput
-                  label="Custo"
-                  value={rule.redirectCost}
-                  onChange={(event) =>
-                    updateRedirectRule(index, {
-                      ...rule,
-                      redirectCost: toNumber(event.target.value),
-                    })
-                  }
-                />
-                <TextInput
-                  label="Prioridade"
-                  type="number"
-                  value={String(rule.priority)}
-                  onChange={(value) =>
-                    updateRedirectRule(index, {
-                      ...rule,
-                      priority: toNumber(value),
-                    })
-                  }
-                />
-                <div className="flex items-end">
-                  <ActionButton variant="secondary" onClick={() => removeRedirectRule(index)}>
-                    Remover
-                  </ActionButton>
-                </div>
-              </div>
-            ))}
+
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <CurrencyInput
+              label="Cotação do dólar"
+              value={settings.usaFinancial.dollarQuote}
+              onChange={(event) => updateUsaFinancial('dollarQuote', toNumber(event.target.value))}
+            />
+            <CurrencyInput
+              label="Frete Aéreo"
+              value={settings.usaFinancial.airFreight}
+              onChange={(event) => updateUsaFinancial('airFreight', toNumber(event.target.value))}
+            />
+            <PercentageInput
+              label="Desconto no frete"
+              value={settings.usaFinancial.freightDiscountPercent}
+              onChange={(event) =>
+                updateUsaFinancial('freightDiscountPercent', toNumber(event.target.value))
+              }
+            />
+            <CurrencyInput
+              label="Taxa administrativa"
+              value={settings.usaFinancial.administrativeFee}
+              onChange={(event) =>
+                updateUsaFinancial('administrativeFee', toNumber(event.target.value))
+              }
+            />
+            <CurrencyInput
+              label="Despachante"
+              value={settings.usaFinancial.customsBroker}
+              onChange={(event) =>
+                updateUsaFinancial('customsBroker', toNumber(event.target.value))
+              }
+            />
+            <CurrencyInput
+              label="Seguro"
+              value={settings.usaFinancial.insurance}
+              onChange={(event) => updateUsaFinancial('insurance', toNumber(event.target.value))}
+            />
+            <CurrencyInput
+              label="Etiqueta"
+              value={settings.usaFinancial.label}
+              onChange={(event) => updateUsaFinancial('label', toNumber(event.target.value))}
+            />
+            <PercentageInput
+              label="Nota Fiscal"
+              value={settings.usaFinancial.invoiceTaxPercent}
+              onChange={(event) =>
+                updateUsaFinancial('invoiceTaxPercent', toNumber(event.target.value))
+              }
+            />
+            <CurrencyInput
+              label="IOF"
+              value={settings.usaFinancial.iof}
+              onChange={(event) => updateUsaFinancial('iof', toNumber(event.target.value))}
+            />
+            <CurrencyInput
+              label="Outras despesas"
+              value={settings.usaFinancial.otherExpenses}
+              onChange={(event) =>
+                updateUsaFinancial('otherExpenses', toNumber(event.target.value))
+              }
+            />
           </div>
-        </div>
-        <ActionButton className="mt-5" variant="secondary" onClick={addRedirectRule}>
-          Adicionar categoria
-        </ActionButton>
-      </SettingsCard>
 
-      <SettingsCard
-        eyebrow="Radar USA"
-        title="Configuracao Financeira USA"
-        description="Parametros editaveis para a futura composicao do custo de importacao dos Estados Unidos."
-      >
-        <div className="mb-5 flex flex-col gap-3 border-b border-inest-line pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase text-inest-muted">Ultima atualizacao</p>
-            <p className="mt-1 text-sm font-bold text-inest-text">
-              {formatLastUpdated(settings.usaFinancial.lastUpdated)}
-            </p>
+          <div className="mt-6 grid gap-2 border-t border-inest-line pt-4 sm:flex sm:justify-end">
+            <ActionButton
+              variant="secondary"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => void reload()}
+              disabled={saving}
+            >
+              Restaurar valores salvos
+            </ActionButton>
+            <ActionButton
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => void save(settings)}
+              disabled={saving}
+            >
+              {saving ? 'Salvando...' : 'Salvar configuração USA'}
+            </ActionButton>
           </div>
-          <StatusBadge tone="blue">USD / Importacao</StatusBadge>
-        </div>
-
-        <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <CurrencyInput
-            label="Cotacao do Dolar"
-            value={settings.usaFinancial.dollarQuote}
-            onChange={(event) => updateUsaFinancial('dollarQuote', toNumber(event.target.value))}
-          />
-          <CurrencyInput
-            label="Frete Aereo"
-            value={settings.usaFinancial.airFreight}
-            onChange={(event) => updateUsaFinancial('airFreight', toNumber(event.target.value))}
-          />
-          <PercentageInput
-            label="Desconto no Frete"
-            value={settings.usaFinancial.freightDiscountPercent}
-            onChange={(event) =>
-              updateUsaFinancial('freightDiscountPercent', toNumber(event.target.value))
-            }
-          />
-          <CurrencyInput
-            label="Taxa Administrativa"
-            value={settings.usaFinancial.administrativeFee}
-            onChange={(event) =>
-              updateUsaFinancial('administrativeFee', toNumber(event.target.value))
-            }
-          />
-          <CurrencyInput
-            label="Despachante"
-            value={settings.usaFinancial.customsBroker}
-            onChange={(event) => updateUsaFinancial('customsBroker', toNumber(event.target.value))}
-          />
-          <CurrencyInput
-            label="Seguro"
-            value={settings.usaFinancial.insurance}
-            onChange={(event) => updateUsaFinancial('insurance', toNumber(event.target.value))}
-          />
-          <CurrencyInput
-            label="Etiqueta"
-            value={settings.usaFinancial.label}
-            onChange={(event) => updateUsaFinancial('label', toNumber(event.target.value))}
-          />
-          <PercentageInput
-            label="Nota Fiscal"
-            value={settings.usaFinancial.invoiceTaxPercent}
-            onChange={(event) =>
-              updateUsaFinancial('invoiceTaxPercent', toNumber(event.target.value))
-            }
-          />
-          <CurrencyInput
-            label="IOF"
-            value={settings.usaFinancial.iof}
-            onChange={(event) => updateUsaFinancial('iof', toNumber(event.target.value))}
-          />
-          <CurrencyInput
-            label="Outras Despesas"
-            value={settings.usaFinancial.otherExpenses}
-            onChange={(event) => updateUsaFinancial('otherExpenses', toNumber(event.target.value))}
-          />
-        </div>
-
-        <div className="mt-6 grid gap-2 border-t border-inest-line pt-4 sm:flex sm:justify-end">
-          <ActionButton
-            variant="secondary"
-            className="min-h-11 w-full sm:w-auto"
-            onClick={() => void reload()}
-            disabled={saving}
-          >
-            Restaurar valores salvos
-          </ActionButton>
-          <ActionButton
-            className="min-h-11 w-full sm:w-auto"
-            onClick={() => void save(settings)}
-            disabled={saving}
-          >
-            {saving ? 'Salvando...' : 'Salvar configuracao USA'}
-          </ActionButton>
-        </div>
-      </SettingsCard>
+        </SettingsCard>
+      </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <SettingsCard
-          eyebrow="Ofertas"
-          title="Configuracoes de oferta"
-          description="Textos padrao consumidos futuramente pelo Gerador de Ofertas."
-        >
-          <div className="grid gap-4">
-            <TextInput
-              label="Garantia padrao"
-              value={settings.offers.defaultWarranty}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  offers: { ...current.offers, defaultWarranty: value },
-                }))
-              }
-            />
-            <TextInput
-              label="Prazo padrao"
-              value={settings.offers.defaultDeadline}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  offers: { ...current.offers, defaultDeadline: value },
-                }))
-              }
-            />
-            <TextArea
-              label="Texto padrao da oferta"
-              value={settings.offers.defaultOfferText}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  offers: { ...current.offers, defaultOfferText: value },
-                }))
-              }
-            />
-            <TextArea
-              label="Rodape padrao"
-              value={settings.offers.defaultFooter}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  offers: { ...current.offers, defaultFooter: value },
-                }))
-              }
-            />
-            <TextArea
-              label="Mensagem do WhatsApp"
-              value={settings.offers.whatsappMessage}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  offers: { ...current.offers, whatsappMessage: value },
-                }))
-              }
-            />
-          </div>
-        </SettingsCard>
+        <div className={activeSection === 'offers' ? '' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Ofertas"
+            title="Configurações de oferta"
+            description="Textos padrão consumidos futuramente pelo Gerador de Ofertas."
+          >
+            <div className="grid gap-4">
+              <TextInput
+                label="Garantia padrão"
+                value={settings.offers.defaultWarranty}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    offers: { ...current.offers, defaultWarranty: value },
+                  }))
+                }
+              />
+              <TextInput
+                label="Prazo padrão"
+                value={settings.offers.defaultDeadline}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    offers: { ...current.offers, defaultDeadline: value },
+                  }))
+                }
+              />
+              <TextArea
+                label="Texto padrão da oferta"
+                value={settings.offers.defaultOfferText}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    offers: { ...current.offers, defaultOfferText: value },
+                  }))
+                }
+              />
+              <TextArea
+                label="Rodapé padrão"
+                value={settings.offers.defaultFooter}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    offers: { ...current.offers, defaultFooter: value },
+                  }))
+                }
+              />
+              <TextArea
+                label="Mensagem do WhatsApp"
+                value={settings.offers.whatsappMessage}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    offers: { ...current.offers, whatsappMessage: value },
+                  }))
+                }
+              />
+            </div>
+          </SettingsCard>
+        </div>
 
-        <SettingsCard
-          eyebrow="Usuario"
-          title="Preferencias"
-          description="Preferencias preparadas para evolucao de tema, idioma e formatos."
-        >
-          <div className="grid gap-4">
-            <SelectInput
-              label="Tema"
-              value={settings.userPreferences.theme}
-              options={[
-                ['light', 'Claro'],
-                ['dark', 'Escuro'],
-              ]}
-              onChange={(value) => {
-                const theme = normalizeThemePreference(value);
-                applyThemePreference(theme);
-                updateSettings((current) => ({
-                  ...current,
-                  userPreferences: { ...current.userPreferences, theme },
-                }));
-              }}
-            />
-            <SelectInput
-              label="Idioma"
-              value={settings.userPreferences.language}
-              options={[
-                ['pt-BR', 'Portugues (Brasil)'],
-                ['en-US', 'Ingles (EUA)'],
-                ['es-PY', 'Espanhol (Paraguai)'],
-              ]}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  userPreferences: {
-                    ...current.userPreferences,
-                    language: value as SettingsPayload['userPreferences']['language'],
-                  },
-                }))
-              }
-            />
-            <TextInput
-              label="Formato monetario"
-              value={settings.userPreferences.currencyFormat}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  userPreferences: { ...current.userPreferences, currencyFormat: value },
-                }))
-              }
-            />
-            <TextInput
-              label="Formato de data"
-              value={settings.userPreferences.dateFormat}
-              onChange={(value) =>
-                updateSettings((current) => ({
-                  ...current,
-                  userPreferences: { ...current.userPreferences, dateFormat: value },
-                }))
-              }
-            />
-          </div>
-        </SettingsCard>
+        <div className={activeSection === 'general' ? '' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Usuário"
+            title="Preferências"
+            description="Preferências preparadas para evolução de tema, idioma e formatos."
+          >
+            <div className="grid gap-4">
+              <SelectInput
+                label="Tema"
+                value={settings.userPreferences.theme}
+                options={[
+                  ['light', 'Claro'],
+                  ['dark', 'Escuro'],
+                ]}
+                onChange={(value) => {
+                  const theme = normalizeThemePreference(value);
+                  applyThemePreference(theme);
+                  updateSettings((current) => ({
+                    ...current,
+                    userPreferences: { ...current.userPreferences, theme },
+                  }));
+                }}
+              />
+              <SelectInput
+                label="Idioma"
+                value={settings.userPreferences.language}
+                options={[
+                  ['pt-BR', 'Português (Brasil)'],
+                  ['en-US', 'Inglês (EUA)'],
+                  ['es-PY', 'Espanhol (Paraguai)'],
+                ]}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    userPreferences: {
+                      ...current.userPreferences,
+                      language: value as SettingsPayload['userPreferences']['language'],
+                    },
+                  }))
+                }
+              />
+              <TextInput
+                label="Formato monetário"
+                value={settings.userPreferences.currencyFormat}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    userPreferences: { ...current.userPreferences, currencyFormat: value },
+                  }))
+                }
+              />
+              <TextInput
+                label="Formato de data"
+                value={settings.userPreferences.dateFormat}
+                onChange={(value) =>
+                  updateSettings((current) => ({
+                    ...current,
+                    userPreferences: { ...current.userPreferences, dateFormat: value },
+                  }))
+                }
+              />
+            </div>
+          </SettingsCard>
+        </div>
       </div>
 
-      <UsersAccessSettingsCard />
+      <div className={activeSection === 'general' ? '' : 'hidden'}>
+        <UsersAccessSettingsCard />
+      </div>
 
-      <OfferTemplatesSettingsCard />
+      <div className={activeSection === 'offers' ? '' : 'hidden'}>
+        <OfferTemplatesSettingsCard />
+      </div>
     </div>
   );
 }
@@ -741,7 +804,7 @@ function toNumber(value: string) {
 
 function formatLastUpdated(value?: string) {
   if (!value) {
-    return 'Ainda nao atualizada';
+    return 'Ainda não atualizada';
   }
 
   return new Intl.DateTimeFormat('pt-BR', {

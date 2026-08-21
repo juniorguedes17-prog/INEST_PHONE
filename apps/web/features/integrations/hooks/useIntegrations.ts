@@ -39,7 +39,7 @@ export function useIntegrations() {
       setError(
         integrationError instanceof Error
           ? integrationError.message
-          : 'Nao foi possivel carregar integracoes.',
+          : 'Não foi possível carregar integrações.',
       );
     } finally {
       setLoading(false);
@@ -56,13 +56,13 @@ export function useIntegrations() {
     setSuccess(null);
     try {
       const result = await action();
-      setSuccess(result.message ?? 'Operacao concluida.');
+      setSuccess(result.message ?? 'Operação concluída.');
       await load();
     } catch (integrationError) {
       setError(
         integrationError instanceof Error
           ? integrationError.message
-          : 'Nao foi possivel concluir a operacao.',
+          : 'Não foi possível concluir a operação.',
       );
     } finally {
       setSaving(false);
@@ -92,13 +92,13 @@ export function useIntegrations() {
     try {
       const artifact = await exportIntegration(format, dataset);
       setLastArtifact(artifact);
-      setSuccess(`Exportacao gerada: ${artifact.filename}`);
+      setSuccess(`Exportação gerada: ${artifact.filename}`);
       await load();
     } catch (integrationError) {
       setError(
         integrationError instanceof Error
           ? integrationError.message
-          : 'Nao foi possivel gerar a exportacao.',
+          : 'Não foi possível gerar a exportação.',
       );
     } finally {
       setSaving(false);

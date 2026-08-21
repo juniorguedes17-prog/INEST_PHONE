@@ -50,7 +50,7 @@ export function RadarToolbar({
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge tone="blue">{total} encontrados</StatusBadge>
           <span className="text-xs font-bold text-inest-muted">
-            {lastUpdated ? `Atualizado ${lastUpdated}` : 'Sem atualizacao'}
+            {lastUpdated ? `Atualizado ${lastUpdated}` : 'Sem atualização'}
           </span>
         </div>
 
@@ -59,7 +59,7 @@ export function RadarToolbar({
             Filtros{activeFilterCount ? ` (${activeFilterCount})` : ''}
           </ActionButton>
           <CompactSelect
-            label="Ordenacao"
+            label="Ordenação"
             value={sort}
             options={sortOptions}
             onChange={onSortChange}

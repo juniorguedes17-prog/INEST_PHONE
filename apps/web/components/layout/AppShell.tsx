@@ -19,14 +19,14 @@ export function AppShell({ children }: AppShellProps) {
       <div
         className={cn(
           'grid min-h-screen transition-[grid-template-columns]',
-          collapsed ? 'lg:grid-cols-[76px_minmax(0,1fr)]' : 'lg:grid-cols-[244px_minmax(0,1fr)]',
+          collapsed ? 'lg:grid-cols-[92px_minmax(0,1fr)]' : 'lg:grid-cols-[280px_minmax(0,1fr)]',
         )}
       >
         <div className="sticky top-0 hidden h-screen min-h-0 lg:block">
           <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((value) => !value)} />
         </div>
 
-        <div className="min-w-0 border-l border-white/40">
+        <div className="min-w-0">
           <Header onOpenMenu={() => setDrawerOpen(true)} />
           <main className="min-w-0 py-7 lg:py-9">
             <ContentContainer>{children}</ContentContainer>

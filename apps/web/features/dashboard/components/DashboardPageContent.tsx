@@ -32,11 +32,11 @@ export function DashboardPageContent() {
   const charts = data?.sheetCharts ?? EMPTY_CHARTS;
   const lastUpdated = data?.sheet.lastSync
     ? formatDateTime(data.sheet.lastSync)
-    : 'Aguardando sincronizacao';
+    : 'Aguardando sincronização';
   return (
     <div className="grid min-w-0 gap-4 overflow-x-hidden">
       <PageHeader
-        eyebrow="Operacao comercial"
+        eyebrow="Operação comercial"
         title="Dashboard"
         description="Indicadores operacionais oficiais sincronizados com o Google Sheets."
       />
@@ -85,7 +85,7 @@ export function DashboardPageContent() {
               tone="green"
             />
             <KpiCard
-              label="Ticket medio"
+              label="Ticket médio"
               value={formatCurrency(data.sheet.averageTicket)}
               tone="amber"
             />
@@ -94,35 +94,35 @@ export function DashboardPageContent() {
               value={formatNumber(data.sheet.productsSold)}
               tone="blue"
             />
-            <KpiCard label="Ultima venda" value={formatDate(data.sheet.lastSale)} tone="purple" />
-            <KpiCard label="Ultima sincronizacao" value={lastUpdated} tone="amber" />
+            <KpiCard label="Última venda" value={formatDate(data.sheet.lastSale)} tone="purple" />
+            <KpiCard label="Última sincronização" value={lastUpdated} tone="amber" />
           </div>
         </PageSection>
       ) : null}
       {data ? (
         <PageSection
-          title="Evolucao das vendas"
+          title="Evolução das vendas"
           description="Indicadores atualizados a partir do mesmo snapshot sincronizado."
         >
           <div className="grid min-w-0 gap-4">
             <DashboardChartCard
-              title="Quantidade de aparelhos vendidos por mes"
-              description="Total de unidades vendidas em cada mes."
+              title="Quantidade de aparelhos vendidos por mês"
+              description="Total de unidades vendidas em cada mês."
             >
               <MonthlyBarChart
                 data={charts.monthlyUnits}
-                title="Quantidade de aparelhos vendidos por mes"
+                title="Quantidade de aparelhos vendidos por mês"
               />
             </DashboardChartCard>
             <DashboardChartCard
-              title="Receita bruta por mes"
-              description="Somatorio do valor real das vendas por mes."
+              title="Receita bruta por mês"
+              description="Somatório do valor real das vendas por mês."
             >
               <MonthlyLineChart data={charts.monthlyRevenue} title="Receita bruta por mes" />
             </DashboardChartCard>
             <DashboardChartCard
-              title="Lucro liquido por mes"
-              description="Somatorio do lucro realizado em cada mes."
+              title="Lucro líquido por mês"
+              description="Somatório do lucro realizado em cada mês."
             >
               <MonthlyLineChart data={charts.monthlyProfit} title="Lucro liquido por mes" />
             </DashboardChartCard>

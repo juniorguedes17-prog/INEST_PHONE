@@ -92,7 +92,7 @@ export const PricingProductCard = memo(function PricingProductCard({
 
       <div className="flex min-w-0 flex-col items-start gap-1 border-t border-inest-line/70 pt-4 md:items-end md:border-l md:border-t-0 md:pl-5 md:pt-0">
         <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-inest-muted">
-          Preco de venda
+          Preço de venda
         </span>
         <strong className="font-display text-[28px] font-bold leading-none text-inest-text">
           {formatCurrency(item.salePrice)}
