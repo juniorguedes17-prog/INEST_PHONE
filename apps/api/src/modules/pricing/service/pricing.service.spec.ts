@@ -361,6 +361,7 @@ describe('PricingService native product profit integration', () => {
           productDescription,
           normalizedDescription: productDescription.toLowerCase(),
           productType: 'IPHONE_SEALED',
+          profitCondition: 'NOVO',
         }),
         listPricingConfigurations: vi
           .fn()
@@ -419,7 +420,7 @@ describe('PricingService native product profit integration', () => {
           productName: 'Mac Neo 13 8/256',
           model: 'Mac Neo 13 8/256',
           category: 'MacBook',
-          condition: 'NOVO',
+          condition: 'CPO',
         }),
       ),
       findActiveCatalogProductById: vi.fn().mockResolvedValue({
@@ -491,6 +492,147 @@ describe('PricingService native product profit integration', () => {
     );
     log.mockRestore();
   });
+
+  it.each([
+    ['CPO', 'NOVO'],
+    ['SEMINOVO', 'NOVO'],
+    ['NOVO', 'CPO'],
+  ] as const)(
+    'blocks Brazil Radar pricing when quote condition %s diverges from Product condition %s',
+    async (quoteCondition, productCondition) => {
+      const repository = {
+        findBrazilRadarQuote: vi
+          .fn()
+          .mockResolvedValue(
+            brazilRadarQuote({ productId: CATALOG_PRODUCT_ID, condition: quoteCondition }),
+          ),
+        findActiveCatalogProductById: vi.fn().mockResolvedValue({
+          id: CATALOG_PRODUCT_ID,
+          profitProductId: 901,
+          productDescription: 'iPhone 17 Pro Max 256GB',
+          productType: 'IPHONE_SEALED',
+          profitCondition: productCondition,
+        }),
+        findActiveCatalogProduct: vi.fn(),
+        listPricingConfigurations: vi.fn().mockResolvedValue([]),
+      };
+      const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: '901',
+              condition: productCondition,
+              productDescription: 'iPhone 17 Pro Max 256GB',
+              normalizedDescription: 'iphone 17 pro max 256gb',
+              netProfit: 800,
+            },
+          ],
+          fetchedAt: '2026-08-21T00:00:00.000Z',
+        }),
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
+
+      const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+      expect(result).toMatchObject({
+        product: { condition: quoteCondition },
+        desiredNetProfit: null,
+        salePrice: null,
+        offerPrice: null,
+        calculationStatus: 'missing_profit',
+        calculationError:
+          'Condicao da cotacao do Radar Brasil diverge da condicao do produto mestre associado.',
+        offerDraft: null,
+      });
+    },
+  );
+
+  it('blocks Brazil Radar pricing when the associated Product has no profit condition', async () => {
+    const repository = {
+      findBrazilRadarQuote: vi
+        .fn()
+        .mockResolvedValue(brazilRadarQuote({ productId: CATALOG_PRODUCT_ID })),
+      findActiveCatalogProductById: vi.fn().mockResolvedValue({
+        id: CATALOG_PRODUCT_ID,
+        profitProductId: 901,
+        productDescription: 'iPhone 17 Pro Max 256GB',
+        productType: 'IPHONE_SEALED',
+        profitCondition: null,
+      }),
+      findActiveCatalogProduct: vi.fn(),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '2026-08-21T00:00:00.000Z' }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(result).toMatchObject({
+      product: { condition: 'NOVO' },
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      calculationStatus: 'missing_profit',
+      calculationError: 'Condicao do produto mestre associado ausente ou invalida.',
+      offerDraft: null,
+    });
+  });
+
+  it.each([null, '', 'CONDITION_UNKNOWN'] as const)(
+    'blocks Brazil Radar pricing without defaulting condition %j to NOVO',
+    async (condition) => {
+      const repository = {
+        findBrazilRadarQuote: vi.fn().mockResolvedValue(brazilRadarQuote({ condition })),
+        findActiveCatalogProduct: vi.fn(),
+        listPricingConfigurations: vi.fn().mockResolvedValue([]),
+      };
+      const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: '17',
+              condition: 'NOVO',
+              productDescription: 'iPhone 17 Pro Max 256GB',
+              normalizedDescription: 'iphone 17 pro max 256gb',
+              netProfit: 690,
+            },
+          ],
+          fetchedAt: '2026-08-21T00:00:00.000Z',
+        }),
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
+
+      const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+      expect(repository.findActiveCatalogProduct).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        product: { condition: condition ?? '' },
+        desiredNetProfit: null,
+        salePrice: null,
+        offerPrice: null,
+        calculationStatus: 'missing_profit',
+        calculationError: 'Condicao da cotacao do Radar Brasil ausente ou invalida.',
+        offerDraft: null,
+      });
+    },
+  );
 
   it('fails closed without falling back when a persisted Product.id is inactive or missing', async () => {
     const repository = {

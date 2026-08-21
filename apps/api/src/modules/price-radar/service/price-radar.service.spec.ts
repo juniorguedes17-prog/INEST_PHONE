@@ -9,6 +9,7 @@ function automatedQuote(
   price: number,
   productName = 'iPhone 17 256GB',
   productId: string | null = null,
+  condition: string | null = 'NOVO',
 ): AutomatedPriceQuoteRecord {
   return {
     id,
@@ -19,7 +20,7 @@ function automatedQuote(
     model: productName,
     capacity: productName.includes('512GB') ? '512GB' : '256GB',
     color: 'Azul',
-    condition: 'NOVO',
+    condition,
     price,
     availability: null,
     rawLine: `Azul R$ ${price}`,
@@ -105,4 +106,24 @@ describe('PriceRadarService automated quotes', () => {
     expect(repository.listQuotes).toHaveBeenCalledOnce();
     expect(repository.listAutomatedQuotes).toHaveBeenCalledOnce();
   });
+
+  it.each([null, '', 'CONDITION_UNKNOWN'] as const)(
+    'does not classify an automated quote with condition %j as NOVO',
+    async (condition) => {
+      const repository = {
+        listQuotes: vi.fn().mockResolvedValue([]),
+        listAutomatedQuotes: vi
+          .fn()
+          .mockResolvedValue([
+            automatedQuote('condition', 'Fornecedor', 4900, undefined, null, condition),
+          ]),
+      };
+      const service = new PriceRadarService(repository as unknown as PriceRadarRepository);
+
+      const [quote] = await service.list({});
+
+      expect(quote?.quality).toBe(condition ?? '');
+      expect(quote?.quality).not.toBe('NOVO');
+    },
+  );
 });

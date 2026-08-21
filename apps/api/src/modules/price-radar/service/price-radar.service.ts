@@ -352,7 +352,7 @@ export class PriceRadarService {
       color: record.color ?? '',
       capacity: record.capacity ?? '',
       productType: record.category ?? '',
-      quality: record.condition ?? 'NOVO',
+      quality: record.condition ?? '',
       supplier: {
         id: contact.id,
         name: contact.supplierName,

@@ -367,29 +367,40 @@ export class PricingService {
       this.profitProvider.getCatalog(),
       quote.productId
         ? this.pricingRepository.findActiveCatalogProductById(quote.productId)
-        : this.pricingRepository.findActiveCatalogProduct(
-            quoteProfitCondition,
-            normalizedDescription,
-          ),
+        : quoteProfitCondition
+          ? this.pricingRepository.findActiveCatalogProduct(
+              quoteProfitCondition,
+              normalizedDescription,
+            )
+          : Promise.resolve(null),
     ]);
     const productIdUnavailable = Boolean(quote.productId && !catalogProduct);
-    const profitCondition = this.resolveBrazilRadarProfitCondition(
-      catalogProduct?.profitCondition ?? quoteProfitCondition,
-    );
+    const catalogProfitCondition = catalogProduct
+      ? this.resolveBrazilRadarProfitCondition(catalogProduct.profitCondition)
+      : null;
+    const conditionError = !quoteProfitCondition
+      ? 'Condicao da cotacao do Radar Brasil ausente ou invalida.'
+      : catalogProduct && !catalogProfitCondition
+        ? 'Condicao do produto mestre associado ausente ou invalida.'
+        : catalogProfitCondition && catalogProfitCondition !== quoteProfitCondition
+          ? 'Condicao da cotacao do Radar Brasil diverge da condicao do produto mestre associado.'
+          : null;
+    const canResolveProfit = !productIdUnavailable && !conditionError;
+    const profitCondition = quoteProfitCondition ?? quote.condition?.trim() ?? '';
     const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
-    const legacyProfitLookup = productIdUnavailable
+    const legacyProfitLookup = !canResolveProfit
       ? { status: 'not_found' as const }
       : this.findProfit(
           profitCatalog,
           catalogProduct?.profitProductId,
-          profitCondition,
+          quoteProfitCondition!,
           profitProductDescription,
         );
     const profitIdentityResolution =
-      pricingResolutionSource === 'LEGACY_FALLBACK'
+      canResolveProfit && pricingResolutionSource === 'LEGACY_FALLBACK'
         ? resolveProfitIdentity(profitCatalog, {
             productDescription: quoteDescription,
-            condition: profitCondition,
+            condition: quoteProfitCondition!,
             category: quote.category,
             color: quote.color,
           })
@@ -431,7 +442,7 @@ export class PricingService {
         });
       }
     }
-    const profitRecord = productIdUnavailable
+    const profitRecord = !canResolveProfit
       ? null
       : pricingResolutionSource === 'PRODUCT_ID'
         ? legacyProfitLookup.status === 'found'
@@ -447,14 +458,24 @@ export class PricingService {
       settings,
       pricingConfigurations,
     );
-    const { calculationStatus, calculationError } = productIdUnavailable
+    const { calculationStatus, calculationError } = !quoteProfitCondition
       ? {
           calculationStatus: 'missing_profit' as const,
-          calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
+          calculationError: conditionError,
         }
-      : pricingResolutionSource === 'PRODUCT_ID'
-        ? getDirectProductProfitCalculationState(legacyProfitLookup)
-        : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
+      : productIdUnavailable
+        ? {
+            calculationStatus: 'missing_profit' as const,
+            calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
+          }
+        : conditionError
+          ? {
+              calculationStatus: 'missing_profit' as const,
+              calculationError: conditionError,
+            }
+          : pricingResolutionSource === 'PRODUCT_ID'
+            ? getDirectProductProfitCalculationState(legacyProfitLookup)
+            : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
     const contact = quote.currentList.supplierContact;
     const productName = catalogProduct?.productDescription?.trim() || quote.productName.trim();
 
@@ -579,13 +600,12 @@ export class PricingService {
     );
   }
 
-  private resolveBrazilRadarProfitCondition(condition?: string | null): ProfitCondition {
+  private resolveBrazilRadarProfitCondition(condition?: string | null): ProfitCondition | null {
     const normalized = condition?.trim().toUpperCase();
-    if (normalized === 'CPO') return 'CPO';
-    if (normalized === 'SEMINOVO' || normalized === 'USADO' || normalized === 'VITRINE') {
-      return 'SEMINOVO';
+    if (normalized === 'NOVO' || normalized === 'CPO' || normalized === 'SEMINOVO') {
+      return normalized;
     }
-    return 'NOVO';
+    return null;
   }
 
   private getBrazilRadarProfitDescription(quote: PricingBrazilRadarQuoteRecord) {
