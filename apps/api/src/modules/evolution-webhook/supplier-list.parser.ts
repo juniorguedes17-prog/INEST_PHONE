@@ -10,6 +10,7 @@ const CPO_CONDITION_MARKERS =
   /\b(?:cpo|refurbished|pre[-\s]?owned|certified\s+pre[-\s]?owned|recondicionado\s+(?:pela\s+)?apple)\b/i;
 const NEW_CONDITION_MARKERS = /\b(?:novo|novos|lacrad[oa]s?|new|sealed)\b/i;
 const GRADE_MARKER = /\bgrade\s*(a\s*\+|ab|b|c|a)(?=\s|[^a-z0-9]|$)/gi;
+const YEAR_CONTEXT_HEADER = /^\s*ano\s*(?::|[-–—])?\s*(?:19|20)\d{2}\s*$/i;
 const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`;
 const MONEY_VALUE = String.raw`\d(?:[\d.,]|\s(?=\d{3}(?:\D|$)))*`;
 const PRICE_PREFIX = new RegExp(`${CURRENCY_MARKER}\\s*(${MONEY_VALUE})`, 'iu');
@@ -462,6 +463,7 @@ function isNonProductText(value: string) {
 function isContextBoundaryLine(value: string) {
   if (hasPrice(value)) return false;
   return (
+    YEAR_CONTEXT_HEADER.test(value) ||
     /^\s*\d{1,2}[/-]\d{1,2}[/-]\d{2,4}(?:\s|$)/.test(value) ||
     /^\s*\d{1,2}:\d{2}(?::\d{2})?(?:\s|$)/.test(value) ||
     /\b(?:ultima\s+chamada|última\s+chamada|lista\s+atualizada|bom\s+dia|boa\s+tarde|boa\s+noite|aviso)\b/i.test(

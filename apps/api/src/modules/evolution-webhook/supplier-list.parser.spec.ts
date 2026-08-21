@@ -645,6 +645,52 @@ describe('supplier list parser', () => {
     });
   });
 
+  it.each(['ANO 2024', 'Ano: 2025', 'ano - 2026'])(
+    'trata %s como contexto sem contaminar o produto seguinte',
+    (yearHeader) => {
+      const items = parseSupplierListText(`
+        MACBOOK LACRADOS
+        ${yearHeader}
+        MacBook Air M5 13 512GB
+        Silver R$ 4.500
+      `);
+
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({
+        productName: 'MacBook Air M5 13 512GB',
+        model: 'MacBook Air M5 13 512GB',
+        category: 'MacBook',
+        condition: 'NOVO',
+        color: 'silver',
+        price: 4500,
+      });
+      expect(items.some((item) => /\bano\b/i.test(item.productName))).toBe(false);
+      expect(items.some((item) => /\bano\b/i.test(item.model ?? ''))).toBe(false);
+    },
+  );
+
+  it('nao promove um cabecalho ANO a produto quando a proxima linha contem preco', () => {
+    const rejections: Array<{ rawLine: string; reason: string }> = [];
+    const items = parseSupplierListText('ANO 2026\nR$ 4.500', {
+      onLineRejected: (rejection) => rejections.push(rejection),
+    });
+
+    expect(items).toEqual([]);
+    expect(rejections).toEqual([{ rawLine: 'R$ 4.500', reason: 'missing_product_context' }]);
+  });
+
+  it('preserva ano que faz parte de uma descricao de produto', () => {
+    const [item] = parseSupplierListText('Apple Watch Ultra 3 2024\nBlack R$ 1.000');
+
+    expect(item).toMatchObject({
+      productName: 'Apple Watch Ultra 3 2024',
+      model: 'Apple Watch Ultra 3 2024',
+      category: 'Apple Watch',
+      color: 'black',
+      price: 1000,
+    });
+  });
+
   it('isola os blocos da Tala Cell e classifica AS IS como seminovo', () => {
     const items = parseSupplierListText(`
       IPHONE 17 256GB 🇺🇸 AS IS
