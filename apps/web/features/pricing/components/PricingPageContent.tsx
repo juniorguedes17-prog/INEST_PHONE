@@ -567,7 +567,7 @@ function BrazilRadarQuotePricingCard({
         {item.calculationStatus === 'missing_profit' ? (
           <ActionButton
             variant="primary"
-            className="mt-1 h-9 px-3 text-xs"
+            className="mt-1 h-9 w-full px-3 text-xs md:w-auto"
             disabled={generating}
             onClick={onRegisterProfit}
           >
