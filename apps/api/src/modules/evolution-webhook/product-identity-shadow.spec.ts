@@ -117,6 +117,12 @@ describe('product identity ingestion shadow', () => {
       resolveProductIdShadow(supplierIdentity('MacBook Neo A18 Pro 13" 8GB 256GB'), catalog),
     ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
     expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo 8/256GB 13"'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo A18 Pro 8GB / 256GB 13”'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
+    expect(
       resolveProductIdShadow(supplierIdentity('MacBook Neo 13 8GB/256GB'), catalog),
     ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
   });

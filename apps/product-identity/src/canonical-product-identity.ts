@@ -171,6 +171,21 @@ function resolveCanonicalModel({
     return { entry: null, confidence: 0, matchMethod: 'unclassified' };
   }
   if (exactAlias) {
+    const specificEntry = resolveModelWithExplicitScreen({
+      text,
+      category,
+      screen,
+      chip,
+      baseEntry: exactAlias,
+    });
+    if (specificEntry === 'conflict') {
+      return { entry: null, confidence: 0, matchMethod: 'unclassified' };
+    }
+    if (specificEntry) {
+      return hasInvariantConflict(specificEntry, screen, chip)
+        ? { entry: null, confidence: 0, matchMethod: 'unclassified' }
+        : { entry: specificEntry, confidence: 1, matchMethod: 'exact_alias' };
+    }
     return hasInvariantConflict(exactAlias, screen, chip)
       ? { entry: null, confidence: 0, matchMethod: 'unclassified' }
       : { entry: exactAlias, confidence: 1, matchMethod: 'exact_alias' };
@@ -188,6 +203,50 @@ function resolveCanonicalModel({
   }
 
   return { entry: null, confidence: 0, matchMethod: 'unclassified' };
+}
+
+function resolveModelWithExplicitScreen({
+  text,
+  category,
+  screen,
+  chip,
+  baseEntry,
+}: {
+  text: string;
+  category: string;
+  screen: string | null;
+  chip: string | null;
+  baseEntry: CanonicalModelRegistryEntry;
+}): CanonicalModelRegistryEntry | 'conflict' | null {
+  if (category !== 'MacBook' || !screen || baseEntry.invariants?.screen !== undefined) return null;
+
+  const matchingBaseAliases = baseEntry.aliases
+    .map(normalizeCanonicalText)
+    .filter((alias) => containsPhrase(text, alias));
+  const candidates = canonicalModelRegistry.filter((entry) => {
+    if (entry.category !== category || entry.invariants?.screen === undefined) return false;
+    const sameFamily = entry.aliases.some((alias) => {
+      const normalizedAlias = normalizeCanonicalText(alias);
+      return matchingBaseAliases.some(
+        (baseAlias) => normalizedAlias === baseAlias || normalizedAlias.startsWith(`${baseAlias} `),
+      );
+    });
+    if (!sameFamily) return false;
+    if (normalizeCanonicalText(entry.invariants.screen) !== normalizeCanonicalText(screen)) {
+      return false;
+    }
+    if (
+      chip &&
+      entry.invariants?.chip !== undefined &&
+      normalizeCanonicalText(entry.invariants.chip) !== normalizeCanonicalText(chip)
+    ) {
+      return false;
+    }
+    return matchingBaseAliases.length > 0;
+  });
+
+  if (candidates.length === 1) return candidates[0] ?? null;
+  return candidates.length > 1 ? 'conflict' : null;
 }
 
 function hasInvariantConflict(

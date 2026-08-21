@@ -105,6 +105,42 @@ test('enriquece memoria abreviada de MacBook somente em pares inequívocos', () 
   assert.equal(ambiguous.canonicalStorage, null);
 });
 
+test('resolve tela explícita de MacBook independentemente da posição dos atributos', () => {
+  const before = normalizeCanonicalProductIdentity('MacBook Neo 13" 8/256GB');
+  const afterStraightQuotes = normalizeCanonicalProductIdentity('MacBook Neo 8/256GB 13"');
+  const afterCurvedQuotes = normalizeCanonicalProductIdentity(
+    'MacBook Neo A18 Pro 8GB / 256GB 13”',
+  );
+  const alternateFamilyAlias = normalizeCanonicalProductIdentity('Mac Neo 8/256GB 13"');
+  const otherModel = normalizeCanonicalProductIdentity('MacBook Air M5 16/512GB 13"');
+
+  assert.deepEqual([before.canonicalModelKey, before.canonicalScreen], ['macbook-neo-13', '13"']);
+  assert.deepEqual(
+    [afterStraightQuotes.canonicalModelKey, afterStraightQuotes.canonicalScreen],
+    ['macbook-neo-13', '13"'],
+  );
+  assert.deepEqual(
+    [afterCurvedQuotes.canonicalModelKey, afterCurvedQuotes.canonicalScreen],
+    ['macbook-neo-13', '13"'],
+  );
+  assert.deepEqual(
+    [alternateFamilyAlias.canonicalModelKey, alternateFamilyAlias.canonicalScreen],
+    ['macbook-neo-13', '13"'],
+  );
+  assert.deepEqual(
+    [otherModel.canonicalModelKey, otherModel.canonicalScreen],
+    ['macbook-air-m5-13', '13"'],
+  );
+});
+
+test('não inventa tela quando a descrição do MacBook não informa screen', () => {
+  const result = normalizeCanonicalProductIdentity('MacBook Neo 8/512');
+
+  assert.equal(result.canonicalScreen, null);
+  assert.equal(result.canonicalScreenSource, 'unknown');
+  assert.notEqual(result.canonicalModelKey, 'macbook-neo-13');
+});
+
 test('completa conectividade iPad no nível da família e preserva Cellular explícito', () => {
   const wifi = normalizeCanonicalProductIdentity('iPad 11 128GB');
   const wifiComplete = normalizeCanonicalProductIdentity('iPad 11 A16 128GB 11" Wi-Fi');
