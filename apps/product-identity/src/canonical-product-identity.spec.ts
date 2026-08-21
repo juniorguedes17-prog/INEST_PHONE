@@ -55,6 +55,13 @@ test('preserva RAM, armazenamento, tela e chip de MacBook', () => {
   });
 });
 
+test('normaliza RAM quando o marcador precede a capacidade', () => {
+  const result = normalizeCanonicalProductIdentity('MacBook Air M5 13" RAM 8GB 256GB');
+
+  assert.equal(result.canonicalRam, '8GB');
+  assert.equal(result.canonicalStorage, '256GB');
+});
+
 test('completa invariantes seguras de MacBook Air e Pro', () => {
   const air = normalizeCanonicalProductIdentity('MacBook Air M5 13" 16G 512');
   const pro = normalizeCanonicalProductIdentity('MacBook Pro M5 Pro 16" 24G 1TB');
@@ -199,9 +206,21 @@ test('falha fechada quando atributo explícito contradiz invariant do modelo', (
 
 test('não interpreta pares numéricos abreviados fora de MacBook', () => {
   const iphone = normalizeCanonicalProductIdentity('iPhone 17 16 512');
+  const compactIphone = normalizeCanonicalProductIdentity('iPhone 17 8/256GB');
 
   assert.equal(iphone.canonicalRam, null);
   assert.equal(iphone.canonicalStorage, null);
+  assert.equal(compactIphone.canonicalRam, null);
+  assert.equal(compactIphone.canonicalStorage, null);
+});
+
+test('falha fechada para atributos de memoria conflitantes', () => {
+  const conflictingMac = normalizeCanonicalProductIdentity('MacBook Neo 13" 8/256GB 16/512GB');
+  const conflictingStorage = normalizeCanonicalProductIdentity('iPhone 17 Pro 256GB 512GB');
+
+  assert.equal(conflictingMac.canonicalRam, null);
+  assert.equal(conflictingMac.canonicalStorage, null);
+  assert.equal(conflictingStorage.canonicalStorage, null);
 });
 
 test('preserva tamanho e conectividade de Apple Watch', () => {

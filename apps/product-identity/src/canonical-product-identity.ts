@@ -380,31 +380,83 @@ function deriveDeterministicModelLabel({
 }
 
 function resolveRam(text: string, category: string) {
-  const explicit = text.match(/\b(\d{1,3})gb\s*(?:ram|memory|memoria)\b|\b(\d{1,3})\s*ram\b/);
-  const slash = text.match(/\b(\d{1,3})\s*\/\s*(\d{2,4})\b/);
+  const compactMemory = resolveCompactMemory(text, category);
+  if (compactMemory.conflict) return null;
+
+  const explicit = Array.from(
+    text.matchAll(
+      /\b(\d{1,3})gb\s*(?:ram|memory|memoria)\b|\b(?:ram|memory|memoria)\s*(\d{1,3})gb\b|\b(\d{1,3})\s*ram\b/g,
+    ),
+    (match) => match[1] ?? match[2] ?? match[3],
+  );
   const memoryCandidates = Array.from(text.matchAll(/\b(\d{1,3})gb\b/g), (match) => Number(match[1]));
   const abbreviated = resolveMacBookAbbreviatedMemory(text, category);
   const inferred = ['MacBook', 'iMac', 'Mac Studio'].includes(category)
-    ? memoryCandidates.find((value) => value <= 64)
-    : undefined;
-  const value = explicit?.[1] ?? explicit?.[2] ?? slash?.[1] ?? inferred;
-  if (value) return `${Number(value)}GB`;
-  return abbreviated?.ram ?? null;
+    ? memoryCandidates.filter((value) => value <= 64).map((value) => `${value}GB`)
+    : [];
+
+  return resolveUnambiguousAttribute([
+    ...explicit.map((value) => `${Number(value)}GB`),
+    compactMemory.ram,
+    ...inferred,
+    abbreviated?.ram,
+  ]);
 }
 
 function resolveStorage(text: string, ram: string | null, category: string) {
-  const slash = text.match(/\b\d{1,3}\s*\/\s*(\d{2,4})\b/);
-  if (slash?.[1]) return `${Number(slash[1])}GB`;
+  const compactMemory = resolveCompactMemory(text, category);
+  if (compactMemory.conflict || hasUnsupportedCompactMemoryPair(text, category)) return null;
 
-  const terabytes = text.match(/\b([1248])tb\b/);
-  if (terabytes?.[1]) return `${terabytes[1]}TB`;
+  const terabytes = Array.from(text.matchAll(/\b([1248])tb\b/g), (match) => `${match[1]}TB`);
 
   const candidates = Array.from(text.matchAll(/\b(\d{2,4})gb\b/g), (match) => Number(match[1]));
   const ramValue = ram ? Number(ram.replace('GB', '')) : null;
-  const storage = candidates.find((value) => value !== ramValue || candidates.length === 1 && value >= 64);
-  if (storage) return `${storage}GB`;
+  const storage = candidates
+    .filter((value) => value !== ramValue || (candidates.length === 1 && value >= 64))
+    .map((value) => `${value}GB`);
+  const abbreviated = resolveMacBookAbbreviatedMemory(text, category);
 
-  return resolveMacBookAbbreviatedMemory(text, category)?.storage ?? null;
+  return resolveUnambiguousAttribute([
+    compactMemory.storage,
+    ...terabytes,
+    ...storage,
+    abbreviated?.storage,
+  ]);
+}
+
+function resolveCompactMemory(text: string, category: string) {
+  if (!['MacBook', 'iMac', 'Mac Studio'].includes(category)) {
+    return { ram: null, storage: null, conflict: false };
+  }
+
+  const pairs = Array.from(
+    text.matchAll(
+      /\b((?:8|16|18|24|32|36|48|64)(?:gb|g)?)\s*\/\s*((?:64|128|256|512|1024|2048|4096|8192)(?:gb)?|(?:1|2|4|8)tb)\b/g,
+    ),
+    (match) => ({
+      ram: parseMacBookRamToken(match[1]),
+      storage: parseMacBookStorageToken(match[2]),
+    }),
+  ).filter((pair): pair is { ram: string; storage: string } => Boolean(pair.ram && pair.storage));
+  const distinctPairs = [...new Map(pairs.map((pair) => [`${pair.ram}|${pair.storage}`, pair])).values()];
+
+  if (distinctPairs.length !== 1) {
+    return { ram: null, storage: null, conflict: distinctPairs.length > 1 };
+  }
+
+  return { ...distinctPairs[0]!, conflict: false };
+}
+
+function hasUnsupportedCompactMemoryPair(text: string, category: string) {
+  return (
+    !['MacBook', 'iMac', 'Mac Studio'].includes(category) &&
+    /\b\d{1,3}\s*\/\s*(?:\d{2,4}(?:gb)?|[1248]tb)\b/.test(text)
+  );
+}
+
+function resolveUnambiguousAttribute(values: Array<string | null | undefined>) {
+  const distinct = [...new Set(values.filter((value): value is string => Boolean(value)))];
+  return distinct.length === 1 ? (distinct[0] ?? null) : null;
 }
 
 function resolveMacBookAbbreviatedMemory(text: string, category: string) {
