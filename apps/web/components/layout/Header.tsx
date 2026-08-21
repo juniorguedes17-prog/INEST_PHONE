@@ -121,7 +121,7 @@ export function Header({ onOpenMenu }: HeaderProps) {
             disabled={isUpdatingTheme}
             aria-label="Alternar tema"
             title={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
-            className="hidden h-10 w-10 place-items-center rounded-xl border border-inest-line bg-inest-surface text-sm font-bold text-inest-text shadow-[0_4px_12px_rgba(16,24,40,0.04)] transition-colors hover:bg-inest-soft sm:grid"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-inest-line bg-inest-surface text-sm font-bold text-inest-text shadow-[0_4px_12px_rgba(16,24,40,0.04)] transition-colors hover:bg-inest-soft"
           >
             O
           </button>
