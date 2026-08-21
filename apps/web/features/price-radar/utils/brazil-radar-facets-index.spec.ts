@@ -202,6 +202,51 @@ test('preserva Fones como categoria estruturada no indice do Radar', () => {
   );
 });
 
+test('preserva Garmin como categoria estruturada e filtra sem Product vinculado', () => {
+  const index = buildBrazilRadarFacetIndex([
+    quote({
+      id: 'garmin-alpha-300',
+      productName: 'Garmin Alpha 300',
+      category: 'Garmin',
+      model: 'Garmin Alpha 300',
+      productId: null,
+    }),
+    quote({
+      id: 'garmin-fenix-8',
+      productName: 'Garmin Fenix 8',
+      category: 'Garmin',
+      model: 'Garmin Fenix 8',
+      productId: null,
+    }),
+    quote({
+      id: 'iphone-17',
+      productName: 'iPhone 17',
+      category: 'iPhone',
+      model: 'iPhone 17',
+    }),
+    quote({
+      id: 'airpods-pro',
+      productName: 'AirPods Pro',
+      category: 'Fones',
+      model: 'AirPods Pro',
+    }),
+  ]);
+
+  const facets = buildBrazilRadarFacetsFromIndex(index);
+
+  assert.equal(
+    facets.categories.some((item) => item.label === 'Garmin'),
+    true,
+  );
+  assert.deepEqual(
+    filterBrazilRadarQuotesByIndex(index, {
+      ...emptyBrazilRadarFacetState,
+      categories: ['Garmin'],
+    }).map((item) => item.id),
+    ['garmin-alpha-300', 'garmin-fenix-8'],
+  );
+});
+
 test('escala de 10 mil itens cria o indice uma vez e reutiliza as linhas normalizadas', () => {
   const dataset = Array.from({ length: 10_000 }, (_, index) =>
     quote({

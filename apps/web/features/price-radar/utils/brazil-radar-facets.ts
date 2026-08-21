@@ -208,6 +208,7 @@ const categoryOrder = [
   'MacBook',
   'Apple Watch',
   'Fones',
+  'Garmin',
   'Eletronicos',
   'Acessorios',
 ];
@@ -375,7 +376,9 @@ export function countActiveBrazilRadarFacets(filters: BrazilRadarFacetState) {
 }
 
 export function getCanonicalCategory(source: CatalogFacetSource) {
-  if (normalizeCatalogFilterText(source.category ?? '') === 'fones') return 'Fones';
+  const structuredCategory = normalizeCatalogFilterText(source.category ?? '');
+  if (structuredCategory === 'fones') return 'Fones';
+  if (structuredCategory === 'garmin') return 'Garmin';
   return normalizeCanonicalProductIdentity(source).canonicalCategory;
 }
 

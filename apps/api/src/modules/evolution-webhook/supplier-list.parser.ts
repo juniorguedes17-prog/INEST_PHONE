@@ -284,6 +284,7 @@ export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[
 
 function isCategoryHeading(value: string, category: string | null) {
   if (!category) return false;
+  if (category === 'Garmin' && !/^\s*garmin\s*$/i.test(value)) return false;
   if (/\b(?:pencil|airtag|magic\s?mouse|earpods)\b/i.test(value)) return false;
   if (/\bair\s?pods\s+(?:pro|max|regular|anc)\b/i.test(value)) return false;
   if (/\b(?:watch\s+)?(?:se|series|ultra|s\d+)\b/i.test(value)) return false;
@@ -660,6 +661,7 @@ function toPositiveNumber(value: string) {
 }
 
 function detectCategory(value: string): string | null {
+  if (/\bgarmin\b/i.test(value)) return 'Garmin';
   if (/\biphones?\b|\biph(?:one)?\s*\d/i.test(value)) return 'iPhone';
   if (isCompactAppleProductHeading(value)) return 'iPhone';
   if (/ipad/i.test(value)) return 'iPad';

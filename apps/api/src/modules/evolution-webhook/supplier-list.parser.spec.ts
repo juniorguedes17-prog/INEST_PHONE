@@ -554,6 +554,38 @@ describe('supplier list parser', () => {
     expect(item?.category).toBe(category);
   });
 
+  it.each(['Garmin Alpha 300', 'Garmin Forerunner 965', 'Garmin Fenix 8', 'GARMIN Venu 3'])(
+    'classifica %s como Garmin por marca explicita',
+    (heading) => {
+      const [item] = parseSupplierListText(`${heading}\nBlack R$ 1.000`);
+
+      expect(item).toMatchObject({ category: 'Garmin' });
+      expect(item?.model?.toLowerCase()).toBe(heading.toLowerCase());
+    },
+  );
+
+  it('nao classifica uma palavra maior que apenas contenha garmin como Garmin', () => {
+    const [item] = parseSupplierListText('Garminia Alpha 300\nBlack R$ 1.000');
+
+    expect(item?.category).not.toBe('Garmin');
+  });
+
+  it.each([
+    ['Apple Watch Ultra', 'Apple Watch'],
+    ['Xiaomi Redmi Pad', null],
+    ['Tecno Spark', null],
+  ])('nao classifica %s como Garmin', (heading, category) => {
+    const [item] = parseSupplierListText(`${heading}\nBlack R$ 1.000`);
+
+    expect(item?.category).toBe(category);
+  });
+
+  it.each(['NOVO', 'CPO', 'SEMINOVO'])('preserva a condicao %s de um Garmin', (condition) => {
+    const [item] = parseSupplierListText(`${condition}\nGarmin Alpha 300\nBlack R$ 1.000`);
+
+    expect(item).toMatchObject({ category: 'Garmin', condition });
+  });
+
   it('preserva acessorio explicitamente associado a AirPods', () => {
     const [item] = parseSupplierListText('Capa para AirPods 4\nPreto R$ 100');
 
