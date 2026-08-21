@@ -1,4 +1,8 @@
 import { UpdateSettingsDto } from './dto/settings.dto';
+import {
+  DEFAULT_INSTALLMENT_MESSAGE_TEMPLATE,
+  DEFAULT_INSTALLMENT_RATES,
+} from './utils/installment-settings';
 
 export const SETTINGS_SCOPE = 'global';
 export const FINANCIAL_CONFIGURATION_NAME = 'Configuracao Financeira Global';
@@ -87,6 +91,8 @@ export const defaultSettings: Required<UpdateSettingsDto> = {
     defaultFooter: 'Me chama no privado e garanta sua reserva.',
     whatsappMessage: 'Ola! Tenho interesse neste produto da iNest Phone.',
   },
+  installmentRates: DEFAULT_INSTALLMENT_RATES,
+  installmentMessageTemplate: DEFAULT_INSTALLMENT_MESSAGE_TEMPLATE,
   userPreferences: {
     theme: 'light',
     language: 'pt-BR',

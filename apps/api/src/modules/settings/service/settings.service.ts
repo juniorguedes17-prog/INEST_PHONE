@@ -15,14 +15,28 @@ import {
 import { UpdateSettingsDto } from '../dto/settings.dto';
 import { SettingsRepository } from '../repository/settings.repository';
 import { defaultSettings } from '../settings.defaults';
+import {
+  hasValidInstallmentMessageTemplate,
+  INSTALLMENT_MESSAGE_TEMPLATE_CONFIGURATION_KEY,
+  INSTALLMENT_RATES_CONFIGURATION_KEY,
+  isValidInstallmentRates,
+  parseInstallmentRates,
+} from '../utils/installment-settings';
 import { toNumber } from '../validators/settings.validators';
 
 @Injectable()
 export class SettingsService {
-  constructor(@Inject(SettingsRepository) private readonly settingsRepository: SettingsRepository) {}
+  constructor(
+    @Inject(SettingsRepository) private readonly settingsRepository: SettingsRepository,
+  ) {}
 
   async getSettings(): Promise<Required<UpdateSettingsDto>> {
-    const [systemConfigurations, financialConfiguration, importConfiguration, pricingConfigurations] = await Promise.all([
+    const [
+      systemConfigurations,
+      financialConfiguration,
+      importConfiguration,
+      pricingConfigurations,
+    ] = await Promise.all([
       this.settingsRepository.findSystemConfigurations(),
       this.settingsRepository.findFinancialConfiguration(),
       this.settingsRepository.findImportConfiguration(),
@@ -99,6 +113,12 @@ export class SettingsService {
         defaultFooter: system.defaultFooter ?? defaultSettings.offers.defaultFooter,
         whatsappMessage: system.whatsappMessage ?? defaultSettings.offers.whatsappMessage,
       },
+      installmentRates: parseInstallmentRates(system[INSTALLMENT_RATES_CONFIGURATION_KEY]),
+      installmentMessageTemplate:
+        system[INSTALLMENT_MESSAGE_TEMPLATE_CONFIGURATION_KEY] &&
+        hasValidInstallmentMessageTemplate(system[INSTALLMENT_MESSAGE_TEMPLATE_CONFIGURATION_KEY])
+          ? system[INSTALLMENT_MESSAGE_TEMPLATE_CONFIGURATION_KEY]
+          : defaultSettings.installmentMessageTemplate,
       userPreferences: {
         ...defaultSettings.userPreferences,
         theme: this.parseTheme(system.theme),
@@ -120,10 +140,17 @@ export class SettingsService {
         ? { ...settings.usaFinancial, lastUpdated: new Date().toISOString() }
         : oldValue.usaFinancial,
       offers: settings.offers ?? oldValue.offers,
+      installmentRates: settings.installmentRates ?? oldValue.installmentRates,
+      installmentMessageTemplate:
+        settings.installmentMessageTemplate ?? oldValue.installmentMessageTemplate,
       userPreferences: settings.userPreferences ?? oldValue.userPreferences,
     };
 
     this.assertValidPricingSettings(nextSettings.pricing);
+    this.assertValidInstallmentSettings(
+      nextSettings.installmentRates,
+      nextSettings.installmentMessageTemplate,
+    );
     await this.persistSystemSettings(nextSettings);
     await this.persistPricingSettings(nextSettings.pricing);
     await this.settingsRepository.upsertFinancialConfiguration(nextSettings.financial, user?.id);
@@ -177,6 +204,12 @@ export class SettingsService {
       ['defaultOfferText', settings.offers.defaultOfferText, 'texto_longo'],
       ['defaultFooter', settings.offers.defaultFooter, 'texto_longo'],
       ['whatsappMessage', settings.offers.whatsappMessage, 'texto_longo'],
+      [INSTALLMENT_RATES_CONFIGURATION_KEY, JSON.stringify(settings.installmentRates), 'json'],
+      [
+        INSTALLMENT_MESSAGE_TEMPLATE_CONFIGURATION_KEY,
+        settings.installmentMessageTemplate,
+        'texto_longo',
+      ],
       ['theme', settings.userPreferences.theme, 'texto'],
       ['language', settings.userPreferences.language, 'texto'],
       ['currencyFormat', settings.userPreferences.currencyFormat, 'texto'],
@@ -255,7 +288,22 @@ export class SettingsService {
     }
 
     if (!hasValidOfferIncrement(settings.offerIncrement)) {
-      throw new BadRequestException('O acrescimo da oferta deve ser um valor nao negativo com ate duas casas decimais.');
+      throw new BadRequestException(
+        'O acrescimo da oferta deve ser um valor nao negativo com ate duas casas decimais.',
+      );
+    }
+  }
+
+  private assertValidInstallmentSettings(
+    rates: Required<UpdateSettingsDto>['installmentRates'],
+    template: Required<UpdateSettingsDto>['installmentMessageTemplate'],
+  ) {
+    if (!isValidInstallmentRates(rates)) {
+      throw new BadRequestException('As taxas de parcelamento informadas são inválidas.');
+    }
+
+    if (!hasValidInstallmentMessageTemplate(template)) {
+      throw new BadRequestException('O template de parcelamento contém placeholder inválido.');
     }
   }
 

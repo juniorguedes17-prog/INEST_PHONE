@@ -18,7 +18,7 @@ import {
 } from '@/lib/theme-preference';
 import type { ThemePreference } from '@/lib/theme-preference';
 import { useSettings } from '../hooks/useSettings';
-import { ImportRedirectRule, SettingsPayload } from '../types/settings';
+import { ImportRedirectRule, InstallmentRate, SettingsPayload } from '../types/settings';
 import { OfferTemplatesSettingsCard } from './OfferTemplatesSettingsCard';
 import { UsersAccessSettingsCard } from './UsersAccessSettingsCard';
 
@@ -141,6 +141,38 @@ export function SettingsPageContent() {
       usaFinancial: {
         ...current.usaFinancial,
         [field]: value,
+      },
+    }));
+  }
+
+  function updateInstallmentRate(
+    provider: 'infinityPay' | 'pagBank' | 'nubank',
+    installments: number,
+    ratePercent: number,
+  ) {
+    updateSettings((current) => ({
+      ...current,
+      installmentRates: {
+        ...current.installmentRates,
+        [provider]: {
+          ...current.installmentRates[provider],
+          installments: current.installmentRates[provider].installments.map((rate) =>
+            rate.installments === installments ? { ...rate, ratePercent } : rate,
+          ),
+        },
+      },
+    }));
+  }
+
+  function updateInfinityPayDebitRate(debitRatePercent: number) {
+    updateSettings((current) => ({
+      ...current,
+      installmentRates: {
+        ...current.installmentRates,
+        infinityPay: {
+          ...current.installmentRates.infinityPay,
+          debitRatePercent,
+        },
       },
     }));
   }
@@ -412,6 +444,62 @@ export function SettingsPageContent() {
                   }))
                 }
               />
+            </div>
+          </SettingsCard>
+        </div>
+
+        <div className={activeSection === 'pricing' ? 'xl:col-span-2' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Precificação"
+            title="Taxas de parcelamento"
+            description="Taxas efetivas editáveis por adquirente e quantidade de parcelas."
+          >
+            <div className="grid gap-8 xl:grid-cols-3">
+              <section className="min-w-0">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-black text-inest-text">InfinityPay</h3>
+                  <span className="text-xs font-bold text-inest-muted">Débito + 1x a 12x</span>
+                </div>
+                <RateInput
+                  label="Débito"
+                  value={settings.installmentRates.infinityPay.debitRatePercent}
+                  onChange={updateInfinityPayDebitRate}
+                />
+                <div className="mt-4 border-t border-inest-line pt-4">
+                  <InstallmentRateInputs
+                    rates={settings.installmentRates.infinityPay.installments}
+                    onChange={(installments, ratePercent) =>
+                      updateInstallmentRate('infinityPay', installments, ratePercent)
+                    }
+                  />
+                </div>
+              </section>
+
+              <section className="min-w-0 border-t border-inest-line pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-black text-inest-text">PagBank</h3>
+                  <span className="text-xs font-bold text-inest-muted">1x a 18x</span>
+                </div>
+                <InstallmentRateInputs
+                  rates={settings.installmentRates.pagBank.installments}
+                  onChange={(installments, ratePercent) =>
+                    updateInstallmentRate('pagBank', installments, ratePercent)
+                  }
+                />
+              </section>
+
+              <section className="min-w-0 border-t border-inest-line pt-6 xl:border-l xl:border-t-0 xl:pl-8 xl:pt-0">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-black text-inest-text">Nubank</h3>
+                  <span className="text-xs font-bold text-inest-muted">1x a 12x</span>
+                </div>
+                <InstallmentRateInputs
+                  rates={settings.installmentRates.nubank.installments}
+                  onChange={(installments, ratePercent) =>
+                    updateInstallmentRate('nubank', installments, ratePercent)
+                  }
+                />
+              </section>
             </div>
           </SettingsCard>
         </div>
@@ -793,6 +881,25 @@ export function SettingsPageContent() {
       <div className={activeSection === 'offers' ? '' : 'hidden'}>
         <OfferTemplatesSettingsCard />
       </div>
+
+      <div className={activeSection === 'offers' ? '' : 'hidden'}>
+        <SettingsCard
+          eyebrow="Ofertas"
+          title="Mensagem de parcelamento"
+          description="Template futuro para apresentar as opções de parcelamento ao cliente."
+        >
+          <TextArea
+            label="Template da mensagem"
+            value={settings.installmentMessageTemplate}
+            onChange={(installmentMessageTemplate) =>
+              updateSettings((current) => ({ ...current, installmentMessageTemplate }))
+            }
+          />
+          <p className="mt-3 text-xs font-medium text-inest-muted">
+            Placeholders permitidos: {'{{produto}}'}, {'{{cor}}'} e {'{{parcelas}}'}.
+          </p>
+        </SettingsCard>
+      </div>
     </div>
   );
 }
@@ -830,6 +937,54 @@ function TextInput({ label, value, type = 'text', onChange }: TextInputProps) {
         onChange={(event) => onChange(event.target.value)}
         className="field-control"
       />
+    </label>
+  );
+}
+
+interface InstallmentRateInputsProps {
+  rates: InstallmentRate[];
+  onChange: (installments: number, ratePercent: number) => void;
+}
+
+function InstallmentRateInputs({ rates, onChange }: InstallmentRateInputsProps) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {rates.map((rate) => (
+        <RateInput
+          key={rate.installments}
+          label={`${rate.installments}x`}
+          value={rate.ratePercent}
+          onChange={(ratePercent) => onChange(rate.installments, ratePercent)}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface RateInputProps {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}
+
+function RateInput({ label, value, onChange }: RateInputProps) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
+      <div className="relative">
+        <input
+          type="number"
+          min="0"
+          max="99.999999999"
+          step="0.000001"
+          value={String(value)}
+          onChange={(event) => onChange(toNumber(event.target.value))}
+          className="field-control pr-8"
+        />
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-bold text-inest-muted">
+          %
+        </span>
+      </div>
     </label>
   );
 }

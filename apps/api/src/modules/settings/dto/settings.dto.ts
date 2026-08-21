@@ -228,6 +228,52 @@ export class OfferSettingsDto {
   whatsappMessage!: string;
 }
 
+export class InstallmentRateDto {
+  @ApiProperty()
+  @IsInt()
+  @Min(1)
+  installments!: number;
+
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(99.999999999)
+  ratePercent!: number;
+}
+
+export class InstallmentProviderRatesDto {
+  @ApiProperty({ type: [InstallmentRateDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => InstallmentRateDto)
+  installments!: InstallmentRateDto[];
+}
+
+export class InfinityPayInstallmentRatesDto extends InstallmentProviderRatesDto {
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(99.999999999)
+  debitRatePercent!: number;
+}
+
+export class InstallmentRatesDto {
+  @ApiProperty({ type: InfinityPayInstallmentRatesDto })
+  @ValidateNested()
+  @Type(() => InfinityPayInstallmentRatesDto)
+  infinityPay!: InfinityPayInstallmentRatesDto;
+
+  @ApiProperty({ type: InstallmentProviderRatesDto })
+  @ValidateNested()
+  @Type(() => InstallmentProviderRatesDto)
+  pagBank!: InstallmentProviderRatesDto;
+
+  @ApiProperty({ type: InstallmentProviderRatesDto })
+  @ValidateNested()
+  @Type(() => InstallmentProviderRatesDto)
+  nubank!: InstallmentProviderRatesDto;
+}
+
 export class UserPreferencesDto {
   @ApiProperty({ enum: ['light', 'dark', 'system'] })
   @IsIn(['light', 'dark', 'system'])
@@ -282,6 +328,17 @@ export class UpdateSettingsDto {
   @ValidateNested()
   @Type(() => OfferSettingsDto)
   offers?: OfferSettingsDto;
+
+  @ApiProperty({ type: InstallmentRatesDto, required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InstallmentRatesDto)
+  installmentRates?: InstallmentRatesDto;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  installmentMessageTemplate?: string;
 
   @ApiProperty({ type: UserPreferencesDto, required: false })
   @IsOptional()

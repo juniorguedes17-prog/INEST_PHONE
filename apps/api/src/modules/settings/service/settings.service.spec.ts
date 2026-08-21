@@ -7,16 +7,20 @@ import {
 } from '../../pricing/utils/commercial-price-rounding';
 import { OFFER_INCREMENT_KEY } from '../../pricing/utils/offer-increment';
 import { SettingsRepository } from '../repository/settings.repository';
+import { defaultSettings } from '../settings.defaults';
 import { SettingsService } from './settings.service';
 
 function createRepository(pricingConfigurations: Array<{ key: string; value: string }> = []) {
   return {
-    findSystemConfigurations: vi.fn().mockImplementation((scope?: string) =>
-      Promise.resolve(scope === PRICING_CONFIGURATION_SCOPE ? pricingConfigurations : []),
-    ),
+    findSystemConfigurations: vi
+      .fn()
+      .mockImplementation((scope?: string) =>
+        Promise.resolve(scope === PRICING_CONFIGURATION_SCOPE ? pricingConfigurations : []),
+      ),
     findFinancialConfiguration: vi.fn().mockResolvedValue(null),
     findImportConfiguration: vi.fn().mockResolvedValue(null),
     upsertSystemConfiguration: vi.fn().mockResolvedValue({}),
+    deleteSystemConfigurations: vi.fn().mockResolvedValue({}),
     upsertFinancialConfiguration: vi.fn().mockResolvedValue({}),
     upsertImportConfiguration: vi.fn().mockResolvedValue({}),
     createAuditLog: vi.fn().mockResolvedValue({}),
@@ -119,19 +123,166 @@ describe('SettingsService commercial price endings', () => {
     });
   });
 
-  it.each([-1, 100.555])('rejects invalid offer increment %s before writing settings', async (offerIncrement) => {
+  it.each([-1, 100.555])(
+    'rejects invalid offer increment %s before writing settings',
+    async (offerIncrement) => {
+      const repository = createRepository();
+      const service = new SettingsService(repository as unknown as SettingsRepository);
+
+      await expect(
+        service.updateSettings({
+          pricing: {
+            offerIncrement,
+            commercialRoundingEnding1: 49,
+            commercialRoundingEnding2: 70,
+          },
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns installment defaults when no global configuration exists', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const settings = await service.getSettings();
+
+    expect(settings.installmentRates.infinityPay.debitRatePercent).toBe(1.37);
+    expect(settings.installmentRates.infinityPay.installments).toHaveLength(12);
+    expect(settings.installmentRates.infinityPay.installments[0]).toEqual({
+      installments: 1,
+      ratePercent: 3.15,
+    });
+    expect(settings.installmentRates.pagBank.installments).toHaveLength(18);
+    expect(settings.installmentRates.nubank.installments.at(-1)).toEqual({
+      installments: 12,
+      ratePercent: 12.38,
+    });
+    expect(settings.installmentMessageTemplate).toBe('{{produto}}\n\n{{cor}}\n\n{{parcelas}}');
+  });
+
+  it('persists valid installment rates and the message template through SystemConfiguration', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const rates = structuredClone(defaultSettings.installmentRates);
+    rates.infinityPay.debitRatePercent = 1.5;
+    rates.pagBank.installments[0]!.ratePercent = 3.1;
+
+    await service.updateSettings({
+      installmentRates: rates,
+      installmentMessageTemplate: '{{produto}}\n{{parcelas}}',
+    });
+
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'installmentRates',
+      JSON.stringify(rates),
+      'json',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'installmentMessageTemplate',
+      '{{produto}}\n{{parcelas}}',
+      'texto_longo',
+    );
+  });
+
+  it.each([
+    [
+      'InfinityPay',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.infinityPay.debitRatePercent = 1.5),
+    ],
+    [
+      'PagBank',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.pagBank.installments[0]!.ratePercent = 3.1),
+    ],
+    [
+      'Nubank',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.nubank.installments[0]!.ratePercent = 3.2),
+    ],
+  ])('accepts a valid PATCH for %s rates', async (_provider, mutate) => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const rates = structuredClone(defaultSettings.installmentRates);
+    mutate(rates);
+
+    await service.updateSettings({ installmentRates: rates });
+
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'installmentRates',
+      JSON.stringify(rates),
+      'json',
+    );
+  });
+
+  it.each([
+    [
+      'negative rate',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.nubank.installments[0]!.ratePercent = -1),
+    ],
+    [
+      'rate equal to 100',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.nubank.installments[0]!.ratePercent = 100),
+    ],
+    [
+      'non-finite rate',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.nubank.installments[0]!.ratePercent = Number.NaN),
+    ],
+    [
+      'duplicated installment',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.pagBank.installments[1]!.installments = 1),
+    ],
+    [
+      'installment out of range',
+      (rates: typeof defaultSettings.installmentRates) =>
+        (rates.infinityPay.installments[0]!.installments = 13),
+    ],
+    [
+      'incomplete provider structure',
+      (rates: typeof defaultSettings.installmentRates) => rates.pagBank.installments.pop(),
+    ],
+  ])('rejects %s before writing installment settings', async (_label, mutate) => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const rates = structuredClone(defaultSettings.installmentRates);
+    mutate(rates);
+
+    await expect(service.updateSettings({ installmentRates: rates })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown installment message placeholder before writing settings', async () => {
     const repository = createRepository();
     const service = new SettingsService(repository as unknown as SettingsRepository);
 
     await expect(
-      service.updateSettings({
-        pricing: {
-          offerIncrement,
-          commercialRoundingEnding1: 49,
-          commercialRoundingEnding2: 70,
-        },
-      }),
+      service.updateSettings({ installmentMessageTemplate: '{{produto}} {{cliente}}' }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('includes installment defaults in the existing reset flow', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await service.resetDefaults();
+
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'installmentRates',
+      JSON.stringify(defaultSettings.installmentRates),
+      'json',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'installmentMessageTemplate',
+      defaultSettings.installmentMessageTemplate,
+      'texto_longo',
+    );
   });
 });

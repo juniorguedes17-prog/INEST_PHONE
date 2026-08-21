@@ -60,6 +60,24 @@ export interface OfferSettings {
   whatsappMessage: string;
 }
 
+export interface InstallmentRate {
+  installments: number;
+  ratePercent: number;
+}
+
+export interface InstallmentRates {
+  infinityPay: {
+    debitRatePercent: number;
+    installments: InstallmentRate[];
+  };
+  pagBank: {
+    installments: InstallmentRate[];
+  };
+  nubank: {
+    installments: InstallmentRate[];
+  };
+}
+
 export interface UserPreferences {
   theme: ThemePreference;
   language: 'pt-BR' | 'en-US' | 'es-PY';
@@ -74,6 +92,8 @@ export interface SettingsPayload {
   importation: ImportSettings;
   usaFinancial: UsaFinancialSettings;
   offers: OfferSettings;
+  installmentRates: InstallmentRates;
+  installmentMessageTemplate: string;
   userPreferences: UserPreferences;
 }
 import type { ThemePreference } from '@/lib/theme-preference';
