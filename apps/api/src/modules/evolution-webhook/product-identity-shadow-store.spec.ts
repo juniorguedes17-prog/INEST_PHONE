@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { ProductIdentityShadowResultStore } from './product-identity-shadow-store';
-import type { ProductIdentityShadowObservation } from './product-identity-shadow';
+import type {
+  ProductIdentityShadowObservation,
+  ProductIdShadowReason,
+} from './product-identity-shadow';
 
 function observation(
   productName: string,
@@ -9,6 +12,7 @@ function observation(
   status: 'FOUND' | 'MISSING' | 'AMBIGUOUS',
   productId?: string,
   candidates?: string[],
+  reason?: ProductIdShadowReason,
 ): ProductIdentityShadowObservation {
   return {
     item: { productName, rawLine: productName } as never,
@@ -20,6 +24,7 @@ function observation(
       status,
       productId,
       candidates,
+      reason,
       candidateCount: candidates?.length ?? (status === 'FOUND' ? 1 : 0),
     },
   };
@@ -30,7 +35,15 @@ describe('ProductIdentityShadowResultStore', () => {
     const store = new ProductIdentityShadowResultStore();
     store.record([
       observation('MacBook Neo A18 Pro 13 8/256', 'macbook', 'macbook-neo-13', 'FOUND', 'neo-256'),
-      observation('iPad 11 A16 256 Wi-Fi', 'ipad', 'ipad-11-a16', 'MISSING'),
+      observation(
+        'iPad 11 A16 256 Wi-Fi',
+        'ipad',
+        'ipad-11-a16',
+        'MISSING',
+        undefined,
+        undefined,
+        'catalog_no_match',
+      ),
       observation(
         'Apple Watch Series 11 42mm GPS',
         'apple-watch',
@@ -38,10 +51,15 @@ describe('ProductIdentityShadowResultStore', () => {
         'FOUND',
         'watch-42',
       ),
-      observation('iPhone 17 Air 256GB', 'iphone', 'iphone-17-air', 'AMBIGUOUS', undefined, [
-        'iphone-a',
-        'iphone-b',
-      ]),
+      observation(
+        'iPhone 17 Air 256GB',
+        'iphone',
+        'iphone-17-air',
+        'AMBIGUOUS',
+        undefined,
+        ['iphone-a', 'iphone-b'],
+        'multiple_catalog_candidates',
+      ),
     ]);
 
     expect(store.summary()).toEqual({
@@ -52,12 +70,25 @@ describe('ProductIdentityShadowResultStore', () => {
       foundIncorrectSuspects: 0,
       checks: {
         macbookNeo: expect.objectContaining({ resolvedProductId: 'neo-256' }),
-        ipad: expect.objectContaining({ status: 'MISSING' }),
+        ipad: expect.objectContaining({ status: 'MISSING', reason: 'catalog_no_match' }),
         appleWatch: expect.objectContaining({ resolvedProductId: 'watch-42' }),
-        iphone17Air: expect.objectContaining({ candidates: ['iphone-a', 'iphone-b'] }),
+        iphone17Air: expect.objectContaining({
+          candidates: ['iphone-a', 'iphone-b'],
+          reason: 'multiple_catalog_candidates',
+        }),
       },
-      missingSamples: [expect.objectContaining({ rawDescription: 'iPad 11 A16 256 Wi-Fi' })],
-      ambiguousSamples: [expect.objectContaining({ candidates: ['iphone-a', 'iphone-b'] })],
+      missingSamples: [
+        expect.objectContaining({
+          rawDescription: 'iPad 11 A16 256 Wi-Fi',
+          reason: 'catalog_no_match',
+        }),
+      ],
+      ambiguousSamples: [
+        expect.objectContaining({
+          candidates: ['iphone-a', 'iphone-b'],
+          reason: 'multiple_catalog_candidates',
+        }),
+      ],
       vm2: 'RELEASED',
     });
   });

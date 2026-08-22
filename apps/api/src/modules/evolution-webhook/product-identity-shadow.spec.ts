@@ -131,10 +131,7 @@ describe('product identity ingestion shadow', () => {
     const catalog = [catalogProduct('neo-256', 'MacBook Neo 13 8/256GB')];
 
     expect(
-      resolveProductIdShadow(
-        supplierIdentity('MacBook Neo (A18) Pro 13" 8/256GB'),
-        catalog,
-      ),
+      resolveProductIdShadow(supplierIdentity('MacBook Neo (A18) Pro 13" 8/256GB'), catalog),
     ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
   });
 
@@ -209,6 +206,37 @@ describe('product identity ingestion shadow', () => {
       status: 'AMBIGUOUS',
       candidates: ['air-256-new', 'air-256-new-duplicate'],
       candidateCount: 2,
+    });
+  });
+
+  it('keeps the VM2 decision while exposing deterministic resolution reasons', () => {
+    expect(resolveProductIdShadow(supplierIdentity('MacBook Neo 8/512GB'), [])).toMatchObject({
+      status: 'MISSING',
+      reason: 'identity_insufficient',
+      candidateCount: 0,
+    });
+    expect(resolveProductIdShadow(supplierIdentity('iPhone 17 Air 256GB'), [])).toMatchObject({
+      status: 'MISSING',
+      reason: 'catalog_no_match',
+      candidateCount: 0,
+    });
+    expect(
+      resolveProductIdShadow(supplierIdentity('iPhone 17 Air 256GB'), [
+        catalogProduct('air-256-a', 'iPhone 17 Air 256GB'),
+        catalogProduct('air-256-b', 'iPhone 17 Air 256GB'),
+      ]),
+    ).toMatchObject({
+      status: 'AMBIGUOUS',
+      reason: 'multiple_catalog_candidates',
+      candidateCount: 2,
+    });
+    expect(
+      resolveProductIdShadow(supplierIdentity('iPhone 17 Air 256GB'), [
+        catalogProduct('air-256', 'iPhone 17 Air 256GB'),
+      ]),
+    ).toMatchObject({
+      status: 'FOUND',
+      candidateCount: 1,
     });
   });
 

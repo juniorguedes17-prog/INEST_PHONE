@@ -71,7 +71,10 @@ export class EvolutionWebhookService {
         this.logger.warn(`Lista atual preservada: lista=${currentList.id} modo inconclusivo.`);
         continue;
       }
-      const parsedItems = this.parseSupplierList(currentList.rawContent, currentList.sourceMessageId);
+      const parsedItems = this.parseSupplierList(
+        currentList.rawContent,
+        currentList.sourceMessageId,
+      );
       if (!isValidParsedSupplierListSnapshot(parsedItems)) {
         this.logger.warn(
           `Lista atual preservada: lista=${currentList.id} snapshot invalido ou vazio.`,
@@ -357,6 +360,7 @@ export class EvolutionWebhookService {
           persistedProductId:
             productResolution.status === 'FOUND' ? (productResolution.productId ?? null) : null,
           candidateCount: productResolution.candidateCount,
+          reason: productResolution.reason ?? null,
         }),
       );
     }

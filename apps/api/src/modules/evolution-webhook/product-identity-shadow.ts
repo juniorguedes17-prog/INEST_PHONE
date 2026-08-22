@@ -7,12 +7,14 @@ import {
 import type { ParsedSupplierListItem } from './evolution-webhook.types';
 
 export type ProductIdShadowStatus = 'FOUND' | 'MISSING' | 'AMBIGUOUS';
+export type ProductIdShadowReason =
+  'identity_insufficient' | 'catalog_no_match' | 'multiple_catalog_candidates';
 
 export interface ProductIdShadowResolution {
   status: ProductIdShadowStatus;
   productId?: string;
   candidates?: string[];
-  reason?: string;
+  reason?: ProductIdShadowReason;
   candidateCount: number;
 }
 

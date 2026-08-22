@@ -1,4 +1,5 @@
 import type {
+  ProductIdShadowReason,
   ProductIdShadowStatus,
   ProductIdentityShadowObservation,
 } from './product-identity-shadow';
@@ -9,6 +10,7 @@ export interface Vm2ShadowSample {
   rawDescription: string;
   canonicalModelKey: string | null;
   status: ProductIdShadowStatus;
+  reason?: ProductIdShadowReason;
   resolvedProductId: string | null;
   candidateCount: number;
   candidates?: string[];
@@ -107,6 +109,7 @@ export class ProductIdentityShadowResultStore {
       rawDescription: observation.item.productName,
       canonicalModelKey: observation.identity.canonical.canonicalModelKey || null,
       status: resolution.status,
+      ...(resolution.reason ? { reason: resolution.reason } : {}),
       resolvedProductId: resolution.productId ?? null,
       candidateCount: resolution.candidateCount,
       ...(resolution.candidates ? { candidates: resolution.candidates } : {}),
