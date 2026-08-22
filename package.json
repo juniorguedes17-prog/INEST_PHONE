@@ -26,6 +26,8 @@
     "typecheck:web": "pnpm --filter @inest/web typecheck",
     "typecheck:api": "pnpm --filter @inest/api typecheck",
     "test:api": "pnpm --filter @inest/api test",
+    "test:regression:parser-identity": "pnpm --filter @inest/api exec vitest run src/modules/evolution-webhook/supplier-list.parser.spec.ts src/modules/evolution-webhook/golden-dataset.spec.ts src/modules/evolution-webhook/supplier-snapshot-scope.spec.ts src/modules/evolution-webhook/product-identity-shadow.spec.ts src/modules/evolution-webhook/evolution-webhook.service.spec.ts && pnpm --filter @inest/product-identity test",
+    "test:regression:full": "pnpm test:api && pnpm --filter @inest/product-identity test && pnpm lint && pnpm typecheck",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck",
     "env:check": "node scripts/check-env.mjs development && node scripts/check-env.mjs staging --allow-placeholders && node scripts/check-env.mjs production --allow-placeholders",
     "prisma:validate": "node scripts/run-env.mjs development prisma validate",
