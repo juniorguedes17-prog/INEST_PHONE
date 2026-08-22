@@ -353,18 +353,18 @@ model SupplierContact {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  currentList      SupplierCurrentList?
+  currentLists     SupplierCurrentList[]
   webhookReceipts  EvolutionWebhookReceipt[]
 
   @@index([isActive], map: "idx_supplier_contacts_is_active")
   @@map("supplier_contacts")
 }
 
-/// Lista operacional atual recebida pelo WhatsApp para um fornecedor.
-/// A relacao unica garante que listas anteriores nao sejam mantidas como historico.
+/// Lista operacional atual recebida pelo WhatsApp para um fornecedor e escopo documental.
 model SupplierCurrentList {
   id                String   @id @default(uuid()) @db.Uuid
-  supplierContactId String   @unique(map: "uq_supplier_current_list_supplier_contact") @map("supplier_contact_id") @db.Uuid
+  supplierContactId String   @map("supplier_contact_id") @db.Uuid
+  snapshotScope     String   @default("legacy:default") @map("snapshot_scope") @db.VarChar(120)
   sourceMessageId   String   @map("source_message_id") @db.VarChar(180)
   sourceType        String   @map("source_type") @db.VarChar(40)
   rawContent        String   @map("raw_content")
@@ -377,6 +377,7 @@ model SupplierCurrentList {
   attachments     SupplierCurrentListAttachment[]
 
   @@index([updatedAt], map: "idx_supplier_current_list_updated_at")
+  @@unique([supplierContactId, snapshotScope], map: "uq_supplier_current_list_supplier_contact_scope")
   @@map("supplier_current_list")
 }
 

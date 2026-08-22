@@ -5,6 +5,7 @@ import {
   EvolutionWebhookService,
   supplierListItemMergeKey,
 } from './evolution-webhook.service';
+import { LEGACY_SNAPSHOT_SCOPE } from './supplier-current-list-scope';
 
 const webhookSecret = 'this-is-a-test-webhook-secret-with-32-characters';
 
@@ -226,6 +227,39 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
   });
 
+  it('localiza atualizacoes parciais no unico snapshot legado do fornecedor', async () => {
+    const { service, transaction } = createService();
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'current-list-id',
+      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul' })],
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-legacy-partial',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'PROMOÇÃO\nProduto B 256GB\nAzul R$ 5.500' },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.findUnique).toHaveBeenCalledWith({
+      where: {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+        },
+      },
+      include: { items: true },
+    });
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'item-b' }, data: expect.objectContaining({ price: 5500 }) }),
+    );
+  });
+
   it('atualiza NOVO sem substituir CPO ou SEMINOVO', async () => {
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
@@ -445,6 +479,13 @@ describe('EvolutionWebhookService', () => {
 
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: {
+          supplierContactId_snapshotScope: {
+            supplierContactId: 'supplier-contact-id',
+            snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+          },
+        },
+        create: expect.objectContaining({ snapshotScope: LEGACY_SNAPSHOT_SCOPE }),
         update: expect.objectContaining({
           items: {
             deleteMany: {},
@@ -453,6 +494,80 @@ describe('EvolutionWebhookService', () => {
         }),
       }),
     );
+  });
+
+  it('mantem o mesmo selector legado em snapshots completos sucessivos', async () => {
+    const { service, transaction } = createService();
+    const first = {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-legacy-full-1',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'LISTA COMPLETA\nProduto A 128GB\nPreto R$ 1.100' },
+      },
+    };
+    const second = {
+      ...first,
+      data: {
+        ...first.data,
+        key: { ...first.data.key, id: 'message-legacy-full-2' },
+        message: { conversation: 'LISTA COMPLETA\nProduto A 128GB\nPreto R$ 1.050' },
+      },
+    };
+
+    await service.receive(webhookSecret, first);
+    await service.receive(webhookSecret, second);
+
+    for (const [call] of transaction.supplierCurrentList.upsert.mock.calls) {
+      expect(call.where).toEqual({
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+        },
+      });
+      expect(call.create.snapshotScope).toBe(LEGACY_SNAPSHOT_SCOPE);
+      expect(call.update.items.deleteMany).toEqual({});
+    }
+  });
+
+  it('isola fornecedores distintos no mesmo scope legado', async () => {
+    const { service, transaction, supplierContacts } = createService();
+    supplierContacts.findActiveByWhatsappNumber
+      .mockResolvedValueOnce({ id: 'supplier-a' })
+      .mockResolvedValueOnce({ id: 'supplier-b' });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-supplier-a', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'LISTA COMPLETA\nProduto A 128GB\nPreto R$ 1.100' },
+      },
+    });
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-supplier-b', remoteJid: '5511988888888@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'LISTA COMPLETA\nProduto B 256GB\nAzul R$ 5.500' },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert.mock.calls.map(([call]) => call.where)).toEqual([
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-a',
+          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+        },
+      },
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-b',
+          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+        },
+      },
+    ]);
   });
 
   it('preserva o snapshot quando a classificacao e inconclusiva', async () => {

@@ -7,6 +7,7 @@ import { SupplierContactsService } from '../suppliers/service/supplier-contacts.
 import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contacts.validators';
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
+import { LEGACY_SNAPSHOT_SCOPE } from './supplier-current-list-scope';
 import {
   isValidParsedSupplierListSnapshot,
   parseSupplierListText,
@@ -210,7 +211,12 @@ export class EvolutionWebhookService {
 
         if (updateMode === 'PARTIAL_UPDATE') {
           const currentList = await transaction.supplierCurrentList.findUnique({
-            where: { supplierContactId: supplier.id },
+            where: {
+              supplierContactId_snapshotScope: {
+                supplierContactId: supplier.id,
+                snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+              },
+            },
             include: { items: true },
           });
 
@@ -234,6 +240,7 @@ export class EvolutionWebhookService {
             await transaction.supplierCurrentList.create({
               data: {
                 supplierContactId: supplier.id,
+                snapshotScope: LEGACY_SNAPSHOT_SCOPE,
                 sourceMessageId: message.messageId,
                 sourceType: 'text',
                 rawContent: text,
@@ -246,9 +253,15 @@ export class EvolutionWebhookService {
         }
 
         await transaction.supplierCurrentList.upsert({
-          where: { supplierContactId: supplier.id },
+          where: {
+            supplierContactId_snapshotScope: {
+              supplierContactId: supplier.id,
+              snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+            },
+          },
           create: {
             supplierContactId: supplier.id,
+            snapshotScope: LEGACY_SNAPSHOT_SCOPE,
             sourceMessageId: message.messageId,
             sourceType: 'text',
             rawContent: text,
