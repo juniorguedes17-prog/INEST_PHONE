@@ -260,14 +260,18 @@ describe('EvolutionWebhookService', () => {
     );
   });
 
-  it('observa escopo used sem alterar a persistencia legada', async () => {
+  it('persiste FULL resolvido no escopo used', async () => {
     const { service, transaction } = createService();
     const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
 
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-scope-shadow', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-scope-shadow',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'IPHONE SWAP AMERICANOS\niPhone 16 128GB\nPreto R$ 3.500' },
       },
     });
@@ -281,14 +285,169 @@ describe('EvolutionWebhookService', () => {
         where: {
           supplierContactId_snapshotScope: {
             supplierContactId: 'supplier-contact-id',
-            snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+            snapshotScope: 'catalog:used',
           },
         },
-        create: expect.objectContaining({ snapshotScope: LEGACY_SNAPSHOT_SCOPE }),
+        create: expect.objectContaining({ snapshotScope: 'catalog:used' }),
       }),
     );
 
     debug.mockRestore();
+  });
+
+  it('isola FULL primary e used, substituindo somente o scope recebido', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-primary-v1', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'LISTA APPLE LACRADOS\niPhone 16 128GB\nPreto R$ 4.000' },
+      },
+    });
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-used-v1', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'IPHONE SWAP AMERICANOS\niPhone 15 128GB\nAzul R$ 3.000' },
+      },
+    });
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-used-v2', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'IPHONE SWAP AMERICANOS\niPhone 15 128GB\nAzul R$ 2.900' },
+      },
+    });
+
+    const writes = transaction.supplierCurrentList.upsert.mock.calls.map(([call]) => call);
+    expect(writes.map((write) => write.where)).toEqual([
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:primary',
+        },
+      },
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:used',
+        },
+      },
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:used',
+        },
+      },
+    ]);
+    expect(writes[0]).toMatchObject({
+      create: { sourceMessageId: 'message-primary-v1', snapshotScope: 'catalog:primary' },
+      update: { attachments: { deleteMany: {} }, items: { deleteMany: {} } },
+    });
+    expect(writes[1]).toMatchObject({
+      create: { sourceMessageId: 'message-used-v1', snapshotScope: 'catalog:used' },
+      update: { attachments: { deleteMany: {} }, items: { deleteMany: {} } },
+    });
+    expect(writes[2]).toMatchObject({
+      create: { sourceMessageId: 'message-used-v2', snapshotScope: 'catalog:used' },
+      update: { attachments: { deleteMany: {} }, items: { deleteMany: {} } },
+    });
+  });
+
+  it('substitui catalog:general somente pelo mesmo scope', async () => {
+    const { service, transaction } = createService();
+    const first = {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-general-v1', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: {
+          conversation:
+            'LISTA UNIFICADA\niPhone 16 128GB\nPreto R$ 4.000\nMacBook Neo 13 8/256\nPrata R$ 5.000',
+        },
+      },
+    };
+
+    await service.receive(webhookSecret, first);
+    await service.receive(webhookSecret, {
+      ...first,
+      data: {
+        ...first.data,
+        key: { ...first.data.key, id: 'message-general-v2' },
+        message: {
+          conversation:
+            'LISTA UNIFICADA\niPhone 16 128GB\nPreto R$ 3.900\nMacBook Neo 13 8/256\nPrata R$ 4.900',
+        },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert.mock.calls.map(([call]) => call.where)).toEqual([
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:general',
+        },
+      },
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:general',
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    ['UNKNOWN', 'LISTA COMPLETA\nProduto A 128GB\nPreto R$ 1.100'],
+    [
+      'AMBIGUOUS',
+      'LISTA COMPLETA\nSEMINOVOS AMERICANOS\nIPHONES LACRADOS\niPhone 16 128GB\nPreto R$ 4.000',
+    ],
+  ])('preserva todos os snapshots para FULL %s', async (_status, conversation) => {
+    const { service, transaction } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: `message-full-${_status.toLowerCase()}`,
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 1 });
+    expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.findUnique).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+  });
+
+  it('mantem a idempotencia do receipt para FULL resolvido', async () => {
+    const { service, transaction } = createService();
+    const payload = {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-used-duplicate',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'IPHONE SWAP AMERICANOS\niPhone 16 128GB\nPreto R$ 3.500' },
+      },
+    };
+
+    await service.receive(webhookSecret, payload);
+    transaction.evolutionWebhookReceipt.create.mockRejectedValueOnce({ code: 'P2002' });
+
+    await expect(service.receive(webhookSecret, payload)).resolves.toEqual({
+      accepted: true,
+      duplicate: true,
+    });
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
   });
 
   it('atualiza NOVO sem substituir CPO ou SEMINOVO', async () => {
@@ -297,7 +456,11 @@ describe('EvolutionWebhookService', () => {
       id: 'current-list-id',
       items: [
         currentItem('novo', 'iPhone 17 Pro Max 256GB', 7100, {
-          category: 'iPhone', model: 'iPhone 17 Pro Max 256GB', capacity: '256GB', color: 'silver', condition: 'NOVO',
+          category: 'iPhone',
+          model: 'iPhone 17 Pro Max 256GB',
+          capacity: '256GB',
+          color: 'silver',
+          condition: 'NOVO',
         }),
         currentItem('cpo', 'iPhone 17 Pro Max 256GB CPO', 6500, {
           category: 'iPhone', model: 'iPhone 17 Pro Max 256GB', capacity: '256GB', color: 'silver', condition: 'CPO',
@@ -503,8 +666,12 @@ describe('EvolutionWebhookService', () => {
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-full-after-partial', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\nProduto E 128GB\nPreto R$ 9.000' },
+        key: {
+          id: 'message-full-after-partial',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'LISTA APPLE LACRADOS\nProduto E 128GB\nPreto R$ 9.000' },
       },
     });
 
@@ -513,10 +680,10 @@ describe('EvolutionWebhookService', () => {
         where: {
           supplierContactId_snapshotScope: {
             supplierContactId: 'supplier-contact-id',
-            snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+            snapshotScope: 'catalog:primary',
           },
         },
-        create: expect.objectContaining({ snapshotScope: LEGACY_SNAPSHOT_SCOPE }),
+        create: expect.objectContaining({ snapshotScope: 'catalog:primary' }),
         update: expect.objectContaining({
           items: {
             deleteMany: {},
@@ -527,7 +694,7 @@ describe('EvolutionWebhookService', () => {
     );
   });
 
-  it('mantem o mesmo selector legado em snapshots completos sucessivos', async () => {
+  it('mantem o mesmo selector de scope em snapshots completos sucessivos', async () => {
     const { service, transaction } = createService();
     const first = {
       event: 'MESSAGES_UPSERT',
@@ -537,7 +704,7 @@ describe('EvolutionWebhookService', () => {
           remoteJid: '5511999999999@s.whatsapp.net',
           fromMe: false,
         },
-        message: { conversation: 'LISTA COMPLETA\nProduto A 128GB\nPreto R$ 1.100' },
+        message: { conversation: 'LISTA APPLE LACRADOS\nProduto A 128GB\nPreto R$ 1.100' },
       },
     };
     const second = {
@@ -545,7 +712,7 @@ describe('EvolutionWebhookService', () => {
       data: {
         ...first.data,
         key: { ...first.data.key, id: 'message-legacy-full-2' },
-        message: { conversation: 'LISTA COMPLETA\nProduto A 128GB\nPreto R$ 1.050' },
+        message: { conversation: 'LISTA APPLE LACRADOS\nProduto A 128GB\nPreto R$ 1.050' },
       },
     };
 
@@ -556,15 +723,15 @@ describe('EvolutionWebhookService', () => {
       expect(call.where).toEqual({
         supplierContactId_snapshotScope: {
           supplierContactId: 'supplier-contact-id',
-          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+          snapshotScope: 'catalog:primary',
         },
       });
-      expect(call.create.snapshotScope).toBe(LEGACY_SNAPSHOT_SCOPE);
+      expect(call.create.snapshotScope).toBe('catalog:primary');
       expect(call.update.items.deleteMany).toEqual({});
     }
   });
 
-  it('isola fornecedores distintos no mesmo scope legado', async () => {
+  it('isola fornecedores distintos no mesmo scope resolvido', async () => {
     const { service, transaction, supplierContacts } = createService();
     supplierContacts.findActiveByWhatsappNumber
       .mockResolvedValueOnce({ id: 'supplier-a' })
@@ -574,14 +741,14 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-supplier-a', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\nProduto A 128GB\nPreto R$ 1.100' },
+        message: { conversation: 'IPHONE SWAP AMERICANOS\nProduto A 128GB\nPreto R$ 1.100' },
       },
     });
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-supplier-b', remoteJid: '5511988888888@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\nProduto B 256GB\nAzul R$ 5.500' },
+        message: { conversation: 'IPHONE SWAP AMERICANOS\nProduto B 256GB\nAzul R$ 5.500' },
       },
     });
 
@@ -589,13 +756,13 @@ describe('EvolutionWebhookService', () => {
       {
         supplierContactId_snapshotScope: {
           supplierContactId: 'supplier-a',
-          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+          snapshotScope: 'catalog:used',
         },
       },
       {
         supplierContactId_snapshotScope: {
           supplierContactId: 'supplier-b',
-          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+          snapshotScope: 'catalog:used',
         },
       },
     ]);
@@ -630,7 +797,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-shadow', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\niPhone 17 Pro 256GB\nPreto R$ 6.400' },
+        message: { conversation: 'LISTA APPLE LACRADOS\niPhone 17 Pro 256GB\nPreto R$ 6.400' },
       },
     });
 
@@ -678,7 +845,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-found', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\niPhone 17 Pro 256GB\nPreto R$ 6.400' },
+        message: { conversation: 'LISTA APPLE LACRADOS\niPhone 17 Pro 256GB\nPreto R$ 6.400' },
       },
     });
 
@@ -697,7 +864,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-ambiguous', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\niPhone 17 Pro 256GB\nPreto R$ 6.400' },
+        message: { conversation: 'LISTA APPLE LACRADOS\niPhone 17 Pro 256GB\nPreto R$ 6.400' },
       },
     });
 
@@ -927,7 +1094,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-1', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\nIPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+        message: { conversation: 'LISTA APPLE LACRADOS\nIPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
       },
     });
 
@@ -954,7 +1121,7 @@ describe('EvolutionWebhookService', () => {
       data: {
         key: { id: 'message-snapshot', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
         message: {
-          conversation: 'LISTA COMPLETA\nProduto A 128GB R$ 1.100\nProduto C 256GB R$ 3.000',
+          conversation: 'LISTA APPLE LACRADOS\nProduto A 128GB R$ 1.100\nProduto C 256GB R$ 3.000',
         },
       },
     });
@@ -1006,7 +1173,7 @@ describe('EvolutionWebhookService', () => {
           participant: '5511999999999@s.whatsapp.net',
           fromMe: false,
         },
-        message: { conversation: 'LISTA COMPLETA\niPhone 17 R$ 5.000' },
+        message: { conversation: 'LISTA APPLE LACRADOS\niPhone 17 R$ 5.000' },
       },
     });
 
@@ -1025,7 +1192,7 @@ describe('EvolutionWebhookService', () => {
       senderPn: '5511999999999',
       data: {
         key: { id: 'message-3', remoteJid: '12345@g.us', fromMe: false },
-        message: { conversation: 'LISTA COMPLETA\nIPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
+        message: { conversation: 'LISTA APPLE LACRADOS\nIPHONES\n17 PRO 256GB\nAZUL R$ 6.400,00' },
       },
     });
 

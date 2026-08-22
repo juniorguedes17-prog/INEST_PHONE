@@ -8,7 +8,10 @@ import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contac
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
 import { LEGACY_SNAPSHOT_SCOPE } from './supplier-current-list-scope';
-import { resolveSupplierSnapshotScope } from './supplier-snapshot-scope';
+import {
+  resolveSupplierSnapshotScope,
+  type SupplierSnapshotScopeResolution,
+} from './supplier-snapshot-scope';
 import {
   isValidParsedSupplierListSnapshot,
   parseSupplierListText,
@@ -189,6 +192,7 @@ export class EvolutionWebhookService {
     }
     const updateMode = classifySupplierListUpdateMode(text);
     const scopeResolution = resolveSupplierSnapshotScope(text, items);
+    const fullSnapshotScope = resolvedFullSnapshotScope(updateMode, scopeResolution);
     this.logger.debug(
       JSON.stringify({
         event: 'evolution.snapshot_scope.shadow',
@@ -266,16 +270,18 @@ export class EvolutionWebhookService {
           return;
         }
 
+        if (!fullSnapshotScope) return;
+
         await transaction.supplierCurrentList.upsert({
           where: {
             supplierContactId_snapshotScope: {
               supplierContactId: supplier.id,
-              snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+              snapshotScope: fullSnapshotScope,
             },
           },
           create: {
             supplierContactId: supplier.id,
-            snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+            snapshotScope: fullSnapshotScope,
             sourceMessageId: message.messageId,
             sourceType: 'text',
             rawContent: text,
@@ -646,6 +652,15 @@ export function supplierListItemMergeKey(item: SupplierListItemForMerge) {
 
 function normalizeMergeValue(value: string | null | undefined) {
   return value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') ?? '';
+}
+
+function resolvedFullSnapshotScope(
+  updateMode: SupplierListUpdateMode,
+  resolution: SupplierSnapshotScopeResolution,
+) {
+  if (updateMode !== 'FULL_SNAPSHOT' || resolution.status !== 'RESOLVED') return null;
+  const scopeKey = resolution.scopeKey?.trim();
+  return scopeKey || null;
 }
 
 interface EvolutionExtraction {
