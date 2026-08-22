@@ -30,6 +30,7 @@ function createService(catalog: unknown[] = []) {
       findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
       create: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     supplierCurrentListItem: {
       update: vi.fn().mockResolvedValue({}),
@@ -576,6 +577,168 @@ describe('EvolutionWebhookService', () => {
         },
       },
     ]);
+  });
+
+  it('consolida primary e used em general completo sem apagar legacy ou escopo futuro', async () => {
+    const { service, transaction } = createService();
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-general-complete', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: {
+          conversation: `LISTA GERAL
+iPhone 16 128GB NOVO
+Preto R$ 4.000
+iPhone 15 128GB CPO
+Azul R$ 3.000
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500`,
+        },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          supplierContactId_snapshotScope: {
+            supplierContactId: 'supplier-contact-id',
+            snapshotScope: 'catalog:general',
+          },
+        },
+        create: expect.objectContaining({
+          snapshotScope: 'catalog:general',
+          sourceMessageId: 'message-general-complete',
+        }),
+      }),
+    );
+    expect(transaction.supplierCurrentList.deleteMany).toHaveBeenCalledWith({
+      where: {
+        supplierContactId: 'supplier-contact-id',
+        snapshotScope: { in: ['catalog:primary', 'catalog:used'] },
+      },
+    });
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"evolution.snapshot_transition"'),
+    );
+    expect(debug).toHaveBeenCalledWith(expect.stringContaining('"removedScopes":["catalog:primary","catalog:used"]'));
+    debug.mockRestore();
+  });
+
+  it('isola a consolidacao geral entre fornecedores distintos', async () => {
+    const { service, transaction, supplierContacts } = createService();
+    supplierContacts.findActiveByWhatsappNumber
+      .mockResolvedValueOnce({ id: 'supplier-a' })
+      .mockResolvedValueOnce({ id: 'supplier-b' });
+    const conversation = `LISTA GERAL
+iPhone 16 128GB NOVO
+Preto R$ 4.000
+iPhone 15 128GB CPO
+Azul R$ 3.000
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500`;
+
+    for (const [id, remoteJid] of [
+      ['message-general-supplier-a', '5511999999999@s.whatsapp.net'],
+      ['message-general-supplier-b', '5511988888888@s.whatsapp.net'],
+    ]) {
+      await service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: { key: { id, remoteJid, fromMe: false }, message: { conversation } },
+      });
+    }
+
+    expect(transaction.supplierCurrentList.deleteMany.mock.calls.map(([call]) => call.where)).toEqual([
+      {
+        supplierContactId: 'supplier-a',
+        snapshotScope: { in: ['catalog:primary', 'catalog:used'] },
+      },
+      {
+        supplierContactId: 'supplier-b',
+        snapshotScope: { in: ['catalog:primary', 'catalog:used'] },
+      },
+    ]);
+  });
+
+  it('preserva general quando chegam snapshots segmentados', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-general-to-used', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'IPHONE SWAP AMERICANOS\niPhone 15 128GB\nAzul R$ 3.000' },
+      },
+    });
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-general-to-primary', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'LISTA APPLE LACRADOS\niPhone 16 128GB\nPreto R$ 4.000' },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert.mock.calls.map(([call]) => call.where)).toEqual([
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:used',
+        },
+      },
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:primary',
+        },
+      },
+    ]);
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('reverte o general e preserva segmentados quando o cleanup falha', async () => {
+    const { service, prisma, transaction } = createService();
+    const state = { upsertedGeneral: false, deletedSegmented: false };
+    transaction.supplierCurrentList.upsert.mockImplementation(async () => {
+      state.upsertedGeneral = true;
+      return {};
+    });
+    transaction.supplierCurrentList.deleteMany.mockImplementation(async () => {
+      state.deletedSegmented = true;
+      throw new Error('general cleanup failed');
+    });
+    prisma.$transaction.mockImplementation(async (callback) => {
+      const before = { ...state };
+      try {
+        return await callback(transaction);
+      } catch (error) {
+        Object.assign(state, before);
+        throw error;
+      }
+    });
+
+    await expect(
+      service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: { id: 'message-general-rollback', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+          message: {
+            conversation: `LISTA GERAL
+iPhone 16 128GB NOVO
+Preto R$ 4.000
+iPhone 15 128GB CPO
+Azul R$ 3.000
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500`,
+          },
+        },
+      }),
+    ).rejects.toThrow('general cleanup failed');
+
+    expect(state).toEqual({ upsertedGeneral: false, deletedSegmented: false });
   });
 
   it.each([

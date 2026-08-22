@@ -24,6 +24,9 @@ const PARTIAL_UPDATE_MARKER =
   /\b(?:promo(?:c|ç)(?:[aã]o|ões)|ofertas?|baix(?:ou|amos)|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar|reposi(?:c|ç)(?:[aã]o|ões)|chegou\s+lacrad[oa]s?|remessas?)\b/i;
 const FULL_SNAPSHOT_MARKER =
   /\b(?:lista(?:\s+(?:completa|geral|atual(?:izada)?|unificada|di[aá]ria|de\s+pre[cç]os?))?|tabela\s+(?:completa|geral)|todos?\s+os\s+produtos|(?:aparelhos?|produtos?)\s+(?:dispon[ií]veis?|lacrad[oa]s?|novos?\s+lacrad[oa]s?|semi[-\s]?novos?)|(?:iphone|iphones|xiaomis?)\s+(?:lacrad[oa]s?|semi[-\s]?novos?|swap\s+americanos?))\b/i;
+const GENERAL_REPLACED_SEGMENTED_SCOPES = ['catalog:primary', 'catalog:used'] as const;
+
+type SnapshotReplacementAuthority = 'SAME_SCOPE_ONLY' | 'ALL_SEGMENTED_SCOPES';
 
 export function classifySupplierListUpdateMode(text: string): SupplierListUpdateMode {
   const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text);
@@ -193,6 +196,11 @@ export class EvolutionWebhookService {
     const scopeResolution = resolveSupplierSnapshotScope(text, items);
     const fullSnapshotScope = resolvedFullSnapshotScope(updateMode, scopeResolution);
     const partialSnapshotScope = resolvedPartialSnapshotScope(updateMode, scopeResolution);
+    const replacementAuthority = fullSnapshotReplacementAuthority(
+      updateMode,
+      fullSnapshotScope,
+      scopeResolution,
+    );
     this.logger.debug(
       JSON.stringify({
         event: 'evolution.snapshot_scope.shadow',
@@ -300,6 +308,26 @@ export class EvolutionWebhookService {
             attachments: { deleteMany: {} },
           },
         });
+
+        if (replacementAuthority === 'ALL_SEGMENTED_SCOPES') {
+          const deleted = await transaction.supplierCurrentList.deleteMany({
+            where: {
+              supplierContactId: supplier.id,
+              snapshotScope: { in: [...GENERAL_REPLACED_SEGMENTED_SCOPES] },
+            },
+          });
+          this.logger.debug(
+            JSON.stringify({
+              event: 'evolution.snapshot_transition',
+              supplierContactId: supplier.id,
+              sourceMessageId: message.messageId,
+              incomingScope: fullSnapshotScope,
+              replacementAuthority,
+              removedScopes: GENERAL_REPLACED_SEGMENTED_SCOPES,
+              removedCount: deleted.count,
+            }),
+          );
+        }
       });
     } catch (error) {
       if (isDuplicateReceiptError(error)) {
@@ -670,6 +698,26 @@ function resolvedPartialSnapshotScope(
   if (updateMode !== 'PARTIAL_UPDATE' || resolution.status !== 'RESOLVED') return null;
   const scopeKey = resolution.scopeKey?.trim();
   return scopeKey || null;
+}
+
+function fullSnapshotReplacementAuthority(
+  updateMode: SupplierListUpdateMode,
+  scopeKey: string | null,
+  resolution: SupplierSnapshotScopeResolution,
+): SnapshotReplacementAuthority {
+  if (
+    updateMode === 'FULL_SNAPSHOT' &&
+    scopeKey === 'catalog:general' &&
+    hasCompleteGeneralCoverage(resolution)
+  ) {
+    return 'ALL_SEGMENTED_SCOPES';
+  }
+  return 'SAME_SCOPE_ONLY';
+}
+
+function hasCompleteGeneralCoverage(resolution: SupplierSnapshotScopeResolution) {
+  const conditions = new Set(resolution.evidence.conditions);
+  return conditions.has('NOVO') && conditions.has('CPO') && conditions.has('SEMINOVO');
 }
 
 interface EvolutionExtraction {
