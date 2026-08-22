@@ -392,6 +392,7 @@ model SupplierCurrentListItem {
   capacity              String?  @map("capacity") @db.VarChar(40)
   color                 String?  @map("color") @db.VarChar(80)
   condition             String?  @map("condition") @db.VarChar(40)
+  qualityGrade          String?  @map("quality_grade") @db.VarChar(8)
   price                 Decimal  @map("price") @db.Decimal(12, 2)
   availability          String?  @map("availability") @db.VarChar(80)
   rawLine               String   @map("raw_line")

@@ -6,6 +6,7 @@ export interface ParsedSupplierListItem {
   capacity: string | null;
   color: string | null;
   condition: string | null;
+  qualityGrade: string | null;
   price: number;
   availability: string | null;
   rawLine: string;

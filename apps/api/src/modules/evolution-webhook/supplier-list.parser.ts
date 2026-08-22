@@ -9,6 +9,8 @@ const USED_CONDITION_MARKERS =
 const CPO_CONDITION_MARKERS =
   /\b(?:cpo|refurbished|pre[-\s]?owned|certified\s+pre[-\s]?owned|recondicionado\s+(?:pela\s+)?apple)\b/i;
 const NEW_CONDITION_MARKERS = /\b(?:novo|novos|lacrad[oa]s?|new|sealed)\b/i;
+const LOGISTIC_NEW_CONTEXT_MARKERS =
+  /\b(?:lote\s+novo|novo\s+lote|novo\s+estoque|estoque\s+novo)\b/i;
 const GRADE_MARKER = /\bgrade\s*(a\s*\+|ab|b|c|a)(?=\s|[^a-z0-9]|$)/gi;
 const YEAR_CONTEXT_HEADER = /^\s*ano\s*(?::|[-–—])?\s*(?:19|20)\d{2}\s*$/i;
 const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`;
@@ -207,7 +209,8 @@ export function parseSupplierListText(
         model: extractModel(productName),
         capacity: extractCapacity(productName),
         color,
-        condition: currentCondition,
+        condition: resolveOfferCondition(currentCondition, currentGrade),
+        qualityGrade: currentGrade,
         price,
         availability: null,
         rawLine: line,
@@ -266,6 +269,10 @@ function removeGradeMarker(value: string) {
 
 function isEligibleGrade(grade: ProductGrade) {
   return grade === 'A' || grade === 'A+';
+}
+
+function resolveOfferCondition(currentCondition: string, grade: ProductGrade | null) {
+  return grade && isEligibleGrade(grade) ? 'SEMINOVO' : currentCondition;
 }
 
 export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[]) {
@@ -714,7 +721,9 @@ function detectCondition(value: string): DetectedCondition {
   if (isSwapConditionHeading(value) || /\bswap\b/i.test(value)) return 'SEMINOVO';
   if (CPO_CONDITION_MARKERS.test(value)) return 'CPO';
   if (USED_CONDITION_MARKERS.test(value)) return 'SEMINOVO';
-  if (NEW_CONDITION_MARKERS.test(value)) return 'NOVO';
+  if (NEW_CONDITION_MARKERS.test(value) && !LOGISTIC_NEW_CONTEXT_MARKERS.test(value)) {
+    return 'NOVO';
+  }
   return 'NONE';
 }
 

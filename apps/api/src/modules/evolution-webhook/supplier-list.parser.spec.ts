@@ -288,7 +288,7 @@ describe('supplier list parser', () => {
     },
   );
 
-  it('aceita grades A e A+ e remove a grade da identidade do produto', () => {
+  it('preserva grades A e A+ como ofertas SEMINOVO sem contaminarem a identidade do produto', () => {
     const items = parseSupplierListText(`
       GRADE A
       iPhone 15 Pro 256GB
@@ -302,19 +302,37 @@ describe('supplier list parser', () => {
       expect.arrayContaining([
         expect.objectContaining({
           normalizedName: 'iphone 15 pro 256gb',
-          condition: 'NOVO',
+          condition: 'SEMINOVO',
+          qualityGrade: 'A',
           color: 'natural',
           price: 3800,
         }),
         expect.objectContaining({
           normalizedName: 'iphone 16 pro max 256gb',
-          condition: 'NOVO',
+          condition: 'SEMINOVO',
+          qualityGrade: 'A+',
           color: 'desert',
           price: 4900,
         }),
       ]),
     );
     expect(items.every((item) => !/grade\s*[abc]/i.test(item.productName))).toBe(true);
+  });
+
+  it('mantem A e A+ como ofertas distintas do mesmo produto', () => {
+    const items = parseSupplierListText(`
+      iPhone 15 128GB
+      Grade A — R$ 2.100
+      Grade A+ — R$ 2.200
+    `);
+
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.qualityGrade)).toEqual(['A', 'A+']);
+    expect(items.map((item) => item.condition)).toEqual(['SEMINOVO', 'SEMINOVO']);
+    expect(items.map((item) => item.normalizedName)).toEqual([
+      'iphone 15 128gb',
+      'iphone 15 128gb',
+    ]);
   });
 
   it('descarta AB, B e C sem descartar as secoes A e A+', () => {
@@ -358,8 +376,34 @@ describe('supplier list parser', () => {
     expect(items[0]).toMatchObject({
       normalizedName: 'iphone 15 pro 256gb',
       condition: 'SEMINOVO',
+      qualityGrade: 'A+',
       price: 3800,
     });
+  });
+
+  it.each(['LOTE NOVO', 'NOVO LOTE', 'NOVO ESTOQUE', 'ESTOQUE NOVO'])(
+    'nao promove %s a condicao NOVO',
+    (logisticContext) => {
+      const swapItems = parseSupplierListText(
+        `LISTA SWAP\n${logisticContext}\niPhone 15 128GB\nPreto R$ 3.000`,
+      );
+      const cpoItems = parseSupplierListText(
+        `CPO\n${logisticContext}\niPhone 15 128GB\nPreto R$ 3.000`,
+      );
+
+      expect(swapItems[0]).toMatchObject({ condition: 'SEMINOVO', qualityGrade: null });
+      expect(cpoItems[0]).toMatchObject({ condition: 'CPO', qualityGrade: null });
+    },
+  );
+
+  it('preserva NOVO comercial sem grade e aplica Grade A sobre contexto CPO', () => {
+    const [newItem] = parseSupplierListText(
+      'APARELHOS NOVOS LACRADOS\niPhone 15 128GB\nPreto R$ 3.000',
+    );
+    const [gradedCpoItem] = parseSupplierListText('CPO\niPhone 15 128GB\nGrade A — R$ 2.100');
+
+    expect(newItem).toMatchObject({ condition: 'NOVO', qualityGrade: null });
+    expect(gradedCpoItem).toMatchObject({ condition: 'SEMINOVO', qualityGrade: 'A' });
   });
 
   it('distingue A+ de AB em qualificadores inline', () => {

@@ -48,6 +48,7 @@ type SupplierListItemForMerge = {
   capacity: string | null;
   color: string | null;
   condition: string | null;
+  qualityGrade: string | null;
   price: number | { toString(): string };
   availability: string | null;
   rawLine: string;
@@ -621,6 +622,7 @@ function hasEquivalentSnapshot(
     capacity: string | null;
     color: string | null;
     condition: string | null;
+    qualityGrade: string | null;
     price: { toString(): string };
     availability: string | null;
     rawLine: string;
@@ -643,6 +645,7 @@ function snapshotKey(item: {
   capacity: string | null;
   color: string | null;
   condition: string | null;
+  qualityGrade: string | null;
   price: number | { toString(): string };
   availability: string | null;
   rawLine: string;
@@ -655,6 +658,7 @@ function snapshotKey(item: {
     item.capacity,
     item.color,
     item.condition,
+    item.qualityGrade,
     Number(item.price.toString()),
     item.availability,
     normalizedRawLine(item.rawLine),
@@ -675,6 +679,7 @@ export function supplierListItemMergeKey(item: SupplierListItemForMerge) {
     `capacity:${normalizeMergeValue(item.capacity)}`,
     `color:${normalizeMergeValue(item.color)}`,
     `condition:${normalizeMergeValue(item.condition)}`,
+    `quality-grade:${normalizeMergeValue(item.qualityGrade)}`,
   ].join('|');
 }
 

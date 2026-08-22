@@ -8,12 +8,17 @@ import {
 
 const webhookSecret = 'this-is-a-test-webhook-secret-with-32-characters';
 
-function catalogProduct(id: string, productDescription: string) {
+function catalogProduct(
+  id: string,
+  productDescription: string,
+  profitCondition = 'NOVO',
+  productType = 'IPHONE_SEALED',
+) {
   return {
     id,
     productDescription,
-    productType: 'IPHONE_SEALED',
-    profitCondition: 'NOVO',
+    productType,
+    profitCondition,
     variantAttributes: null,
     category: null,
     model: null,
@@ -86,6 +91,7 @@ function currentItem(
     capacity: null,
     color: null,
     condition: 'NOVO',
+    qualityGrade: null,
     price,
     availability: null,
     rawLine: `${normalizedName} R$ ${price}`,
@@ -150,6 +156,9 @@ describe('EvolutionWebhookService', () => {
     );
     expect(supplierListItemMergeKey(base)).not.toBe(
       supplierListItemMergeKey({ ...base, condition: 'CPO' }),
+    );
+    expect(supplierListItemMergeKey(base)).not.toBe(
+      supplierListItemMergeKey({ ...base, qualityGrade: 'A' }),
     );
     expect(supplierListItemMergeKey(base)).not.toBe(
       supplierListItemMergeKey({
@@ -225,6 +234,140 @@ describe('EvolutionWebhookService', () => {
       expect.objectContaining({ where: { id: 'blue-novo' } }),
     );
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+  });
+
+  it('persiste A e A+ como ofertas distintas do mesmo Product em FULL', async () => {
+    const { service, transaction } = createService([
+      catalogProduct('used-product-id', 'iPhone 15 256GB', 'SEMINOVO', 'IPHONE_USED'),
+    ]);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-full-graded',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: 'LISTA SWAP\niPhone 15 256GB\nGrade A — R$ 2.100\nGrade A+ — R$ 2.200',
+        },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          items: {
+            create: [
+              expect.objectContaining({
+                condition: 'SEMINOVO',
+                qualityGrade: 'A',
+                productId: 'used-product-id',
+              }),
+              expect.objectContaining({
+                condition: 'SEMINOVO',
+                qualityGrade: 'A+',
+                productId: 'used-product-id',
+              }),
+            ],
+          },
+        }),
+      }),
+    );
+  });
+
+  it('atualiza A e A+ isoladamente em PARTIAL_UPDATE', async () => {
+    const { service, transaction } = createService();
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'used-list-id',
+      items: [
+        currentItem('grade-a', 'iPhone 15 128GB', 2100, {
+          category: 'iPhone',
+          capacity: '128GB',
+          condition: 'SEMINOVO',
+          qualityGrade: 'A',
+        }),
+        currentItem('grade-a-plus', 'iPhone 15 128GB', 2200, {
+          category: 'iPhone',
+          capacity: '128GB',
+          condition: 'SEMINOVO',
+          qualityGrade: 'A+',
+        }),
+      ],
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-partial-grade-a',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'PROMOÇÃO SWAP\niPhone 15 128GB\nGrade A — R$ 2.050' },
+      },
+    });
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-partial-grade-a-plus',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'PROMOÇÃO SWAP\niPhone 15 128GB\nGrade A+ — R$ 2.150' },
+      },
+    });
+
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: { id: 'grade-a' },
+        data: expect.objectContaining({ price: 2050, qualityGrade: 'A' }),
+      }),
+    );
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'grade-a-plus' },
+        data: expect.objectContaining({ price: 2150, qualityGrade: 'A+' }),
+      }),
+    );
+  });
+
+  it('nao casa oferta graduada com item legado sem grade em PARTIAL_UPDATE', async () => {
+    const { service, transaction } = createService();
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'used-list-id',
+      items: [
+        currentItem('legacy-item', 'iPhone 15 128GB', 2100, {
+          category: 'iPhone',
+          capacity: '128GB',
+          condition: 'SEMINOVO',
+          qualityGrade: null,
+        }),
+      ],
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-partial-graded-legacy',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'PROMOÇÃO SWAP\niPhone 15 128GB\nGrade A — R$ 2.050' },
+      },
+    });
+
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ qualityGrade: 'A', supplierCurrentListId: 'used-list-id' }),
+      }),
+    );
   });
 
   it('localiza atualizacoes parciais no scope resolved do fornecedor', async () => {

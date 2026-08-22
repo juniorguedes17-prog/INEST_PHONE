@@ -118,4 +118,170 @@ Preto R$ 3.500`,
     },
     expected: { itemCount: 1, parsedItems: [{ itemIndex: 0, condition: 'CPO' }] },
   },
+  {
+    id: 'condition-grade-a-001',
+    rule: 'P0.1C eligible Grade A is a used offer',
+    input: { rawText: 'iPhone 15 128GB\nGrade A - R$ 2.100' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A' }],
+    },
+  },
+  {
+    id: 'condition-grade-a-plus-001',
+    rule: 'P0.1C eligible Grade A+ is a used offer',
+    input: { rawText: 'iPhone 15 128GB\nGrade A+ - R$ 2.200' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A+' }],
+    },
+  },
+  {
+    id: 'condition-grade-ab-discarded-001',
+    rule: 'P0.1C Grade AB remains operationally ineligible',
+    input: { rawText: 'iPhone 15 128GB\nGrade AB - R$ 2.100' },
+    expected: { itemCount: 0 },
+  },
+  {
+    id: 'condition-grade-b-discarded-001',
+    rule: 'P0.1C Grade B remains operationally ineligible',
+    input: { rawText: 'iPhone 15 128GB\nGrade B - R$ 2.100' },
+    expected: { itemCount: 0 },
+  },
+  {
+    id: 'condition-grade-c-discarded-001',
+    rule: 'P0.1C Grade C remains operationally ineligible',
+    input: { rawText: 'iPhone 15 128GB\nGrade C - R$ 2.100' },
+    expected: { itemCount: 0 },
+  },
+  {
+    id: 'condition-grade-lote-novo-001',
+    rule: 'P0.1C logistic LOTE NOVO cannot override an eligible grade',
+    input: { rawText: 'LOTE NOVO\niPhone 15 128GB\nGrade A - R$ 2.100' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A' }],
+    },
+  },
+  {
+    id: 'condition-grade-novo-lote-001',
+    rule: 'P0.1C logistic NOVO LOTE cannot override an eligible grade',
+    input: { rawText: 'NOVO LOTE\niPhone 15 128GB\nGrade A - R$ 2.100' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A' }],
+    },
+  },
+  {
+    id: 'condition-grade-novo-estoque-001',
+    rule: 'P0.1C logistic NOVO ESTOQUE cannot override an eligible grade',
+    input: { rawText: 'NOVO ESTOQUE\niPhone 15 128GB\nGrade A - R$ 2.100' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A' }],
+    },
+  },
+  {
+    id: 'condition-grade-estoque-novo-001',
+    rule: 'P0.1C logistic ESTOQUE NOVO cannot override an eligible grade',
+    input: { rawText: 'ESTOQUE NOVO\niPhone 15 128GB\nGrade A - R$ 2.100' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A' }],
+    },
+  },
+  {
+    id: 'condition-swap-lote-novo-001',
+    rule: 'P0.1C logistic LOTE NOVO preserves SWAP context',
+    input: { rawText: 'LISTA SWAP\nLOTE NOVO\niPhone 15 128GB\nPreto R$ 3.000' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: null }],
+    },
+  },
+  {
+    id: 'condition-cpo-lote-novo-001',
+    rule: 'P0.1C logistic LOTE NOVO preserves CPO context',
+    input: { rawText: 'CPO\nLOTE NOVO\niPhone 15 128GB\nPreto R$ 3.000' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'CPO', qualityGrade: null }],
+    },
+  },
+  {
+    id: 'condition-cpo-grade-a-001',
+    rule: 'P0.1C eligible grade overrides CPO only for the graded offer',
+    input: { rawText: 'CPO\niPhone 15 128GB\nGrade A - R$ 2.100' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A' }],
+    },
+  },
+  {
+    id: 'condition-novos-lacrados-no-grade-001',
+    rule: 'P0.1C legitimate NOVO context remains NOVO without a grade',
+    input: { rawText: 'NOVOS LACRADOS\niPhone 15 128GB\nPreto R$ 3.000' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'NOVO', qualityGrade: null }],
+    },
+  },
+  {
+    id: 'condition-grades-a-a-plus-coexist-001',
+    rule: 'P0.1C A and A+ are separate eligible offers',
+    input: {
+      rawText: 'iPhone 15 128GB\nGrade A - R$ 2.100\nGrade A+ - R$ 2.200',
+    },
+    expected: {
+      itemCount: 2,
+      parsedItems: [
+        { itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A' },
+        { itemIndex: 1, condition: 'SEMINOVO', qualityGrade: 'A+' },
+      ],
+    },
+  },
+  {
+    id: 'condition-no-grade-null-001',
+    rule: 'P0.1C ungraded offers preserve a null quality grade',
+    input: { rawText: 'LISTA SWAP\niPhone 15 128GB\nPreto R$ 3.000' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO', qualityGrade: null }],
+    },
+  },
+  {
+    id: 'condition-swap-nova-lista-001',
+    rule: 'P0.1C NOVA LISTA remains non-destructive within SWAP context',
+    input: { rawText: 'LISTA SWAP\nNOVA LISTA\niPhone 15 128GB\nPreto R$ 3.000' },
+    expected: { itemCount: 1, parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO' }] },
+  },
+  {
+    id: 'condition-cpo-nova-remessa-001',
+    rule: 'P0.1C NOVA REMESSA remains non-destructive within CPO context',
+    input: { rawText: 'CPO\nNOVA REMESSA\niPhone 15 128GB\nPreto R$ 3.000' },
+    expected: { itemCount: 1, parsedItems: [{ itemIndex: 0, condition: 'CPO' }] },
+  },
+  {
+    id: 'condition-grade-real-stock-lote-001',
+    rule: 'P0.1C sanitized graded stock list preserves only eligible Grade A offers',
+    input: {
+      rawText: `ATUALIZACAO DE ESTOQUE - LOTE NOVO
+Grades A | AB | B
+iPhone 15 128GB
+Grade A - R$ 2.155
+Grade AB - R$ 2.120
+Grade B - R$ 2.075
+iPhone 16 Pro 128GB
+Grade A - R$ 3.825
+Grade AB - R$ 3.790
+Grade B - R$ 3.755`,
+    },
+    expected: {
+      itemCount: 2,
+      parsedItems: [
+        { itemIndex: 0, condition: 'SEMINOVO', qualityGrade: 'A', price: 2155 },
+        { itemIndex: 1, condition: 'SEMINOVO', qualityGrade: 'A', price: 3825 },
+      ],
+    },
+  },
 ] as const);
