@@ -7,7 +7,6 @@ import { SupplierContactsService } from '../suppliers/service/supplier-contacts.
 import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contacts.validators';
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
-import { LEGACY_SNAPSHOT_SCOPE } from './supplier-current-list-scope';
 import {
   resolveSupplierSnapshotScope,
   type SupplierSnapshotScopeResolution,
@@ -193,6 +192,7 @@ export class EvolutionWebhookService {
     const updateMode = classifySupplierListUpdateMode(text);
     const scopeResolution = resolveSupplierSnapshotScope(text, items);
     const fullSnapshotScope = resolvedFullSnapshotScope(updateMode, scopeResolution);
+    const partialSnapshotScope = resolvedPartialSnapshotScope(updateMode, scopeResolution);
     this.logger.debug(
       JSON.stringify({
         event: 'evolution.snapshot_scope.shadow',
@@ -228,45 +228,45 @@ export class EvolutionWebhookService {
         if (updateMode === 'INCONCLUSIVE') return;
 
         if (updateMode === 'PARTIAL_UPDATE') {
+          if (!partialSnapshotScope) return;
+
           const currentList = await transaction.supplierCurrentList.findUnique({
             where: {
               supplierContactId_snapshotScope: {
                 supplierContactId: supplier.id,
-                snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+                snapshotScope: partialSnapshotScope,
               },
             },
             include: { items: true },
           });
 
-          if (currentList) {
-            await transaction.supplierCurrentList.update({
-              where: { id: currentList.id },
-              data: {
-                sourceMessageId: message.messageId,
-                sourceType: 'text',
-                rawContent: text,
-                receivedAt: message.receivedAt,
-              },
-            });
-            await this.applyPartialUpdate(
-              transaction,
-              currentList.id,
-              currentList.items,
-              itemsWithResolvedProductId,
-            );
-          } else {
-            await transaction.supplierCurrentList.create({
-              data: {
+          if (!currentList) {
+            this.logger.debug(
+              JSON.stringify({
+                event: 'evolution.snapshot_scope.partial_scope_not_found',
                 supplierContactId: supplier.id,
-                snapshotScope: LEGACY_SNAPSHOT_SCOPE,
-                sourceMessageId: message.messageId,
-                sourceType: 'text',
-                rawContent: text,
-                receivedAt: message.receivedAt,
-                items: { create: itemsWithResolvedProductId },
-              },
-            });
+                externalMessageId: message.messageId,
+                snapshotScope: partialSnapshotScope,
+              }),
+            );
+            return;
           }
+
+          await transaction.supplierCurrentList.update({
+            where: { id: currentList.id },
+            data: {
+              sourceMessageId: message.messageId,
+              sourceType: 'text',
+              rawContent: text,
+              receivedAt: message.receivedAt,
+            },
+          });
+          await this.applyPartialUpdate(
+            transaction,
+            currentList.id,
+            currentList.items,
+            itemsWithResolvedProductId,
+          );
           return;
         }
 
@@ -659,6 +659,15 @@ function resolvedFullSnapshotScope(
   resolution: SupplierSnapshotScopeResolution,
 ) {
   if (updateMode !== 'FULL_SNAPSHOT' || resolution.status !== 'RESOLVED') return null;
+  const scopeKey = resolution.scopeKey?.trim();
+  return scopeKey || null;
+}
+
+function resolvedPartialSnapshotScope(
+  updateMode: SupplierListUpdateMode,
+  resolution: SupplierSnapshotScopeResolution,
+) {
+  if (updateMode !== 'PARTIAL_UPDATE' || resolution.status !== 'RESOLVED') return null;
   const scopeKey = resolution.scopeKey?.trim();
   return scopeKey || null;
 }

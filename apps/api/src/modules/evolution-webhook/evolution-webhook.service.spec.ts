@@ -5,7 +5,6 @@ import {
   EvolutionWebhookService,
   supplierListItemMergeKey,
 } from './evolution-webhook.service';
-import { LEGACY_SNAPSHOT_SCOPE } from './supplier-current-list-scope';
 
 const webhookSecret = 'this-is-a-test-webhook-secret-with-32-characters';
 
@@ -185,7 +184,7 @@ describe('EvolutionWebhookService', () => {
     }
   });
 
-  it('atualiza somente a cor correspondente e preserva as demais ofertas', async () => {
+  it('atualiza somente a cor correspondente no scope used', async () => {
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
@@ -195,14 +194,14 @@ describe('EvolutionWebhookService', () => {
           model: 'iPhone 17 Pro Max 256GB',
           capacity: '256GB',
           color: 'silver',
-          condition: 'NOVO',
+          condition: 'SEMINOVO',
         }),
         currentItem('blue-novo', 'iPhone 17 Pro Max 256GB', 7050, {
           category: 'iPhone',
           model: 'iPhone 17 Pro Max 256GB',
           capacity: '256GB',
           color: 'azul',
-          condition: 'NOVO',
+          condition: 'SEMINOVO',
         }),
       ],
     });
@@ -211,7 +210,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-promo-silver', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'PROMOÇÃO\niPhone 17 Pro Max 256GB\nSilver R$ 6.990' },
+        message: { conversation: 'PROMOÇÃO SWAP\niPhone 17 Pro Max 256GB\nSilver R$ 6.990' },
       },
     });
 
@@ -227,22 +226,22 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
   });
 
-  it('localiza atualizacoes parciais no unico snapshot legado do fornecedor', async () => {
+  it('localiza atualizacoes parciais no scope resolved do fornecedor', async () => {
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
-      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul' })],
+      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul', condition: 'SEMINOVO' })],
     });
 
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
         key: {
-          id: 'message-legacy-partial',
+          id: 'message-used-partial',
           remoteJid: '5511999999999@s.whatsapp.net',
           fromMe: false,
         },
-        message: { conversation: 'PROMOÇÃO\nProduto B 256GB\nAzul R$ 5.500' },
+        message: { conversation: 'PROMOÇÃO SWAP\nProduto B 256GB\nAzul R$ 5.500' },
       },
     });
 
@@ -250,7 +249,7 @@ describe('EvolutionWebhookService', () => {
       where: {
         supplierContactId_snapshotScope: {
           supplierContactId: 'supplier-contact-id',
-          snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+          snapshotScope: 'catalog:used',
         },
       },
       include: { items: true },
@@ -258,6 +257,188 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'item-b' }, data: expect.objectContaining({ price: 5500 }) }),
     );
+  });
+
+  it('atualiza somente o snapshot used existente e sua proveniencia', async () => {
+    const { service, transaction } = createService();
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'used-list-id',
+      sourceMessageId: 'used-full-message',
+      items: [
+        currentItem('used-u1', 'iPhone 14 128GB', 2800, {
+          category: 'iPhone',
+          model: 'iPhone 14',
+          capacity: '128GB',
+          color: 'preto',
+          condition: 'SEMINOVO',
+        }),
+        currentItem('used-u2', 'iPhone 15 128GB', 3000, {
+          category: 'iPhone',
+          model: 'iPhone 15 128GB',
+          capacity: '128GB',
+          color: 'azul',
+          condition: 'SEMINOVO',
+        }),
+      ],
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'used-partial-message', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'PROMOÇÃO SWAP\niPhone 15 128GB\nAzul R$ 2.900' },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.findUnique).toHaveBeenCalledWith({
+      where: {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-contact-id',
+          snapshotScope: 'catalog:used',
+        },
+      },
+      include: { items: true },
+    });
+    expect(transaction.supplierCurrentList.update).toHaveBeenCalledWith({
+      where: { id: 'used-list-id' },
+      data: expect.objectContaining({
+        sourceMessageId: 'used-partial-message',
+        rawContent: 'PROMOÇÃO SWAP\niPhone 15 128GB\nAzul R$ 2.900',
+      }),
+    });
+    expect(transaction.supplierCurrentList.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'primary-list-id' } }),
+    );
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'used-u2' }, data: expect.objectContaining({ price: 2900 }) }),
+    );
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'used-u1' } }),
+    );
+  });
+
+  it('nao cria snapshot nem usa legacy quando o scope parcial resolvido nao existe', async () => {
+    const { service, transaction } = createService();
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+    transaction.supplierCurrentList.findUnique.mockResolvedValue(null);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'missing-used-partial', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'PROMOÇÃO SWAP\niPhone 15 128GB\nAzul R$ 2.900' },
+      },
+    });
+
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining('evolution.snapshot_scope.partial_scope_not_found'),
+    );
+    expect(transaction.supplierCurrentList.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          supplierContactId_snapshotScope: {
+            supplierContactId: 'supplier-contact-id',
+            snapshotScope: 'catalog:used',
+          },
+        },
+      }),
+    );
+    expect(transaction.supplierCurrentList.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+    debug.mockRestore();
+  });
+
+  it('isola partial used entre fornecedores distintos', async () => {
+    const { service, transaction, supplierContacts } = createService();
+    supplierContacts.findActiveByWhatsappNumber
+      .mockResolvedValueOnce({ id: 'supplier-a' })
+      .mockResolvedValueOnce({ id: 'supplier-b' });
+    transaction.supplierCurrentList.findUnique
+      .mockResolvedValueOnce({
+        id: 'used-list-a',
+        items: [
+          currentItem('used-item-a', 'Produto B 256GB', 6000, {
+            capacity: '256GB',
+            color: 'azul',
+            condition: 'SEMINOVO',
+          }),
+        ],
+      })
+      .mockResolvedValueOnce({
+        id: 'used-list-b',
+        items: [
+          currentItem('used-item-b', 'Produto B 256GB', 6100, {
+            capacity: '256GB',
+            color: 'azul',
+            condition: 'SEMINOVO',
+          }),
+        ],
+      });
+
+    for (const [id, remoteJid] of [
+      ['partial-supplier-a', '5511999999999@s.whatsapp.net'],
+      ['partial-supplier-b', '5511988888888@s.whatsapp.net'],
+    ]) {
+      await service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: { id, remoteJid, fromMe: false },
+          message: { conversation: 'PROMOÇÃO SWAP\nProduto B 256GB\nAzul R$ 5.500' },
+        },
+      });
+    }
+
+    expect(transaction.supplierCurrentList.findUnique.mock.calls.map(([call]) => call.where)).toEqual([
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-a',
+          snapshotScope: 'catalog:used',
+        },
+      },
+      {
+        supplierContactId_snapshotScope: {
+          supplierContactId: 'supplier-b',
+          snapshotScope: 'catalog:used',
+        },
+      },
+    ]);
+    expect(transaction.supplierCurrentList.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ where: { id: 'used-list-a' } }),
+    );
+    expect(transaction.supplierCurrentList.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ where: { id: 'used-list-b' } }),
+    );
+  });
+
+  it.each([
+    ['UNKNOWN', 'PROMOÇÃO\niPhone 15 128GB\nAzul R$ 2.900'],
+    [
+      'AMBIGUOUS',
+      'PROMOÇÃO SWAP LACRADOS\niPhone 15 128GB\nAzul R$ 2.900',
+    ],
+  ])('preserva todos os snapshots para partial %s', async (_status, conversation) => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: `partial-${_status.toLowerCase()}`, remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation },
+      },
+    });
+
+    expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.findUnique).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
   });
 
   it('persiste FULL resolvido no escopo used', async () => {
@@ -450,7 +631,7 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
   });
 
-  it('atualiza NOVO sem substituir CPO ou SEMINOVO', async () => {
+  it('atualiza SEMINOVO sem substituir CPO ou NOVO', async () => {
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
@@ -460,7 +641,7 @@ describe('EvolutionWebhookService', () => {
           model: 'iPhone 17 Pro Max 256GB',
           capacity: '256GB',
           color: 'silver',
-          condition: 'NOVO',
+          condition: 'SEMINOVO',
         }),
         currentItem('cpo', 'iPhone 17 Pro Max 256GB CPO', 6500, {
           category: 'iPhone', model: 'iPhone 17 Pro Max 256GB', capacity: '256GB', color: 'silver', condition: 'CPO',
@@ -475,7 +656,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-promo-novo', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'PROMOÇÃO\niPhone 17 Pro Max 256GB\nSilver R$ 6.990' },
+        message: { conversation: 'PROMOÇÃO SWAP\niPhone 17 Pro Max 256GB\nSilver R$ 6.990' },
       },
     });
 
@@ -490,7 +671,7 @@ describe('EvolutionWebhookService', () => {
     );
   });
 
-  it('preserva itens antigos e substitui somente B em uma atualizacao parcial', async () => {
+  it('preserva itens antigos e substitui somente B em uma atualizacao partial used', async () => {
     const { service, transaction } = createService();
     const existingItems = [
       currentItem('item-a', 'Produto A 128GB', 5000),
@@ -498,6 +679,7 @@ describe('EvolutionWebhookService', () => {
         category: null,
         capacity: '256GB',
         color: 'azul',
+        condition: 'SEMINOVO',
       }),
       currentItem('item-c', 'Produto C 512GB', 7000),
     ];
@@ -510,7 +692,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-promo-b', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'PROMOÇÃO\nProduto B 256GB\nAzul R$ 5.500' },
+        message: { conversation: 'PROMOÇÃO SWAP\nProduto B 256GB\nAzul R$ 5.500' },
       },
     });
 
@@ -535,7 +717,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-promo-d', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'OFERTA\nProduto D 512GB\nPreto R$ 8.000' },
+        message: { conversation: 'OFERTA SWAP\nProduto D 512GB\nPreto R$ 8.000' },
       },
     });
 
@@ -562,8 +744,9 @@ describe('EvolutionWebhookService', () => {
           currentItem('item-b', 'Produto B 256GB', 5500, {
             capacity: '256GB',
             color: 'azul',
+            condition: 'SEMINOVO',
           }),
-          currentItem('item-c', 'Produto C 512GB', 7000, { capacity: '512GB', color: 'preto' }),
+          currentItem('item-c', 'Produto C 512GB', 7000, { capacity: '512GB', color: 'preto', condition: 'SEMINOVO' }),
         ],
       })
       .mockResolvedValueOnce({
@@ -573,8 +756,9 @@ describe('EvolutionWebhookService', () => {
           currentItem('item-b', 'Produto B 256GB', 5500, {
             capacity: '256GB',
             color: 'azul',
+            condition: 'SEMINOVO',
           }),
-          currentItem('item-c', 'Produto C 512GB', 7000, { capacity: '512GB', color: 'preto' }),
+          currentItem('item-c', 'Produto C 512GB', 7000, { capacity: '512GB', color: 'preto', condition: 'SEMINOVO' }),
         ],
       });
 
@@ -582,7 +766,7 @@ describe('EvolutionWebhookService', () => {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-promo-c', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'BAIXOU\nProduto C 512GB\nPreto R$ 6.500' },
+        message: { conversation: 'BAIXOU SWAP\nProduto C 512GB\nPreto R$ 6.500' },
       },
     });
 
@@ -598,14 +782,14 @@ describe('EvolutionWebhookService', () => {
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
-      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul' })],
+      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul', condition: 'SEMINOVO' })],
     });
 
     const payload = {
       event: 'MESSAGES_UPSERT',
       data: {
         key: { id: 'message-replayed', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-        message: { conversation: 'PROMOÇÃO\nProduto B 256GB\nAzul R$ 5.500' },
+        message: { conversation: 'PROMOÇÃO SWAP\nProduto B 256GB\nAzul R$ 5.500' },
       },
     };
 
@@ -627,7 +811,7 @@ describe('EvolutionWebhookService', () => {
 
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
-      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul' })],
+      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul', condition: 'SEMINOVO' })],
     });
     transaction.supplierCurrentList.update.mockImplementation(async ({ data }) => {
       state = { ...state, rawContent: data.rawContent };
@@ -649,7 +833,7 @@ describe('EvolutionWebhookService', () => {
         event: 'MESSAGES_UPSERT',
         data: {
           key: { id: 'message-partial-failure', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
-          message: { conversation: 'PROMOÇÃO\nProduto B 256GB\nAzul R$ 5.500' },
+          message: { conversation: 'PROMOÇÃO SWAP\nProduto B 256GB\nAzul R$ 5.500' },
         },
       }),
     ).rejects.toThrow('partial update failed');
