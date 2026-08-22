@@ -1,6 +1,15 @@
-import { Transform } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 const PRODUCT_CONDITIONS = ['NOVO', 'SEMINOVO', 'CPO'] as const;
 
@@ -115,6 +124,47 @@ export class CreateProductDto {
 
 export class UpdateProductDto extends CreateProductDto {}
 
+export class CreateProfitRegistrationProductDto extends OmitType(CreateProductDto, [
+  'modelId',
+] as const) {}
+
+export class CreateProfitRegistrationModelDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  name!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  canonicalModelKey!: string;
+
+  @ApiProperty()
+  @IsIn([
+    'IPHONE_SEALED',
+    'IPHONE_USED',
+    'APPLE_CPO',
+    'MACBOOK',
+    'IPAD',
+    'APPLE_WATCH',
+    'AIRPODS',
+    'ACCESSORY',
+  ])
+  productType!: string;
+}
+
+export class CreateProfitRegistrationDto {
+  @ApiProperty({ type: CreateProfitRegistrationProductDto })
+  @ValidateNested()
+  @Type(() => CreateProfitRegistrationProductDto)
+  product!: CreateProfitRegistrationProductDto;
+
+  @ApiProperty({ type: CreateProfitRegistrationModelDto })
+  @ValidateNested()
+  @Type(() => CreateProfitRegistrationModelDto)
+  model!: CreateProfitRegistrationModelDto;
+}
+
 export class UpsertCategoryDto {
   @ApiProperty()
   @IsString()
@@ -176,7 +226,10 @@ export function parseBrazilianDecimal(value: unknown) {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string') return value;
 
-  const normalized = value.trim().replace(/^R\$\s*/i, '').replace(/\s/g, '');
+  const normalized = value
+    .trim()
+    .replace(/^R\$\s*/i, '')
+    .replace(/\s/g, '');
   if (!normalized) return Number.NaN;
 
   const hasComma = normalized.includes(',');

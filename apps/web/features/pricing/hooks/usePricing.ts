@@ -30,6 +30,7 @@ import {
   normalizeCatalogFilterText,
 } from '@/features/price-radar/utils/brazil-radar-facets';
 import {
+  createProfitRegistration,
   createProduct,
   getProduct,
   getProductReferences,
@@ -280,24 +281,41 @@ export function usePricing({
       if (registration.action === 'update') {
         await updateProduct(registration.productId, registration.payload);
       } else {
-        await createProduct(registration.payload).catch(async (createError) => {
+        const createRegistration =
+          registration.action === 'create-model-and-product'
+            ? () =>
+                createProfitRegistration({
+                  product: registration.payload,
+                  model: registration.model,
+                })
+            : () => createProduct(registration.payload);
+
+        await createRegistration().catch(async (createError) => {
           if (
             !(createError instanceof Error) ||
-            !/ja existe|conflit|duplicad/i.test(createError.message)
+            !/ja existe|conflit|duplicad|unique constraint/i.test(createError.message)
           ) {
             throw createError;
           }
 
-          const productsAfterConflict = await listProducts(emptyProductFilters);
+          const [productsAfterConflict, referencesAfterConflict] = await Promise.all([
+            listProducts(emptyProductFilters),
+            getProductReferences(),
+          ]);
           const retry = resolveProfitRegistration({
             item,
             netProfit,
             products: productsAfterConflict,
-            references,
+            references: referencesAfterConflict,
           });
 
           if (retry.action === 'update') {
             await updateProduct(retry.productId, retry.payload);
+            return;
+          }
+
+          if (retry.action === 'create') {
+            await createProduct(retry.payload);
             return;
           }
 

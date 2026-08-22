@@ -4,6 +4,7 @@ import {
   ProductFilters,
   ProductFormPayload,
   ProductItem,
+  ProfitRegistrationPayload,
   ProductReferences,
 } from '../types/products';
 
@@ -56,6 +57,17 @@ export async function createProduct(payload: ProductFormPayload): Promise<Produc
   return parseResponse<ProductItem>(response);
 }
 
+export async function createProfitRegistration(
+  payload: ProfitRegistrationPayload,
+): Promise<ProductItem> {
+  const response = await authenticatedFetch(`${env.apiUrl}/products/profit-registration`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  return parseResponse<ProductItem>(response);
+}
+
 export async function updateProduct(id: string, payload: ProductFormPayload): Promise<ProductItem> {
   const response = await authenticatedFetch(`${env.apiUrl}/products/${id}`, {
     method: 'PATCH',
@@ -73,8 +85,11 @@ export async function deleteProduct(id: string): Promise<ProductItem> {
 }
 
 export async function setProductActive(id: string, active: boolean): Promise<ProductItem> {
-  const response = await authenticatedFetch(`${env.apiUrl}/products/${id}/${active ? 'activate' : 'deactivate'}`, {
-    method: 'PATCH',
-  });
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/products/${id}/${active ? 'activate' : 'deactivate'}`,
+    {
+      method: 'PATCH',
+    },
+  );
   return parseResponse<ProductItem>(response);
 }

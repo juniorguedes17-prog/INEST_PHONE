@@ -2,6 +2,7 @@ import { ConflictException, Inject, Injectable, NotFoundException } from '@nestj
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
   CreateProductDto,
+  CreateProfitRegistrationDto,
   ProductQueryDto,
   UpdateProductDto,
   UpsertCategoryDto,
@@ -15,7 +16,9 @@ import { normalizeProfitProductDescription } from '../../pricing/providers/googl
 
 @Injectable()
 export class ProductsService {
-  constructor(@Inject(ProductsRepository) private readonly productsRepository: ProductsRepository) {}
+  constructor(
+    @Inject(ProductsRepository) private readonly productsRepository: ProductsRepository,
+  ) {}
 
   list(query: ProductQueryDto) {
     return this.productsRepository.listProducts(query);
@@ -37,6 +40,28 @@ export class ProductsService {
       entityId: product.id,
       newValue: product,
       context: { event: 'products.created' },
+    });
+    return product;
+  }
+
+  async createProfitRegistration(dto: CreateProfitRegistrationDto, user?: AuthenticatedUser) {
+    if (dto.model.productType !== dto.product.productType) {
+      throw new NotFoundException('Modelo canonico incompativel com o tipo comercial do produto.');
+    }
+
+    await this.validateProfitRegistrationReferences(dto.product);
+    await this.ensureUniqueProfitIdentity(dto.product);
+    const product = await this.productsRepository.createProfitRegistration(
+      dto.product,
+      dto.model,
+      user?.id,
+    );
+    await this.productsRepository.createAuditLog({
+      userId: user?.id,
+      operationType: 'CREATE',
+      entityId: product.id,
+      newValue: product,
+      context: { event: 'products.profit_registration_created' },
     });
     return product;
   }
@@ -158,7 +183,26 @@ export class ProductsService {
     }
   }
 
-  private async ensureUniqueProfitIdentity(dto: CreateProductDto | UpdateProductDto, excludedId?: string) {
+  private async validateProfitRegistrationReferences(dto: CreateProfitRegistrationDto['product']) {
+    const [category, color, storage] = await Promise.all([
+      this.productsRepository.findCategory(dto.categoryId),
+      dto.colorId ? this.productsRepository.findColor(dto.colorId) : Promise.resolve(true),
+      dto.storageId ? this.productsRepository.findStorage(dto.storageId) : Promise.resolve(true),
+    ]);
+
+    ensureExists(category, 'Categoria invalida.');
+    ensureExists(color, 'Cor invalida.');
+    ensureExists(storage, 'Capacidade invalida.');
+
+    if (category && 'type' in category && category.type !== dto.productType) {
+      throw new NotFoundException('Categoria comercial incompativel com o tipo do produto.');
+    }
+  }
+
+  private async ensureUniqueProfitIdentity(
+    dto: Pick<CreateProductDto, 'profitCondition' | 'productDescription'>,
+    excludedId?: string,
+  ) {
     const normalizedDescription = normalizeProfitProductDescription(dto.productDescription);
     const existing = await this.productsRepository.findProfitIdentity(
       dto.profitCondition,
@@ -166,7 +210,9 @@ export class ProductsService {
       excludedId,
     );
     if (existing) {
-      throw new ConflictException('Ja existe um produto cadastrado para esta descricao e condicao.');
+      throw new ConflictException(
+        'Ja existe um produto cadastrado para esta descricao e condicao.',
+      );
     }
   }
 }

@@ -24,6 +24,7 @@ export interface ProductRecord {
 }
 
 export interface ProductsPrismaClient {
+  $transaction<T>(callback: (client: ProductsPrismaClient) => Promise<T>): Promise<T>;
   product: {
     findMany(args?: unknown): Promise<ProductRecord[]>;
     findUnique(args: unknown): Promise<ProductRecord | null>;
@@ -35,7 +36,7 @@ export interface ProductsPrismaClient {
     findMany(
       args?: unknown,
     ): Promise<Array<{ id: string; name: string; slug: string; type: string }>>;
-    findUnique(args: unknown): Promise<{ id: string } | null>;
+    findUnique(args: unknown): Promise<{ id: string; type: string } | null>;
     create(args: unknown): Promise<unknown>;
     update(args: unknown): Promise<unknown>;
   };
@@ -43,7 +44,9 @@ export interface ProductsPrismaClient {
     findMany(
       args?: unknown,
     ): Promise<Array<{ id: string; categoryId: string; name: string; productType: string }>>;
-    findUnique(args: unknown): Promise<{ id: string; categoryId: string } | null>;
+    findUnique(
+      args: unknown,
+    ): Promise<{ id: string; categoryId: string; productType: string } | null>;
     create(args: unknown): Promise<unknown>;
     update(args: unknown): Promise<unknown>;
   };

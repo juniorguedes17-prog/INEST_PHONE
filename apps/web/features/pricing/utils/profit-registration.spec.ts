@@ -24,8 +24,15 @@ const item = {
 } as unknown as BrazilRadarQuotePricing;
 
 const references = {
-  categories: [{ id: 'category-iphone', name: 'iPhone' }],
-  models: [{ id: 'model-17-pro-max', categoryId: 'category-iphone', name: 'iPhone 17 Pro Max' }],
+  categories: [{ id: 'category-iphone', name: 'iPhone Lacrado', type: 'IPHONE_SEALED' }],
+  models: [
+    {
+      id: 'model-17-pro-max',
+      categoryId: 'category-iphone',
+      name: 'iPhone 17 Pro Max',
+      productType: 'IPHONE_SEALED',
+    },
+  ],
   colors: [{ id: 'color-preto', name: 'Preto' }],
   storages: [{ id: 'storage-2tb', displayName: '2TB' }],
 };
@@ -129,4 +136,210 @@ test('nao cria Product quando o modelo nao possui identidade canonica segura', (
   });
 
   assert.equal(result.action, 'incomplete');
+});
+
+test('resolve a categoria comercial por tipo, sem depender do label canonico', () => {
+  const result = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references,
+  });
+
+  assert.equal(result.action, 'create');
+  if (result.action !== 'create') return;
+  assert.equal(result.payload.categoryId, 'category-iphone');
+  assert.equal(result.payload.productType, 'IPHONE_SEALED');
+});
+
+test('prepara a criacao atomica de Model e Product para um modelo canonico ausente', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'iPhone 17 Air 256GB',
+        model: 'iPhone 17 Air',
+        capacity: '256GB',
+      },
+      profit: { ...item.profit, productDescription: 'iPhone 17 Air 256GB' },
+    },
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      models: [],
+      storages: [{ id: 'storage-256', displayName: '256GB' }],
+    },
+  });
+
+  assert.deepEqual(result, {
+    action: 'create-model-and-product',
+    payload: {
+      categoryId: 'category-iphone',
+      colorId: 'color-preto',
+      storageId: 'storage-256',
+      productType: 'IPHONE_SEALED',
+      status: 'ACTIVE',
+      productDescription: 'iPhone 17 Air 256GB',
+      profitCondition: 'NOVO',
+      netProfit: '500',
+    },
+    model: {
+      name: 'iPhone 17 Air',
+      canonicalModelKey: 'iphone-17-air',
+      productType: 'IPHONE_SEALED',
+    },
+  });
+});
+
+test('resolve categorias comerciais distintas para CPO e SEMINOVO', () => {
+  const cases = [
+    { condition: 'CPO' as const, type: 'APPLE_CPO', categoryId: 'category-cpo' },
+    { condition: 'SEMINOVO' as const, type: 'IPHONE_USED', categoryId: 'category-used' },
+  ];
+
+  cases.forEach(({ condition, type, categoryId }) => {
+    const result = resolveProfitRegistration({
+      item: {
+        ...item,
+        product: { ...item.product, condition },
+      },
+      netProfit: '500',
+      products: [],
+      references: {
+        ...references,
+        categories: [{ id: categoryId, name: 'Categoria comercial', type }],
+        models: [
+          {
+            id: `model-${condition}`,
+            categoryId,
+            name: 'iPhone 17 Pro Max',
+            productType: type,
+          },
+        ],
+      },
+    });
+
+    assert.equal(result.action, 'create');
+    if (result.action !== 'create') return;
+    assert.equal(result.payload.categoryId, categoryId);
+    assert.equal(result.payload.productType, type);
+    assert.equal(result.payload.profitCondition, condition);
+  });
+});
+
+test('falha de forma fechada para categoria comercial ausente ou ambigua', () => {
+  const absent = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: { ...references, categories: [] },
+  });
+  const ambiguous = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [
+        { id: 'category-a', name: 'iPhone Lacrado A', type: 'IPHONE_SEALED' },
+        { id: 'category-b', name: 'iPhone Lacrado B', type: 'IPHONE_SEALED' },
+      ],
+    },
+  });
+
+  assert.equal(absent.action, 'incomplete');
+  assert.equal(ambiguous.action, 'incomplete');
+});
+
+test('falha de forma fechada para modelos canonicos ambiguos ou incompativeis', () => {
+  const ambiguous = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      models: [
+        {
+          id: 'model-a',
+          categoryId: 'category-iphone',
+          name: 'iPhone 17 Pro Max',
+          productType: 'IPHONE_SEALED',
+        },
+        {
+          id: 'model-b',
+          categoryId: 'category-iphone',
+          name: 'iPhone 17 Pro Max',
+          productType: 'IPHONE_SEALED',
+        },
+      ],
+    },
+  });
+  const incompatible = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      models: [
+        {
+          id: 'model-cpo',
+          categoryId: 'category-cpo',
+          name: 'iPhone 17 Pro Max',
+          productType: 'APPLE_CPO',
+        },
+      ],
+    },
+  });
+
+  assert.equal(ambiguous.action, 'incomplete');
+  assert.equal(incompatible.action, 'incomplete');
+});
+
+test('aplica a mesma ponte estrutural para MacBook, iPad e Apple Watch', () => {
+  const cases = [
+    {
+      name: 'MacBook Air M4 13 256GB',
+      model: 'MacBook Air M4 13"',
+      category: 'MacBook',
+      type: 'MACBOOK',
+    },
+    {
+      name: 'iPad 11 A16 256GB',
+      model: 'iPad 11',
+      category: 'iPad',
+      type: 'IPAD',
+    },
+    {
+      name: 'Apple Watch Series 11 46mm GPS',
+      model: 'Apple Watch Series 11 46mm',
+      category: 'Apple Watch',
+      type: 'APPLE_WATCH',
+    },
+  ];
+
+  cases.forEach(({ name, model, category, type }) => {
+    const result = resolveProfitRegistration({
+      item: {
+        ...item,
+        product: { ...item.product, name, model, category },
+        profit: { ...item.profit, productDescription: name },
+      },
+      netProfit: '500',
+      products: [],
+      references: {
+        ...references,
+        categories: [{ id: `category-${type}`, name: 'Categoria comercial', type }],
+        models: [
+          { id: `model-${type}`, categoryId: `category-${type}`, name: model, productType: type },
+        ],
+      },
+    });
+
+    assert.equal(result.action, 'create');
+    if (result.action !== 'create') return;
+    assert.equal(result.payload.categoryId, `category-${type}`);
+    assert.equal(result.payload.productType, type);
+  });
 });

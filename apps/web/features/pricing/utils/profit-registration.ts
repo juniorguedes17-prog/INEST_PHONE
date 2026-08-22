@@ -3,7 +3,13 @@ import {
   normalizeCanonicalProductIdentity,
   normalizeCanonicalText,
 } from '../../price-radar/utils/canonical-product-identity';
-import type { ProductFormPayload, ProductItem, ProductReferences } from '../../products/types/products';
+import type {
+  ProductFormPayload,
+  ProductItem,
+  ProductReferences,
+  ProfitRegistrationModelPayload,
+  ProfitRegistrationProductPayload,
+} from '../../products/types/products';
 import type { BrazilRadarQuotePricing } from '../types/pricing';
 
 export const emptyProductFilters = {
@@ -19,6 +25,11 @@ export const emptyProductFilters = {
 type ProfitRegistrationResolution =
   | { action: 'update'; productId: string; payload: ProductFormPayload }
   | { action: 'create'; payload: ProductFormPayload }
+  | {
+      action: 'create-model-and-product';
+      payload: ProfitRegistrationProductPayload;
+      model: ProfitRegistrationModelPayload;
+    }
   | { action: 'incomplete'; message: string };
 
 export function resolveProfitRegistration({
@@ -44,7 +55,9 @@ export function resolveProfitRegistration({
 
   const source = toCanonicalSource(item);
   const identity = normalizeCanonicalProductIdentity(source);
-  const matchingProduct = products.find((product) => matchesCatalogProduct(product, item, identity));
+  const matchingProduct = products.find((product) =>
+    matchesCatalogProduct(product, item, identity),
+  );
 
   if (matchingProduct) {
     return {
@@ -62,48 +75,100 @@ export function resolveProfitRegistration({
     };
   }
 
-  const category = references.categories.find(
-    (candidate) =>
-      normalizeCanonicalText(candidate.name) === normalizeCanonicalText(identity.canonicalCategory),
+  const productType = productTypeForCategory(identity.canonicalCategory, item.product.condition);
+  const categoryCandidates = references.categories.filter(
+    (candidate) => candidate.type === productType,
   );
+  if (categoryCandidates.length === 0) {
+    return {
+      action: 'incomplete',
+      message:
+        'A categoria comercial necessaria ainda nao esta disponivel no catalogo para este cadastro.',
+    };
+  }
+  if (categoryCandidates.length > 1) {
+    return {
+      action: 'incomplete',
+      message: 'A categoria comercial identificada esta ambigua no catalogo para este cadastro.',
+    };
+  }
+  const category = categoryCandidates[0];
   if (!category?.id) {
     return {
       action: 'incomplete',
-      message: 'A categoria identificada ainda nao esta disponivel no catalogo para este cadastro.',
+      message:
+        'A categoria comercial necessaria ainda nao esta disponivel no catalogo para este cadastro.',
     };
   }
 
-  const model = references.models.find((candidate) => {
-    if (candidate.categoryId !== category.id || !candidate.name) return false;
-    return (
+  const canonicalModelCandidates = references.models.filter(
+    (candidate) =>
+      candidate.name &&
       normalizeCanonicalProductIdentity({
         productName: candidate.name,
         category: identity.canonicalCategory,
-      }).canonicalModelKey === identity.canonicalModelKey
-    );
-  });
-  if (!model?.id) {
+      }).canonicalModelKey === identity.canonicalModelKey,
+  );
+  const compatibleModels = canonicalModelCandidates.filter(
+    (candidate) => candidate.categoryId === category.id && candidate.productType === productType,
+  );
+  if (compatibleModels.length > 1) {
     return {
       action: 'incomplete',
-      message: 'O modelo identificado ainda nao esta disponivel no catalogo para este cadastro.',
+      message: 'O modelo canonico identificado esta ambiguo no catalogo para este cadastro.',
     };
   }
 
   const storageId = findStorageId(references, identity.canonicalStorage);
   const colorId = findColorId(references, identity.canonicalColor, item.product.color);
+  const productPayload = {
+    categoryId: category.id,
+    colorId,
+    storageId,
+    productType,
+    status: 'ACTIVE',
+    productDescription: item.profit.productDescription.trim() || item.product.name.trim(),
+    profitCondition: item.product.condition,
+    netProfit,
+  };
+
+  if (compatibleModels.length === 1) {
+    const model = compatibleModels[0];
+    if (!model?.id) {
+      return {
+        action: 'incomplete',
+        message:
+          'O modelo canonico identificado ainda nao esta disponivel no catalogo para este cadastro.',
+      };
+    }
+    return {
+      action: 'create',
+      payload: { ...productPayload, modelId: model.id },
+    };
+  }
+
+  if (canonicalModelCandidates.length > 0) {
+    return {
+      action: 'incomplete',
+      message: 'O modelo canonico identificado pertence a uma categoria comercial incompativel.',
+    };
+  }
+
+  if (!identity.canonicalModelLabel) {
+    return {
+      action: 'incomplete',
+      message:
+        'Nao foi possivel identificar com seguranca o nome canonico do modelo para este cadastro.',
+    };
+  }
 
   return {
-    action: 'create',
-    payload: {
-      categoryId: category.id,
-      modelId: model.id,
-      colorId,
-      storageId,
-      productType: productTypeForCategory(identity.canonicalCategory, item.product.condition),
-      status: 'ACTIVE',
-      productDescription: item.profit.productDescription.trim() || item.product.name.trim(),
-      profitCondition: item.product.condition,
-      netProfit,
+    action: 'create-model-and-product',
+    payload: productPayload,
+    model: {
+      name: identity.canonicalModelLabel,
+      canonicalModelKey: identity.canonicalModelKey,
+      productType,
     },
   };
 }
@@ -168,7 +233,8 @@ function matchesCatalogProduct(
 function findStorageId(references: ProductReferences, storage: string | null) {
   if (!storage) return undefined;
   return references.storages.find(
-    (candidate) => normalizeCanonicalText(candidate.displayName) === normalizeCanonicalText(storage),
+    (candidate) =>
+      normalizeCanonicalText(candidate.displayName) === normalizeCanonicalText(storage),
   )?.id;
 }
 
@@ -181,7 +247,10 @@ function findColorId(references: ProductReferences, color: string | null, rawCol
   )?.id;
 }
 
-function productTypeForCategory(category: string, condition: BrazilRadarQuotePricing['product']['condition']) {
+function productTypeForCategory(
+  category: string,
+  condition: BrazilRadarQuotePricing['product']['condition'],
+) {
   if (category === 'iPhone') {
     if (condition === 'CPO') return 'APPLE_CPO';
     return condition === 'SEMINOVO' ? 'IPHONE_USED' : 'IPHONE_SEALED';

@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   CreateProductDto,
+  CreateProfitRegistrationModelDto,
+  CreateProfitRegistrationProductDto,
   ProductQueryDto,
   UpdateProductDto,
   UpsertCategoryDto,
@@ -51,14 +53,45 @@ export class ProductsRepository {
     return this.createManualProfitProduct(dto, userId);
   }
 
-  async createManualProfitProduct(dto: CreateProductDto, userId?: string) {
-    const latestProfitProduct = await this.prisma.product.findFirst({
+  createProfitRegistration(
+    product: CreateProfitRegistrationProductDto,
+    model: CreateProfitRegistrationModelDto,
+    userId?: string,
+  ) {
+    return this.prisma.$transaction(async (transaction) => {
+      const existingModel = await transaction.productModel.findUnique({
+        where: { normalizedName: model.canonicalModelKey },
+      });
+      if (existingModel) {
+        throw new Error('Modelo canonico ja existe no catalogo.');
+      }
+
+      const createdModel = await transaction.productModel.create({
+        data: {
+          categoryId: product.categoryId,
+          name: model.name,
+          normalizedName: model.canonicalModelKey,
+          productType: model.productType,
+        },
+      });
+      const modelId = (createdModel as { id: string }).id;
+
+      return this.createManualProfitProduct({ ...product, modelId }, userId, transaction);
+    });
+  }
+
+  async createManualProfitProduct(
+    dto: CreateProductDto,
+    userId?: string,
+    prisma: ProductsPrismaClient = this.prisma,
+  ) {
+    const latestProfitProduct = await prisma.product.findFirst({
       where: { profitProductId: { not: null } },
       orderBy: { profitProductId: 'desc' },
       select: { profitProductId: true },
     });
 
-    return this.prisma.product.create({
+    return prisma.product.create({
       data: {
         ...dto,
         profitProductId: (latestProfitProduct?.profitProductId ?? 0) + 1,

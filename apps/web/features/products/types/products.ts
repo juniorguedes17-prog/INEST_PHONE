@@ -50,6 +50,19 @@ export interface ProductFormPayload {
   netProfit: string;
 }
 
+export type ProfitRegistrationProductPayload = Omit<ProductFormPayload, 'modelId'>;
+
+export interface ProfitRegistrationModelPayload {
+  name: string;
+  canonicalModelKey: string;
+  productType: string;
+}
+
+export interface ProfitRegistrationPayload {
+  product: ProfitRegistrationProductPayload;
+  model: ProfitRegistrationModelPayload;
+}
+
 export interface ProductFilters {
   search: string;
   categoryId: string;

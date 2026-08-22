@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
   CreateProductDto,
+  CreateProfitRegistrationDto,
   ProductQueryDto,
   UpdateProductDto,
   UpsertCategoryDto,
@@ -52,6 +53,15 @@ export class ProductsController {
   @Post()
   create(@Body() dto: CreateProductDto, @CurrentUser() user: AuthenticatedUser) {
     return this.productsService.create(dto, user);
+  }
+
+  @Post('profit-registration')
+  @ApiOperation({ summary: 'Cria um produto de lucro e seu modelo canonico de forma atomica.' })
+  createProfitRegistration(
+    @Body() dto: CreateProfitRegistrationDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.productsService.createProfitRegistration(dto, user);
   }
 
   @Patch(':id')

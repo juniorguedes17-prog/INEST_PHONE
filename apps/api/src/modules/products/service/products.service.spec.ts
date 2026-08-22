@@ -15,12 +15,13 @@ const dto: CreateProductDto = {
 
 function createRepository(existing: unknown = null) {
   return {
-    findCategory: vi.fn().mockResolvedValue({ id: dto.categoryId }),
+    findCategory: vi.fn().mockResolvedValue({ id: dto.categoryId, type: dto.productType }),
     findModel: vi.fn().mockResolvedValue({ id: dto.modelId, categoryId: dto.categoryId }),
     findColor: vi.fn(),
     findStorage: vi.fn(),
     findProfitIdentity: vi.fn().mockResolvedValue(existing),
     createProduct: vi.fn().mockResolvedValue({ id: 'product-1', ...dto }),
+    createProfitRegistration: vi.fn().mockResolvedValue({ id: 'product-2', ...dto }),
     updateProduct: vi.fn().mockResolvedValue({ id: 'product-1', ...dto, netProfit: 1090 }),
     findProduct: vi.fn().mockResolvedValue({ id: 'product-1', ...dto }),
     createAuditLog: vi.fn().mockResolvedValue(undefined),
@@ -58,5 +59,43 @@ describe('ProductsService manual catalog management', () => {
     await service.update('product-1', updateDto);
 
     expect(repository.updateProduct).toHaveBeenCalledWith('product-1', updateDto, undefined);
+  });
+
+  it('creates a canonical Model and Product only through the explicit profit registration flow', async () => {
+    const repository = createRepository();
+    const service = new ProductsService(repository as unknown as ProductsRepository);
+    const registration = {
+      product: { ...dto, storageId: undefined },
+      model: {
+        name: 'iPhone 17 Air',
+        canonicalModelKey: 'iphone-17-air',
+        productType: 'IPHONE_SEALED',
+      },
+    };
+
+    await service.createProfitRegistration(registration);
+
+    expect(repository.createProfitRegistration).toHaveBeenCalledWith(
+      registration.product,
+      registration.model,
+      undefined,
+    );
+  });
+
+  it('rejects a Model whose type diverges from the commercial category type', async () => {
+    const repository = createRepository();
+    const service = new ProductsService(repository as unknown as ProductsRepository);
+
+    await expect(
+      service.createProfitRegistration({
+        product: { ...dto, storageId: undefined },
+        model: {
+          name: 'iPhone 17 Air',
+          canonicalModelKey: 'iphone-17-air',
+          productType: 'APPLE_CPO',
+        },
+      }),
+    ).rejects.toBeInstanceOf(Error);
+    expect(repository.createProfitRegistration).not.toHaveBeenCalled();
   });
 });
