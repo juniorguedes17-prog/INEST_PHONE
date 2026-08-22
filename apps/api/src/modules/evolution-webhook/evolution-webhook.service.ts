@@ -8,6 +8,7 @@ import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contac
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
 import { LEGACY_SNAPSHOT_SCOPE } from './supplier-current-list-scope';
+import { resolveSupplierSnapshotScope } from './supplier-snapshot-scope';
 import {
   isValidParsedSupplierListSnapshot,
   parseSupplierListText,
@@ -187,6 +188,19 @@ export class EvolutionWebhookService {
       return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
     const updateMode = classifySupplierListUpdateMode(text);
+    const scopeResolution = resolveSupplierSnapshotScope(text, items);
+    this.logger.debug(
+      JSON.stringify({
+        event: 'evolution.snapshot_scope.shadow',
+        supplierContactId: supplier.id,
+        externalMessageId: message.messageId,
+        updateMode,
+        status: scopeResolution.status,
+        scopeKey: scopeResolution.scopeKey ?? null,
+        reason: scopeResolution.reason,
+        evidence: scopeResolution.evidence,
+      }),
+    );
     const catalog = await this.loadProductShadowCatalog();
     const itemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
       items,

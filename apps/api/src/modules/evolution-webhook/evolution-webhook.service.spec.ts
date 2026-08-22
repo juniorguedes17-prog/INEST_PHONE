@@ -260,6 +260,37 @@ describe('EvolutionWebhookService', () => {
     );
   });
 
+  it('observa escopo used sem alterar a persistencia legada', async () => {
+    const { service, transaction } = createService();
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-scope-shadow', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'IPHONE SWAP AMERICANOS\niPhone 16 128GB\nPreto R$ 3.500' },
+      },
+    });
+
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"evolution.snapshot_scope.shadow"'),
+    );
+    expect(debug).toHaveBeenCalledWith(expect.stringContaining('"scopeKey":"catalog:used"'));
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          supplierContactId_snapshotScope: {
+            supplierContactId: 'supplier-contact-id',
+            snapshotScope: LEGACY_SNAPSHOT_SCOPE,
+          },
+        },
+        create: expect.objectContaining({ snapshotScope: LEGACY_SNAPSHOT_SCOPE }),
+      }),
+    );
+
+    debug.mockRestore();
+  });
+
   it('atualiza NOVO sem substituir CPO ou SEMINOVO', async () => {
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
