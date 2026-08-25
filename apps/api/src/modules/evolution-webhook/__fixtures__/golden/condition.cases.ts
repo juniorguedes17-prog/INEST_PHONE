@@ -137,6 +137,25 @@ Preto R$ 3.500`,
     },
   },
   {
+    id: 'condition-detached-grade-context-001',
+    rule: 'P0.1C detached eligible grade qualifies the preceding product offer',
+    input: { rawText: 'iPhone 14 128GB (J/A)\nGrade A+\nPreto R$ 1.820' },
+    expected: {
+      itemCount: 1,
+      parsedItems: [
+        {
+          itemIndex: 0,
+          normalizedName: 'iphone 14 128gb j a',
+          capacity: '128GB',
+          color: 'preto',
+          condition: 'SEMINOVO',
+          qualityGrade: 'A+',
+          price: 1820,
+        },
+      ],
+    },
+  },
+  {
     id: 'condition-grade-ab-discarded-001',
     rule: 'P0.1C Grade AB remains operationally ineligible',
     input: { rawText: 'iPhone 15 128GB\nGrade AB - R$ 2.100' },

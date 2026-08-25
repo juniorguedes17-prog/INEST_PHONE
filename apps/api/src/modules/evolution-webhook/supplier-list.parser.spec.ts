@@ -381,6 +381,34 @@ describe('supplier list parser', () => {
     });
   });
 
+  it.each([
+    ['GRADE A', 'A'],
+    ['GRADE A+', 'A+'],
+  ])('associa %s isolada a oferta colorida do heading anterior', (grade, expectedGrade) => {
+    const [item] = parseSupplierListText(`
+      iPhone 14 128GB (J/A)
+      ${grade}
+      PRETO R$ 1.820
+    `);
+
+    expect(item).toMatchObject({
+      productName: 'iPhone 14 128GB (J/A)',
+      normalizedName: 'iphone 14 128gb j a',
+      capacity: '128GB',
+      color: 'preto',
+      condition: 'SEMINOVO',
+      qualityGrade: expectedGrade,
+      price: 1820,
+    });
+  });
+
+  it.each(['GRADE AB', 'GRADE B', 'GRADE C'])(
+    'continua descartando %s no formato de grade isolada',
+    (grade) => {
+      expect(parseSupplierListText(`iPhone 14 128GB (J/A)\n${grade}\nPRETO R$ 1.820`)).toEqual([]);
+    },
+  );
+
   it.each(['LOTE NOVO', 'NOVO LOTE', 'NOVO ESTOQUE', 'ESTOQUE NOVO'])(
     'nao promove %s a condicao NOVO',
     (logisticContext) => {

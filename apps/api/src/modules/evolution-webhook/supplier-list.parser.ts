@@ -131,7 +131,12 @@ export function parseSupplierListText(
     }
 
     const lineGrade = extractGrade(line);
-    if (lineGrade && isGradeSectionHeading(line)) {
+    const gradeStartsProductSection =
+      lineGrade &&
+      isGradeSectionHeading(line) &&
+      (!currentProduct ||
+        isProductHeading(nextLine ?? '', activeCategory, false, lines[index + 2] ?? null));
+    if (gradeStartsProductSection) {
       activeGrade = lineGrade;
       currentGrade = activeGrade;
       currentProduct = null;
