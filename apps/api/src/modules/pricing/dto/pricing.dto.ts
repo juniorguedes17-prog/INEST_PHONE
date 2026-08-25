@@ -108,7 +108,11 @@ export class ReplaceBrazilRadarWorkSnapshotDto {
 export class TemporaryImportPricingDto {
   @ApiProperty()
   @IsString()
-  productId!: string;
+  sourceProductId!: string;
+
+  @ApiProperty()
+  @IsUUID()
+  catalogProductId!: string;
 
   @ApiProperty()
   @IsString()

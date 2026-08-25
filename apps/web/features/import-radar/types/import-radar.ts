@@ -35,6 +35,14 @@ export interface ImportSearchResponse {
 
 export interface ImportCalculation {
   product: ImportProduct;
+  catalogProductId: string | null;
+  condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
+  productResolution: {
+    status: 'FOUND' | 'MISSING' | 'AMBIGUOUS';
+    productId?: string;
+    candidateCount: number;
+    reason?: 'identity_insufficient' | 'catalog_no_match' | 'multiple_catalog_candidates';
+  };
   matchedProductType: string;
   dollarQuote: number;
   breakdown: {

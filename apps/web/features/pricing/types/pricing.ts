@@ -126,7 +126,8 @@ export type PricingOfferTarget =
   | { id: string; kind: 'brazil-radar'; item: BrazilRadarQuotePricing };
 
 export interface TemporaryImportPricingRequest {
-  productId: string;
+  sourceProductId: string;
+  catalogProductId: string;
   productName: string;
   category: string;
   supplier: string;
@@ -153,6 +154,10 @@ export interface TemporaryImportPricingRequest {
 export interface TemporaryImportPricing {
   temporary: true;
   origin: 'PY';
+  calculationStatus: 'ready' | 'missing_profit';
+  calculationError: string | null;
+  catalogProductId: string;
+  recalculationRequest: TemporaryImportPricingRequest;
   product: {
     id: string;
     name: string;
@@ -183,18 +188,18 @@ export interface TemporaryImportPricing {
     paymentFee: number;
     offerIncrement: number;
   };
-  desiredNetProfit: number;
-  margin: number;
-  salePrice: number;
-  offerPrice: number;
+  desiredNetProfit: number | null;
+  margin: number | null;
+  salePrice: number | null;
+  offerPrice: number | null;
   profit: {
     source: string;
     condition: 'NOVO' | 'SEMINOVO' | 'CPO';
     productDescription: string;
-    recordId: string;
+    recordId: string | null;
     updatedAt: string;
   };
-  offerDraft: OfferDraft;
+  offerDraft: OfferDraft | null;
 }
 
 export const TEMPORARY_IMPORT_PRICING_STORAGE_KEY = 'inest.temporary-import-pricing';

@@ -11,6 +11,10 @@ import { ImportRadarRepository } from '../repository/import-radar.repository';
 import { identifyRedirectRule, toNumber } from '../validators/import-radar.validators';
 import { ComprasParaguaiProvider } from '../providers/compras-paraguai.provider';
 import { MockImportProvider } from '../providers/mock-import.provider';
+import {
+  processParsedSupplierItemsShadow,
+  type ProductIdShadowResolution,
+} from '../../evolution-webhook/product-identity-shadow';
 
 @Injectable()
 export class ImportRadarService {
@@ -18,7 +22,8 @@ export class ImportRadarService {
     @Inject(SettingsService) private readonly settingsService: SettingsService,
     @Inject(ImportRadarRepository) private readonly repository: ImportRadarRepository,
     @Inject(MockImportProvider) private readonly mockProvider: MockImportProvider,
-    @Inject(ComprasParaguaiProvider) private readonly comprasParaguaiProvider: ComprasParaguaiProvider,
+    @Inject(ComprasParaguaiProvider)
+    private readonly comprasParaguaiProvider: ComprasParaguaiProvider,
   ) {}
 
   async search(query: ImportSearchQueryDto, user: AuthenticatedUser) {
@@ -76,8 +81,18 @@ export class ImportRadarService {
       invoiceTax +
       toNumber(importSettings.correiosLabel);
 
+    const catalog = await this.repository.listActiveCatalogProducts();
+    const productResolution = this.resolveCatalogProduct(dto, catalog);
+    const catalogProduct =
+      productResolution.status === 'FOUND'
+        ? (catalog.find((product) => product.id === productResolution.productId) ?? null)
+        : null;
     const result = {
       product: dto,
+      productResolution,
+      catalogProductId:
+        productResolution.status === 'FOUND' ? (productResolution.productId ?? null) : null,
+      condition: this.toStructuredCondition(catalogProduct?.profitCondition),
       matchedProductType: redirectRule?.productType ?? 'Nao identificado',
       dollarQuote: importSettings.dollarQuote,
       breakdown: {
@@ -100,6 +115,8 @@ export class ImportRadarService {
         event: 'import_radar.calculated',
         matchedProductType: result.matchedProductType,
         dollarQuote: importSettings.dollarQuote,
+        productResolutionStatus: productResolution.status,
+        productResolutionReason: productResolution.reason ?? null,
       },
     });
 
@@ -138,5 +155,54 @@ export class ImportRadarService {
       return this.comprasParaguaiProvider;
     }
     return this.mockProvider;
+  }
+
+  private resolveCatalogProduct(
+    dto: CalculateImportCostDto,
+    catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
+  ): ProductIdShadowResolution {
+    const resolutions = (['NOVO', 'SEMINOVO', 'CPO'] as const).map(
+      (condition) =>
+        processParsedSupplierItemsShadow(
+          [
+            {
+              productName: dto.name,
+              normalizedName: dto.name.toLowerCase(),
+              category: dto.category || null,
+              model: dto.model ?? null,
+              capacity: dto.capacity ?? null,
+              color: dto.color ?? null,
+              condition,
+              qualityGrade: null,
+              price: dto.priceUsd,
+              availability: dto.availability ?? null,
+              rawLine: dto.name,
+            },
+          ],
+          catalog,
+        )[0]!.productResolution,
+    );
+    const productIds = [
+      ...new Set(resolutions.flatMap((resolution) => resolution.productId ?? [])),
+    ];
+
+    if (productIds.length === 1) {
+      return { status: 'FOUND', productId: productIds[0], candidateCount: 1 };
+    }
+    if (productIds.length > 1) {
+      return {
+        status: 'AMBIGUOUS',
+        candidates: productIds,
+        candidateCount: productIds.length,
+        reason: 'multiple_catalog_candidates',
+      };
+    }
+
+    const ambiguous = resolutions.find((resolution) => resolution.status === 'AMBIGUOUS');
+    return ambiguous ?? { status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 };
+  }
+
+  private toStructuredCondition(value: string | null | undefined) {
+    return value === 'NOVO' || value === 'SEMINOVO' || value === 'CPO' ? value : null;
   }
 }

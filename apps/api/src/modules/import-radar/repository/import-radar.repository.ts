@@ -1,5 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';
 
 interface ImportRadarPrismaClient {
   auditLog?: {
@@ -30,6 +32,23 @@ export class ImportRadarRepository {
       where: { entity: 'import_radar' },
       orderBy: { createdAt: 'desc' },
       take: 30,
+    });
+  }
+
+  listActiveCatalogProducts(): Promise<ProductIdShadowCandidate[]> {
+    return this.prismaService.product.findMany({
+      where: { active: true, status: ProductStatus.ACTIVE, deletedAt: null },
+      select: {
+        id: true,
+        productDescription: true,
+        productType: true,
+        profitCondition: true,
+        variantAttributes: true,
+        category: { select: { name: true } },
+        model: { select: { name: true } },
+        color: { select: { name: true } },
+        storage: { select: { displayName: true, value: true, unit: true } },
+      },
     });
   }
 

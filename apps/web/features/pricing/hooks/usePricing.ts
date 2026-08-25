@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   calculateBrazilRadarQuotePricing,
+  calculateTemporaryImportPricing,
   generateOfferDraft,
   getBrazilRadarPricingWorkSnapshot,
   listPricing,
@@ -182,7 +183,12 @@ export function usePricing({
   }
 
   async function generateTemporaryOffer() {
-    if (!temporaryImportPricing) return;
+    if (
+      !temporaryImportPricing?.offerDraft ||
+      temporaryImportPricing.calculationStatus !== 'ready'
+    ) {
+      return;
+    }
     const isIphone = /iphone/i.test(temporaryImportPricing.product.name);
     const productType = isIphone
       ? temporaryImportPricing.profit.condition === 'NOVO'
@@ -345,6 +351,38 @@ export function usePricing({
     }
   }
 
+  async function registerTemporaryImportProfit(item: TemporaryImportPricing, netProfit: string) {
+    setSaving(true);
+    setSuccess(null);
+    try {
+      const catalogProduct = await getProduct(item.catalogProductId);
+      const registration = resolveProfitRegistration({
+        item: toProfitRegistrationItem(item),
+        netProfit,
+        products: [],
+        references: { categories: [], models: [], colors: [], storages: [] },
+        catalogProduct,
+      });
+      if (registration.action !== 'update') {
+        throw new Error('Produto canonico indisponivel para cadastrar o Lucro Liquido.');
+      }
+
+      await updateProduct(registration.productId, registration.payload);
+      const recalculated = await calculateTemporaryImportPricing(item.recalculationRequest);
+      setTemporaryImportPricing(recalculated);
+
+      if (recalculated.calculationStatus !== 'ready') {
+        throw new Error(
+          recalculated.calculationError ??
+            'O Lucro Liquido foi salvo, mas a importacao ainda nao pode ser recalculada.',
+        );
+      }
+      setSuccess('Lucro Liquido salvo e importacao recalculada.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function sendOfferDraft(draft: OfferDraft) {
     await replaceOffersWorkSnapshot({ drafts: [draft], failedCount: 0 });
     router.push(draft.route);
@@ -371,6 +409,31 @@ export function usePricing({
     prepareOfferBatch,
     sendOfferDraftBatch,
     registerBrazilRadarProfit,
+    registerTemporaryImportProfit,
+  };
+}
+
+function toProfitRegistrationItem(item: TemporaryImportPricing): BrazilRadarQuotePricing {
+  return {
+    temporary: true,
+    origin: 'BR',
+    source: 'BRAZIL_RADAR',
+    sourceQuoteId: `temporary-py-${item.recalculationRequest.sourceProductId}`,
+    catalogProductId: item.catalogProductId,
+    calculationStatus: item.calculationStatus,
+    calculationError: item.calculationError,
+    product: {
+      ...item.product,
+      condition: item.profit.condition,
+    },
+    costProduct: item.importCosts.totalCost,
+    desiredNetProfit: item.desiredNetProfit,
+    margin: item.margin,
+    salePrice: item.salePrice,
+    offerPrice: item.offerPrice,
+    pricingCosts: item.pricingCosts,
+    profit: item.profit,
+    offerDraft: item.offerDraft,
   };
 }
 

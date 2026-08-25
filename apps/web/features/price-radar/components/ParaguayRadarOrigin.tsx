@@ -193,6 +193,12 @@ export function ParaguayRadarOrigin() {
 
   async function sendToPricing() {
     if (!calculation) return;
+    if (!calculation.catalogProductId || calculation.productResolution.status !== 'FOUND') {
+      setError(
+        'Este produto nao possui uma identidade canonica unica e nao pode ser enviado para Precificacao.',
+      );
+      return;
+    }
 
     setSendingToPricing(true);
     setError(null);
@@ -611,6 +617,9 @@ function CalculationModal({
   onClose: () => void;
   onSendToPricing: () => void;
 }) {
+  const canSendToPricing =
+    calculation?.productResolution.status === 'FOUND' && Boolean(calculation.catalogProductId);
+
   return (
     <Modal open={Boolean(calculation)} title="Custo estimado - Paraguai" onClose={onClose}>
       {calculation ? (
@@ -635,6 +644,11 @@ function CalculationModal({
               {formatBrl(calculation.total)}
             </strong>
           </div>
+          {!canSendToPricing ? (
+            <p className="text-sm font-bold text-red-700" role="alert">
+              Produto sem identidade canonica unica. Envio para Precificacao bloqueado.
+            </p>
+          ) : null}
           <div className="grid gap-2 sm:grid-cols-2">
             <ActionButton
               variant="secondary"
@@ -644,7 +658,11 @@ function CalculationModal({
             >
               Fechar
             </ActionButton>
-            <ActionButton className="min-h-11" onClick={onSendToPricing} disabled={sending}>
+            <ActionButton
+              className="min-h-11"
+              onClick={onSendToPricing}
+              disabled={sending || !canSendToPricing}
+            >
               {sending ? 'Preparando...' : 'Enviar para Precificação'}
             </ActionButton>
           </div>
@@ -660,7 +678,8 @@ function buildTemporaryPricingRequest(
   const product = calculation.product;
   const supplier = toPlainText(product.store) || toPlainText(product.provider);
   return {
-    productId: product.id,
+    sourceProductId: product.id,
+    catalogProductId: calculation.catalogProductId!,
     productName: product.name,
     category: product.category || 'Sem categoria',
     supplier,
@@ -679,6 +698,7 @@ function buildTemporaryPricingRequest(
     model: product.model || product.name,
     capacity: product.capacity,
     color: product.color,
+    condition: calculation.condition ?? undefined,
     city: product.city,
     matchedProductType: calculation.matchedProductType,
   };

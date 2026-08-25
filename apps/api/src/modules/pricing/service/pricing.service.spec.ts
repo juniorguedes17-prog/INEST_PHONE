@@ -211,6 +211,12 @@ describe('PricingService native product profit integration', () => {
     'uses the native %s profit record for temporary radar pricing',
     async (condition, productDescription, expectedProfit, expectedSalePrice) => {
       const repository = {
+        findActiveCatalogProductById: vi.fn().mockResolvedValue({
+          id: CATALOG_PRODUCT_ID,
+          profitProductId: 1,
+          productDescription,
+          profitCondition: condition,
+        }),
         listPricingConfigurations: vi
           .fn()
           .mockResolvedValue([{ key: 'pricing.offer_increment', value: '100', type: 'currency' }]),
@@ -245,7 +251,8 @@ describe('PricingService native product profit integration', () => {
       );
 
       const result = await service.calculateTemporaryImport({
-        productId: 'radar-py-1',
+        sourceProductId: 'radar-py-1',
+        catalogProductId: CATALOG_PRODUCT_ID,
         productName: productDescription,
         category: 'iPhone',
         supplier: 'Fornecedor',
@@ -272,7 +279,7 @@ describe('PricingService native product profit integration', () => {
         profit: { source: 'native_product_catalog', condition },
         offerDraft: {
           payload: {
-            productId: null,
+            productId: CATALOG_PRODUCT_ID,
             sourceQuoteId: 'temporary-py-radar-py-1',
           },
         },
@@ -282,6 +289,12 @@ describe('PricingService native product profit integration', () => {
 
   it('applies commercial endings configured in the pricing scope', async () => {
     const repository = {
+      findActiveCatalogProductById: vi.fn().mockResolvedValue({
+        id: CATALOG_PRODUCT_ID,
+        profitProductId: 1,
+        productDescription: 'iPhone 17 128GB',
+        profitCondition: 'NOVO',
+      }),
       listPricingConfigurations: vi.fn().mockResolvedValue([
         { key: 'offer_increment', value: '100', type: 'currency' },
         { key: COMMERCIAL_ROUNDING_ENDING_ONE_KEY, value: '90', type: 'number' },
@@ -310,7 +323,8 @@ describe('PricingService native product profit integration', () => {
     );
 
     const result = await service.calculateTemporaryImport({
-      productId: 'radar-py-1',
+      sourceProductId: 'radar-py-1',
+      catalogProductId: CATALOG_PRODUCT_ID,
       productName: 'iPhone 17 128GB',
       category: 'iPhone',
       supplier: 'Fornecedor',
@@ -335,6 +349,97 @@ describe('PricingService native product profit integration', () => {
       offerPrice: 5490,
       margin: 5 / 5390,
     });
+  });
+
+  it('returns missing_profit for an active canonical PY product without creating a fallback', async () => {
+    const repository = {
+      findActiveCatalogProductById: vi.fn().mockResolvedValue({
+        id: CATALOG_PRODUCT_ID,
+        profitProductId: 42,
+        productDescription: 'iPhone 17 128GB',
+        profitCondition: 'NOVO',
+      }),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '2026-08-24T00:00:00.000Z' }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateTemporaryImport({
+      sourceProductId: 'external-py-id',
+      catalogProductId: CATALOG_PRODUCT_ID,
+      productName: 'iPhone 17 128GB',
+      category: 'iPhone',
+      supplier: 'Fornecedor',
+      store: 'Loja',
+      productUrl: 'https://example.com/product',
+      priceUsd: 1000,
+      dollarQuote: 5,
+      convertedPrice: 5000,
+      cdeExit: 0,
+      redirectCost: 0,
+      brazilDispatch: 0,
+      invoiceTax: 0,
+      correiosLabel: 0,
+      totalCost: 5000,
+      condition: 'NOVO',
+    });
+
+    expect(result).toMatchObject({
+      calculationStatus: 'missing_profit',
+      catalogProductId: CATALOG_PRODUCT_ID,
+      desiredNetProfit: null,
+      salePrice: null,
+      offerDraft: null,
+      recalculationRequest: {
+        sourceProductId: 'external-py-id',
+        catalogProductId: CATALOG_PRODUCT_ID,
+      },
+    });
+  });
+
+  it('rejects a temporary PY handoff when the canonical Product is not active', async () => {
+    const repository = {
+      findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '2026-08-24T00:00:00.000Z' }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+    );
+
+    await expect(
+      service.calculateTemporaryImport({
+        sourceProductId: 'external-py-id',
+        catalogProductId: CATALOG_PRODUCT_ID,
+        productName: 'iPhone 17 128GB',
+        category: 'iPhone',
+        supplier: 'Fornecedor',
+        store: 'Loja',
+        productUrl: 'https://example.com/product',
+        priceUsd: 1000,
+        dollarQuote: 5,
+        convertedPrice: 5000,
+        cdeExit: 0,
+        redirectCost: 0,
+        brazilDispatch: 0,
+        invoiceTax: 0,
+        correiosLabel: 0,
+        totalCost: 5000,
+        condition: 'NOVO',
+      }),
+    ).rejects.toThrow('Produto canonico ativo nao encontrado');
   });
 
   it.each([

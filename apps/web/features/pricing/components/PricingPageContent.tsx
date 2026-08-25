@@ -28,7 +28,11 @@ import {
   buildFacetOptions,
 } from '@/features/price-radar/components/ProductFacetsDrawer';
 import { getProductCardPresentation } from '@/utils/product-card-presentation';
-import { PricingOfferTarget } from '../types/pricing';
+import { PricingOfferTarget, TemporaryImportPricing } from '../types/pricing';
+
+type MissingProfitItem =
+  | { kind: 'brazil'; item: ReturnType<typeof usePricing>['brazilRadarPricings'][number] }
+  | { kind: 'temporary-import'; item: TemporaryImportPricing };
 
 const sortOptions = [
   ['lowest_price', 'Menor preço'],
@@ -64,9 +68,7 @@ export function PricingPageContent() {
   const [profitValue, setProfitValue] = useState('');
   const [profitModalError, setProfitModalError] = useState<string | null>(null);
   const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(() => new Set());
-  const [profitItem, setProfitItem] = useState<
-    ReturnType<typeof usePricing>['brazilRadarPricings'][number] | null
-  >(null);
+  const [profitItem, setProfitItem] = useState<MissingProfitItem | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
   const models = useMemo(() => buildCanonicalModelFacetOptions(pricing.items), [pricing.items]);
   const colors = useUnique(pricing.items.flatMap((item) => getCanonicalColors(item)));
@@ -189,7 +191,7 @@ export function PricingPageContent() {
     }
   }
 
-  function openProfitModal(item: ReturnType<typeof usePricing>['brazilRadarPricings'][number]) {
+  function openProfitModal(item: MissingProfitItem) {
     setProfitItem(item);
     setProfitValue('');
     setProfitModalError(null);
@@ -200,7 +202,11 @@ export function PricingPageContent() {
     setProfitModalError(null);
     try {
       if (!profitItem) return;
-      await pricing.registerBrazilRadarProfit(profitItem, profitValue);
+      if (profitItem.kind === 'brazil') {
+        await pricing.registerBrazilRadarProfit(profitItem.item, profitValue);
+      } else {
+        await pricing.registerTemporaryImportProfit(profitItem.item, profitValue);
+      }
       setProfitModalOpen(false);
       setProfitItem(null);
     } catch (profitError) {
@@ -350,7 +356,7 @@ export function PricingPageContent() {
                       setOfferSelection(radarSelectionId(item.sourceQuoteId), selected)
                     }
                     onGenerateOffer={() => pricing.generateBrazilRadarOffer(item)}
-                    onRegisterProfit={() => openProfitModal(item)}
+                    onRegisterProfit={() => openProfitModal({ kind: 'brazil', item })}
                   />
                 ))}
                 {pricing.temporaryImportPricing ? (
@@ -358,6 +364,12 @@ export function PricingPageContent() {
                     item={pricing.temporaryImportPricing}
                     generating={pricing.saving}
                     onGenerateOffer={pricing.generateTemporaryOffer}
+                    onRegisterProfit={() =>
+                      openProfitModal({
+                        kind: 'temporary-import',
+                        item: pricing.temporaryImportPricing!,
+                      })
+                    }
                   />
                 ) : null}
                 {paginatedItems.map((item) => (
@@ -590,7 +602,7 @@ function MissingProfitModal({
   onSave,
 }: {
   open: boolean;
-  item: ReturnType<typeof usePricing>['brazilRadarPricings'][number] | null;
+  item: MissingProfitItem | null;
   value: string;
   error: string | null;
   saving: boolean;
@@ -599,6 +611,7 @@ function MissingProfitModal({
   onSave: () => void;
 }) {
   if (!item) return null;
+  const displayItem = item.item;
 
   return (
     <Modal
@@ -629,19 +642,23 @@ function MissingProfitModal({
         <div className="grid gap-3 rounded-xl border border-inest-line bg-inest-soft p-4 text-sm">
           <div>
             <span className="block text-xs font-black uppercase text-inest-muted">Produto</span>
-            <strong className="mt-1 block text-inest-text">{item.profit.productDescription}</strong>
+            <strong className="mt-1 block text-inest-text">
+              {displayItem.profit.productDescription}
+            </strong>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <span className="block text-xs font-black uppercase text-inest-muted">Condicao</span>
-              <strong className="mt-1 block text-inest-text">{item.product.condition}</strong>
+              <strong className="mt-1 block text-inest-text">{displayItem.profit.condition}</strong>
             </div>
-            {item.product.capacity ? (
+            {displayItem.product.capacity ? (
               <div>
                 <span className="block text-xs font-black uppercase text-inest-muted">
                   Capacidade
                 </span>
-                <strong className="mt-1 block text-inest-text">{item.product.capacity}</strong>
+                <strong className="mt-1 block text-inest-text">
+                  {displayItem.product.capacity}
+                </strong>
               </div>
             ) : null}
           </div>
@@ -673,10 +690,12 @@ function TemporaryImportPricingCard({
   item,
   generating,
   onGenerateOffer,
+  onRegisterProfit,
 }: {
   item: NonNullable<ReturnType<typeof usePricing>['temporaryImportPricing']>;
   generating: boolean;
   onGenerateOffer: () => void;
+  onRegisterProfit: () => void;
 }) {
   const presentation = getProductCardPresentation({
     canonicalDescription: item.profit.productDescription,
@@ -730,14 +749,26 @@ function TemporaryImportPricingCard({
         <span className="text-xs font-bold text-inest-muted">
           Margem {formatPercent(item.margin)}
         </span>
-        <ActionButton
-          variant="success"
-          className="mt-1 h-9 px-3 text-xs"
-          disabled={generating}
-          onClick={onGenerateOffer}
-        >
-          {generating ? 'Preparando...' : 'Gerar Oferta'}
-        </ActionButton>
+        {item.calculationStatus === 'ready' && item.offerDraft ? (
+          <ActionButton
+            variant="success"
+            className="mt-1 h-9 px-3 text-xs"
+            disabled={generating}
+            onClick={onGenerateOffer}
+          >
+            {generating ? 'Preparando...' : 'Gerar Oferta'}
+          </ActionButton>
+        ) : null}
+        {item.calculationStatus === 'missing_profit' ? (
+          <ActionButton
+            variant="primary"
+            className="mt-1 h-9 px-3 text-xs"
+            disabled={generating}
+            onClick={onRegisterProfit}
+          >
+            Cadastrar lucro
+          </ActionButton>
+        ) : null}
       </div>
     </article>
   );
