@@ -12,6 +12,39 @@ import {
 } from '../interfaces/price-radar-prisma.interface';
 import { markHidden } from '../validators/price-radar.validators';
 
+const SAO_PAULO_TIME_ZONE = 'America/Sao_Paulo';
+const AUTOMATED_LIST_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export function automatedListFreshnessFilter(now = new Date()) {
+  const normalWindow = { receivedAt: { gt: new Date(now.getTime() - AUTOMATED_LIST_MAX_AGE_MS) } };
+  const weekday = new Intl.DateTimeFormat('en-US', {
+    timeZone: SAO_PAULO_TIME_ZONE,
+    weekday: 'short',
+  }).format(now);
+
+  if (weekday !== 'Sun' && weekday !== 'Mon') {
+    return normalWindow;
+  }
+
+  const localDate = calendarDateInTimeZone(now, SAO_PAULO_TIME_ZONE);
+  localDate.setUTCDate(localDate.getUTCDate() - (weekday === 'Sun' ? 1 : 2));
+  const saturdayStart = localMidnightInTimeZone(localDate, SAO_PAULO_TIME_ZONE);
+  const sundayDate = new Date(localDate);
+  sundayDate.setUTCDate(sundayDate.getUTCDate() + 1);
+
+  return {
+    OR: [
+      normalWindow,
+      {
+        receivedAt: {
+          gte: saturdayStart,
+          lt: localMidnightInTimeZone(sundayDate, SAO_PAULO_TIME_ZONE),
+        },
+      },
+    ],
+  };
+}
+
 @Injectable()
 export class PriceRadarRepository {
   constructor(@Inject(PrismaService) private readonly prismaService: PrismaService) {}
@@ -55,13 +88,17 @@ export class PriceRadarRepository {
     });
   }
 
-  listAutomatedQuotes(query: PriceRadarQueryDto): Promise<AutomatedPriceQuoteRecord[]> {
+  listAutomatedQuotes(
+    query: PriceRadarQueryDto,
+    now = new Date(),
+  ): Promise<AutomatedPriceQuoteRecord[]> {
     return this.prisma.supplierCurrentListItem.findMany({
       where: {
         currentList: {
           supplierContact: {
             isActive: true,
           },
+          ...automatedListFreshnessFilter(now),
         },
         OR: query.search
           ? [
@@ -205,4 +242,50 @@ export class PriceRadarRepository {
   private get prisma(): PriceRadarPrismaClient {
     return this.prismaService as unknown as PriceRadarPrismaClient;
   }
+}
+
+function calendarDateInTimeZone(value: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value);
+
+  return new Date(Date.UTC(get('year'), get('month') - 1, get('day')));
+}
+
+function localMidnightInTimeZone(localDate: Date, timeZone: string) {
+  const year = localDate.getUTCFullYear();
+  const month = localDate.getUTCMonth();
+  const day = localDate.getUTCDate();
+  let instant = Date.UTC(year, month, day);
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    }).formatToParts(new Date(instant));
+    const get = (type: Intl.DateTimeFormatPartTypes) =>
+      Number(parts.find((part) => part.type === type)?.value);
+    const displayedAsUtc = Date.UTC(
+      get('year'),
+      get('month') - 1,
+      get('day'),
+      get('hour'),
+      get('minute'),
+      get('second'),
+    );
+    instant = Date.UTC(year, month, day) - (displayedAsUtc - instant);
+  }
+
+  return new Date(instant);
 }
