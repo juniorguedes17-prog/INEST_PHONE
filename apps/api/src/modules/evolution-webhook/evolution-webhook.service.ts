@@ -20,6 +20,24 @@ import { EvolutionMessage, ParsedSupplierListItem } from './evolution-webhook.ty
 
 export type SupplierListUpdateMode = 'FULL_SNAPSHOT' | 'PARTIAL_UPDATE' | 'INCONCLUSIVE';
 
+type SupplierListUpdateClassification = {
+  mode: SupplierListUpdateMode;
+  hasPartialMarker: boolean;
+  hasFullMarker: boolean;
+};
+
+type SnapshotWriteItemGroup = 'ALL' | 'PRIMARY' | 'USED';
+
+type SnapshotWriteTarget = {
+  scopeKey: 'catalog:used' | 'catalog:primary' | 'catalog:general';
+  itemGroup: SnapshotWriteItemGroup;
+};
+
+type SnapshotWritePlan =
+  | { authority: 'NONE'; targets: [] }
+  | { authority: 'FULL_SNAPSHOT'; targets: SnapshotWriteTarget[] }
+  | { authority: 'PARTIAL_UPDATE'; targets: [SnapshotWriteTarget] };
+
 const PARTIAL_UPDATE_MARKER =
   /\b(?:promo(?:c|ç)(?:[aã]o|ões)|ofertas?|baix(?:ou|amos)|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar|reposi(?:c|ç)(?:[aã]o|ões)|chegou\s+lacrad[oa]s?|remessas?)\b/i;
 const FULL_SNAPSHOT_MARKER =
@@ -29,13 +47,19 @@ const GENERAL_REPLACED_SEGMENTED_SCOPES = ['catalog:primary', 'catalog:used'] as
 type SnapshotReplacementAuthority = 'SAME_SCOPE_ONLY' | 'ALL_SEGMENTED_SCOPES';
 
 export function classifySupplierListUpdateMode(text: string): SupplierListUpdateMode {
+  return classifySupplierListUpdate(text).mode;
+}
+
+function classifySupplierListUpdate(text: string): SupplierListUpdateClassification {
   const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text);
   const hasFullMarker = FULL_SNAPSHOT_MARKER.test(text);
 
-  if (hasPartialMarker && hasFullMarker) return 'INCONCLUSIVE';
-  if (hasPartialMarker) return 'PARTIAL_UPDATE';
-  if (hasFullMarker) return 'FULL_SNAPSHOT';
-  return 'INCONCLUSIVE';
+  if (hasPartialMarker && hasFullMarker) {
+    return { mode: 'INCONCLUSIVE', hasPartialMarker, hasFullMarker };
+  }
+  if (hasPartialMarker) return { mode: 'PARTIAL_UPDATE', hasPartialMarker, hasFullMarker };
+  if (hasFullMarker) return { mode: 'FULL_SNAPSHOT', hasPartialMarker, hasFullMarker };
+  return { mode: 'INCONCLUSIVE', hasPartialMarker, hasFullMarker };
 }
 
 type SupplierListItemForMerge = {
@@ -74,7 +98,8 @@ export class EvolutionWebhookService {
     let updated = 0;
 
     for (const currentList of currentLists) {
-      const updateMode = classifySupplierListUpdateMode(currentList.rawContent);
+      const updateClassification = classifySupplierListUpdate(currentList.rawContent);
+      const updateMode = updateClassification.mode;
       if (updateMode === 'INCONCLUSIVE') {
         this.logger.warn(`Lista atual preservada: lista=${currentList.id} modo inconclusivo.`);
         continue;
@@ -89,8 +114,32 @@ export class EvolutionWebhookService {
         );
         continue;
       }
-      const parsedItemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
+      const repairScopeResolution = resolveSupplierSnapshotScope(
+        currentList.rawContent,
         parsedItems,
+      );
+      const repairWritePlan = resolveSnapshotWritePlan(
+        updateClassification,
+        repairScopeResolution,
+        parsedItems,
+      );
+      const repairTarget =
+        repairWritePlan.authority === 'FULL_SNAPSHOT' && repairWritePlan.targets.length > 1
+          ? repairWritePlan.targets.find((target) => target.scopeKey === currentList.snapshotScope)
+          : null;
+      if (repairWritePlan.authority === 'FULL_SNAPSHOT' && repairWritePlan.targets.length > 1) {
+        if (!repairTarget) {
+          this.logger.warn(
+            `Lista atual preservada: lista=${currentList.id} sem alvo no plano multi-scope.`,
+          );
+          continue;
+        }
+      }
+      const scopedParsedItems = repairTarget
+        ? selectSnapshotWriteItems(parsedItems, repairTarget.itemGroup)
+        : parsedItems;
+      const parsedItemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
+        scopedParsedItems,
         {
           supplierContactId: currentList.supplierContactId,
           sourceMessageId: currentList.sourceMessageId,
@@ -98,7 +147,7 @@ export class EvolutionWebhookService {
         catalog,
       );
 
-      if (hasEquivalentSnapshot(currentList.items, parsedItems)) continue;
+      if (hasEquivalentSnapshot(currentList.items, scopedParsedItems)) continue;
 
       try {
         if (updateMode === 'FULL_SNAPSHOT') {
@@ -107,7 +156,7 @@ export class EvolutionWebhookService {
             data: {
               items: {
                 deleteMany: {},
-                create: parsedItems,
+                create: scopedParsedItems,
               },
             },
           });
@@ -193,10 +242,14 @@ export class EvolutionWebhookService {
       );
       return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
-    const updateMode = classifySupplierListUpdateMode(text);
+    const updateClassification = classifySupplierListUpdate(text);
+    const updateMode = updateClassification.mode;
     const scopeResolution = resolveSupplierSnapshotScope(text, items);
-    const fullSnapshotScope = resolvedFullSnapshotScope(updateMode, scopeResolution);
-    const partialSnapshotScope = resolvedPartialSnapshotScope(updateMode, scopeResolution);
+    const writePlan = resolveSnapshotWritePlan(updateClassification, scopeResolution, items);
+    const fullSnapshotScope =
+      writePlan.authority === 'FULL_SNAPSHOT' && writePlan.targets.length === 1
+        ? (writePlan.targets[0]?.scopeKey ?? null)
+        : null;
     const replacementAuthority = fullSnapshotReplacementAuthority(
       updateMode,
       fullSnapshotScope,
@@ -234,10 +287,10 @@ export class EvolutionWebhookService {
           },
         });
 
-        if (updateMode === 'INCONCLUSIVE') return;
+        if (writePlan.authority === 'NONE') return;
 
-        if (updateMode === 'PARTIAL_UPDATE') {
-          if (!partialSnapshotScope) return;
+        if (writePlan.authority === 'PARTIAL_UPDATE') {
+          const partialSnapshotScope = writePlan.targets[0].scopeKey;
 
           const currentList = await transaction.supplierCurrentList.findUnique({
             where: {
@@ -279,36 +332,40 @@ export class EvolutionWebhookService {
           return;
         }
 
-        if (!fullSnapshotScope) return;
-
-        await transaction.supplierCurrentList.upsert({
-          where: {
-            supplierContactId_snapshotScope: {
+        for (const target of writePlan.targets) {
+          const scopedItems = selectSnapshotWriteItems(
+            itemsWithResolvedProductId,
+            target.itemGroup,
+          );
+          await transaction.supplierCurrentList.upsert({
+            where: {
+              supplierContactId_snapshotScope: {
+                supplierContactId: supplier.id,
+                snapshotScope: target.scopeKey,
+              },
+            },
+            create: {
               supplierContactId: supplier.id,
-              snapshotScope: fullSnapshotScope,
+              snapshotScope: target.scopeKey,
+              sourceMessageId: message.messageId,
+              sourceType: 'text',
+              rawContent: text,
+              receivedAt: message.receivedAt,
+              items: { create: scopedItems },
             },
-          },
-          create: {
-            supplierContactId: supplier.id,
-            snapshotScope: fullSnapshotScope,
-            sourceMessageId: message.messageId,
-            sourceType: 'text',
-            rawContent: text,
-            receivedAt: message.receivedAt,
-            items: { create: itemsWithResolvedProductId },
-          },
-          update: {
-            sourceMessageId: message.messageId,
-            sourceType: 'text',
-            rawContent: text,
-            receivedAt: message.receivedAt,
-            items: {
-              deleteMany: {},
-              create: itemsWithResolvedProductId,
+            update: {
+              sourceMessageId: message.messageId,
+              sourceType: 'text',
+              rawContent: text,
+              receivedAt: message.receivedAt,
+              items: {
+                deleteMany: {},
+                create: scopedItems,
+              },
+              attachments: { deleteMany: {} },
             },
-            attachments: { deleteMany: {} },
-          },
-        });
+          });
+        }
 
         if (replacementAuthority === 'ALL_SEGMENTED_SCOPES') {
           const deleted = await transaction.supplierCurrentList.deleteMany({
@@ -338,7 +395,7 @@ export class EvolutionWebhookService {
     }
 
     this.logger.log(
-      updateMode === 'INCONCLUSIVE'
+      writePlan.authority === 'NONE'
         ? `Lista preservada: fornecedor=${supplier.id} itens=${items.length} modo inconclusivo.`
         : `Lista atualizada: fornecedor=${supplier.id} itens=${items.length}`,
     );
@@ -687,22 +744,90 @@ function normalizeMergeValue(value: string | null | undefined) {
   return value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') ?? '';
 }
 
-function resolvedFullSnapshotScope(
-  updateMode: SupplierListUpdateMode,
+function resolveSnapshotWritePlan(
+  updateClassification: SupplierListUpdateClassification,
   resolution: SupplierSnapshotScopeResolution,
-) {
-  if (updateMode !== 'FULL_SNAPSHOT' || resolution.status !== 'RESOLVED') return null;
-  const scopeKey = resolution.scopeKey?.trim();
-  return scopeKey || null;
+  items: readonly ParsedSupplierListItem[],
+): SnapshotWritePlan {
+  const conditions = new Set(items.map((item) => item.condition));
+  const hasPrimaryItems = conditions.has('NOVO') || conditions.has('CPO');
+  const hasUsedItems = conditions.has('SEMINOVO');
+  const hasMixedSegments = hasPrimaryItems && hasUsedItems;
+  const resolvedScope = resolution.status === 'RESOLVED' ? resolution.scopeKey : undefined;
+
+  if (updateClassification.mode === 'PARTIAL_UPDATE') {
+    if (!resolvedScope || hasMixedSegments) return { authority: 'NONE', targets: [] };
+    return {
+      authority: 'PARTIAL_UPDATE',
+      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL' }],
+    };
+  }
+
+  if (updateClassification.mode === 'FULL_SNAPSHOT' && resolvedScope) {
+    return {
+      authority: 'FULL_SNAPSHOT',
+      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL' }],
+    };
+  }
+
+  if (
+    updateClassification.hasFullMarker &&
+    hasExplicitMixedSnapshotAuthority(resolution, hasPrimaryItems, hasUsedItems)
+  ) {
+    return {
+      authority: 'FULL_SNAPSHOT',
+      targets: [
+        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY' },
+        { scopeKey: 'catalog:used', itemGroup: 'USED' },
+      ],
+    };
+  }
+
+  if (
+    updateClassification.mode === 'INCONCLUSIVE' &&
+    updateClassification.hasFullMarker &&
+    resolvedScope &&
+    hasExplicitUsedSnapshotAuthority(resolution)
+  ) {
+    return {
+      authority: 'FULL_SNAPSHOT',
+      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL' }],
+    };
+  }
+
+  return { authority: 'NONE', targets: [] };
 }
 
-function resolvedPartialSnapshotScope(
-  updateMode: SupplierListUpdateMode,
+function hasExplicitMixedSnapshotAuthority(
   resolution: SupplierSnapshotScopeResolution,
+  hasPrimaryItems: boolean,
+  hasUsedItems: boolean,
 ) {
-  if (updateMode !== 'PARTIAL_UPDATE' || resolution.status !== 'RESOLVED') return null;
-  const scopeKey = resolution.scopeKey?.trim();
-  return scopeKey || null;
+  return (
+    resolution.status === 'AMBIGUOUS' &&
+    resolution.reason === 'conflicting_document_evidence' &&
+    resolution.evidence.preambleMarkers.includes('primary') &&
+    resolution.evidence.preambleMarkers.includes('used') &&
+    hasPrimaryItems &&
+    hasUsedItems
+  );
+}
+
+function hasExplicitUsedSnapshotAuthority(resolution: SupplierSnapshotScopeResolution) {
+  return resolution.scopeKey === 'catalog:used' && resolution.reason === 'explicit_used_preamble';
+}
+
+function selectSnapshotWriteItems<T extends Pick<ParsedSupplierListItem, 'condition'>>(
+  items: readonly T[],
+  itemGroup: SnapshotWriteItemGroup,
+): T[] {
+  if (itemGroup === 'PRIMARY') {
+    return items.filter((item) => item.condition === 'NOVO' || item.condition === 'CPO');
+  }
+  if (itemGroup === 'USED') {
+    return items.filter((item) => item.condition === 'SEMINOVO');
+  }
+  return [...items];
 }
 
 function fullSnapshotReplacementAuthority(

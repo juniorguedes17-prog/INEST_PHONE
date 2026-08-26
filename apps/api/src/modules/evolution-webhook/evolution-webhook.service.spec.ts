@@ -620,6 +620,73 @@ describe('EvolutionWebhookService', () => {
     debug.mockRestore();
   });
 
+  it('mantem NOVO e CPO juntos em um unico FULL catalog:primary', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-primary-new-cpo',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: `IPHONES LACRADOS
+iPhone 16 128GB
+Preto R$ 4.000
+CPO
+iPhone 15 128GB
+Azul R$ 3.000`,
+        },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    const write = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0];
+    expect(write.create.snapshotScope).toBe('catalog:primary');
+    expect(write.create.items.create.map((item: { condition: string }) => item.condition)).toEqual([
+      'NOVO',
+      'CPO',
+    ]);
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('preserva PARTIAL primary resolvido no scope existente', async () => {
+    const { service, transaction } = createService();
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'primary-list-id',
+      items: [currentItem('primary-item', 'iPhone 16 128GB', 4000, { color: 'preto' })],
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-primary-partial',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'PROMOCAO SEALED\niPhone 16 128GB\nPreto R$ 3.900' },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          supplierContactId_snapshotScope: {
+            supplierContactId: 'supplier-contact-id',
+            snapshotScope: 'catalog:primary',
+          },
+        },
+      }),
+    );
+    expect(transaction.supplierCurrentList.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'primary-list-id' } }),
+    );
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+  });
+
   it('isola FULL primary e used, substituindo somente o scope recebido', async () => {
     const { service, transaction } = createService();
 
@@ -909,6 +976,240 @@ Verde R$ 2.500`,
     expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
     expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentList.findUnique).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+  });
+
+  it('roteia FULL mista explicitamente autorizada para primary e used na mesma transacao', async () => {
+    const { service, prisma, transaction } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-explicit-mixed-full',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: `LISTA COMPLETA
+SEMINOVOS
+IPHONES LACRADOS
+iPhone 16 128GB
+Preto R$ 4.000
+CPO
+iPhone 15 128GB
+Azul R$ 3.000
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500`,
+        },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 3 });
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(2);
+
+    const writes = transaction.supplierCurrentList.upsert.mock.calls.map(([call]) => call);
+    expect(writes.map((write) => write.create.snapshotScope)).toEqual([
+      'catalog:primary',
+      'catalog:used',
+    ]);
+    expect(writes[0].create.items.create.map((item: { condition: string }) => item.condition)).toEqual([
+      'NOVO',
+      'CPO',
+    ]);
+    expect(writes[1].create.items.create.map((item: { condition: string }) => item.condition)).toEqual([
+      'SEMINOVO',
+    ]);
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('roteia lista mista explicita com marcadores promocionais sem liberar inconclusive generico', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-explicit-mixed-inconclusive',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: `PROMOCAO - LISTA COMPLETA
+SEMINOVOS
+IPHONES LACRADOS
+iPhone 16 128GB
+Preto R$ 4.000
+CPO
+iPhone 15 128GB
+Azul R$ 3.000
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500`,
+        },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(2);
+    expect(
+      transaction.supplierCurrentList.upsert.mock.calls.map(([call]) => call.create.snapshotScope),
+    ).toEqual(['catalog:primary', 'catalog:used']);
+  });
+
+  it('reverte todos os scopes da lista mista quando um dos writes falha', async () => {
+    const { service, prisma, transaction } = createService();
+    const state = { scopes: [] as string[] };
+    transaction.supplierCurrentList.upsert.mockImplementation(async ({ create }) => {
+      state.scopes.push(create.snapshotScope);
+      if (create.snapshotScope === 'catalog:used') throw new Error('used write failed');
+      return {};
+    });
+    prisma.$transaction.mockImplementation(async (callback) => {
+      const before = [...state.scopes];
+      try {
+        return await callback(transaction);
+      } catch (error) {
+        state.scopes = before;
+        throw error;
+      }
+    });
+
+    await expect(
+      service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: {
+            id: 'message-explicit-mixed-rollback',
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: {
+            conversation: `LISTA COMPLETA
+SEMINOVOS
+IPHONES LACRADOS
+iPhone 16 128GB
+Preto R$ 4.000
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500`,
+          },
+        },
+      }),
+    ).rejects.toThrow('used write failed');
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(2);
+    expect(state.scopes).toEqual([]);
+  });
+
+  it('persiste INCONCLUSIVE resolvido por preambulo used explicito somente em catalog:used', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-explicit-used-inconclusive',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: 'PROMOCAO\nIPHONE SWAP AMERICANOS\niPhone 15 128GB\nPreto R$ 2.500',
+        },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          snapshotScope: 'catalog:used',
+          items: {
+            create: [expect.objectContaining({ condition: 'SEMINOVO' })],
+          },
+        }),
+      }),
+    );
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('nao libera INCONCLUSIVE primary resolvido como FULL', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-primary-inconclusive',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: 'PROMOCAO\nIPHONES LACRADOS\niPhone 16 128GB\nPreto R$ 3.900',
+        },
+      },
+    });
+
+    expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.findUnique).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+  });
+
+  it('mantem fail-closed para lista mista sem marcadores documentais explicitos', async () => {
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-mixed-without-authority',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: `Produto A 128GB NOVO
+Preto R$ 4.000
+Produto B 128GB SEMINOVO
+Azul R$ 2.500`,
+        },
+      },
+    });
+
+    expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('mantem PARTIAL misto em fail-closed mesmo com itens dos dois segmentos', async () => {
+    const { service, transaction } = createService();
+    const conversation = `PROMOCAO
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500
+NOVO
+MacBook Air M5 13 16/512GB
+Prata R$ 7.500`;
+
+    expect(classifySupplierListUpdateMode(conversation)).toBe('PARTIAL_UPDATE');
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-mixed-partial',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation },
+      },
+    });
+
+    expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.findUnique).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
   });
@@ -1516,6 +1817,53 @@ Verde R$ 2.500`,
         },
       }),
     );
+  });
+
+  it('mantem os grupos primary e used isolados ao reparar rawContent multi-scope', async () => {
+    const { service, prisma } = createService();
+    const rawContent = `LISTA COMPLETA
+SEMINOVOS
+IPHONES LACRADOS
+iPhone 16 128GB
+Preto R$ 4.000
+CPO
+iPhone 15 128GB
+Azul R$ 3.000
+SEMINOVOS
+iPhone 14 128GB
+Verde R$ 2.500`;
+    prisma.supplierCurrentList.findMany.mockResolvedValue([
+      {
+        id: 'primary-list-id',
+        supplierContactId: 'supplier-contact-id',
+        snapshotScope: 'catalog:primary',
+        sourceMessageId: 'message-mixed-repair',
+        rawContent,
+        items: [currentItem('stale-primary', 'Produto antigo primary', 1000)],
+      },
+      {
+        id: 'used-list-id',
+        supplierContactId: 'supplier-contact-id',
+        snapshotScope: 'catalog:used',
+        sourceMessageId: 'message-mixed-repair',
+        rawContent,
+        items: [
+          currentItem('stale-used', 'Produto antigo used', 900, { condition: 'SEMINOVO' }),
+        ],
+      },
+    ]);
+
+    await service.repairCurrentLists();
+
+    expect(prisma.supplierCurrentList.update).toHaveBeenCalledTimes(2);
+    const updates = prisma.supplierCurrentList.update.mock.calls.map(([call]) => call);
+    expect(updates[0].data.items.create.map((item: { condition: string }) => item.condition)).toEqual([
+      'NOVO',
+      'CPO',
+    ]);
+    expect(updates[1].data.items.create.map((item: { condition: string }) => item.condition)).toEqual([
+      'SEMINOVO',
+    ]);
   });
 
   it('nao regrava um snapshot equivalente durante o repair', async () => {
