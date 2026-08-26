@@ -1,5 +1,6 @@
 import { OfferDraft } from '@/features/pricing/types/pricing';
 import { CommercialTemplate, OfferItem } from '../types/offers';
+import { formatColorLabel } from './color-label';
 
 export interface TemporaryOfferItem extends Omit<OfferItem, 'createdAt'> {
   createdAt?: string;
@@ -162,19 +163,6 @@ function formatVariantLine(draft: OfferDraft) {
   const color = formatColorLabel(draft.payload.color);
   const price = formatCurrency(draft.payload.offerPrice);
   return color ? `${color}: ${price}` : `💰 ${price}`;
-}
-
-function formatColorLabel(color: string) {
-  const labels: Record<string, string> = {
-    azul: '🔵 Azul',
-    branco: '⚪ Branco',
-    lavender: '🟣 Lavender',
-    laranja: '🟠 Laranja',
-    preto: '⚫ Preto',
-    roxo: '🟣 Roxo',
-  };
-  const normalizedColor = color.trim().toLocaleLowerCase('pt-BR');
-  return labels[normalizedColor] ?? color.trim();
 }
 
 function splitTemplateForProducts(template: string) {

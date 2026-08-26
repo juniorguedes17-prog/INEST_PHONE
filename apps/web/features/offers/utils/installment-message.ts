@@ -3,6 +3,7 @@ import {
   InstallmentSimulationOption,
   ProviderSimulation,
 } from './installment-simulation';
+import { formatColorLabel } from './color-label';
 
 export function renderInstallmentMessage(
   template: string,
@@ -20,7 +21,10 @@ export function renderInstallmentMessage(
   const tradeInBlock = values.tradeIn ? formatTradeInBlock(values.tradeIn) : '';
   const hasColorPlaceholder = /\{\{cor\}\}/.test(template);
   const withTradeIn = hasColorPlaceholder
-    ? template.replace(/\{\{cor\}\}/g, `${formatColor(values.color)}${tradeInBlock}`)
+    ? template.replace(
+        /\{\{cor\}\}/g,
+        `${formatColorLabel(values.color) || 'Sem cor informada'}${tradeInBlock}`,
+      )
     : `${template}${tradeInBlock}`;
 
   return withTradeIn
@@ -69,11 +73,4 @@ function formatTradeInBlock(
   values: NonNullable<Parameters<typeof renderInstallmentMessage>[1]['tradeIn']>,
 ) {
   return `\n\n💰 *Valor do aparelho:* ${formatCurrencyCents(values.offerPriceCents)}\n🔄 *Seu aparelho na troca:* ${formatCurrencyCents(values.tradeInAmountCents)}\n*Saldo a pagar:* ${formatCurrencyCents(values.remainingAmountCents)}`;
-}
-
-function formatColor(value: string) {
-  const trimmed = value.trim();
-  return trimmed
-    ? `${trimmed.charAt(0).toLocaleUpperCase('pt-BR')}${trimmed.slice(1)}`
-    : 'Sem cor informada';
 }

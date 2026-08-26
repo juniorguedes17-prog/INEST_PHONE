@@ -68,7 +68,7 @@ function draft({
 function selectedColor(offers: OfferItem[], drafts: OfferDraft[], color = 'Azul') {
   const [product] = buildInstallmentAvailability(offers, drafts);
   assert.ok(product);
-  const selected = product.colors.find((item) => item.label === color);
+  const selected = product.colors.find((item) => item.label.endsWith(` ${color}`));
   assert.ok(selected);
   return selected;
 }

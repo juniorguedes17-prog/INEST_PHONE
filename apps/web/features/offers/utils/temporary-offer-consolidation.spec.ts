@@ -7,6 +7,7 @@ import {
   prepareTemporaryOffer,
   renderTemporaryOfferMessage,
 } from './temporary-offer-consolidation';
+import { formatColorLabel } from './color-label';
 
 const sealedTemplate: CommercialTemplate = {
   id: 'sealed',
@@ -207,7 +208,7 @@ test('consolidates five runtime drafts with the same editable template id', () =
 
   drafts.forEach((item) => {
     assert.ok(consolidated.message.includes(item.payload.productName));
-    assert.ok(consolidated.message.includes(item.payload.color));
+    assert.ok(consolidated.message.includes(formatColorLabel(item.payload.color)));
     assert.ok(consolidated.message.includes(item.payload.capacity));
     assert.ok(
       consolidated.message.includes(
@@ -262,13 +263,13 @@ test('groups four colors of the same product configuration into one variant bloc
   assert.ok(consolidated);
   assert.equal(occurrences(consolidated.message, productName), 1);
   assert.equal(occurrences(consolidated.message, '256GB'), 1);
-  assert.match(consolidated.message, /⚫ Preto: R\$\s?5\.139,00/);
+  assert.match(consolidated.message, /⚫️ Preto: R\$\s?5\.139,00/);
   assert.match(consolidated.message, /🔵 Azul: R\$\s?5\.189,00/);
-  assert.match(consolidated.message, /🟣 Lavender: R\$\s?5\.190,00/);
-  assert.match(consolidated.message, /⚪ Branco: R\$\s?5\.220,00/);
+  assert.match(consolidated.message, /🟣 Lilás: R\$\s?5\.190,00/);
+  assert.match(consolidated.message, /⚪️ Branco: R\$\s?5\.220,00/);
 
   const positions = ['Preto', 'Azul', 'Lavender', 'Branco'].map((color) =>
-    consolidated.message.indexOf(color),
+    consolidated.message.indexOf(formatColorLabel(color)),
   );
   assert.ok(
     positions[0]! < positions[1]! && positions[1]! < positions[2]! && positions[2]! < positions[3]!,

@@ -49,7 +49,7 @@ test('renders the configured template with commercial payment formatting', () =>
   );
 
   assert.match(message, /📱 \*iPhone 17 Pro Max 256GB\*/);
-  assert.match(message, /Cor: Azul/);
+  assert.match(message, /Cor: 🔵 Azul/);
   assert.match(message, /💳 \*Condições de Pagamento\*/);
   assert.match(message, /• \*Débito:\* R\$/);
   assert.match(message, /• \*12x\* de R\$/);
@@ -98,7 +98,7 @@ test('adds the trade-in summary without changing the configured template text', 
     },
   });
 
-  assert.match(message, /iPhone 16 128GB\nCor: Branco/);
+  assert.match(message, /iPhone 16 128GB\nCor: ⚪️ Branco/);
   assert.match(message, /Valor do aparelho:\* R\$\s?5\.349,00/);
   assert.match(message, /Seu aparelho na troca:\* R\$\s?2\.000,00/);
   assert.match(message, /Saldo a pagar:\* R\$\s?3\.349,00/);

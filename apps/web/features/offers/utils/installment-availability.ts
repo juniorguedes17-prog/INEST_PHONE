@@ -1,5 +1,6 @@
 import { OfferDraft } from '@/features/pricing/types/pricing';
 import { OfferItem } from '../types/offers';
+import { formatColorLabel } from './color-label';
 
 export type InstallmentAvailabilitySource = 'offer' | 'draft';
 
@@ -62,7 +63,7 @@ export function buildInstallmentAvailability(
 
           return {
             key: colorKey,
-            label: first.color || 'Sem cor informada',
+            label: formatColorLabel(first.color) || 'Sem cor informada',
             entry: resolved,
             isAmbiguous: resolved === null && entriesForColor.length > 1,
           };
