@@ -32,6 +32,23 @@ type ProfitRegistrationResolution =
     }
   | { action: 'incomplete'; message: string };
 
+const catalogProductTypes = new Set([
+  'IPHONE_SEALED',
+  'IPHONE_USED',
+  'APPLE_CPO',
+  'MACBOOK',
+  'IPAD',
+  'APPLE_WATCH',
+  'AIRPODS',
+  'ACCESSORY',
+]);
+
+type CatalogProductTypeResolution = {
+  category: ProductReferences['categories'][number];
+  model: ProductReferences['models'][number];
+  productType: string;
+};
+
 export function resolveProfitRegistration({
   item,
   netProfit,
@@ -75,32 +92,6 @@ export function resolveProfitRegistration({
     };
   }
 
-  const productType = productTypeForCategory(identity.canonicalCategory, item.product.condition);
-  const categoryCandidates = references.categories.filter(
-    (candidate) => candidate.type === productType,
-  );
-  if (categoryCandidates.length === 0) {
-    return {
-      action: 'incomplete',
-      message:
-        'A categoria comercial necessaria ainda nao esta disponivel no catalogo para este cadastro.',
-    };
-  }
-  if (categoryCandidates.length > 1) {
-    return {
-      action: 'incomplete',
-      message: 'A categoria comercial identificada esta ambigua no catalogo para este cadastro.',
-    };
-  }
-  const category = categoryCandidates[0];
-  if (!category?.id) {
-    return {
-      action: 'incomplete',
-      message:
-        'A categoria comercial necessaria ainda nao esta disponivel no catalogo para este cadastro.',
-    };
-  }
-
   const canonicalModelCandidates = references.models.filter(
     (candidate) =>
       candidate.name &&
@@ -109,15 +100,17 @@ export function resolveProfitRegistration({
         category: identity.canonicalCategory,
       }).canonicalModelKey === identity.canonicalModelKey,
   );
-  const compatibleModels = canonicalModelCandidates.filter(
-    (candidate) => candidate.categoryId === category.id && candidate.productType === productType,
-  );
-  if (compatibleModels.length > 1) {
+
+  const catalogType = resolveCatalogProductType(canonicalModelCandidates, references);
+  if (!catalogType) {
     return {
       action: 'incomplete',
-      message: 'O modelo canonico identificado esta ambiguo no catalogo para este cadastro.',
+      message:
+        'O modelo canonico nao possui uma categoria comercial compativel com tipo de produto valido.',
     };
   }
+
+  const { category, model, productType } = catalogType;
 
   const storageId = findStorageId(references, identity.canonicalStorage);
   const colorId = findColorId(references, identity.canonicalColor, item.product.color);
@@ -132,45 +125,35 @@ export function resolveProfitRegistration({
     netProfit,
   };
 
-  if (compatibleModels.length === 1) {
-    const model = compatibleModels[0];
-    if (!model?.id) {
-      return {
-        action: 'incomplete',
-        message:
-          'O modelo canonico identificado ainda nao esta disponivel no catalogo para este cadastro.',
-      };
-    }
-    return {
-      action: 'create',
-      payload: { ...productPayload, modelId: model.id },
-    };
-  }
-
-  if (canonicalModelCandidates.length > 0) {
-    return {
-      action: 'incomplete',
-      message: 'O modelo canonico identificado pertence a uma categoria comercial incompativel.',
-    };
-  }
-
-  if (!identity.canonicalModelLabel) {
-    return {
-      action: 'incomplete',
-      message:
-        'Nao foi possivel identificar com seguranca o nome canonico do modelo para este cadastro.',
-    };
-  }
-
   return {
-    action: 'create-model-and-product',
-    payload: productPayload,
-    model: {
-      name: identity.canonicalModelLabel,
-      canonicalModelKey: identity.canonicalModelKey,
-      productType,
-    },
+    action: 'create',
+    payload: { ...productPayload, modelId: model.id },
   };
+}
+
+function resolveCatalogProductType(
+  canonicalModelCandidates: ProductReferences['models'],
+  references: ProductReferences,
+): CatalogProductTypeResolution | null {
+  const matches = canonicalModelCandidates.flatMap((model) => {
+    const productType = model.productType;
+    if (!model.id || !model.categoryId || !isCatalogProductType(productType)) return [];
+
+    return references.categories
+      .filter(
+        (category) =>
+          category.id === model.categoryId &&
+          category.type === model.productType &&
+          isCatalogProductType(category.type),
+      )
+      .map((category) => ({ category, model, productType }));
+  });
+
+  return matches.length === 1 ? (matches[0] ?? null) : null;
+}
+
+function isCatalogProductType(value: string | undefined): value is string {
+  return value !== undefined && catalogProductTypes.has(value);
 }
 
 function toExistingProductPayload(product: ProductItem, netProfit: string): ProductFormPayload {
@@ -245,18 +228,4 @@ function findColorId(references: ProductReferences, color: string | null, rawCol
   return references.colors.find(
     (candidate) => normalizeCanonicalText(candidate.name) === normalizeCanonicalText(expected),
   )?.id;
-}
-
-function productTypeForCategory(
-  category: string,
-  condition: BrazilRadarQuotePricing['product']['condition'],
-) {
-  if (category === 'iPhone') {
-    if (condition === 'CPO') return 'APPLE_CPO';
-    return condition === 'SEMINOVO' ? 'IPHONE_USED' : 'IPHONE_SEALED';
-  }
-  if (category === 'MacBook') return 'MACBOOK';
-  if (category === 'iPad') return 'IPAD';
-  if (category === 'Apple Watch') return 'APPLE_WATCH';
-  return 'ACCESSORY';
 }

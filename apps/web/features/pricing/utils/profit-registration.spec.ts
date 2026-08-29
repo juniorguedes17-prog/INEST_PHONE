@@ -152,7 +152,7 @@ test('resolve a categoria comercial por tipo, sem depender do label canonico', (
   assert.equal(result.payload.productType, 'IPHONE_SEALED');
 });
 
-test('prepara a criacao atomica de Model e Product para um modelo canonico ausente', () => {
+test('falha de forma fechada quando o Model canonico esta ausente', () => {
   const result = resolveProfitRegistration({
     item: {
       ...item,
@@ -173,24 +173,7 @@ test('prepara a criacao atomica de Model e Product para um modelo canonico ausen
     },
   });
 
-  assert.deepEqual(result, {
-    action: 'create-model-and-product',
-    payload: {
-      categoryId: 'category-iphone',
-      colorId: 'color-preto',
-      storageId: 'storage-256',
-      productType: 'IPHONE_SEALED',
-      status: 'ACTIVE',
-      productDescription: 'iPhone 17 Air 256GB',
-      profitCondition: 'NOVO',
-      netProfit: '500',
-    },
-    model: {
-      name: 'iPhone 17 Air',
-      canonicalModelKey: 'iphone-17-air',
-      productType: 'IPHONE_SEALED',
-    },
-  });
+  assert.equal(result.action, 'incomplete');
 });
 
 test('resolve categorias comerciais distintas para CPO e SEMINOVO', () => {
@@ -297,6 +280,45 @@ test('falha de forma fechada para modelos canonicos ambiguos ou incompativeis', 
   assert.equal(incompatible.action, 'incomplete');
 });
 
+test('falha de forma fechada para Category ausente, tipo divergente ou desconhecido', () => {
+  const categoryAbsent = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: { ...references, categories: [] },
+  });
+  const typeDivergent = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [{ id: 'category-iphone', name: 'iPhone', type: 'IPAD' }],
+    },
+  });
+  const typeUnknown = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [{ id: 'category-iphone', name: 'Categoria', type: 'UNKNOWN' }],
+      models: [
+        {
+          id: 'model-17-pro-max',
+          categoryId: 'category-iphone',
+          name: 'iPhone 17 Pro Max',
+          productType: 'UNKNOWN',
+        },
+      ],
+    },
+  });
+
+  assert.equal(categoryAbsent.action, 'incomplete');
+  assert.equal(typeDivergent.action, 'incomplete');
+  assert.equal(typeUnknown.action, 'incomplete');
+});
+
 test('aplica a mesma ponte estrutural para MacBook, iPad e Apple Watch', () => {
   const cases = [
     {
@@ -342,4 +364,69 @@ test('aplica a mesma ponte estrutural para MacBook, iPad e Apple Watch', () => {
     assert.equal(result.payload.categoryId, `category-${type}`);
     assert.equal(result.payload.productType, type);
   });
+});
+
+test('resolve AirPods e acessorio verdadeiro pelo tipo estruturado do catalogo', () => {
+  const cases = [
+    { name: 'AirPods 4', model: 'AirPods 4', type: 'AIRPODS' },
+    { name: 'AirPods Pro 3', model: 'AirPods Pro 3', type: 'AIRPODS' },
+    { name: 'AirPods Max', model: 'AirPods Max', type: 'AIRPODS' },
+    { name: 'Apple Pencil USB-C', model: 'Apple Pencil USB-C', type: 'ACCESSORY' },
+  ];
+
+  cases.forEach(({ name, model, type }) => {
+    const result = resolveProfitRegistration({
+      item: {
+        ...item,
+        product: { ...item.product, name, model, category: 'Acessorios' },
+        profit: { ...item.profit, productDescription: name },
+      },
+      netProfit: '500',
+      products: [],
+      references: {
+        ...references,
+        categories: [{ id: `category-${type}`, name: 'Categoria comercial', type }],
+        models: [
+          { id: `model-${type}`, categoryId: `category-${type}`, name: model, productType: type },
+        ],
+      },
+    });
+
+    assert.equal(result.action, 'create');
+    if (result.action !== 'create') return;
+    assert.equal(result.payload.productType, type);
+  });
+});
+
+test('categoria textual desconhecida nao usa ACCESSORY como fallback', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'AirPods Max',
+        model: 'AirPods Max',
+        category: 'Categoria desconhecida',
+      },
+      profit: { ...item.profit, productDescription: 'AirPods Max' },
+    },
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [{ id: 'category-airpods', name: 'AirPods', type: 'AIRPODS' }],
+      models: [
+        {
+          id: 'model-airpods-max',
+          categoryId: 'category-airpods',
+          name: 'AirPods Max',
+          productType: 'AIRPODS',
+        },
+      ],
+    },
+  });
+
+  assert.equal(result.action, 'create');
+  if (result.action !== 'create') return;
+  assert.equal(result.payload.productType, 'AIRPODS');
 });
