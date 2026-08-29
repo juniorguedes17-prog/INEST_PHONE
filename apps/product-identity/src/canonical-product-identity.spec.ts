@@ -321,3 +321,21 @@ test('preserva a normalizacao textual pura', () => {
     'iphone 17 pro max 256gb',
   );
 });
+
+test('distingue AirPods Max 1 de Max 2 sem dar autoridade ao model number desconhecido', () => {
+  const max1 = normalizeCanonicalProductIdentity('AirPods Max USB-C');
+  const max1Spaced = normalizeCanonicalProductIdentity('Air Pods Max');
+  const max2 = normalizeCanonicalProductIdentity('AirPods Max 2');
+  const max2WithModelNumber = normalizeCanonicalProductIdentity('AirPods Max 2 A3452');
+  const max2WithUsbC = normalizeCanonicalProductIdentity('AirPods Max 2 USB-C');
+  const max2WithSupplierNoise = normalizeCanonicalProductIdentity('AirPods Max 2 Typo C 2026');
+  const modelNumberOnly = normalizeCanonicalProductIdentity('A3452');
+
+  assert.equal(max1.canonicalModelKey, 'airpods-max');
+  assert.equal(max1Spaced.canonicalModelKey, 'airpods-max');
+  assert.equal(max2.canonicalModelKey, 'airpods-max-2');
+  assert.equal(max2WithModelNumber.canonicalModelKey, 'airpods-max-2');
+  assert.equal(max2WithUsbC.canonicalModelKey, 'airpods-max-2');
+  assert.equal(max2WithSupplierNoise.canonicalModelKey, 'airpods-max-2');
+  assert.equal(modelNumberOnly.canonicalModelKey, '');
+});

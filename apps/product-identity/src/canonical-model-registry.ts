@@ -257,6 +257,7 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   accessory('airpods-pro-2', 'AirPods Pro 2', ['airpods pro 2', 'air pods pro 2']),
   accessory('airpods-pro-3', 'AirPods Pro 3', ['airpods pro 3', 'air pods pro 3']),
   accessory('airpods-max', 'AirPods Max', ['airpods max', 'air pods max']),
+  accessory('airpods-max-2', 'AirPods Max 2', ['airpods max 2', 'air pods max 2']),
   accessory('earpods', 'EarPods', ['earpods', 'ear pods']),
   accessory('apple-pencil', 'Apple Pencil', ['apple pencil', 'pencil apple']),
   accessory('apple-pencil-1', 'Apple Pencil 1', ['apple pencil 1', 'pencil 1']),

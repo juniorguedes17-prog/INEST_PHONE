@@ -39,6 +39,15 @@ function catalogProduct(
   };
 }
 
+function airpodsCatalogProduct(id: string, productDescription: string, profitCondition = 'NOVO') {
+  return {
+    ...catalogProduct(id, productDescription, profitCondition),
+    productType: 'AIRPODS',
+    category: { name: 'AirPods' },
+    model: { name: productDescription },
+  };
+}
+
 function supplierIdentity(productName: string, condition = 'NOVO') {
   return deriveExtendedProductIdentity({ productName, quality: condition });
 }
@@ -289,5 +298,29 @@ describe('product identity ingestion shadow', () => {
     expect(
       resolveProductIdShadow(supplierIdentity('iPad 11 A16 11" Wi-Fi 256GB'), catalog),
     ).toMatchObject({ status: 'FOUND', productId: 'ipad-11-a16-256-wifi', candidateCount: 1 });
+  });
+
+  it('keeps AirPods Max generations and conditions isolated', () => {
+    const catalog = [
+      airpodsCatalogProduct('airpods-max-1-new', 'AirPods Max', 'NOVO'),
+      airpodsCatalogProduct('airpods-max-2-new', 'AirPods Max 2', 'NOVO'),
+    ];
+
+    expect(resolveProductIdShadow(supplierIdentity('AirPods Max'), catalog)).toMatchObject({
+      status: 'FOUND',
+      productId: 'airpods-max-1-new',
+    });
+    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2 A3452'), catalog)).toMatchObject({
+      status: 'FOUND',
+      productId: 'airpods-max-2-new',
+    });
+    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2', 'CPO'), catalog)).toMatchObject({
+      status: 'MISSING',
+      reason: 'catalog_no_match',
+    });
+    expect(resolveProductIdShadow(supplierIdentity('A3452'), catalog)).toMatchObject({
+      status: 'MISSING',
+      reason: 'identity_insufficient',
+    });
   });
 });
