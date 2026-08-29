@@ -55,8 +55,16 @@ export type SupplierLineRejectionReason =
   'invalid_or_missing_price' | 'missing_product_context' | 'empty_normalized_product';
 
 export interface SupplierLineRejection {
+  lineIndex: number;
   rawLine: string;
   reason: SupplierLineRejectionReason;
+  previousLines: string[];
+  nextLines: string[];
+  activeProductHeading: string | null;
+  activeCategory: string | null;
+  activeCondition: string | null;
+  qualityGrade: ProductGrade | null;
+  detectedPrice: number | null;
 }
 
 export interface ParseSupplierListOptions {
@@ -69,8 +77,8 @@ export function parseSupplierListText(
 ): ParsedSupplierListItem[] {
   const lines = content
     .split(/\r?\n/)
-    .map((line) => cleanLine(line))
-    .filter(Boolean);
+    .map((line, lineIndex) => ({ line: cleanLine(line), lineIndex }))
+    .filter(({ line }) => Boolean(line));
   const items: ParsedSupplierListItem[] = [];
   let currentProduct: string | null = null;
   let activeCategory: string | null = null;
@@ -81,9 +89,27 @@ export function parseSupplierListText(
   let pendingColors: string[] = [];
 
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index];
+    const lineEntry = lines[index];
+    const line = lineEntry?.line;
     if (!line) continue;
-    const nextLine = lines[index + 1] ?? null;
+    const nextLine = lines[index + 1]?.line ?? null;
+    const observeRejection = (
+      reason: SupplierLineRejectionReason,
+      detectedPrice: number | null = null,
+    ) => {
+      options.onLineRejected?.({
+        lineIndex: lineEntry.lineIndex,
+        rawLine: line,
+        reason,
+        previousLines: lines.slice(Math.max(0, index - 2), index).map(({ line: value }) => value),
+        nextLines: lines.slice(index + 1, index + 3).map(({ line: value }) => value),
+        activeProductHeading: currentProduct,
+        activeCategory,
+        activeCondition: currentCondition,
+        qualityGrade: currentGrade,
+        detectedPrice,
+      });
+    };
     if (isContextBoundaryLine(line)) {
       currentProduct = null;
       activeGrade = null;
@@ -135,7 +161,7 @@ export function parseSupplierListText(
       lineGrade &&
       isGradeSectionHeading(line) &&
       (!currentProduct ||
-        isProductHeading(nextLine ?? '', activeCategory, false, lines[index + 2] ?? null));
+        isProductHeading(nextLine ?? '', activeCategory, false, lines[index + 2]?.line ?? null));
     if (gradeStartsProductSection) {
       activeGrade = lineGrade;
       currentGrade = activeGrade;
@@ -175,12 +201,12 @@ export function parseSupplierListText(
         !hasPrice(nextLine ?? '') &&
         !hasContextualBarePrice(nextLine ?? '')
       ) {
-        options.onLineRejected?.({ rawLine: line, reason: 'invalid_or_missing_price' });
+        observeRejection('invalid_or_missing_price', price);
       }
       continue;
     }
     if (!currentProduct) {
-      options.onLineRejected?.({ rawLine: line, reason: 'missing_product_context' });
+      observeRejection('missing_product_context', price);
       continue;
     }
 
@@ -194,7 +220,7 @@ export function parseSupplierListText(
     const normalizedName = normalizeProductText(nameWithoutColor);
 
     if (!normalizedName) {
-      options.onLineRejected?.({ rawLine: line, reason: 'empty_normalized_product' });
+      observeRejection('empty_normalized_product', price);
       continue;
     }
 

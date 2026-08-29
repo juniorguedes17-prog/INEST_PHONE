@@ -3,6 +3,7 @@ import {
   isValidParsedSupplierListSnapshot,
   normalizeProductText,
   parseSupplierListText,
+  type SupplierLineRejection,
 } from './supplier-list.parser';
 
 describe('supplier list parser', () => {
@@ -51,8 +52,93 @@ describe('supplier list parser', () => {
       }),
     ).toEqual([]);
     expect(rejections).toEqual([
-      { rawLine: 'R$ 6.650', reason: 'missing_product_context' },
-      { rawLine: 'iPhone 17 Pro 256GB', reason: 'invalid_or_missing_price' },
+      expect.objectContaining({ rawLine: 'R$ 6.650', reason: 'missing_product_context' }),
+      expect.objectContaining({ rawLine: 'iPhone 17 Pro 256GB', reason: 'invalid_or_missing_price' }),
+    ]);
+  });
+
+  it('expõe contexto local sem alterar itens nem a razão da rejeição', () => {
+    const input = '\nSEMINOVOS\nR$ 2.100\niPhone 15 128GB\nPRETO R$ 2.100';
+    const expectedItems = parseSupplierListText(input);
+    const rejections: SupplierLineRejection[] = [];
+    const items = parseSupplierListText(input, {
+      onLineRejected: (rejection) => rejections.push(rejection),
+    });
+
+    expect(items).toEqual(expectedItems);
+    expect(rejections).toHaveLength(1);
+    expect(rejections[0]).toMatchObject({
+      lineIndex: 2,
+      rawLine: 'R$ 2.100',
+      reason: 'missing_product_context',
+      previousLines: ['SEMINOVOS'],
+      nextLines: ['iPhone 15 128GB', 'PRETO R$ 2.100'],
+      activeProductHeading: null,
+      activeCategory: null,
+      activeCondition: 'SEMINOVO',
+      qualityGrade: null,
+      detectedPrice: 2100,
+    });
+  });
+
+  it('usa null e listas vazias quando o parser ainda nao possui contexto', () => {
+    const rejections: SupplierLineRejection[] = [];
+
+    expect(
+      parseSupplierListText('R$ 900', {
+        onLineRejected: (rejection) => rejections.push(rejection),
+      }),
+    ).toEqual([]);
+    expect(rejections[0]).toMatchObject({
+      lineIndex: 0,
+      rawLine: 'R$ 900',
+      reason: 'missing_product_context',
+      previousLines: [],
+      nextLines: [],
+      activeProductHeading: null,
+      activeCategory: null,
+      activeCondition: 'NOVO',
+      qualityGrade: null,
+      detectedPrice: 900,
+    });
+  });
+
+  it('expõe heading e grade ativos no momento da rejeição', () => {
+    const rejections: SupplierLineRejection[] = [];
+
+    expect(
+      parseSupplierListText('GRADE A\niPhone 15 128GB', {
+        onLineRejected: (rejection) => rejections.push(rejection),
+      }),
+    ).toEqual([]);
+    expect(rejections[0]).toMatchObject({
+      lineIndex: 1,
+      rawLine: 'iPhone 15 128GB',
+      reason: 'invalid_or_missing_price',
+      previousLines: ['GRADE A'],
+      nextLines: [],
+      activeProductHeading: 'iPhone 15 128GB',
+      activeCategory: null,
+      activeCondition: 'NOVO',
+      qualityGrade: 'A',
+      detectedPrice: null,
+    });
+  });
+
+  it('mantem rejeicoes finais sem inferir uma oferta a partir do contexto', () => {
+    const rejections: SupplierLineRejection[] = [];
+    const items = parseSupplierListText('R$ 6.650\niPhone 17 Pro 256GB', {
+      onLineRejected: (rejection) => rejections.push(rejection),
+    });
+
+    expect(items).toEqual([]);
+    expect(rejections.map(({ reason }) => reason)).toEqual([
+      'missing_product_context',
+      'invalid_or_missing_price',
+    ]);
+    expect(rejections.map(({ rawLine }) => rawLine)).toEqual([
+      'R$ 6.650',
+      'iPhone 17 Pro 256GB',
     ]);
   });
 
@@ -748,7 +834,9 @@ describe('supplier list parser', () => {
     });
 
     expect(items).toEqual([]);
-    expect(rejections).toEqual([{ rawLine: 'R$ 4.500', reason: 'missing_product_context' }]);
+    expect(rejections).toEqual([
+      expect.objectContaining({ rawLine: 'R$ 4.500', reason: 'missing_product_context' }),
+    ]);
   });
 
   it('preserva ano que faz parte de uma descricao de produto', () => {
