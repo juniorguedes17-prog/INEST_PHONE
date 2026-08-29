@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, ProductStatus } from '@prisma/client';
 import { timingSafeEqual } from 'node:crypto';
@@ -7,6 +7,10 @@ import { SupplierContactsService } from '../suppliers/service/supplier-contacts.
 import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contacts.validators';
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
+import {
+  ProductNormalizationService,
+  type ProductNormalizationInput,
+} from './product-normalization.service';
 import {
   resolveSupplierSnapshotScope,
   type SupplierSnapshotScopeResolution,
@@ -88,6 +92,9 @@ export class EvolutionWebhookService {
     @Inject(ConfigService) private readonly config: ConfigService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(SupplierContactsService) private readonly supplierContacts: SupplierContactsService,
+    @Optional()
+    @Inject(ProductNormalizationService)
+    private readonly productNormalization?: ProductNormalizationService,
   ) {}
 
   async repairCurrentLists() {
@@ -235,7 +242,10 @@ export class EvolutionWebhookService {
     }
 
     const text = message.text;
-    const items = this.parseSupplierList(text, message.messageId);
+    const rejections: SupplierLineRejection[] = [];
+    const items = this.parseSupplierList(text, message.messageId, (rejection) =>
+      rejections.push(rejection),
+    );
     if (!isValidParsedSupplierListSnapshot(items)) {
       this.logger.warn(
         `Lista ignorada para fornecedor ${supplier.id}: nenhum item com preco foi localizado.`,
@@ -268,6 +278,10 @@ export class EvolutionWebhookService {
       }),
     );
     const catalog = await this.loadProductShadowCatalog();
+    const aiRecoveryCandidates: ProductNormalizationInput[] = rejections.map((rejection) => ({
+      ...rejection,
+      originalReason: rejection.reason,
+    }));
     const itemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
       items,
       {
@@ -275,6 +289,7 @@ export class EvolutionWebhookService {
         sourceMessageId: message.messageId,
       },
       catalog,
+      (candidate) => aiRecoveryCandidates.push(candidate),
     );
 
     try {
@@ -399,6 +414,13 @@ export class EvolutionWebhookService {
         ? `Lista preservada: fornecedor=${supplier.id} itens=${items.length} modo inconclusivo.`
         : `Lista atualizada: fornecedor=${supplier.id} itens=${items.length}`,
     );
+    const recoveryObservation = this.productNormalization?.observeCandidates(
+      aiRecoveryCandidates,
+      catalog,
+    );
+    if (recoveryObservation) {
+      void recoveryObservation.catch(() => undefined);
+    }
     return { accepted: true, supplierId: supplier.id, items: items.length };
   }
 
@@ -441,9 +463,16 @@ export class EvolutionWebhookService {
     }
   }
 
-  private parseSupplierList(content: string, sourceMessageId: string) {
+  private parseSupplierList(
+    content: string,
+    sourceMessageId: string,
+    onLineRejected?: (rejection: SupplierLineRejection) => void,
+  ) {
     return parseSupplierListText(content, {
-      onLineRejected: (rejection) => this.logRejectedSupplierLine(sourceMessageId, rejection),
+      onLineRejected: (rejection) => {
+        this.logRejectedSupplierLine(sourceMessageId, rejection);
+        onLineRejected?.(rejection);
+      },
     });
   }
 
@@ -462,6 +491,7 @@ export class EvolutionWebhookService {
     items: readonly ParsedSupplierListItem[],
     context: { supplierContactId: string; sourceMessageId: string },
     catalog: Awaited<ReturnType<EvolutionWebhookService['loadProductShadowCatalog']>>,
+    onIdentityInsufficient?: (candidate: ProductNormalizationInput) => void,
   ) {
     const observations = processParsedSupplierItemsShadow(items, catalog);
     vm2ShadowResultStore.record(observations);
@@ -482,6 +512,19 @@ export class EvolutionWebhookService {
           reason: productResolution.reason ?? null,
         }),
       );
+      if (productResolution.reason === 'identity_insufficient') {
+        onIdentityInsufficient?.({
+          originalReason: 'identity_insufficient',
+          rawLine: item.rawLine,
+          previousLines: [],
+          nextLines: [],
+          activeProductHeading: item.productName,
+          activeCategory: item.category,
+          activeCondition: item.condition,
+          qualityGrade: item.qualityGrade,
+          detectedPrice: item.price,
+        });
+      }
     }
 
     return observations.map(({ item, productResolution }) => ({

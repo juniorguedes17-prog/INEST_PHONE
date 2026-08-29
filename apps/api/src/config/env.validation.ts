@@ -53,8 +53,24 @@ export function validateEnv(config: Env) {
 
   validateGoogleSheetsCredentials(normalizedConfig);
   validateEvolutionWebhook(normalizedConfig);
+  validateAiRecovery(normalizedConfig);
 
   return normalizedConfig;
+}
+
+function validateAiRecovery(config: Env) {
+  if (config.AI_RECOVERY_ENABLED !== 'true') return;
+
+  if (!config.OPENAI_API_KEY?.trim()) {
+    throw new Error('Variavel OPENAI_API_KEY obrigatoria quando AI_RECOVERY_ENABLED=true.');
+  }
+
+  const budget = Number(config.AI_RECOVERY_DAILY_BUDGET_USD ?? 0);
+  if (!Number.isFinite(budget) || budget <= 0) {
+    throw new Error(
+      'Variavel AI_RECOVERY_DAILY_BUDGET_USD invalida: informe um orcamento positivo.',
+    );
+  }
 }
 
 function validateEvolutionWebhook(config: Env) {

@@ -27,7 +27,7 @@ function catalogProduct(
   };
 }
 
-function createService(catalog: unknown[] = []) {
+function createService(catalog: unknown[] = [], productNormalization?: unknown) {
   const transaction = {
     evolutionWebhookReceipt: { create: vi.fn().mockResolvedValue({}) },
     supplierCurrentList: {
@@ -68,6 +68,7 @@ function createService(catalog: unknown[] = []) {
       config as never,
       prisma as never,
       supplierContacts as never,
+      productNormalization as never,
     ),
     prisma,
     transaction,
@@ -138,6 +139,26 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+  });
+
+  it('mantem o resultado produtivo quando a observacao shadow e habilitada', async () => {
+    const withoutRecovery = createService();
+    const recovery = { observeCandidates: vi.fn().mockResolvedValue([]) };
+    const withRecovery = createService([], recovery);
+    const payload = {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'message-shadow-only', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: 'IPHONES SEMINOVOS\niPhone 15 128GB\nPreto R$ 2.100' },
+      },
+    };
+
+    const resultWithout = await withoutRecovery.service.receive(webhookSecret, payload);
+    const resultWith = await withRecovery.service.receive(webhookSecret, payload);
+
+    expect(resultWith).toEqual(resultWithout);
+    expect(recovery.observeCandidates).toHaveBeenCalledTimes(1);
+    expect(withRecovery.transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(1);
   });
 
   it('mantem dimensoes estruturais distintas na chave de merge', () => {
