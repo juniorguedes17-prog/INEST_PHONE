@@ -303,18 +303,26 @@ describe('product identity ingestion shadow', () => {
   it('keeps AirPods Max generations and conditions isolated', () => {
     const catalog = [
       airpodsCatalogProduct('airpods-max-1-new', 'AirPods Max', 'NOVO'),
-      airpodsCatalogProduct('airpods-max-2-new', 'AirPods Max 2', 'NOVO'),
+      airpodsCatalogProduct('airpods-max-2-cpo', 'AirPods Max 2', 'CPO'),
     ];
 
     expect(resolveProductIdShadow(supplierIdentity('AirPods Max'), catalog)).toMatchObject({
       status: 'FOUND',
       productId: 'airpods-max-1-new',
     });
-    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2 A3452'), catalog)).toMatchObject({
+    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2 A3452', 'CPO'), catalog)).toMatchObject({
       status: 'FOUND',
-      productId: 'airpods-max-2-new',
+      productId: 'airpods-max-2-cpo',
     });
     expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2', 'CPO'), catalog)).toMatchObject({
+      status: 'FOUND',
+      productId: 'airpods-max-2-cpo',
+    });
+    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2', 'NOVO'), catalog)).toMatchObject({
+      status: 'MISSING',
+      reason: 'catalog_no_match',
+    });
+    expect(resolveProductIdShadow(supplierIdentity('AirPods Max', 'CPO'), catalog)).toMatchObject({
       status: 'MISSING',
       reason: 'catalog_no_match',
     });

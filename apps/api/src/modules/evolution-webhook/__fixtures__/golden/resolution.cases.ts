@@ -116,11 +116,23 @@ export const resolutionCases = defineGoldenCases([
   },
   {
     id: 'resolution-airpods-max-2-cpo-001',
-    rule: 'AirPods Max 2 CPO never matches the NOVO product',
+    rule: 'AirPods Max 2 CPO resolves only the CPO product',
     input: { rawText: 'CPO\nAirPods Max 2 Typo C 2026 R$ 1.500' },
-    catalog: [airpodsCatalogProduct('airpods-max-2-new', 'AirPods Max 2')],
+    catalog: [airpodsCatalogProduct('airpods-max-2-cpo', 'AirPods Max 2', 'CPO')],
     expected: {
       identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max-2', canonicalCondition: 'CPO' }],
+      resolutions: [
+        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'airpods-max-2-cpo' },
+      ],
+    },
+  },
+  {
+    id: 'resolution-airpods-max-2-new-001',
+    rule: 'AirPods Max 2 NOVO does not match the CPO product',
+    input: { rawText: 'AirPods Max 2 R$ 1.500' },
+    catalog: [airpodsCatalogProduct('airpods-max-2-cpo', 'AirPods Max 2', 'CPO')],
+    expected: {
+      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max-2', canonicalCondition: 'Novo' }],
       resolutions: [
         { itemIndex: 0, status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 },
       ],

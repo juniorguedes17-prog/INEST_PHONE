@@ -130,11 +130,13 @@ async function resolveStorage(prisma: PrismaClient, description: string) {
   return prisma.productStorage.create({ data: { value, unit, displayName } });
 }
 
-function getProductType(description: string, condition: ProductCondition): ProductType {
+export function getProductType(description: string, condition: ProductCondition): ProductType {
   if (condition === ProductCondition.SEMINOVO) return ProductType.IPHONE_USED;
-  if (condition === ProductCondition.CPO) return ProductType.APPLE_CPO;
 
   const normalized = normalizeProfitDescription(description);
+  if (condition === ProductCondition.CPO && normalized.startsWith('iphone')) {
+    return ProductType.APPLE_CPO;
+  }
   if (normalized.startsWith('iphone')) return ProductType.IPHONE_SEALED;
   if (normalized.includes('macbook') || normalized.includes('mac mini')) return ProductType.MACBOOK;
   if (normalized.startsWith('ipad')) return ProductType.IPAD;
@@ -143,9 +145,9 @@ function getProductType(description: string, condition: ProductCondition): Produ
   return ProductType.ACCESSORY;
 }
 
-function getCategorySlug(productType: ProductType, condition: ProductCondition) {
+export function getCategorySlug(productType: ProductType, condition: ProductCondition) {
   if (condition === ProductCondition.SEMINOVO) return 'iphone-seminovo';
-  if (condition === ProductCondition.CPO) return 'apple-certified-pre-owned';
+  if (productType === ProductType.APPLE_CPO) return 'apple-certified-pre-owned';
 
   const byType: Record<ProductType, string> = {
     [ProductType.IPHONE_SEALED]: 'iphone-lacrado',
@@ -160,7 +162,7 @@ function getCategorySlug(productType: ProductType, condition: ProductCondition) 
   return byType[productType];
 }
 
-function getBaseModelName(description: string, productType: ProductType) {
+export function getBaseModelName(description: string, productType: ProductType) {
   const normalized = normalizeProfitDescription(description);
   const iphone = normalized.match(/^iphone\s+(?:\d+\s+pro\s+max|\d+\s+pro|\d+e?|air)/i);
   if (iphone) return toTitleCase(iphone[0]);
@@ -173,6 +175,7 @@ function getBaseModelName(description: string, productType: ProductType) {
   if (normalized.includes('watch ultra')) return 'Apple Watch Ultra';
   if (normalized.includes('watch se')) return 'Apple Watch SE';
   if (normalized.includes('watch')) return 'Apple Watch Series';
+  if (normalized.includes('airpods max 2')) return 'AirPods Max 2';
   if (normalized.includes('airpods max')) return 'AirPods Max';
   if (normalized.includes('airpods pro')) return 'AirPods Pro';
   if (normalized.includes('airpods')) return 'AirPods';
@@ -186,9 +189,9 @@ function getBaseModelName(description: string, productType: ProductType) {
 }
 
 function validateProfitSeed(records: ProfitSeedProduct[]) {
-  if (records.length !== 129) {
+  if (records.length !== 130) {
     throw new Error(
-      `Carga de lucro invalida: esperados 129 registros, recebidos ${records.length}.`,
+      `Carga de lucro invalida: esperados 130 registros, recebidos ${records.length}.`,
     );
   }
 

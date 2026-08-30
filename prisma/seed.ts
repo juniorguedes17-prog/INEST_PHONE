@@ -250,6 +250,7 @@ async function seedProductCatalog() {
     ['airpods', 'AirPods', 'airpods', ProductType.AIRPODS],
     ['airpods', 'AirPods Pro', 'airpods-pro', ProductType.AIRPODS],
     ['airpods', 'AirPods Max', 'airpods-max', ProductType.AIRPODS],
+    ['airpods', 'AirPods Max 2', 'airpods-max-2', ProductType.AIRPODS],
   ] as const;
 
   for (const [categorySlug, name, normalizedName, productType] of models) {

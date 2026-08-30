@@ -424,7 +424,7 @@ test('fixture minima Mohamad Nasser separa familias e configuracoes', () => {
   assert.notEqual(regular.key, anc.key);
 });
 
-test('audita os 129 produtos sem alterar a fixture', () => {
+test('audita os 130 produtos sem alterar a fixture', () => {
   const file = new URL('../../../prisma/data/profit-products.json', import.meta.url);
   const raw = JSON.parse(readFileSync(file, 'utf8')) as Array<{
     produto_id: number;
@@ -438,8 +438,8 @@ test('audita os 129 produtos sem alterar a fixture', () => {
   }));
   const audit = auditProfitIdentityCatalog(records);
 
-  assert.equal(audit.total, 129);
-  assert.equal(audit.valid, 128);
+  assert.equal(audit.total, 130);
+  assert.equal(audit.valid, 129);
   assert.equal(audit.insufficient, 1);
   assert.equal(audit.ambiguous, 0);
   assert.deepEqual(

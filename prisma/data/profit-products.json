@@ -772,5 +772,11 @@
     "condicao_produto": "CPO",
     "produto_descricao": "iPhone 16 Pro Max 256GB",
     "lucro_liquido": 549
+  },
+  {
+    "produto_id": 133,
+    "condicao_produto": "CPO",
+    "produto_descricao": "AirPods Max 2",
+    "lucro_liquido": 500
   }
 ]
