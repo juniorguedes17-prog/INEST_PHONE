@@ -24,6 +24,10 @@ import {
 import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { OFFER_INCREMENT_KEY, PricingRepository } from '../repository/pricing.repository';
 import {
+  ProductNormalizationService,
+  type ProductNormalizationInput,
+} from '../../evolution-webhook/product-normalization.service';
+import {
   COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
   COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
   normalizeCommercialPriceEndings,
@@ -89,6 +93,8 @@ export class PricingService {
     @Inject(SettingsService) private readonly settingsService: SettingsService,
     @Inject(ProductProfitProvider)
     private readonly profitProvider: ProductProfitProvider,
+    @Inject(ProductNormalizationService)
+    private readonly productNormalization?: ProductNormalizationService,
   ) {}
 
   async list(query: PricingQueryDto = {}) {
@@ -559,6 +565,23 @@ export class PricingService {
       catalogProductId: catalogProduct?.id ?? null,
     });
 
+    if (
+      pricingResolutionSource === 'LEGACY_FALLBACK' &&
+      profitIdentityResolution?.status === 'insufficient_identity'
+    ) {
+      this.observeBrazilPricingNormalization({
+        sourceQuoteId: quote.id,
+        sourceText: quoteDescription,
+        productName: quote.productName,
+        category: quote.category ?? null,
+        model: quote.model ?? null,
+        capacity: quote.capacity ?? null,
+        color: quote.color ?? null,
+        condition: quoteProfitCondition,
+        price: toNumber(quote.price),
+      });
+    }
+
     return {
       temporary: true,
       origin: 'BR' as const,
@@ -651,6 +674,71 @@ export class PricingService {
       salePrice,
       offerPrice,
       margin: salePrice !== null && desiredNetProfit !== null ? desiredNetProfit / salePrice : null,
+    };
+  }
+
+  private observeBrazilPricingNormalization(input: {
+    sourceQuoteId: string;
+    sourceText: string;
+    productName: string;
+    category: string | null;
+    model: string | null;
+    capacity: string | null;
+    color: string | null;
+    condition: ProfitCondition | null;
+    price: number;
+  }) {
+    if (!this.productNormalization?.isPricingNormalizationEnabled()) return;
+
+    void (async () => {
+      try {
+        const catalog = await this.pricingRepository.listActiveCatalogProducts();
+        await this.productNormalization!.normalize(
+          this.buildBrazilPricingNormalizationInput(input),
+          catalog,
+        );
+      } catch (error) {
+        this.logger.warn({
+          event: 'pricing.ai_normalization.shadow',
+          context: 'NORMALIZE_PRICING_BR',
+          source: 'BR',
+          sourceQuoteId: input.sourceQuoteId,
+          normalizationStatus: 'MODEL_ERROR',
+          errorCode: error instanceof Error ? error.name : 'unknown_error',
+        });
+      }
+    })();
+  }
+
+  private buildBrazilPricingNormalizationInput(input: {
+    sourceText: string;
+    productName: string;
+    category: string | null;
+    model: string | null;
+    capacity: string | null;
+    color: string | null;
+    condition: ProfitCondition | null;
+    price: number;
+  }): ProductNormalizationInput {
+    return {
+      context: 'NORMALIZE_PRICING_BR',
+      source: 'BR',
+      originalReason: 'identity_insufficient',
+      sourceText: input.sourceText,
+      productName: input.productName,
+      category: input.category,
+      model: input.model,
+      capacity: input.capacity,
+      color: input.color,
+      condition: input.condition,
+      rawLine: input.sourceText,
+      previousLines: [],
+      nextLines: [],
+      activeProductHeading: input.productName,
+      activeCategory: input.category,
+      activeCondition: input.condition,
+      qualityGrade: null,
+      detectedPrice: input.price,
     };
   }
 

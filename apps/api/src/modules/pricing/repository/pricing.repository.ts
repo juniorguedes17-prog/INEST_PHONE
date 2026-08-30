@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
+import type { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';
 import { PricingPrismaClient } from '../interfaces/pricing-prisma.interface';
 export { OFFER_INCREMENT_KEY } from '../utils/offer-increment';
 
@@ -70,6 +71,23 @@ export class PricingRepository {
         model: { select: { name: true } },
         color: { select: { name: true } },
         storage: { select: { displayName: true } },
+      },
+    });
+  }
+
+  listActiveCatalogProducts(): Promise<ProductIdShadowCandidate[]> {
+    return this.prisma.product.findMany({
+      where: { active: true, status: ProductStatus.ACTIVE, deletedAt: null },
+      select: {
+        id: true,
+        productDescription: true,
+        productType: true,
+        profitCondition: true,
+        variantAttributes: true,
+        category: { select: { name: true } },
+        model: { select: { name: true } },
+        color: { select: { name: true } },
+        storage: { select: { displayName: true, value: true, unit: true } },
       },
     });
   }

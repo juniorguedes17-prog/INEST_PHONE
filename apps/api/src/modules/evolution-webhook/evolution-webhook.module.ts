@@ -8,5 +8,6 @@ import { ProductNormalizationService } from './product-normalization.service';
   imports: [SuppliersModule],
   controllers: [EvolutionWebhookController],
   providers: [EvolutionWebhookService, ProductNormalizationService],
+  exports: [ProductNormalizationService],
 })
 export class EvolutionWebhookModule {}

@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsService } from '../../settings/service/settings.service';
+import { ProductNormalizationService } from '../../evolution-webhook/product-normalization.service';
 import { PricingBrazilRadarQuoteRecord } from '../interfaces/pricing-prisma.interface';
 import { ProfitSheetCatalog } from '../interfaces/profit-sheet.interface';
 import { ProductProfitProvider } from '../providers/product-profit.provider';
@@ -1104,6 +1105,7 @@ describe('PricingService native product profit integration', () => {
         }),
       ),
       findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listActiveCatalogProducts: vi.fn().mockResolvedValue([]),
       listPricingConfigurations: vi.fn().mockResolvedValue([]),
     };
     const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
@@ -1128,10 +1130,15 @@ describe('PricingService native product profit integration', () => {
         fetchedAt: '2026-08-17T10:00:00.000Z',
       }),
     };
+    const productNormalization = {
+      isPricingNormalizationEnabled: vi.fn().mockReturnValue(true),
+      normalize: vi.fn().mockResolvedValue({ normalizationStatus: 'FOUND' }),
+    };
     const service = new PricingService(
       repository as unknown as PricingRepository,
       settingsService as unknown as SettingsService,
       profitProvider as unknown as ProductProfitProvider,
+      productNormalization as unknown as ProductNormalizationService,
     );
 
     const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
@@ -1144,6 +1151,16 @@ describe('PricingService native product profit integration', () => {
       offerPrice: null,
       profit: { source: 'unavailable', recordId: null },
       offerDraft: null,
+    });
+    await vi.waitFor(() => {
+      expect(productNormalization.normalize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context: 'NORMALIZE_PRICING_BR',
+          source: 'BR',
+          originalReason: 'identity_insufficient',
+        }),
+        [],
+      );
     });
   });
 

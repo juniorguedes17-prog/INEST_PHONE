@@ -53,16 +53,20 @@ export function validateEnv(config: Env) {
 
   validateGoogleSheetsCredentials(normalizedConfig);
   validateEvolutionWebhook(normalizedConfig);
-  validateAiRecovery(normalizedConfig);
+  validateAiNormalization(normalizedConfig);
 
   return normalizedConfig;
 }
 
-function validateAiRecovery(config: Env) {
-  if (config.AI_RECOVERY_ENABLED !== 'true') return;
+function validateAiNormalization(config: Env) {
+  if (config.AI_RECOVERY_ENABLED !== 'true' && config.AI_PRICING_NORMALIZATION_ENABLED !== 'true') {
+    return;
+  }
 
   if (!config.OPENAI_API_KEY?.trim()) {
-    throw new Error('Variavel OPENAI_API_KEY obrigatoria quando AI_RECOVERY_ENABLED=true.');
+    throw new Error(
+      'Variavel OPENAI_API_KEY obrigatoria quando AI_RECOVERY_ENABLED=true ou AI_PRICING_NORMALIZATION_ENABLED=true.',
+    );
   }
 
   const budget = Number(config.AI_RECOVERY_DAILY_BUDGET_USD ?? 0);

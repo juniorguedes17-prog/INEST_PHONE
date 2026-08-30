@@ -9,6 +9,7 @@ import {
 function createConfig(overrides: Record<string, unknown> = {}) {
   const values: Record<string, unknown> = {
     'app.aiRecoveryEnabled': true,
+    'app.aiPricingNormalizationEnabled': false,
     'app.aiRecoveryModel': 'gpt-5.6-luna',
     'app.aiRecoveryDailyBudgetUsd': 1,
     'app.openaiApiKey': 'test-key',
@@ -96,7 +97,9 @@ describe('ProductNormalizationService', () => {
   it('preserva RECOVERY_BR e aceita os contextos neutros de Pricing', async () => {
     const fetchMock = vi.fn().mockResolvedValue(response());
     vi.stubGlobal('fetch', fetchMock);
-    const service = new ProductNormalizationService(createConfig() as never);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
     const contexts: readonly ProductNormalizationContext[] = [
       'RECOVERY_BR',
       'NORMALIZE_PRICING_BR',
@@ -145,6 +148,23 @@ describe('ProductNormalizationService', () => {
       context: null,
       normalizationStatus: 'SKIPPED_NOT_ELIGIBLE',
       errorCode: 'invalid_context',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('mantem Pricing isolado quando somente AI_RECOVERY_ENABLED esta ativo', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(createConfig() as never);
+
+    const result = await service.normalize(
+      input({ context: 'NORMALIZE_PRICING_BR', source: 'BR' }),
+      [],
+    );
+
+    expect(result).toMatchObject({
+      context: 'NORMALIZE_PRICING_BR',
+      normalizationStatus: 'SKIPPED_DISABLED',
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -366,5 +386,22 @@ describe('ProductNormalizationService', () => {
       expect.stringContaining('"event":"evolution.ai_recovery.shadow"'),
     );
     expect(logger).toHaveBeenCalledWith(expect.stringContaining('"context":"RECOVERY_BR"'));
+  });
+
+  it('emite telemetria separada para Pricing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()));
+    const logger = vi.spyOn(Logger.prototype, 'debug');
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    await service.normalize(input({ context: 'NORMALIZE_PRICING_PY', source: 'PY' }), [
+      catalogProduct('product-15'),
+    ]);
+
+    expect(logger).toHaveBeenCalledWith(
+      expect.stringContaining('"event":"pricing.ai_normalization.shadow"'),
+    );
+    expect(logger).toHaveBeenCalledWith(expect.stringContaining('"source":"PY"'));
   });
 });

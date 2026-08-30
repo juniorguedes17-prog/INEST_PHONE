@@ -44,6 +44,7 @@ export type AiRecoveryNormalizationStatus =
 
 export interface ProductNormalizationInput {
   context?: ProductNormalizationContext;
+  source?: string;
   originalReason: string;
   sourceText?: string;
   productName?: string | null;
@@ -200,7 +201,7 @@ export class ProductNormalizationService {
       });
     }
 
-    if (!this.isEnabled()) {
+    if (!this.isEnabled(context)) {
       return this.finish(input, context, {
         ...base,
         normalizationStatus: 'SKIPPED_DISABLED',
@@ -453,6 +454,10 @@ export class ProductNormalizationService {
     );
   }
 
+  isPricingNormalizationEnabled() {
+    return this.config.get<boolean>('app.aiPricingNormalizationEnabled', false) === true;
+  }
+
   private hasSufficientContext(input: ProductNormalizationInput) {
     return Boolean(
       (input.sourceText ?? input.rawLine).trim() &&
@@ -461,8 +466,10 @@ export class ProductNormalizationService {
     );
   }
 
-  private isEnabled() {
-    return this.config.get<boolean>('app.aiRecoveryEnabled', false) === true;
+  private isEnabled(context: ProductNormalizationContext) {
+    return context === 'RECOVERY_BR'
+      ? this.config.get<boolean>('app.aiRecoveryEnabled', false) === true
+      : this.isPricingNormalizationEnabled();
   }
 
   private model() {
@@ -531,8 +538,9 @@ export class ProductNormalizationService {
         event:
           context === 'RECOVERY_BR'
             ? 'evolution.ai_recovery.shadow'
-            : 'product.normalization.shadow',
+            : 'pricing.ai_normalization.shadow',
         context,
+        source: input.source ?? null,
         normalizationSource: 'AI',
         originalReason: input.originalReason,
         normalizationStatus: result.normalizationStatus,

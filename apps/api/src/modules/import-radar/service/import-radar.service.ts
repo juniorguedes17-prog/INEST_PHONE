@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { SettingsService } from '../../settings/service/settings.service';
 import {
@@ -11,19 +11,24 @@ import { ImportRadarRepository } from '../repository/import-radar.repository';
 import { identifyRedirectRule, toNumber } from '../validators/import-radar.validators';
 import { ComprasParaguaiProvider } from '../providers/compras-paraguai.provider';
 import { MockImportProvider } from '../providers/mock-import.provider';
+import { processParsedSupplierItemsShadow } from '../../evolution-webhook/product-identity-shadow';
 import {
-  processParsedSupplierItemsShadow,
-  type ProductIdShadowResolution,
-} from '../../evolution-webhook/product-identity-shadow';
+  ProductNormalizationService,
+  type ProductNormalizationInput,
+} from '../../evolution-webhook/product-normalization.service';
 
 @Injectable()
 export class ImportRadarService {
+  private readonly logger = new Logger(ImportRadarService.name);
+
   constructor(
     @Inject(SettingsService) private readonly settingsService: SettingsService,
     @Inject(ImportRadarRepository) private readonly repository: ImportRadarRepository,
     @Inject(MockImportProvider) private readonly mockProvider: MockImportProvider,
     @Inject(ComprasParaguaiProvider)
     private readonly comprasParaguaiProvider: ComprasParaguaiProvider,
+    @Inject(ProductNormalizationService)
+    private readonly productNormalization?: ProductNormalizationService,
   ) {}
 
   async search(query: ImportSearchQueryDto, user: AuthenticatedUser) {
@@ -82,7 +87,10 @@ export class ImportRadarService {
       toNumber(importSettings.correiosLabel);
 
     const catalog = await this.repository.listActiveCatalogProducts();
-    const productResolution = this.resolveCatalogProduct(dto, catalog);
+    const { productResolution, hasRecoverableIdentityGap } = this.analyzeCatalogProduct(
+      dto,
+      catalog,
+    );
     const catalogProduct =
       productResolution.status === 'FOUND'
         ? (catalog.find((product) => product.id === productResolution.productId) ?? null)
@@ -119,6 +127,10 @@ export class ImportRadarService {
         productResolutionReason: productResolution.reason ?? null,
       },
     });
+
+    if (hasRecoverableIdentityGap) {
+      this.observeParaguayPricingNormalization(dto, catalog);
+    }
 
     return result;
   }
@@ -157,10 +169,10 @@ export class ImportRadarService {
     return this.mockProvider;
   }
 
-  private resolveCatalogProduct(
+  private analyzeCatalogProduct(
     dto: CalculateImportCostDto,
     catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
-  ): ProductIdShadowResolution {
+  ) {
     const resolutions = (['NOVO', 'SEMINOVO', 'CPO'] as const).map(
       (condition) =>
         processParsedSupplierItemsShadow(
@@ -187,22 +199,90 @@ export class ImportRadarService {
     ];
 
     if (productIds.length === 1) {
-      return { status: 'FOUND', productId: productIds[0], candidateCount: 1 };
+      return {
+        productResolution: {
+          status: 'FOUND' as const,
+          productId: productIds[0],
+          candidateCount: 1,
+        },
+        hasRecoverableIdentityGap: false,
+      };
     }
     if (productIds.length > 1) {
       return {
-        status: 'AMBIGUOUS',
-        candidates: productIds,
-        candidateCount: productIds.length,
-        reason: 'multiple_catalog_candidates',
+        productResolution: {
+          status: 'AMBIGUOUS' as const,
+          candidates: productIds,
+          candidateCount: productIds.length,
+          reason: 'multiple_catalog_candidates' as const,
+        },
+        hasRecoverableIdentityGap: false,
       };
     }
 
     const ambiguous = resolutions.find((resolution) => resolution.status === 'AMBIGUOUS');
-    return ambiguous ?? { status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 };
+    if (ambiguous) {
+      return { productResolution: ambiguous, hasRecoverableIdentityGap: false };
+    }
+
+    return {
+      productResolution: {
+        status: 'MISSING' as const,
+        reason: 'catalog_no_match',
+        candidateCount: 0,
+      },
+      hasRecoverableIdentityGap: resolutions.some(
+        (resolution) => resolution.reason === 'identity_insufficient',
+      ),
+    };
   }
 
   private toStructuredCondition(value: string | null | undefined) {
     return value === 'NOVO' || value === 'SEMINOVO' || value === 'CPO' ? value : null;
+  }
+
+  private observeParaguayPricingNormalization(
+    dto: CalculateImportCostDto,
+    catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
+  ) {
+    if (!this.productNormalization?.isPricingNormalizationEnabled()) return;
+
+    void this.productNormalization
+      .normalize(this.buildParaguayPricingNormalizationInput(dto), catalog)
+      .catch((error) => {
+        this.logger.warn({
+          event: 'pricing.ai_normalization.shadow',
+          context: 'NORMALIZE_PRICING_PY',
+          source: 'PY',
+          sourceProductId: dto.id,
+          normalizationStatus: 'MODEL_ERROR',
+          errorCode: error instanceof Error ? error.name : 'unknown_error',
+        });
+      });
+  }
+
+  private buildParaguayPricingNormalizationInput(
+    dto: CalculateImportCostDto,
+  ): ProductNormalizationInput {
+    return {
+      context: 'NORMALIZE_PRICING_PY',
+      source: 'PY',
+      originalReason: 'identity_insufficient',
+      sourceText: dto.name,
+      productName: dto.name,
+      category: dto.category,
+      model: dto.model ?? null,
+      capacity: dto.capacity ?? null,
+      color: dto.color ?? null,
+      condition: null,
+      rawLine: dto.name,
+      previousLines: [],
+      nextLines: [],
+      activeProductHeading: dto.name,
+      activeCategory: dto.category,
+      activeCondition: null,
+      qualityGrade: null,
+      detectedPrice: dto.priceUsd,
+    };
   }
 }

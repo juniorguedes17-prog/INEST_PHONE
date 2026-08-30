@@ -82,6 +82,7 @@ export interface PricingPrismaClient {
   };
   product: {
     findFirst(args: unknown): Promise<PricingCatalogProductRecord | null>;
+    findMany(args: unknown): Promise<ProductIdShadowCandidate[]>;
   };
   systemConfiguration: {
     findMany(args?: unknown): Promise<PricingSystemConfigurationRecord[]>;
@@ -91,3 +92,4 @@ export interface PricingPrismaClient {
     create(args: unknown): Promise<unknown>;
   };
 }
+import type { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';

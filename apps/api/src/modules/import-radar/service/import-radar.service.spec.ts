@@ -5,6 +5,7 @@ import { ComprasParaguaiProvider } from '../providers/compras-paraguai.provider'
 import { MockImportProvider } from '../providers/mock-import.provider';
 import { ImportRadarRepository } from '../repository/import-radar.repository';
 import { ImportRadarService } from './import-radar.service';
+import { ProductNormalizationService } from '../../evolution-webhook/product-normalization.service';
 
 const PRODUCT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -22,7 +23,13 @@ function catalogProduct(id = PRODUCT_ID): ProductIdShadowCandidate {
   };
 }
 
-function createService(catalog: ProductIdShadowCandidate[]) {
+function createService(
+  catalog: ProductIdShadowCandidate[],
+  productNormalization?: Pick<
+    ProductNormalizationService,
+    'isPricingNormalizationEnabled' | 'normalize'
+  >,
+) {
   const repository = {
     listActiveCatalogProducts: vi.fn().mockResolvedValue(catalog),
     createAuditLog: vi.fn(),
@@ -44,6 +51,7 @@ function createService(catalog: ProductIdShadowCandidate[]) {
     repository as unknown as ImportRadarRepository,
     {} as MockImportProvider,
     {} as ComprasParaguaiProvider,
+    productNormalization as ProductNormalizationService | undefined,
   );
 }
 
@@ -93,5 +101,51 @@ describe('ImportRadarService catalog product handoff', () => {
       condition: null,
       productResolution: { status: 'AMBIGUOUS', candidateCount: 2 },
     });
+  });
+
+  it('observa somente identity_insufficient sem mudar o resultado PY', async () => {
+    const productNormalization = {
+      isPricingNormalizationEnabled: vi.fn().mockReturnValue(true),
+      normalize: vi.fn().mockResolvedValue({ normalizationStatus: 'FOUND' }),
+    };
+    const service = createService([], productNormalization);
+    const incompleteProduct = {
+      ...importProduct,
+      name: 'MacBook Pro M5 14 512GB',
+      category: 'MacBook',
+      model: 'MacBook Pro M5 14',
+      capacity: '512GB',
+    };
+
+    const result = await service.calculate(incompleteProduct, { id: 'user-1' } as never);
+
+    expect(result).toMatchObject({
+      catalogProductId: null,
+      productResolution: { status: 'MISSING', reason: 'catalog_no_match' },
+    });
+    expect(productNormalization.normalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        originalReason: 'identity_insufficient',
+      }),
+      [],
+    );
+  });
+
+  it('nao observa um Product PY deterministico ou catalog_no_match', async () => {
+    const productNormalization = {
+      isPricingNormalizationEnabled: vi.fn().mockReturnValue(true),
+      normalize: vi.fn(),
+    };
+
+    await createService([catalogProduct()], productNormalization).calculate(importProduct, {
+      id: 'user-1',
+    } as never);
+    await createService([], productNormalization).calculate(importProduct, {
+      id: 'user-1',
+    } as never);
+
+    expect(productNormalization.normalize).not.toHaveBeenCalled();
   });
 });

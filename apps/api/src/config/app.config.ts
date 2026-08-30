@@ -14,6 +14,7 @@ export const appConfig = registerAs('app', () => ({
   evolutionWebhookEnabled: process.env.EVOLUTION_WEBHOOK_ENABLED === 'true',
   evolutionWebhookSecret: process.env.EVOLUTION_WEBHOOK_SECRET?.trim() ?? '',
   aiRecoveryEnabled: process.env.AI_RECOVERY_ENABLED === 'true',
+  aiPricingNormalizationEnabled: process.env.AI_PRICING_NORMALIZATION_ENABLED === 'true',
   aiRecoveryModel: process.env.AI_RECOVERY_MODEL?.trim() || 'gpt-5.6-luna',
   aiRecoveryDailyBudgetUsd: Number(process.env.AI_RECOVERY_DAILY_BUDGET_USD ?? 0),
   openaiApiKey: process.env.OPENAI_API_KEY?.trim() ?? '',

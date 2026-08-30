@@ -67,3 +67,24 @@ describe('validateEnv Google Sheets credentials', () => {
     ).toThrow('GOOGLE_SHEETS_CLIENT_EMAIL, GOOGLE_SHEETS_PRIVATE_KEY');
   });
 });
+
+describe('validateEnv AI normalization', () => {
+  it('exige chave e orcamento quando o shadow de Pricing esta ativado', () => {
+    expect(() =>
+      validateEnv({
+        ...baseConfig,
+        AI_PRICING_NORMALIZATION_ENABLED: 'true',
+        OPENAI_API_KEY: '',
+      }),
+    ).toThrow('OPENAI_API_KEY obrigatoria');
+
+    expect(() =>
+      validateEnv({
+        ...baseConfig,
+        AI_PRICING_NORMALIZATION_ENABLED: 'true',
+        OPENAI_API_KEY: 'test-key',
+        AI_RECOVERY_DAILY_BUDGET_USD: '0',
+      }),
+    ).toThrow('AI_RECOVERY_DAILY_BUDGET_USD invalida');
+  });
+});
