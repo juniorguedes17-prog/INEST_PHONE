@@ -56,6 +56,53 @@ export const resolutionCases = defineGoldenCases([
     },
   },
   {
+    id: 'resolution-ipad-9-cpo-001',
+    rule: 'iPad 9 256GB defaults to the approved Wi-Fi CPO catalog variant',
+    input: { rawText: 'CPO\niPad 9ª geração 256GB\nSilver R$ 2.500' },
+    catalog: [
+      goldenCatalogProduct('ipad-9-256-wifi-cpo', 'iPad 9 256GB Wi-Fi', 'CPO', {
+        screen: '10.2"',
+        connectivity: 'Wi-Fi',
+      }),
+    ],
+    expected: {
+      identities: [
+        {
+          itemIndex: 0,
+          canonicalModelKey: 'ipad-9',
+          canonicalCondition: 'CPO',
+          canonicalStorage: '256GB',
+          canonicalScreen: '10.2"',
+          canonicalConnectivity: 'Wi-Fi',
+        },
+      ],
+      resolutions: [
+        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'ipad-9-256-wifi-cpo' },
+      ],
+    },
+  },
+  {
+    id: 'resolution-ipad-9-cpo-002',
+    rule: 'iPad 9 CPO never borrows the approved Wi-Fi catalog product for another variant or condition',
+    input: {
+      rawText:
+        'CPO\niPad 9 256GB Cellular\nSilver R$ 2.500\n\niPad 9 128GB\nSilver R$ 2.100\n\nNOVO\niPad 9 256GB\nSilver R$ 2.600',
+    },
+    catalog: [
+      goldenCatalogProduct('ipad-9-256-wifi-cpo', 'iPad 9 256GB Wi-Fi', 'CPO', {
+        screen: '10.2"',
+        connectivity: 'Wi-Fi',
+      }),
+    ],
+    expected: {
+      resolutions: [
+        { itemIndex: 0, status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 },
+        { itemIndex: 1, status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 },
+        { itemIndex: 2, status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 },
+      ],
+    },
+  },
+  {
     id: 'resolution-ambiguous-001',
     rule: 'P2.1 multiple equivalent catalog candidates',
     originCommit: '1924ca0',

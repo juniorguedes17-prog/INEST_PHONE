@@ -171,6 +171,7 @@ export function getBaseModelName(description: string, productType: ProductType) 
   if (normalized.includes('mac mini')) return 'Mac Mini';
   if (normalized.includes('ipad air')) return 'iPad Air';
   if (normalized.includes('ipad pro')) return 'iPad Pro';
+  if (normalized.startsWith('ipad 9')) return 'iPad 9';
   if (normalized.startsWith('ipad')) return 'iPad';
   if (normalized.includes('watch ultra')) return 'Apple Watch Ultra';
   if (normalized.includes('watch se')) return 'Apple Watch SE';
@@ -189,9 +190,9 @@ export function getBaseModelName(description: string, productType: ProductType) 
 }
 
 function validateProfitSeed(records: ProfitSeedProduct[]) {
-  if (records.length !== 130) {
+  if (records.length !== 131) {
     throw new Error(
-      `Carga de lucro invalida: esperados 130 registros, recebidos ${records.length}.`,
+      `Carga de lucro invalida: esperados 131 registros, recebidos ${records.length}.`,
     );
   }
 

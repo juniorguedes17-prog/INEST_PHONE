@@ -212,6 +212,14 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   macStudio('mac-studio-m4-max', 'Mac Studio M4 Max', ['mac studio m4 max']),
   macStudio('mac-studio-m4-ultra', 'Mac Studio M4 Ultra', ['mac studio m4 ultra']),
 
+  ipad(
+    'ipad-9',
+    'iPad 9',
+    ['ipad 9', 'ipad 9a geracao', 'ipad 9 geracao', 'ipad 9th gen', 'ipad 9th generation'],
+    {
+      invariants: { screen: '10.2"' },
+    },
+  ),
   ipad('ipad-10', 'iPad 10', ['ipad 10']),
   ipad('ipad-11', 'iPad 11', ['ipad 11', 'ipad a16'], {
     invariants: { chip: 'A16', screen: '11"' },

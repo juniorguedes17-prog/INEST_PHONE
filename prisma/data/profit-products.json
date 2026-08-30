@@ -778,5 +778,11 @@
     "condicao_produto": "CPO",
     "produto_descricao": "AirPods Max 2",
     "lucro_liquido": 500
+  },
+  {
+    "produto_id": 134,
+    "condicao_produto": "CPO",
+    "produto_descricao": "iPad 9 256GB Wi-Fi",
+    "lucro_liquido": 500
   }
 ]

@@ -136,6 +136,35 @@ test('iPad 11 deriva apenas a tela invariavel e a variante Wi-Fi base do registr
   assert.notEqual(quote.profit.key, cellular.key);
 });
 
+test('iPad 9 preserva a variante Wi-Fi CPO e rejeita capacidade, conectividade e condicao distintas', () => {
+  const wifi = deriveProfitLookupIdentity({
+    productName: 'iPad 9 256GB',
+    quality: 'CPO',
+  });
+  const explicitWifi = deriveProfitLookupIdentity({
+    productName: 'iPad 9ª geração 256GB Wi-Fi',
+    quality: 'CPO',
+  });
+  const cellular = deriveProfitLookupIdentity({
+    productName: 'iPad 9 256GB Cellular',
+    quality: 'CPO',
+  });
+  const lowerStorage = deriveProfitLookupIdentity({
+    productName: 'iPad 9 128GB',
+    quality: 'CPO',
+  });
+  const novo = deriveProfitLookupIdentity({ productName: 'iPad 9 256GB', quality: 'NOVO' });
+
+  assert.equal(wifi.status, 'valid');
+  assert.equal(wifi.canonicalModelKey, 'ipad-9');
+  assert.equal(wifi.attributes.screen, '10.2"');
+  assert.equal(wifi.attributes.connectivity, 'wi-fi');
+  assert.equal(wifi.key, explicitWifi.key);
+  assert.notEqual(wifi.key, cellular.key);
+  assert.notEqual(wifi.key, lowerStorage.key);
+  assert.notEqual(wifi.key, novo.key);
+});
+
 test('MacBook protege familia, chip, tela, RAM e armazenamento', () => {
   const air13 = deriveProfitLookupIdentity(novo('MacBook Air M5 13" 16/512GB'));
   const air15 = deriveProfitLookupIdentity(novo('MacBook Air M5 15" 16/512GB'));
@@ -424,7 +453,7 @@ test('fixture minima Mohamad Nasser separa familias e configuracoes', () => {
   assert.notEqual(regular.key, anc.key);
 });
 
-test('audita os 130 produtos sem alterar a fixture', () => {
+test('audita os 131 produtos sem alterar a fixture', () => {
   const file = new URL('../../../prisma/data/profit-products.json', import.meta.url);
   const raw = JSON.parse(readFileSync(file, 'utf8')) as Array<{
     produto_id: number;
@@ -438,8 +467,8 @@ test('audita os 130 produtos sem alterar a fixture', () => {
   }));
   const audit = auditProfitIdentityCatalog(records);
 
-  assert.equal(audit.total, 130);
-  assert.equal(audit.valid, 129);
+  assert.equal(audit.total, 131);
+  assert.equal(audit.valid, 130);
   assert.equal(audit.insufficient, 1);
   assert.equal(audit.ambiguous, 0);
   assert.deepEqual(

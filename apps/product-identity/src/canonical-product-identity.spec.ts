@@ -202,6 +202,9 @@ test('não inventa tela quando a descrição do MacBook não informa screen', ()
 });
 
 test('completa conectividade iPad no nível da família e preserva Cellular explícito', () => {
+  const ipad9 = normalizeCanonicalProductIdentity('iPad 9ª geração 256GB');
+  const ipad9English = normalizeCanonicalProductIdentity('iPad 9th Gen 256GB Wi-Fi');
+  const ipad9Cellular = normalizeCanonicalProductIdentity('iPad 9 256GB Cellular');
   const wifi = normalizeCanonicalProductIdentity('iPad 11 128GB');
   const wifiComplete = normalizeCanonicalProductIdentity('iPad 11 A16 128GB 11" Wi-Fi');
   const cellular = normalizeCanonicalProductIdentity('iPad 11 128GB Cellular');
@@ -209,6 +212,16 @@ test('completa conectividade iPad no nível da família e preserva Cellular expl
   const air = normalizeCanonicalProductIdentity('iPad Air M4 11 128GB');
   const pro = normalizeCanonicalProductIdentity('iPad Pro M5 13 256GB Cellular');
 
+  assert.deepEqual(
+    [ipad9.canonicalModelKey, ipad9.canonicalScreen, ipad9.canonicalConnectivity],
+    ['ipad-9', '10.2"', 'Wi-Fi'],
+  );
+  assert.equal(ipad9.canonicalConnectivitySource, 'safe_default');
+  assert.deepEqual(
+    [ipad9English.canonicalModelKey, ipad9English.canonicalScreen, ipad9English.canonicalConnectivity],
+    ['ipad-9', '10.2"', 'Wi-Fi'],
+  );
+  assert.equal(ipad9Cellular.canonicalConnectivity, 'Wi-Fi + Cellular');
   assert.deepEqual(
     [wifi.canonicalModelKey, wifi.canonicalChip, wifi.canonicalScreen, wifi.canonicalConnectivity],
     ['ipad-11', 'A16', '11"', 'Wi-Fi'],

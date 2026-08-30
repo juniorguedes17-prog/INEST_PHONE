@@ -300,6 +300,36 @@ describe('product identity ingestion shadow', () => {
     ).toMatchObject({ status: 'FOUND', productId: 'ipad-11-a16-256-wifi', candidateCount: 1 });
   });
 
+  it('resolves only the approved iPad 9 256GB Wi-Fi CPO catalog product', () => {
+    const catalog = [
+      catalogProduct('ipad-9-256-wifi-cpo', 'iPad 9 256GB Wi-Fi', 'CPO', {
+        screen: '10.2"',
+        connectivity: 'Wi-Fi',
+      }),
+    ];
+
+    expect(resolveProductIdShadow(supplierIdentity('iPad 9 256GB Wi-Fi', 'CPO'), catalog)).toMatchObject({
+      status: 'FOUND',
+      productId: 'ipad-9-256-wifi-cpo',
+      candidateCount: 1,
+    });
+    expect(resolveProductIdShadow(supplierIdentity('iPad 9 256GB', 'CPO'), catalog)).toMatchObject({
+      status: 'FOUND',
+      productId: 'ipad-9-256-wifi-cpo',
+    });
+    for (const [productName, condition] of [
+      ['iPad 9 256GB Cellular', 'CPO'],
+      ['iPad 9 128GB', 'CPO'],
+      ['iPad 9 256GB', 'NOVO'],
+      ['iPad 9 256GB', 'SEMINOVO'],
+    ] as const) {
+      expect(resolveProductIdShadow(supplierIdentity(productName, condition), catalog)).toMatchObject({
+        status: 'MISSING',
+        reason: 'catalog_no_match',
+      });
+    }
+  });
+
   it('keeps AirPods Max generations and conditions isolated', () => {
     const catalog = [
       airpodsCatalogProduct('airpods-max-1-new', 'AirPods Max', 'NOVO'),

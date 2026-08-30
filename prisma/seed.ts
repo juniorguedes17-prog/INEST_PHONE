@@ -242,6 +242,7 @@ async function seedProductCatalog() {
     ['macbook', 'MacBook Air', 'macbook-air', ProductType.MACBOOK],
     ['macbook', 'MacBook Pro', 'macbook-pro', ProductType.MACBOOK],
     ['ipad', 'iPad', 'ipad', ProductType.IPAD],
+    ['ipad', 'iPad 9', 'ipad-9', ProductType.IPAD],
     ['ipad', 'iPad Air', 'ipad-air', ProductType.IPAD],
     ['ipad', 'iPad Pro', 'ipad-pro', ProductType.IPAD],
     ['apple-watch', 'Apple Watch SE', 'apple-watch-se', ProductType.APPLE_WATCH],
