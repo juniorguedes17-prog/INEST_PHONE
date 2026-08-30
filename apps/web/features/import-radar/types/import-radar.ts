@@ -25,6 +25,7 @@ export interface ImportProduct {
   maximumPriceUsd?: number;
   storeCount?: number;
   offerCount?: number;
+  condition?: 'NOVO' | 'SEMINOVO' | 'CPO';
 }
 
 export interface ImportSearchResponse {
@@ -41,7 +42,11 @@ export interface ImportCalculation {
     status: 'FOUND' | 'MISSING' | 'AMBIGUOUS';
     productId?: string;
     candidateCount: number;
-    reason?: 'identity_insufficient' | 'catalog_no_match' | 'multiple_catalog_candidates';
+    reason?:
+      | 'identity_insufficient'
+      | 'catalog_no_match'
+      | 'multiple_catalog_candidates'
+      | 'condition_unresolved';
   };
   matchedProductType: string;
   dollarQuote: number;

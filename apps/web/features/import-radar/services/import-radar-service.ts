@@ -34,6 +34,7 @@ function toCalculateImportCostPayload(product: ImportProduct): CalculateImportCo
     maximumPriceUsd: product.maximumPriceUsd,
     storeCount: product.storeCount,
     offerCount: product.offerCount,
+    condition: product.condition,
   };
 }
 

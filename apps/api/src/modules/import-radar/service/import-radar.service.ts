@@ -16,6 +16,7 @@ import {
   ProductNormalizationService,
   type ProductNormalizationInput,
 } from '../../evolution-webhook/product-normalization.service';
+import { normalizeProductCondition, type ImportProductCondition } from '../condition-normalizer';
 
 @Injectable()
 export class ImportRadarService {
@@ -173,68 +174,62 @@ export class ImportRadarService {
     dto: CalculateImportCostDto,
     catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
   ) {
-    const resolutions = (['NOVO', 'SEMINOVO', 'CPO'] as const).map(
-      (condition) =>
-        processParsedSupplierItemsShadow(
-          [
-            {
-              productName: dto.name,
-              normalizedName: dto.name.toLowerCase(),
-              category: dto.category || null,
-              model: dto.model ?? null,
-              capacity: dto.capacity ?? null,
-              color: dto.color ?? null,
-              condition,
-              qualityGrade: null,
-              price: dto.priceUsd,
-              availability: dto.availability ?? null,
-              rawLine: dto.name,
-            },
-          ],
-          catalog,
-        )[0]!.productResolution,
+    const conditionResolution = normalizeProductCondition(dto.condition ?? dto.name);
+    if (conditionResolution.status !== 'RESOLVED') {
+      return {
+        productResolution: {
+          status: 'MISSING' as const,
+          reason: 'condition_unresolved' as const,
+          candidateCount: 0,
+        },
+        hasRecoverableIdentityGap: false,
+      };
+    }
+
+    const resolution = this.resolveCatalogProductForCondition(
+      dto,
+      catalog,
+      conditionResolution.condition,
     );
-    const productIds = [
-      ...new Set(resolutions.flatMap((resolution) => resolution.productId ?? [])),
-    ];
-
-    if (productIds.length === 1) {
+    if (resolution.reason === 'identity_insufficient') {
       return {
         productResolution: {
-          status: 'FOUND' as const,
-          productId: productIds[0],
-          candidateCount: 1,
+          status: 'MISSING' as const,
+          reason: 'catalog_no_match' as const,
+          candidateCount: 0,
         },
-        hasRecoverableIdentityGap: false,
+        hasRecoverableIdentityGap: true,
       };
     }
-    if (productIds.length > 1) {
-      return {
-        productResolution: {
-          status: 'AMBIGUOUS' as const,
-          candidates: productIds,
-          candidateCount: productIds.length,
-          reason: 'multiple_catalog_candidates' as const,
-        },
-        hasRecoverableIdentityGap: false,
-      };
-    }
-
-    const ambiguous = resolutions.find((resolution) => resolution.status === 'AMBIGUOUS');
-    if (ambiguous) {
-      return { productResolution: ambiguous, hasRecoverableIdentityGap: false };
-    }
-
     return {
-      productResolution: {
-        status: 'MISSING' as const,
-        reason: 'catalog_no_match',
-        candidateCount: 0,
-      },
-      hasRecoverableIdentityGap: resolutions.some(
-        (resolution) => resolution.reason === 'identity_insufficient',
-      ),
+      productResolution: resolution,
+      hasRecoverableIdentityGap: false,
     };
+  }
+
+  private resolveCatalogProductForCondition(
+    dto: CalculateImportCostDto,
+    catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
+    condition: ImportProductCondition,
+  ) {
+    return processParsedSupplierItemsShadow(
+      [
+        {
+          productName: dto.name,
+          normalizedName: dto.name.toLowerCase(),
+          category: dto.category || null,
+          model: dto.model ?? null,
+          capacity: dto.capacity ?? null,
+          color: dto.color ?? null,
+          condition,
+          qualityGrade: null,
+          price: dto.priceUsd,
+          availability: dto.availability ?? null,
+          rawLine: dto.name,
+        },
+      ],
+      catalog,
+    )[0]!.productResolution;
   }
 
   private toStructuredCondition(value: string | null | undefined) {

@@ -57,6 +57,15 @@ describe('ComprasParaguaiProvider parsers', () => {
     });
   });
 
+  it('preserva condition explicita da descricao para o calculo', () => {
+    const [product] = parseSearchResults(
+      searchFixture.replace('Natural', 'CPO Natural'),
+      '2026-07-13T00:00:00.000Z',
+    );
+
+    expect(product).toMatchObject({ condition: 'CPO' });
+  });
+
   it('normaliza ofertas sem combinar lojas diferentes', () => {
     expect(parseProductOffers(offersFixture)).toEqual([
       expect.objectContaining({ store: 'Cellshop', priceUsd: 1100, city: 'Ciudad del Este' }),

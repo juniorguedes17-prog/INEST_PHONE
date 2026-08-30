@@ -1,6 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
 import { ImportProvider, ImportProviderProduct } from '../interfaces/import-provider.interface';
+import { normalizeProductCondition } from '../condition-normalizer';
 
 const BASE_URL = 'https://www.comprasparaguai.com.br';
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -156,6 +157,7 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
       stripHtml(findElementByClass(cardHtml, 'ver-detalhes')?.content ?? ''),
     );
     const attributes = inferProductAttributes(name);
+    const condition = normalizeProductCondition(name);
     const image =
       findFirstTag(cardHtml, 'img', (tag) => hasClass(tag, 'lozad')) ??
       findFirstTag(cardHtml, 'img');
@@ -183,6 +185,7 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
       origin: 'PY',
       offerCount,
       storeCount: offerCount,
+      condition: condition.status === 'RESOLVED' ? condition.condition : undefined,
     });
   }
 

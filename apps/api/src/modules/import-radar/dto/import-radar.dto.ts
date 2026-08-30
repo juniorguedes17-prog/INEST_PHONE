@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNumber, IsOptional, IsString, IsUrl, Min } from 'class-validator';
+import type { ImportProductCondition } from '../condition-normalizer';
 
 export class ImportSearchQueryDto {
   @ApiPropertyOptional()
@@ -134,6 +135,11 @@ export class ImportProductDto {
   @IsNumber()
   @Min(0)
   offerCount?: number;
+
+  @ApiPropertyOptional({ enum: ['NOVO', 'SEMINOVO', 'CPO'] })
+  @IsOptional()
+  @IsString()
+  condition?: ImportProductCondition;
 }
 
 export class CalculateImportCostDto extends ImportProductDto {}

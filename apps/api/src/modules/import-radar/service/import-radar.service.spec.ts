@@ -64,6 +64,7 @@ const importProduct = {
   productUrl: 'https://example.com/iphone-17',
   model: 'iPhone 17 Pro Max',
   capacity: '256GB',
+  condition: 'NOVO' as const,
 };
 
 describe('ImportRadarService catalog product handoff', () => {
@@ -147,5 +148,50 @@ describe('ImportRadarService catalog product handoff', () => {
     } as never);
 
     expect(productNormalization.normalize).not.toHaveBeenCalled();
+  });
+
+  it('nao escolhe Product quando a condition da fonte e desconhecida', async () => {
+    const result = await createService([catalogProduct()]).calculate(
+      { ...importProduct, condition: undefined, name: 'iPhone 17 Pro Max 256GB' },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      catalogProductId: null,
+      condition: null,
+      productResolution: { status: 'MISSING', reason: 'condition_unresolved' },
+    });
+  });
+
+  it('resolve cada condition isoladamente sem criar ambiguidade entre Products diferentes', async () => {
+    const novo = catalogProduct('novo-product');
+    const cpo = {
+      ...catalogProduct('cpo-product'),
+      profitCondition: 'CPO',
+    };
+
+    const result = await createService([novo, cpo]).calculate(
+      { ...importProduct, condition: 'NOVO' },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      catalogProductId: 'novo-product',
+      condition: 'NOVO',
+      productResolution: { status: 'FOUND', productId: 'novo-product', candidateCount: 1 },
+    });
+  });
+
+  it('mantem AMBIGUOUS para dois candidatos dentro da mesma condition', async () => {
+    const result = await createService([
+      catalogProduct('novo-a'),
+      catalogProduct('novo-b'),
+    ]).calculate({ ...importProduct, condition: 'NOVO' }, { id: 'user-1' } as never);
+
+    expect(result.productResolution).toMatchObject({
+      status: 'AMBIGUOUS',
+      candidateCount: 2,
+      reason: 'multiple_catalog_candidates',
+    });
   });
 });

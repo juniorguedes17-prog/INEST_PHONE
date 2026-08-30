@@ -1,4 +1,5 @@
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
+import type { ImportProductCondition } from '../condition-normalizer';
 
 export interface ImportProviderProduct {
   id: string;
@@ -24,6 +25,7 @@ export interface ImportProviderProduct {
   maximumPriceUsd?: number;
   storeCount?: number;
   offerCount?: number;
+  condition?: ImportProductCondition;
 }
 
 export interface ImportProvider {
