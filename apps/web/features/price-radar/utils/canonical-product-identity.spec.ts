@@ -109,8 +109,6 @@ test('corpus de regressao nao transforma residuos em modelos', () => {
     'iPhone Cabo Usbc. Padrao iPhone Cabo Usbc. Padrao',
     'iPhone s11 iPhone s11',
     'Promax',
-    'Imac M4 24" 16ram Imac Imac M4 24" 16ram',
-    'Imac M4 24" 24ram Imac Imac M4 24" 24ram',
   ];
 
   invalidModels.forEach((productName) => {
@@ -124,6 +122,18 @@ test('corpus de regressao nao transforma residuos em modelos', () => {
     buildCanonicalModelFacetOptions(invalidModels.map((productName) => ({ productName }))),
     [],
   );
+});
+
+test('resolve repeticao inequivoca do mesmo modelo iMac', () => {
+  for (const productName of [
+    'Imac M4 24" 16ram Imac Imac M4 24" 16ram',
+    'Imac M4 24" 24ram Imac Imac M4 24" 24ram',
+  ]) {
+    const result = identity(productName);
+    assert.equal(result.canonicalModelMatched, true);
+    assert.equal(result.canonicalModelKey, 'imac-m4-24');
+    assert.equal(result.canonicalModelMatchMethod, 'exact_alias');
+  }
 });
 
 test('normaliza acessorio somente quando existe regra segura no registry', () => {
