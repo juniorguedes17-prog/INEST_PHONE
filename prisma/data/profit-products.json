@@ -784,5 +784,11 @@
     "condicao_produto": "CPO",
     "produto_descricao": "iPad 9 256GB Wi-Fi",
     "lucro_liquido": 500
+  },
+  {
+    "produto_id": 135,
+    "condicao_produto": "CPO",
+    "produto_descricao": "MacBook Neo A18 Pro 13\" 8GB/256GB",
+    "lucro_liquido": 500
   }
 ]

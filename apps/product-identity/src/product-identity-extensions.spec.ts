@@ -422,8 +422,8 @@ test('texto com familias conflitantes retorna identidade ambigua', () => {
 
 test('NOVO, SEMINOVO e CPO possuem identidades financeiras independentes', () => {
   const productName = 'iPhone 17 Pro 256GB';
-  const keys = ['NOVO', 'SEMINOVO', 'CPO'].map((quality) =>
-    deriveProfitLookupIdentity({ productName, quality }).key,
+  const keys = ['NOVO', 'SEMINOVO', 'CPO'].map(
+    (quality) => deriveProfitLookupIdentity({ productName, quality }).key,
   );
 
   assert.equal(new Set(keys).size, 3);
@@ -453,7 +453,7 @@ test('fixture minima Mohamad Nasser separa familias e configuracoes', () => {
   assert.notEqual(regular.key, anc.key);
 });
 
-test('audita os 131 produtos sem alterar a fixture', () => {
+test('audita os 132 produtos sem alterar a fixture', () => {
   const file = new URL('../../../prisma/data/profit-products.json', import.meta.url);
   const raw = JSON.parse(readFileSync(file, 'utf8')) as Array<{
     produto_id: number;
@@ -467,8 +467,8 @@ test('audita os 131 produtos sem alterar a fixture', () => {
   }));
   const audit = auditProfitIdentityCatalog(records);
 
-  assert.equal(audit.total, 131);
-  assert.equal(audit.valid, 130);
+  assert.equal(audit.total, 132);
+  assert.equal(audit.valid, 131);
   assert.equal(audit.insufficient, 1);
   assert.equal(audit.ambiguous, 0);
   assert.deepEqual(

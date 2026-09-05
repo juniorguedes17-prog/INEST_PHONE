@@ -136,6 +136,33 @@ describe('product identity ingestion shadow', () => {
     ).toMatchObject({ status: 'FOUND', productId: 'neo-256', candidateCount: 1 });
   });
 
+  it('keeps MacBook Neo CPO isolated from NOVO and other storage variants', () => {
+    const catalog = [
+      catalogProduct('neo-256-new', 'MacBook Neo A18 Pro 13" 8GB/256GB', 'NOVO', {
+        chip: 'A18 Pro',
+        chipVariant: 'pro',
+        screen: '13"',
+        ram: '8GB',
+      }),
+      catalogProduct('neo-256-cpo', 'MacBook Neo A18 Pro 13" 8GB/256GB', 'CPO', {
+        chip: 'A18 Pro',
+        chipVariant: 'pro',
+        screen: '13"',
+        ram: '8GB',
+      }),
+    ];
+
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo 13" 8/256GB', 'NOVO'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-256-new', candidateCount: 1 });
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo 13" 8/256GB', 'CPO'), catalog),
+    ).toMatchObject({ status: 'FOUND', productId: 'neo-256-cpo', candidateCount: 1 });
+    expect(
+      resolveProductIdShadow(supplierIdentity('MacBook Neo 13" 8/512GB', 'CPO'), catalog),
+    ).toMatchObject({ status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 });
+  });
+
   it('resolves Neo when the master description omits chip text but the model invariant supplies it', () => {
     const catalog = [catalogProduct('neo-256', 'MacBook Neo 13 8/256GB')];
 
@@ -308,7 +335,9 @@ describe('product identity ingestion shadow', () => {
       }),
     ];
 
-    expect(resolveProductIdShadow(supplierIdentity('iPad 9 256GB Wi-Fi', 'CPO'), catalog)).toMatchObject({
+    expect(
+      resolveProductIdShadow(supplierIdentity('iPad 9 256GB Wi-Fi', 'CPO'), catalog),
+    ).toMatchObject({
       status: 'FOUND',
       productId: 'ipad-9-256-wifi-cpo',
       candidateCount: 1,
@@ -323,7 +352,9 @@ describe('product identity ingestion shadow', () => {
       ['iPad 9 256GB', 'NOVO'],
       ['iPad 9 256GB', 'SEMINOVO'],
     ] as const) {
-      expect(resolveProductIdShadow(supplierIdentity(productName, condition), catalog)).toMatchObject({
+      expect(
+        resolveProductIdShadow(supplierIdentity(productName, condition), catalog),
+      ).toMatchObject({
         status: 'MISSING',
         reason: 'catalog_no_match',
       });
@@ -340,15 +371,21 @@ describe('product identity ingestion shadow', () => {
       status: 'FOUND',
       productId: 'airpods-max-1-new',
     });
-    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2 A3452', 'CPO'), catalog)).toMatchObject({
+    expect(
+      resolveProductIdShadow(supplierIdentity('AirPods Max 2 A3452', 'CPO'), catalog),
+    ).toMatchObject({
       status: 'FOUND',
       productId: 'airpods-max-2-cpo',
     });
-    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2', 'CPO'), catalog)).toMatchObject({
-      status: 'FOUND',
-      productId: 'airpods-max-2-cpo',
-    });
-    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2', 'NOVO'), catalog)).toMatchObject({
+    expect(resolveProductIdShadow(supplierIdentity('AirPods Max 2', 'CPO'), catalog)).toMatchObject(
+      {
+        status: 'FOUND',
+        productId: 'airpods-max-2-cpo',
+      },
+    );
+    expect(
+      resolveProductIdShadow(supplierIdentity('AirPods Max 2', 'NOVO'), catalog),
+    ).toMatchObject({
       status: 'MISSING',
       reason: 'catalog_no_match',
     });

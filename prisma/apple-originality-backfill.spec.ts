@@ -75,17 +75,17 @@ function fakeDatabase(initial: OriginalityProduct[]) {
   return { database, writes, hooks, rows: () => structuredClone(committed), reads: () => reads };
 }
 
-test('manifest has exactly the 131 unique approved catalog IDs, without filling numeric gaps', () => {
+test('manifest has exactly the 132 unique approved catalog IDs, without filling numeric gaps', () => {
   const catalog = JSON.parse(
     readFileSync(new URL('./data/profit-products.json', import.meta.url), 'utf8'),
   ) as Array<{ produto_id: number }>;
-  assert.equal(manifest.length, 131);
-  assert.equal(new Set(manifest).size, 131);
+  assert.equal(manifest.length, 132);
+  assert.equal(new Set(manifest).size, 132);
   assert.deepEqual(
     [...manifest].sort((a, b) => a - b),
     catalog.map((row) => row.produto_id).sort((a, b) => a - b),
   );
-  for (const id of [125, 128, 129, 135]) assert.equal(manifest.includes(id), false);
+  for (const id of [125, 128, 129]) assert.equal(manifest.includes(id), false);
   assert.equal(Object.isFrozen(manifest), true);
 });
 
@@ -96,14 +96,14 @@ test('default dry-run reports all counters before any write and leaves state unc
   const result = await backfillAppleOriginality(store.database, {
     onPreflight: (report) => {
       assert.equal(store.writes.length, 0);
-      assert.equal(report.found, 131);
+      assert.equal(report.found, 132);
     },
   });
   assert.deepEqual(result.preflight, {
-    expected: 131,
-    manifestCount: 131,
-    found: 131,
-    null: 130,
+    expected: 132,
+    manifestCount: 132,
+    found: 132,
+    null: 131,
     alreadyTrue: 1,
     conflictingFalse: 0,
     missing: 0,
@@ -127,8 +127,8 @@ test('apply changes only approved nulls to true; second execution makes no write
   initial[0]!.isAppleOriginal = true;
   const store = fakeDatabase(initial);
   const first = await backfillAppleOriginality(store.database, { apply: true });
-  assert.equal(first.updated, 130);
-  assert.equal(first.postflight?.alreadyTrue, 131);
+  assert.equal(first.updated, 131);
+  assert.equal(first.postflight?.alreadyTrue, 132);
   assert.equal(first.postflight?.null, 0);
   assert.equal(first.postflight?.outsideManifestAffected, 0);
   assert.deepEqual(store.rows()[0], initial[0]);
@@ -139,7 +139,7 @@ test('apply changes only approved nulls to true; second execution makes no write
   );
   const second = await backfillAppleOriginality(store.database, { apply: true });
   assert.equal(second.updated, 0);
-  assert.equal(second.preflight.alreadyTrue, 131);
+  assert.equal(second.preflight.alreadyTrue, 132);
   assert.equal(store.writes.length, 1);
   assert.deepEqual(store.rows(), afterFirst);
 });
@@ -167,7 +167,7 @@ test('missing approved Product blocks the batch without creating Products', asyn
     backfillAppleOriginality(store.database, { apply: true }),
     (error: unknown) => {
       assert.ok(error instanceof OriginalityBackfillBlocked);
-      assert.equal(error.report.found, 130);
+      assert.equal(error.report.found, manifest.length - 1);
       assert.deepEqual(error.report.missingIds, [1]);
       return true;
     },
@@ -196,8 +196,11 @@ test('manifest audit detects duplicated, missing and invalid IDs', () => {
   const duplicated = inspectOriginality(products(), [...manifest.slice(0, -1), 1]);
   assert.equal(duplicated.duplicates, 1);
   assert.deepEqual(duplicated.missingIds, []);
-  assert.equal(duplicated.found, 130);
-  assert.equal(inspectOriginality(products(), manifest.slice(1)).manifestCount, 130);
+  assert.equal(duplicated.found, manifest.length - 1);
+  assert.equal(
+    inspectOriginality(products(), manifest.slice(1)).manifestCount,
+    manifest.length - 1,
+  );
   assert.deepEqual(inspectOriginality(products(), [...manifest.slice(1), -1]).invalidIds, [-1]);
 });
 
@@ -210,7 +213,7 @@ test('outside IDs and unclassified Products remain byte-for-byte unchanged, incl
   }));
   const store = fakeDatabase([...products(), ...outside]);
   const result = await backfillAppleOriginality(store.database, { apply: true });
-  assert.deepEqual(store.rows().slice(131), outside);
+  assert.deepEqual(store.rows().slice(manifest.length), outside);
   assert.equal(result.postflight?.outsideManifestAffected, 0);
   assert.equal(
     store.writes[0]!.where.id.in.some((id) => id.startsWith('outside')),
