@@ -23,6 +23,11 @@ import {
 } from '../financial-classification';
 import { formatSourceDisplayName } from '../source-display-name';
 import { deriveProfitLookupIdentity } from '@inest/product-identity';
+import {
+  isReservedAppleManufacturerAlias,
+  normalizeManufacturerAlias,
+} from '../../manufacturers/manufacturer-alias-normalizer';
+import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 
 @Injectable()
 export class ImportRadarService {
@@ -36,6 +41,8 @@ export class ImportRadarService {
     private readonly comprasParaguaiProvider: ComprasParaguaiProvider,
     @Inject(ProductNormalizationService)
     private readonly productNormalization?: ProductNormalizationService,
+    @Inject(ManufacturersService)
+    private readonly manufacturersService?: ManufacturersService,
   ) {}
 
   async search(query: ImportSearchQueryDto, user: AuthenticatedUser) {
@@ -106,6 +113,10 @@ export class ImportRadarService {
     const condition =
       this.toStructuredCondition(catalogProduct?.profitCondition) ??
       (sourceCondition.status === 'RESOLVED' ? sourceCondition.condition : null);
+    const manufacturerResolution = await this.resolveExplicitSourceManufacturer(
+      dto.sourceManufacturer,
+      dto.sourceManufacturerProvenance,
+    );
     const financialClassification = resolveFinancialClassification({
       canonicalProduct: catalogProduct,
       productName: dto.name,
@@ -116,6 +127,7 @@ export class ImportRadarService {
       condition,
       sourceManufacturer: dto.sourceManufacturer,
       sourceManufacturerProvenance: dto.sourceManufacturerProvenance,
+      manufacturerResolution,
     });
     const result = {
       product: dto,
@@ -139,6 +151,9 @@ export class ImportRadarService {
         productResolution.status === 'FOUND' ? (productResolution.productId ?? null) : null,
       condition,
       financialClassification: financialClassification.classification,
+      financialClassificationReason: financialClassification.reason,
+      manufacturerKey: financialClassification.manufacturerKey ?? null,
+      manufacturerProvenance: financialClassification.provenance ?? null,
       pricingEligibility: this.resolvePricingEligibility({
         dto,
         catalogProduct,
@@ -277,6 +292,30 @@ export class ImportRadarService {
 
   private toStructuredCondition(value: string | null | undefined) {
     return value === 'NOVO' || value === 'SEMINOVO' || value === 'CPO' ? value : null;
+  }
+
+  private async resolveExplicitSourceManufacturer(
+    sourceManufacturer: string | null | undefined,
+    provenance: 'EXPLICIT_SOURCE' | null | undefined,
+  ) {
+    if (
+      provenance !== 'EXPLICIT_SOURCE' ||
+      !sourceManufacturer?.trim() ||
+      isReservedAppleManufacturerAlias(sourceManufacturer)
+    ) {
+      return null;
+    }
+    if (!this.manufacturersService) {
+      return {
+        status: 'MISSING' as const,
+        normalizedEvidence: normalizeManufacturerAlias(sourceManufacturer),
+      };
+    }
+    return this.manufacturersService.resolve({
+      evidence: sourceManufacturer,
+      matchMode: 'EXACT_ALIAS',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
+    });
   }
 
   private resolvePricingEligibility({

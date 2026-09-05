@@ -4,6 +4,7 @@ import { SettingsService } from '../../settings/service/settings.service';
 import { TemporaryImportPricingDto } from '../dto/pricing.dto';
 import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { PricingRepository } from '../repository/pricing.repository';
+import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 import {
   COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
   COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
@@ -108,11 +109,15 @@ function setup(
     isPricingNormalizationEnabled: vi.fn().mockReturnValue(true),
     normalize: vi.fn(),
   };
+  const manufacturers = {
+    resolve: vi.fn().mockResolvedValue({ status: 'MISSING', normalizedEvidence: '' }),
+  };
   const service = new PricingService(
     repository as unknown as PricingRepository,
     settings as unknown as SettingsService,
     provider as unknown as ProductProfitProvider,
     normalization as unknown as ProductNormalizationService,
+    manufacturers as unknown as ManufacturersService,
   );
   async function calculate(origin: Origin) {
     if (origin === 'CATALOG') return (await service.list())[0]!;
@@ -128,6 +133,7 @@ function setup(
     provider,
     settings,
     normalization,
+    manufacturers,
     service,
     calculate,
   };
@@ -285,6 +291,16 @@ describe('Pricing canonical originality routing', () => {
       condition: undefined,
     };
     fixture.repository.findActiveCatalogProductById.mockResolvedValue(null);
+    fixture.manufacturers.resolve.mockResolvedValue({
+      status: 'FOUND',
+      manufacturerId: 'manufacturer-canon',
+      manufacturerKey: 'canon',
+      canonicalName: 'Canon',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
+      normalizedEvidence: 'canon',
+      matchedAlias: 'Canon',
+      normalizedAlias: 'canon',
+    });
 
     const result = await fixture.service.calculateTemporaryImport(fixture.dto);
 

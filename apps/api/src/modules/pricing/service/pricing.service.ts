@@ -41,8 +41,16 @@ import {
   resolveProfitIdentity,
   type ProfitIdentityResolution,
 } from './profit-identity-shadow';
-import { resolveFinancialClassification } from '../../import-radar/financial-classification';
+import {
+  resolveFinancialClassification,
+  type FinancialClassificationResult,
+} from '../../import-radar/financial-classification';
 import { formatSourceDisplayName } from '../../import-radar/source-display-name';
+import {
+  isReservedAppleManufacturerAlias,
+  normalizeManufacturerAlias,
+} from '../../manufacturers/manufacturer-alias-normalizer';
+import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 
 function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResolution) {
   switch (resolution.status) {
@@ -98,6 +106,8 @@ export class PricingService {
     private readonly profitProvider: ProductProfitProvider,
     @Inject(ProductNormalizationService)
     private readonly productNormalization?: ProductNormalizationService,
+    @Inject(ManufacturersService)
+    private readonly manufacturersService?: ManufacturersService,
   ) {}
 
   async list(query: PricingQueryDto = {}) {
@@ -308,6 +318,10 @@ export class PricingService {
       catalogProduct?.productDescription?.trim() ||
       dto.displayName?.trim() ||
       dto.productName.trim();
+    const manufacturerResolution = await this.resolveExplicitSourceManufacturer(
+      dto.sourceManufacturer,
+      dto.sourceManufacturerProvenance,
+    );
     const financialClassification = resolveFinancialClassification({
       canonicalProduct: catalogProduct,
       productName: dto.productName,
@@ -318,6 +332,7 @@ export class PricingService {
       condition: profitCondition,
       sourceManufacturer: dto.sourceManufacturer,
       sourceManufacturerProvenance: dto.sourceManufacturerProvenance,
+      manufacturerResolution,
     });
     if (financialClassification.classification === 'UNRESOLVED') {
       throw new BadRequestException('Classificacao financeira do produto externo nao resolvida.');
@@ -332,7 +347,7 @@ export class PricingService {
       return this.buildTemporaryImportResult({
         dto,
         catalogProduct,
-        financialClassification: financialClassification.classification,
+        financialClassification,
         profitCondition,
         profitProductDescription,
         profitCatalog,
@@ -348,7 +363,7 @@ export class PricingService {
       return this.buildTemporaryImportResult({
         dto,
         catalogProduct,
-        financialClassification: financialClassification.classification,
+        financialClassification,
         profitCondition,
         profitProductDescription,
         profitCatalog,
@@ -371,7 +386,7 @@ export class PricingService {
         return this.buildTemporaryImportResult({
           dto,
           catalogProduct,
-          financialClassification: financialClassification.classification,
+          financialClassification,
           profitCondition,
           profitProductDescription,
           profitCatalog,
@@ -389,7 +404,7 @@ export class PricingService {
         return this.buildTemporaryImportResult({
           dto,
           catalogProduct,
-          financialClassification: financialClassification.classification,
+          financialClassification,
           profitCondition,
           profitProductDescription,
           profitCatalog,
@@ -403,7 +418,7 @@ export class PricingService {
       return this.buildTemporaryImportResult({
         dto,
         catalogProduct,
-        financialClassification: financialClassification.classification,
+        financialClassification,
         profitCondition,
         profitProductDescription,
         profitCatalog,
@@ -430,7 +445,7 @@ export class PricingService {
       return this.buildTemporaryImportResult({
         dto,
         catalogProduct,
-        financialClassification: financialClassification.classification,
+        financialClassification,
         profitCondition,
         profitProductDescription,
         profitCatalog,
@@ -450,7 +465,7 @@ export class PricingService {
     return this.buildTemporaryImportResult({
       dto,
       catalogProduct,
-      financialClassification: financialClassification.classification,
+      financialClassification,
       profitCondition,
       profitProductDescription,
       profitCatalog,
@@ -478,7 +493,7 @@ export class PricingService {
   }: {
     dto: TemporaryImportPricingDto;
     catalogProduct: Awaited<ReturnType<PricingRepository['findActiveCatalogProductById']>>;
-    financialClassification: 'APPLE' | 'NON_APPLE';
+    financialClassification: FinancialClassificationResult;
     profitCondition: ProfitCondition | null;
     profitProductDescription: string;
     profitCatalog: Awaited<ReturnType<ProductProfitProvider['getCatalog']>>;
@@ -515,7 +530,10 @@ export class PricingService {
       temporary: true,
       origin: 'PY' as const,
       ...(nonApple ? { engineMetadata: nonApple.engineMetadata } : {}),
-      financialClassification,
+      financialClassification: financialClassification.classification,
+      financialClassificationReason: financialClassification.reason,
+      manufacturerKey: financialClassification.manufacturerKey ?? null,
+      manufacturerProvenance: financialClassification.provenance ?? null,
       calculationStatus,
       calculationError,
       catalogProductId: catalogProduct?.id ?? null,
@@ -883,6 +901,30 @@ export class PricingService {
       offerPrice: engineMetadata.offerPrice,
       margin: engineMetadata.targetProfit / engineMetadata.roundedPrice,
     };
+  }
+
+  private async resolveExplicitSourceManufacturer(
+    sourceManufacturer: string | null | undefined,
+    provenance: 'EXPLICIT_SOURCE' | null | undefined,
+  ) {
+    if (
+      provenance !== 'EXPLICIT_SOURCE' ||
+      !sourceManufacturer?.trim() ||
+      isReservedAppleManufacturerAlias(sourceManufacturer)
+    ) {
+      return null;
+    }
+    if (!this.manufacturersService) {
+      return {
+        status: 'MISSING' as const,
+        normalizedEvidence: normalizeManufacturerAlias(sourceManufacturer),
+      };
+    }
+    return this.manufacturersService.resolve({
+      evidence: sourceManufacturer,
+      matchMode: 'EXACT_ALIAS',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
+    });
   }
 
   private calculateExternalPricing(

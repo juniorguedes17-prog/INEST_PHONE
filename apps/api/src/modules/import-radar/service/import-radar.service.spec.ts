@@ -6,6 +6,7 @@ import { MockImportProvider } from '../providers/mock-import.provider';
 import { ImportRadarRepository } from '../repository/import-radar.repository';
 import { ImportRadarService } from './import-radar.service';
 import { ProductNormalizationService } from '../../evolution-webhook/product-normalization.service';
+import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 
 const PRODUCT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -29,6 +30,7 @@ function createService(
     ProductNormalizationService,
     'isPricingNormalizationEnabled' | 'normalize'
   >,
+  manufacturerResolver?: Pick<ManufacturersService, 'resolve'>,
 ) {
   const repository = {
     listActiveCatalogProducts: vi.fn().mockResolvedValue(catalog),
@@ -52,6 +54,7 @@ function createService(
     {} as MockImportProvider,
     {} as ComprasParaguaiProvider,
     productNormalization as ProductNormalizationService | undefined,
+    manufacturerResolver as ManufacturersService | undefined,
   );
 }
 
@@ -91,8 +94,20 @@ describe('ImportRadarService catalog product handoff', () => {
     });
   });
 
-  it('authorizes an explicit-source Non-Apple item without a canonical Product', async () => {
-    const result = await createService([]).calculate(
+  it('authorizes a registry-resolved explicit-source Non-Apple item without a canonical Product', async () => {
+    const manufacturerResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        status: 'FOUND',
+        manufacturerId: 'manufacturer-canon',
+        manufacturerKey: 'canon',
+        canonicalName: 'Canon',
+        provenance: 'EXPLICIT_SOURCE_VALIDATED',
+        normalizedEvidence: 'canon',
+        matchedAlias: 'Canon',
+        normalizedAlias: 'canon',
+      }),
+    };
+    const result = await createService([], undefined, manufacturerResolver).calculate(
       {
         ...importProduct,
         name: 'Camera Digital Canon EOS Rebel T7 24.1MP',
@@ -109,8 +124,82 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(result).toMatchObject({
       catalogProductId: null,
       financialClassification: 'NON_APPLE',
+      financialClassificationReason: 'manufacturer_registry',
+      manufacturerKey: 'canon',
       pricingEligibility: { status: 'ELIGIBLE', reason: null },
     });
+  });
+
+  it('fails closed for an explicit manufacturer missing from the registry', async () => {
+    const manufacturerResolver = {
+      resolve: vi.fn().mockResolvedValue({ status: 'MISSING', normalizedEvidence: 'novamarca' }),
+    };
+    const result = await createService([], undefined, manufacturerResolver).calculate(
+      {
+        ...importProduct,
+        name: 'Camera NovaMarca X1',
+        category: 'Outros',
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+        sourceManufacturer: 'NovaMarca',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      financialClassificationReason: 'manufacturer_missing',
+      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+    });
+  });
+
+  it('fails closed for an explicit manufacturer with ambiguous registry matches', async () => {
+    const manufacturerResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        status: 'AMBIGUOUS',
+        normalizedEvidence: 'orbit',
+        manufacturerKeys: ['orbit-a', 'orbit-b'],
+      }),
+    };
+    const result = await createService([], undefined, manufacturerResolver).calculate(
+      {
+        ...importProduct,
+        name: 'Camera Orbit X1',
+        category: 'Outros',
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+        sourceManufacturer: 'Orbit',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      financialClassificationReason: 'manufacturer_ambiguous',
+      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+    });
+  });
+
+  it('does not resolve Apple through the external manufacturer registry', async () => {
+    const manufacturerResolver = { resolve: vi.fn() };
+    const result = await createService([], undefined, manufacturerResolver).calculate(
+      {
+        ...importProduct,
+        sourceManufacturer: 'Apple',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'APPLE',
+      financialClassificationReason: 'apple_registry',
+    });
+    expect(manufacturerResolver.resolve).not.toHaveBeenCalled();
   });
 
   it('does not authorize inferred manufacturer text without provenance', async () => {

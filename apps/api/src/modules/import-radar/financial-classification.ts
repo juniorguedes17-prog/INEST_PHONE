@@ -1,4 +1,8 @@
 import { normalizeCanonicalProductIdentity } from '@inest/product-identity';
+import type {
+  FinancialClassificationAuthorityProvenance,
+  ManufacturerResolution,
+} from '../manufacturers/manufacturer-resolver';
 
 export type FinancialClassification = 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
 export type SourceManufacturerProvenance = 'EXPLICIT_SOURCE';
@@ -6,9 +10,11 @@ export type SourceManufacturerProvenance = 'EXPLICIT_SOURCE';
 export type FinancialClassificationReason =
   | 'canonical_product'
   | 'apple_registry'
-  | 'source_manufacturer'
-  | 'classification_unresolved'
-  | 'classification_conflict';
+  | 'manufacturer_registry'
+  | 'manufacturer_missing'
+  | 'manufacturer_ambiguous'
+  | 'manufacturer_conflict'
+  | 'classification_unresolved';
 
 export interface FinancialClassificationInput {
   canonicalProduct?: { isAppleOriginal?: boolean | null } | null;
@@ -20,11 +26,15 @@ export interface FinancialClassificationInput {
   condition?: string | null;
   sourceManufacturer?: string | null;
   sourceManufacturerProvenance?: SourceManufacturerProvenance | null;
+  manufacturerResolution?: ManufacturerResolution | null;
 }
 
 export interface FinancialClassificationResult {
   classification: FinancialClassification;
   reason: FinancialClassificationReason;
+  manufacturerKey?: string;
+  canonicalName?: string;
+  provenance?: FinancialClassificationAuthorityProvenance;
 }
 
 /**
@@ -35,10 +45,18 @@ export function resolveFinancialClassification(
   input: FinancialClassificationInput,
 ): FinancialClassificationResult {
   if (input.canonicalProduct?.isAppleOriginal === true) {
-    return { classification: 'APPLE', reason: 'canonical_product' };
+    return {
+      classification: 'APPLE',
+      reason: 'canonical_product',
+      provenance: 'CANONICAL_PRODUCT',
+    };
   }
   if (input.canonicalProduct?.isAppleOriginal === false) {
-    return { classification: 'NON_APPLE', reason: 'canonical_product' };
+    return {
+      classification: 'NON_APPLE',
+      reason: 'canonical_product',
+      provenance: 'CANONICAL_PRODUCT',
+    };
   }
 
   const identity = normalizeCanonicalProductIdentity({
@@ -50,25 +68,34 @@ export function resolveFinancialClassification(
     quality: input.condition ?? undefined,
   });
   const appleByRegistry = identity.canonicalModelMatched;
-  const manufacturer = normalizeManufacturer(input.sourceManufacturer);
-  const authoritativeManufacturer =
-    manufacturer !== null && input.sourceManufacturerProvenance === 'EXPLICIT_SOURCE';
+  const manufacturer = input.manufacturerResolution ?? null;
 
   if (appleByRegistry) {
-    if (authoritativeManufacturer && manufacturer !== 'apple') {
-      return { classification: 'UNRESOLVED', reason: 'classification_conflict' };
+    if (manufacturer?.status === 'FOUND') {
+      return { classification: 'UNRESOLVED', reason: 'manufacturer_conflict' };
     }
-    return { classification: 'APPLE', reason: 'apple_registry' };
+    return {
+      classification: 'APPLE',
+      reason: 'apple_registry',
+      provenance: 'APPLE_CANONICAL_REGISTRY',
+    };
   }
 
-  if (authoritativeManufacturer && manufacturer !== 'apple') {
-    return { classification: 'NON_APPLE', reason: 'source_manufacturer' };
+  if (manufacturer?.status === 'FOUND') {
+    return {
+      classification: 'NON_APPLE',
+      reason: 'manufacturer_registry',
+      manufacturerKey: manufacturer.manufacturerKey,
+      canonicalName: manufacturer.canonicalName,
+      provenance: manufacturer.provenance,
+    };
+  }
+  if (manufacturer?.status === 'MISSING') {
+    return { classification: 'UNRESOLVED', reason: 'manufacturer_missing' };
+  }
+  if (manufacturer?.status === 'AMBIGUOUS') {
+    return { classification: 'UNRESOLVED', reason: 'manufacturer_ambiguous' };
   }
 
   return { classification: 'UNRESOLVED', reason: 'classification_unresolved' };
-}
-
-function normalizeManufacturer(value: string | null | undefined) {
-  const normalized = value?.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR') ?? '';
-  return normalized || null;
 }
