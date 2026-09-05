@@ -627,27 +627,42 @@ export class PricingService {
           ? 'Condicao da cotacao do Radar Brasil diverge da condicao do produto mestre associado.'
           : null;
     const canResolveProfit = !productIdUnavailable && !conditionError;
-    const nonApple = canResolveProfit
-      ? this.calculateNonApplePricing(
-          catalogProduct?.isAppleOriginal,
-          toNumber(quote.price),
-          settings,
-          pricingConfigurations,
-        )
-      : null;
+    const financialClassification = resolveFinancialClassification({
+      canonicalProduct: catalogProduct,
+      productName: quote.productName,
+      category: quote.category,
+      model: quote.model,
+      capacity: quote.capacity,
+      color: quote.color,
+      condition: quoteProfitCondition ?? quote.condition,
+    });
+    const pricingEligibility =
+      financialClassification.classification === 'UNRESOLVED'
+        ? { status: 'BLOCKED' as const, reason: 'classification_unresolved' as const }
+        : { status: 'ELIGIBLE' as const, reason: null };
+    const nonApple =
+      canResolveProfit && financialClassification.classification === 'NON_APPLE'
+        ? this.calculateNonApplePricing(
+            false,
+            toNumber(quote.price),
+            settings,
+            pricingConfigurations,
+          )
+        : null;
     const profitCondition = quoteProfitCondition ?? quote.condition?.trim() ?? '';
     const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
-    const legacyProfitLookup =
-      !canResolveProfit || nonApple
-        ? { status: 'not_found' as const }
-        : this.findProfit(
-            profitCatalog,
-            catalogProduct?.profitProductId,
-            quoteProfitCondition!,
-            profitProductDescription,
-          );
+    const shouldResolveAppleProfit =
+      canResolveProfit && financialClassification.classification === 'APPLE';
+    const legacyProfitLookup = !shouldResolveAppleProfit
+      ? { status: 'not_found' as const }
+      : this.findProfit(
+          profitCatalog,
+          catalogProduct?.profitProductId,
+          quoteProfitCondition!,
+          profitProductDescription,
+        );
     const profitIdentityResolution =
-      canResolveProfit && !nonApple && pricingResolutionSource === 'LEGACY_FALLBACK'
+      shouldResolveAppleProfit && pricingResolutionSource === 'LEGACY_FALLBACK'
         ? resolveProfitIdentity(profitCatalog, {
             productDescription: quoteDescription,
             condition: quoteProfitCondition!,
@@ -726,11 +741,16 @@ export class PricingService {
               calculationStatus: 'missing_profit' as const,
               calculationError: conditionError,
             }
-          : nonApple
-            ? { calculationStatus: 'ready' as const, calculationError: null }
-            : pricingResolutionSource === 'PRODUCT_ID'
-              ? getDirectProductProfitCalculationState(legacyProfitLookup)
-              : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
+          : financialClassification.classification === 'UNRESOLVED'
+            ? {
+                calculationStatus: 'classification_unresolved' as const,
+                calculationError: 'Classificacao financeira do produto externo nao resolvida.',
+              }
+            : nonApple
+              ? { calculationStatus: 'ready' as const, calculationError: null }
+              : pricingResolutionSource === 'PRODUCT_ID'
+                ? getDirectProductProfitCalculationState(legacyProfitLookup)
+                : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
     const contact = quote.currentList.supplierContact;
     const productName = catalogProduct?.productDescription?.trim() || quote.productName.trim();
 
@@ -767,6 +787,8 @@ export class PricingService {
       source: 'BRAZIL_RADAR' as const,
       sourceQuoteId: quote.id,
       catalogProductId: catalogProduct?.id ?? null,
+      financialClassification: financialClassification.classification,
+      pricingEligibility,
       product: {
         id: catalogProduct?.id ?? null,
         name: productName,

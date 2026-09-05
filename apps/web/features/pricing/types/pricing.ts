@@ -77,6 +77,11 @@ export interface BrazilRadarQuotePricing {
   source: 'BRAZIL_RADAR';
   sourceQuoteId: string;
   catalogProductId: string | null;
+  financialClassification: 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
+  pricingEligibility: {
+    status: 'ELIGIBLE' | 'BLOCKED';
+    reason: 'classification_unresolved' | null;
+  };
   product: {
     id: string | null;
     name: string;
@@ -108,7 +113,12 @@ export interface BrazilRadarQuotePricing {
     updatedAt: string;
   };
   calculationStatus:
-    'ready' | 'missing_profit' | 'insufficient_identity' | 'ambiguous_identity' | 'collision';
+    | 'ready'
+    | 'missing_profit'
+    | 'insufficient_identity'
+    | 'ambiguous_identity'
+    | 'collision'
+    | 'classification_unresolved';
   calculationError: string | null;
   offerDraft: OfferDraft | null;
 }

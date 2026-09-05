@@ -439,6 +439,8 @@ function toProfitRegistrationItem(item: TemporaryImportPricing): BrazilRadarQuot
     source: 'BRAZIL_RADAR',
     sourceQuoteId: `temporary-py-${item.recalculationRequest.sourceProductId}`,
     catalogProductId: item.catalogProductId,
+    financialClassification: item.financialClassification,
+    pricingEligibility: { status: 'ELIGIBLE', reason: null },
     calculationStatus: item.calculationStatus === 'ready' ? 'ready' : 'missing_profit',
     calculationError: item.calculationError,
     product: {

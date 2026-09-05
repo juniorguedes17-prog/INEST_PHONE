@@ -1211,6 +1211,7 @@ describe('PricingService native product profit integration', () => {
     const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
 
     expect(result).toMatchObject({
+      financialClassification: 'APPLE',
       calculationStatus: 'insufficient_identity',
       calculationError: 'Informacoes insuficientes para identificar a configuracao financeira.',
       desiredNetProfit: null,
@@ -1231,13 +1232,63 @@ describe('PricingService native product profit integration', () => {
     });
   });
 
+  it('blocks an unlinked external quote without authoritative classification before Apple identity lookup', async () => {
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          productName: 'Garmin Vivoactive 6',
+          normalizedName: 'garmin vivoactive 6',
+          category: 'Smartwatch',
+          model: 'Vivoactive 6',
+          color: 'Preto',
+          condition: 'CPO',
+          price: 1690,
+        }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+    const profitProvider = {
+      getCatalog: vi.fn().mockResolvedValue({
+        records: [],
+        fetchedAt: '2026-08-17T10:00:00.000Z',
+      }),
+    };
+    const productNormalization = {
+      isPricingNormalizationEnabled: vi.fn().mockReturnValue(true),
+      normalize: vi.fn(),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      settingsService as unknown as SettingsService,
+      profitProvider as unknown as ProductProfitProvider,
+      productNormalization as unknown as ProductNormalizationService,
+    );
+
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+
+    expect(result).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+      calculationStatus: 'classification_unresolved',
+      calculationError: 'Classificacao financeira do produto externo nao resolvida.',
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      profit: { source: 'unavailable', recordId: null },
+      offerDraft: null,
+    });
+    expect(productNormalization.normalize).not.toHaveBeenCalled();
+  });
+
   it.each([
     {
-      name: 'ambiguous identity',
+      name: 'unresolved financial classification',
       productName: 'iPhone 17 Pro 256GB Apple Watch S11 46mm',
       records: [],
-      status: 'ambiguous_identity',
-      error: 'Identidade financeira ambigua para este produto.',
+      status: 'classification_unresolved',
+      error: 'Classificacao financeira do produto externo nao resolvida.',
     },
     {
       name: 'catalog collision',
