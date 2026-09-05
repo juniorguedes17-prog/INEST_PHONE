@@ -63,7 +63,7 @@ const boundaryMaxima = [
     priceCents: rawPrice(boundary * 100).rawBasePrice,
   }));
 
-/** Pure calculation only; production routing does not invoke this engine. */
+/** Pure calculation; the caller owns product classification and routing. */
 export function calculateNonAppleElectronics(input: NonAppleElectronicsInput) {
   const costCents = cents(input.acquisitionCost, 'acquisitionCost');
   if (costCents === 0) throw new RangeError('acquisitionCost must be positive');

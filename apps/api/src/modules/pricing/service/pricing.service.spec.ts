@@ -288,7 +288,7 @@ describe('PricingService native product profit integration', () => {
     },
   );
 
-  it.each([true, false, null])(
+  it.each([true, null])(
     'exposes Apple originality %s without changing temporary import pricing',
     async (isAppleOriginal) => {
       const repository = {

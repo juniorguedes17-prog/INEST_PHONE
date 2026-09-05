@@ -34,6 +34,7 @@ import {
   roundUpToCommercialPrice,
 } from '../utils/commercial-price-rounding';
 import { normalizeOfferIncrement } from '../utils/offer-increment';
+import { calculateNonAppleElectronics } from '../utils/non-apple-electronics.engine';
 import { quoteIsValid, toNumber } from '../validators/pricing.validators';
 import {
   compareProfitIdentityResults,
@@ -115,26 +116,38 @@ export class PricingService {
       const modelName = product?.model?.name ?? '';
       const profitCondition = this.getProfitCondition(product?.productType ?? '');
       const profitProductDescription = this.getProfitProductDescription(quote);
-      const profitLookup = this.findProfit(
-        profitCatalog,
-        product?.profitProductId,
-        profitCondition,
-        profitProductDescription,
+      const nonApple = this.calculateNonApplePricing(
+        product?.isAppleOriginal,
+        costProduct,
+        settings,
+        pricingConfigurations,
       );
-      const fixedCost = toNumber(settings.financial.globalFixedCost);
+      const profitLookup = nonApple
+        ? { status: 'not_found' as const }
+        : this.findProfit(
+            profitCatalog,
+            product?.profitProductId,
+            profitCondition,
+            profitProductDescription,
+          );
+      const fixedCost = nonApple?.fixedCost ?? toNumber(settings.financial.globalFixedCost);
       const freight = toNumber(settings.financial.defaultFreight);
       const paymentFee = toNumber(settings.financial.defaultPaymentFee);
       const desiredNetProfit =
-        profitLookup.status === 'found' ? profitLookup.record.netProfit : null;
+        nonApple?.engineMetadata.targetProfit ??
+        (profitLookup.status === 'found' ? profitLookup.record.netProfit : null);
       const basePrice =
         desiredNetProfit === null
           ? null
           : costProduct + fixedCost + freight + paymentFee + desiredNetProfit;
       const salePrice =
-        basePrice === null ? null : roundUpToCommercialPrice(basePrice, commercialEndings);
-      const offerPrice = salePrice === null ? null : salePrice + offerIncrement;
-      const calculationError =
-        profitLookup.status === 'not_found'
+        nonApple?.salePrice ??
+        (basePrice === null ? null : roundUpToCommercialPrice(basePrice, commercialEndings));
+      const offerPrice =
+        nonApple?.offerPrice ?? (salePrice === null ? null : salePrice + offerIncrement);
+      const calculationError = nonApple
+        ? null
+        : profitLookup.status === 'not_found'
           ? 'Lucro líquido não cadastrado para este modelo e condição.'
           : profitLookup.status === 'duplicate'
             ? 'Cadastro duplicado de lucro líquido para este modelo e condição.'
@@ -150,6 +163,7 @@ export class PricingService {
         capacity: product?.storage?.displayName ?? '',
         productType: product?.productType ?? '',
         isAppleOriginal: product?.isAppleOriginal ?? null,
+        ...(nonApple ? { engineMetadata: nonApple.engineMetadata } : {}),
         status: product?.status ?? '',
         supplier: {
           id: quote.supplier?.id ?? quote.supplierId,
@@ -166,19 +180,23 @@ export class PricingService {
         salePrice,
         offerPrice,
         lastUpdatedAt: quote.createdAt ?? quote.quoteDate,
-        profitSource: profitLookup.status === 'found' ? 'native_product_catalog' : 'unavailable',
+        profitSource: nonApple
+          ? 'non_apple_electronics_policy'
+          : profitLookup.status === 'found'
+            ? 'native_product_catalog'
+            : 'unavailable',
         profitCondition,
         profitProductDescription,
         profitRecordId: profitLookup.status === 'found' ? profitLookup.record.productId : null,
         profitUpdatedAt: profitCatalog.fetchedAt,
         calculationStatus:
-          profitLookup.status === 'found'
+          nonApple || profitLookup.status === 'found'
             ? 'ready'
             : profitLookup.status === 'duplicate'
               ? 'duplicate_profit'
               : 'missing_profit',
         calculationError,
-        googleSheetsReady: profitLookup.status === 'found',
+        googleSheetsReady: Boolean(nonApple) || profitLookup.status === 'found',
       };
     });
 
@@ -283,6 +301,26 @@ export class PricingService {
       catalogProduct.profitCondition,
     );
     const profitProductDescription = catalogProduct.productDescription;
+    const nonApple = this.calculateNonApplePricing(
+      catalogProduct.isAppleOriginal,
+      dto.totalCost,
+      settings,
+      pricingConfigurations,
+    );
+    if (nonApple) {
+      return this.buildTemporaryImportResult({
+        dto,
+        catalogProduct,
+        profitCondition,
+        profitProductDescription,
+        profitCatalog,
+        pricingConfigurations,
+        settings,
+        desiredNetProfit: nonApple.engineMetadata.targetProfit,
+        calculationStatus: 'ready',
+        nonApple,
+      });
+    }
     const profitLookup = this.findProfit(
       profitCatalog,
       catalogProduct.profitProductId,
@@ -334,6 +372,7 @@ export class PricingService {
     desiredNetProfit,
     calculationStatus,
     calculationError = null,
+    nonApple = null,
   }: {
     dto: TemporaryImportPricingDto;
     catalogProduct: NonNullable<
@@ -347,18 +386,22 @@ export class PricingService {
     desiredNetProfit: number | null;
     calculationStatus: 'ready' | 'missing_profit';
     calculationError?: string | null;
+    nonApple?: ReturnType<PricingService['calculateNonApplePricing']>;
   }) {
-    const calculation = this.calculateExternalPricing(
-      dto.totalCost,
-      desiredNetProfit,
-      settings,
-      pricingConfigurations,
-    );
+    const calculation =
+      nonApple ??
+      this.calculateExternalPricing(
+        dto.totalCost,
+        desiredNetProfit,
+        settings,
+        pricingConfigurations,
+      );
     const productName = dto.productName.trim();
 
     return {
       temporary: true,
       origin: 'PY' as const,
+      ...(nonApple ? { engineMetadata: nonApple.engineMetadata } : {}),
       calculationStatus,
       calculationError,
       catalogProductId: catalogProduct.id,
@@ -399,11 +442,13 @@ export class PricingService {
       salePrice: calculation.salePrice,
       offerPrice: calculation.offerPrice,
       profit: {
-        source: 'native_product_catalog',
+        source: nonApple ? 'non_apple_electronics_policy' : 'native_product_catalog',
         condition: profitCondition,
         productDescription: profitProductDescription,
         recordId:
-          catalogProduct.profitProductId === null ? null : String(catalogProduct.profitProductId),
+          nonApple || catalogProduct.profitProductId === null
+            ? null
+            : String(catalogProduct.profitProductId),
         updatedAt: profitCatalog.fetchedAt,
       },
       offerDraft:
@@ -465,18 +510,27 @@ export class PricingService {
           ? 'Condicao da cotacao do Radar Brasil diverge da condicao do produto mestre associado.'
           : null;
     const canResolveProfit = !productIdUnavailable && !conditionError;
+    const nonApple = canResolveProfit
+      ? this.calculateNonApplePricing(
+          catalogProduct?.isAppleOriginal,
+          toNumber(quote.price),
+          settings,
+          pricingConfigurations,
+        )
+      : null;
     const profitCondition = quoteProfitCondition ?? quote.condition?.trim() ?? '';
     const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
-    const legacyProfitLookup = !canResolveProfit
-      ? { status: 'not_found' as const }
-      : this.findProfit(
-          profitCatalog,
-          catalogProduct?.profitProductId,
-          quoteProfitCondition!,
-          profitProductDescription,
-        );
+    const legacyProfitLookup =
+      !canResolveProfit || nonApple
+        ? { status: 'not_found' as const }
+        : this.findProfit(
+            profitCatalog,
+            catalogProduct?.profitProductId,
+            quoteProfitCondition!,
+            profitProductDescription,
+          );
     const profitIdentityResolution =
-      canResolveProfit && pricingResolutionSource === 'LEGACY_FALLBACK'
+      canResolveProfit && !nonApple && pricingResolutionSource === 'LEGACY_FALLBACK'
         ? resolveProfitIdentity(profitCatalog, {
             productDescription: quoteDescription,
             condition: quoteProfitCondition!,
@@ -530,13 +584,16 @@ export class PricingService {
         : profitIdentityResolution?.status === 'found'
           ? profitIdentityResolution.record
           : null;
-    const desiredNetProfit = profitRecord?.netProfit ?? null;
-    const calculation = this.calculateExternalPricing(
-      toNumber(quote.price),
-      desiredNetProfit,
-      settings,
-      pricingConfigurations,
-    );
+    const desiredNetProfit =
+      nonApple?.engineMetadata.targetProfit ?? profitRecord?.netProfit ?? null;
+    const calculation =
+      nonApple ??
+      this.calculateExternalPricing(
+        toNumber(quote.price),
+        desiredNetProfit,
+        settings,
+        pricingConfigurations,
+      );
     const { calculationStatus, calculationError } = !quoteProfitCondition
       ? {
           calculationStatus: 'missing_profit' as const,
@@ -552,9 +609,11 @@ export class PricingService {
               calculationStatus: 'missing_profit' as const,
               calculationError: conditionError,
             }
-          : pricingResolutionSource === 'PRODUCT_ID'
-            ? getDirectProductProfitCalculationState(legacyProfitLookup)
-            : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
+          : nonApple
+            ? { calculationStatus: 'ready' as const, calculationError: null }
+            : pricingResolutionSource === 'PRODUCT_ID'
+              ? getDirectProductProfitCalculationState(legacyProfitLookup)
+              : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
     const contact = quote.currentList.supplierContact;
     const productName = catalogProduct?.productDescription?.trim() || quote.productName.trim();
 
@@ -587,6 +646,7 @@ export class PricingService {
     return {
       temporary: true,
       origin: 'BR' as const,
+      ...(nonApple ? { engineMetadata: nonApple.engineMetadata } : {}),
       source: 'BRAZIL_RADAR' as const,
       sourceQuoteId: quote.id,
       catalogProductId: catalogProduct?.id ?? null,
@@ -614,7 +674,11 @@ export class PricingService {
       salePrice: calculation.salePrice,
       offerPrice: calculation.offerPrice,
       profit: {
-        source: profitRecord ? 'native_product_catalog' : 'unavailable',
+        source: nonApple
+          ? 'non_apple_electronics_policy'
+          : profitRecord
+            ? 'native_product_catalog'
+            : 'unavailable',
         condition: profitCondition,
         productDescription: profitProductDescription,
         recordId: profitRecord?.productId ?? null,
@@ -643,6 +707,41 @@ export class PricingService {
               },
             }
           : null,
+    };
+  }
+
+  private calculateNonApplePricing(
+    isAppleOriginal: boolean | null | undefined,
+    acquisitionCost: number,
+    settings: Awaited<ReturnType<SettingsService['getSettings']>>,
+    pricingConfigurations: Awaited<ReturnType<PricingRepository['listPricingConfigurations']>>,
+  ) {
+    if (isAppleOriginal !== false) return null;
+
+    let engineMetadata: ReturnType<typeof calculateNonAppleElectronics>;
+    try {
+      engineMetadata = calculateNonAppleElectronics({
+        acquisitionCost,
+        applicableCharges: {
+          defaultFreight: toNumber(settings.financial.defaultFreight),
+          defaultPaymentFee: toNumber(settings.financial.defaultPaymentFee),
+        },
+        commercialEndings: this.getCommercialPriceEndings(pricingConfigurations),
+        offerIncrement: this.getOfferIncrement(pricingConfigurations),
+      });
+    } catch (error) {
+      if (error instanceof RangeError) throw new BadRequestException(error.message);
+      throw error;
+    }
+    return {
+      engineMetadata,
+      fixedCost: engineMetadata.fixedCost,
+      freight: engineMetadata.applicableCharges.defaultFreight,
+      paymentFee: engineMetadata.applicableCharges.defaultPaymentFee,
+      offerIncrement: engineMetadata.offerIncrement,
+      salePrice: engineMetadata.roundedPrice,
+      offerPrice: engineMetadata.offerPrice,
+      margin: engineMetadata.targetProfit / engineMetadata.roundedPrice,
     };
   }
 
@@ -819,7 +918,10 @@ export class PricingService {
     return bestQuotes;
   }
 
-  private applyFilters(items: ReturnType<PricingService['mapItem']>[], query: PricingQueryDto) {
+  private applyFilters<T extends ReturnType<PricingService['mapItem']>>(
+    items: T[],
+    query: PricingQueryDto,
+  ) {
     const normalizedSearch = query.search?.toLowerCase();
     const filtered = items.filter((item) => {
       if (normalizedSearch && !item.productName.toLowerCase().includes(normalizedSearch)) {
