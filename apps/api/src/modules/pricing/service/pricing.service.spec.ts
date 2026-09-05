@@ -288,6 +288,73 @@ describe('PricingService native product profit integration', () => {
     },
   );
 
+  it.each([true, false, null])(
+    'exposes Apple originality %s without changing temporary import pricing',
+    async (isAppleOriginal) => {
+      const repository = {
+        findActiveCatalogProductById: vi.fn().mockResolvedValue({
+          id: CATALOG_PRODUCT_ID,
+          profitProductId: 1,
+          productDescription: 'iPhone 17 Pro Max 256GB',
+          profitCondition: 'NOVO',
+          isAppleOriginal,
+        }),
+        listPricingConfigurations: vi
+          .fn()
+          .mockResolvedValue([{ key: 'pricing.offer_increment', value: '100', type: 'currency' }]),
+      };
+      const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: '1',
+              condition: 'NOVO',
+              productDescription: 'iPhone 17 Pro Max 256GB',
+              normalizedDescription: 'iphone 17 pro max 256gb',
+              netProfit: 690,
+            },
+          ],
+          fetchedAt: '2026-08-15T00:00:00.000Z',
+        }),
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
+
+      const result = await service.calculateTemporaryImport({
+        sourceProductId: 'radar-py-1',
+        catalogProductId: CATALOG_PRODUCT_ID,
+        productName: 'iPhone 17 Pro Max 256GB',
+        category: 'iPhone',
+        supplier: 'Fornecedor',
+        store: 'Loja',
+        productUrl: 'https://example.com/product',
+        priceUsd: 1000,
+        dollarQuote: 5,
+        convertedPrice: 5000,
+        cdeExit: 0,
+        redirectCost: 0,
+        brazilDispatch: 0,
+        invoiceTax: 0,
+        correiosLabel: 0,
+        totalCost: 5000,
+        brand: 'Apple',
+        model: 'iPhone 17 Pro Max',
+        condition: 'NOVO',
+      });
+
+      expect(result).toMatchObject({
+        product: { isAppleOriginal },
+        desiredNetProfit: 690,
+        salePrice: 6049,
+        offerPrice: 6149,
+      });
+    },
+  );
+
   it('applies commercial endings configured in the pricing scope', async () => {
     const repository = {
       findActiveCatalogProductById: vi.fn().mockResolvedValue({

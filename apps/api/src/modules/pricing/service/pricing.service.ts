@@ -149,6 +149,7 @@ export class PricingService {
         color: product?.color?.name ?? '',
         capacity: product?.storage?.displayName ?? '',
         productType: product?.productType ?? '',
+        isAppleOriginal: product?.isAppleOriginal ?? null,
         status: product?.status ?? '',
         supplier: {
           id: quote.supplier?.id ?? quote.supplierId,
@@ -375,6 +376,7 @@ export class PricingService {
         city: dto.city ?? '',
         productUrl: dto.productUrl,
         priceUsd: dto.priceUsd,
+        isAppleOriginal: catalogProduct.isAppleOriginal ?? null,
       },
       importCosts: {
         dollarQuote: dto.dollarQuote,
@@ -598,6 +600,7 @@ export class PricingService {
         supplier: contact.supplierName,
         city: contact.address ?? '',
         condition: profitCondition,
+        isAppleOriginal: catalogProduct?.isAppleOriginal ?? null,
       },
       costProduct: toNumber(quote.price),
       pricingCosts: {

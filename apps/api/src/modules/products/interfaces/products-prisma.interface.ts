@@ -12,6 +12,7 @@ export interface ProductRecord {
   colorId?: string | null;
   storageId?: string | null;
   productType: string;
+  isAppleOriginal?: boolean | null;
   status: string;
   qualityGrade?: string | null;
   criticalNotes?: string | null;

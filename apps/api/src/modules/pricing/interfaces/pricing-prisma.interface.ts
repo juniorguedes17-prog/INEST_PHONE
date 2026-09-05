@@ -19,6 +19,7 @@ export interface PricingPriceHistoryRecord {
     productDescription?: string | null;
     profitProductId?: number | null;
     productType: string;
+    isAppleOriginal?: boolean | null;
     status?: string | null;
     qualityGrade?: string | null;
     category?: { id: string; name: string };
@@ -66,6 +67,7 @@ export interface PricingCatalogProductRecord {
   productDescription?: string | null;
   normalizedDescription?: string | null;
   productType: string;
+  isAppleOriginal?: boolean | null;
   profitCondition?: string | null;
   category?: { name: string } | null;
   model?: { name: string } | null;

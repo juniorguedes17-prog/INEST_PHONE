@@ -47,6 +47,7 @@ export class PricingRepository {
         productDescription: true,
         normalizedDescription: true,
         productType: true,
+        isAppleOriginal: true,
         profitCondition: true,
       },
     });
@@ -66,6 +67,7 @@ export class PricingRepository {
         productDescription: true,
         normalizedDescription: true,
         productType: true,
+        isAppleOriginal: true,
         profitCondition: true,
         category: { select: { name: true } },
         model: { select: { name: true } },

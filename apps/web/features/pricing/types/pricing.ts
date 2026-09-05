@@ -7,6 +7,7 @@ export interface PricingItem {
   color: string;
   capacity: string;
   productType: string;
+  isAppleOriginal: boolean | null;
   status: string;
   supplier: {
     id: string;
@@ -86,6 +87,7 @@ export interface BrazilRadarQuotePricing {
     supplier: string;
     city: string;
     condition: 'NOVO' | 'SEMINOVO' | 'CPO';
+    isAppleOriginal: boolean | null;
   };
   costProduct: number;
   pricingCosts: {
@@ -171,6 +173,7 @@ export interface TemporaryImportPricing {
     city: string;
     productUrl: string;
     priceUsd: number;
+    isAppleOriginal: boolean | null;
   };
   importCosts: {
     dollarQuote: number;

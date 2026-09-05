@@ -515,6 +515,7 @@ model Product {
   colorId               String?           @map("cor_id") @db.Uuid
   storageId             String?           @map("capacidade_id") @db.Uuid
   productType           ProductType       @map("tipo_produto")
+  isAppleOriginal       Boolean?          @map("apple_original")
   status                ProductStatus     @default(PENDING_REVIEW)
   qualityGrade          String?           @map("grade_qualidade") @db.VarChar(40)
   batteryHealth         Int?              @map("saude_bateria")

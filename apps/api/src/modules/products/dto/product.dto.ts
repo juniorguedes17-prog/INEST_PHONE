@@ -1,6 +1,7 @@
 import { Transform, Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import {
+  IsBoolean,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -90,6 +91,11 @@ export class CreateProductDto {
     'ACCESSORY',
   ])
   productType!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  isAppleOriginal?: boolean | null;
 
   @ApiPropertyOptional()
   @IsOptional()

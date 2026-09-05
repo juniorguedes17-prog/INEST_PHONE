@@ -38,6 +38,42 @@ describe('ProductsRepository manual catalog persistence', () => {
     );
   });
 
+  it.each([true, false, null])(
+    'persists Apple originality as the explicit tri-state value %s',
+    async (isAppleOriginal) => {
+      const prisma = {
+        product: {
+          findFirst: vi.fn().mockResolvedValue({ profitProductId: 132 }),
+          create: vi.fn().mockResolvedValue({ id: 'product-133', isAppleOriginal }),
+        },
+      };
+      const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+      await repository.createProduct({ ...dto, isAppleOriginal }, 'user-1');
+
+      expect(prisma.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isAppleOriginal }),
+        }),
+      );
+    },
+  );
+
+  it('does not derive Apple originality from ProductType when classification is absent', async () => {
+    const prisma = {
+      product: {
+        findFirst: vi.fn().mockResolvedValue({ profitProductId: 132 }),
+        create: vi.fn().mockResolvedValue({ id: 'product-133' }),
+      },
+    };
+    const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+    await repository.createProduct(dto, 'user-1');
+
+    const call = prisma.product.create.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(call.data).not.toHaveProperty('isAppleOriginal');
+  });
+
   it('keeps the existing soft delete and activation semantics aligned with active', async () => {
     const update = vi.fn().mockResolvedValue({ id: 'product-1' });
     const prisma = { product: { update } };

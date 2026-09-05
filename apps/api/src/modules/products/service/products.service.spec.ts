@@ -43,6 +43,19 @@ describe('ProductsService manual catalog management', () => {
     expect(repository.createProduct).toHaveBeenCalledWith(dto, undefined);
   });
 
+  it.each([true, false, null])(
+    'preserves the explicit Apple originality classification %s in the Product API flow',
+    async (isAppleOriginal) => {
+      const repository = createRepository();
+      const service = new ProductsService(repository as unknown as ProductsRepository);
+      const classifiedDto = { ...dto, isAppleOriginal };
+
+      await service.create(classifiedDto);
+
+      expect(repository.createProduct).toHaveBeenCalledWith(classifiedDto, undefined);
+    },
+  );
+
   it('blocks a duplicate condition and normalized description instead of overwriting it', async () => {
     const repository = createRepository({ id: 'existing-product' });
     const service = new ProductsService(repository as unknown as ProductsRepository);
