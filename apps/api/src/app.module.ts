@@ -15,6 +15,7 @@ import { EvolutionWebhookModule } from './modules/evolution-webhook/evolution-we
 import { HealthModule } from './modules/health/health.module';
 import { ImportRadarModule } from './modules/import-radar/import-radar.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { ManufacturersModule } from './modules/manufacturers/manufacturers.module';
 import { OffersModule } from './modules/offers/offers.module';
 import { PriceRadarModule } from './modules/price-radar/price-radar.module';
 import { PricingModule } from './modules/pricing/pricing.module';
@@ -56,6 +57,7 @@ const envFileName = `.env.${appEnv}`;
     PriceRadarModule,
     PricingModule,
     ImportRadarModule,
+    ManufacturersModule,
     OffersModule,
     IntegrationsModule,
   ],

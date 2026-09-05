@@ -508,6 +508,37 @@ model ProductStorage {
   @@map("capacidade")
 }
 
+/// Registry administrativo de fabricantes externos. Apple permanece fora deste
+/// dominio e continua sob a autoridade do Product/registry canonico existente.
+model ManufacturerIdentity {
+  id              String        @id @default(uuid()) @db.Uuid
+  manufacturerKey String        @unique(map: "uq_fabricante_chave") @map("chave_fabricante") @db.VarChar(120)
+  canonicalName   String        @map("nome_canonico") @db.VarChar(160)
+  status          GenericStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  aliases ManufacturerAlias[]
+
+  @@index([status], map: "idx_fabricante_status")
+  @@map("fabricante")
+}
+
+/// Alias normalizado e globalmente unico para uma ManufacturerIdentity.
+model ManufacturerAlias {
+  id              String   @id @default(uuid()) @db.Uuid
+  manufacturerId  String   @map("fabricante_id") @db.Uuid
+  alias           String   @map("alias") @db.VarChar(160)
+  normalizedAlias String   @unique(map: "uq_fabricante_alias_normalizado") @map("alias_normalizado") @db.VarChar(180)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  manufacturer ManufacturerIdentity @relation(fields: [manufacturerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([manufacturerId], map: "idx_fabricante_alias_fabricante_id")
+  @@map("fabricante_alias")
+}
+
 model Product {
   id                    String            @id @default(uuid()) @db.Uuid
   categoryId            String            @map("categoria_id") @db.Uuid
