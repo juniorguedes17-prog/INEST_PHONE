@@ -5,6 +5,8 @@ import { TemporaryImportPricingDto } from '../dto/pricing.dto';
 import { ProductProfitProvider } from '../providers/product-profit.provider';
 import { PricingRepository } from '../repository/pricing.repository';
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
+import { ManufacturersRepository } from '../../manufacturers/repository/manufacturers.repository';
+import type { ManufacturerResolverAlias } from '../../manufacturers/manufacturer-resolver';
 import {
   COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
   COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
@@ -137,6 +139,73 @@ function setup(
     service,
     calculate,
   };
+}
+
+class MemoryManufacturersRepository {
+  readonly identities: Array<{
+    id: string;
+    manufacturerKey: string;
+    canonicalName: string;
+    status: 'ACTIVE' | 'INACTIVE';
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+  readonly aliases: ManufacturerResolverAlias[] = [];
+  readonly audits: unknown[] = [];
+
+  async listActiveAliases() {
+    return this.aliases.filter((entry) => entry.manufacturer.status === 'ACTIVE');
+  }
+
+  async findIdentityByKey(manufacturerKey: string) {
+    return this.identities.find((entry) => entry.manufacturerKey === manufacturerKey) ?? null;
+  }
+
+  async createIdentity(input: { manufacturerKey: string; canonicalName: string }) {
+    if (await this.findIdentityByKey(input.manufacturerKey)) throw { code: 'P2002' };
+    const identity = {
+      id: `manufacturer-${this.identities.length + 1}`,
+      ...input,
+      status: 'ACTIVE' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.identities.push(identity);
+    return identity;
+  }
+
+  async setIdentityStatus(id: string, status: 'ACTIVE' | 'INACTIVE') {
+    const identity = this.identities.find((entry) => entry.id === id);
+    if (!identity) throw new Error('manufacturer not found');
+    identity.status = status;
+    identity.updatedAt = new Date();
+    for (const alias of this.aliases) {
+      if (alias.manufacturer.id === id) alias.manufacturer.status = status;
+    }
+    return identity;
+  }
+
+  async findAliasByNormalizedAlias(normalizedAlias: string) {
+    return this.aliases.find((entry) => entry.normalizedAlias === normalizedAlias) ?? null;
+  }
+
+  async createAlias(input: { manufacturerId: string; alias: string; normalizedAlias: string }) {
+    if (await this.findAliasByNormalizedAlias(input.normalizedAlias)) throw { code: 'P2002' };
+    const manufacturer = this.identities.find((entry) => entry.id === input.manufacturerId);
+    if (!manufacturer) throw new Error('manufacturer not found');
+    const alias: ManufacturerResolverAlias = {
+      id: `alias-${this.aliases.length + 1}`,
+      alias: input.alias,
+      normalizedAlias: input.normalizedAlias,
+      manufacturer,
+    };
+    this.aliases.push(alias);
+    return alias;
+  }
+
+  async createAuditLog(data: unknown) {
+    this.audits.push(data);
+  }
 }
 
 describe('Pricing canonical originality routing', () => {
@@ -348,6 +417,84 @@ describe('Pricing canonical originality routing', () => {
       calculationStatus: 'ready',
       engineMetadata: { engine: 'NON_APPLE_ELECTRONICS' },
     });
+  });
+
+  it('prices a BR manufacturer end to end after an inline confirmation and reuses it', async () => {
+    const fixture = setup(null, 1690);
+    fixture.quote.productId = '';
+    fixture.quote.productName = 'Garmin Vivoactive 6';
+    fixture.quote.model = 'Vivoactive 6';
+    fixture.quote.category = 'Smartwatch';
+    fixture.quote.condition = 'CPO';
+    fixture.repository.findActiveCatalogProduct.mockResolvedValue(null);
+
+    const manufacturerRepository = new MemoryManufacturersRepository();
+    const manufacturers = new ManufacturersService(
+      manufacturerRepository as unknown as ManufacturersRepository,
+    );
+    const service = new PricingService(
+      fixture.repository as unknown as PricingRepository,
+      fixture.settings as unknown as SettingsService,
+      fixture.provider as unknown as ProductProfitProvider,
+      fixture.normalization as unknown as ProductNormalizationService,
+      manufacturers,
+    );
+
+    await expect(
+      service.calculateBrazilRadarQuote({ sourceQuoteId: fixture.quote.id }),
+    ).resolves.toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      financialClassificationReason: 'manufacturer_missing',
+      pricingEligibility: { status: 'NEEDS_INPUT', inputType: 'MANUFACTURER' },
+      salePrice: null,
+      offerDraft: null,
+    });
+
+    const afterConfirmation = await service.confirmBrazilRadarManufacturer(
+      { sourceQuoteId: fixture.quote.id, canonicalName: 'Garmin', alias: 'Garmin' },
+      { id: 'settings-user' } as never,
+    );
+
+    expect(manufacturerRepository.identities).toHaveLength(1);
+    expect(manufacturerRepository.identities[0]).toMatchObject({
+      manufacturerKey: 'garmin',
+      canonicalName: 'Garmin',
+      status: 'ACTIVE',
+    });
+    expect(manufacturerRepository.aliases).toHaveLength(1);
+    expect(manufacturerRepository.audits).toHaveLength(1);
+    expect(afterConfirmation).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      financialClassificationReason: 'manufacturer_registry',
+      manufacturerKey: 'garmin',
+      pricingEligibility: { status: 'ELIGIBLE' },
+      calculationStatus: 'ready',
+      desiredNetProfit: expect.any(Number),
+      salePrice: expect.any(Number),
+      offerPrice: expect.any(Number),
+      profit: { source: 'non_apple_electronics_policy', recordId: null },
+      engineMetadata: {
+        engine: 'NON_APPLE_ELECTRONICS',
+        acquisitionCost: 1690,
+        targetProfit: expect.any(Number),
+        continuityAdjustment: expect.any(Number),
+        roundedPrice: expect.any(Number),
+      },
+      offerDraft: { payload: { sourceQuoteId: fixture.quote.id } },
+    });
+
+    const secondOccurrence = await service.calculateBrazilRadarQuote({
+      sourceQuoteId: fixture.quote.id,
+    });
+    expect(secondOccurrence).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      manufacturerKey: 'garmin',
+      pricingEligibility: { status: 'ELIGIBLE' },
+      calculationStatus: 'ready',
+    });
+    expect(manufacturerRepository.identities).toHaveLength(1);
+    expect(manufacturerRepository.aliases).toHaveLength(1);
+    expect(manufacturerRepository.audits).toHaveLength(1);
   });
 
   it('uses structured Apple financial identity without Product.id', async () => {
