@@ -7,7 +7,7 @@ import { SettingsController } from './settings.controller';
 
 function contextFor(
   permissions: string[],
-  handler: () => unknown = SettingsController.prototype.updateSettings,
+  handler: (...args: never[]) => unknown = SettingsController.prototype.updateSettings,
 ): ExecutionContext {
   return {
     getHandler: () => handler,
