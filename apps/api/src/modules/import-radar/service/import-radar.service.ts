@@ -9,7 +9,11 @@ import {
 } from '../dto/import-radar.dto';
 import { ImportProvider } from '../interfaces/import-provider.interface';
 import { ImportRadarRepository } from '../repository/import-radar.repository';
-import { identifyRedirectRule, toNumber } from '../validators/import-radar.validators';
+import {
+  identifyRedirectRule,
+  roundMoneyToCents,
+  toNumber,
+} from '../validators/import-radar.validators';
 import { ComprasParaguaiProvider } from '../providers/compras-paraguai.provider';
 import { MockImportProvider } from '../providers/mock-import.provider';
 import { processParsedSupplierItemsShadow } from '../../evolution-webhook/product-identity-shadow';
@@ -91,17 +95,19 @@ export class ImportRadarService {
   async calculate(dto: CalculateImportCostDto, user: AuthenticatedUser) {
     const settings = await this.settingsService.getSettings();
     const importSettings = settings.importation;
-    const convertedPrice = dto.priceUsd * importSettings.dollarQuote;
+    const convertedPriceRaw = dto.priceUsd * importSettings.dollarQuote;
+    const convertedPrice = roundMoneyToCents(convertedPriceRaw);
     const redirectRule = identifyRedirectRule(dto, importSettings);
-    const redirectCost = toNumber(redirectRule?.redirectCost);
-    const invoiceTax = convertedPrice * (toNumber(importSettings.invoiceTaxPercent) / 100);
-    const total =
-      convertedPrice +
-      toNumber(importSettings.cdeExitPerBox) +
-      redirectCost +
-      toNumber(importSettings.brazilDispatchPerBox) +
-      invoiceTax +
-      toNumber(importSettings.correiosLabel);
+    const cdeExit = roundMoneyToCents(toNumber(importSettings.cdeExitPerBox));
+    const redirectCost = roundMoneyToCents(toNumber(redirectRule?.redirectCost));
+    const brazilDispatch = roundMoneyToCents(toNumber(importSettings.brazilDispatchPerBox));
+    const invoiceTax = roundMoneyToCents(
+      convertedPriceRaw * (toNumber(importSettings.invoiceTaxPercent) / 100),
+    );
+    const correiosLabel = roundMoneyToCents(toNumber(importSettings.correiosLabel));
+    const total = roundMoneyToCents(
+      convertedPrice + cdeExit + redirectCost + brazilDispatch + invoiceTax + correiosLabel,
+    );
 
     const catalog = await this.repository.listActiveCatalogProducts();
     const { productResolution, hasRecoverableIdentityGap } = this.analyzeCatalogProduct(
@@ -167,11 +173,11 @@ export class ImportRadarService {
       dollarQuote: importSettings.dollarQuote,
       breakdown: {
         convertedPrice,
-        cdeExit: toNumber(importSettings.cdeExitPerBox),
+        cdeExit,
         redirectCost,
-        brazilDispatch: toNumber(importSettings.brazilDispatchPerBox),
+        brazilDispatch,
         invoiceTax,
-        correiosLabel: toNumber(importSettings.correiosLabel),
+        correiosLabel,
       },
       total,
     };

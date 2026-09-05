@@ -7,6 +7,7 @@ import { ImportRadarRepository } from '../repository/import-radar.repository';
 import { ImportRadarService } from './import-radar.service';
 import { ProductNormalizationService } from '../../evolution-webhook/product-normalization.service';
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
+import { roundMoneyToCents } from '../validators/import-radar.validators';
 
 const PRODUCT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -32,6 +33,13 @@ function createService(
   >,
   manufacturerResolver?: Pick<ManufacturersService, 'resolve'> &
     Partial<Pick<ManufacturersService, 'confirm'>>,
+  importationOverrides?: Partial<{
+    dollarQuote: number;
+    cdeExitPerBox: number;
+    invoiceTaxPercent: number;
+    brazilDispatchPerBox: number;
+    correiosLabel: number;
+  }>,
 ) {
   const repository = {
     listActiveCatalogProducts: vi.fn().mockResolvedValue(catalog),
@@ -46,6 +54,7 @@ function createService(
         brazilDispatchPerBox: 0,
         correiosLabel: 0,
         redirectRules: [],
+        ...importationOverrides,
       },
     }),
   };
@@ -128,6 +137,144 @@ describe('ImportRadarService catalog product handoff', () => {
       financialClassificationReason: 'manufacturer_registry',
       manufacturerKey: 'canon',
       pricingEligibility: { status: 'ELIGIBLE', reason: null },
+    });
+  });
+
+  it('normalizes the Canon PY breakdown and total to cents before the Pricing handoff', async () => {
+    const manufacturerResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        status: 'FOUND',
+        manufacturerId: 'manufacturer-canon',
+        manufacturerKey: 'canon',
+        canonicalName: 'Canon',
+        provenance: 'EXPLICIT_SOURCE_VALIDATED',
+        normalizedEvidence: 'canon',
+        matchedAlias: 'Canon',
+        normalizedAlias: 'canon',
+      }),
+    };
+    const service = createService([], undefined, manufacturerResolver, {
+      dollarQuote: 5.35,
+      cdeExitPerBox: 110,
+      invoiceTaxPercent: 3,
+      brazilDispatchPerBox: 50,
+      correiosLabel: 120,
+    });
+
+    const result = await service.calculate(
+      {
+        ...importProduct,
+        id: 'py-canon-eos-rebel-t7',
+        name: 'Camera Digital Canon EOS Rebel T7 24.1MP - Lente EF-S 18-55mm IS II',
+        category: 'Outros',
+        priceUsd: 435,
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+        sourceManufacturer: 'Canon',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      pricingEligibility: { status: 'ELIGIBLE' },
+      breakdown: {
+        convertedPrice: 2327.25,
+        cdeExit: 110,
+        redirectCost: 0,
+        brazilDispatch: 50,
+        invoiceTax: 69.82,
+        correiosLabel: 120,
+      },
+      total: 2677.07,
+    });
+    expect(
+      roundMoneyToCents(Object.values(result.breakdown).reduce((sum, value) => sum + value, 0)),
+    ).toBe(result.total);
+  });
+
+  it('normalizes a second Non-Apple PY product with a fractional tax', async () => {
+    const manufacturerResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        status: 'FOUND',
+        manufacturerId: 'manufacturer-nikon',
+        manufacturerKey: 'nikon',
+        canonicalName: 'Nikon',
+        provenance: 'EXPLICIT_SOURCE_VALIDATED',
+        normalizedEvidence: 'nikon',
+        matchedAlias: 'Nikon',
+        normalizedAlias: 'Nikon',
+      }),
+    };
+    const service = createService([], undefined, manufacturerResolver, {
+      dollarQuote: 5.35,
+      cdeExitPerBox: 110,
+      invoiceTaxPercent: 3,
+      brazilDispatchPerBox: 50,
+      correiosLabel: 120,
+    });
+
+    const result = await service.calculate(
+      {
+        ...importProduct,
+        id: 'py-nikon-z50',
+        name: 'Camera Nikon Z50 20.9MP',
+        category: 'Outros',
+        priceUsd: 499,
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+        sourceManufacturer: 'Nikon',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      breakdown: {
+        convertedPrice: 2669.65,
+        invoiceTax: 80.09,
+      },
+      total: 3029.74,
+    });
+    expect(
+      roundMoneyToCents(Object.values(result.breakdown).reduce((sum, value) => sum + value, 0)),
+    ).toBe(result.total);
+  });
+
+  it('keeps Apple PY classification while using the normalized monetary breakdown', async () => {
+    const service = createService([], undefined, undefined, {
+      dollarQuote: 5.35,
+      cdeExitPerBox: 110,
+      invoiceTaxPercent: 3,
+      brazilDispatchPerBox: 50,
+      correiosLabel: 120,
+    });
+
+    const result = await service.calculate(
+      {
+        ...importProduct,
+        id: 'py-iphone-17-pro-max',
+        name: 'iPhone 17 Pro Max 256GB',
+        category: 'iPhone',
+        priceUsd: 1000,
+        model: 'iPhone 17 Pro Max',
+        capacity: '256GB',
+        condition: 'NOVO',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'APPLE',
+      breakdown: {
+        convertedPrice: 5350,
+        invoiceTax: 160.5,
+      },
+      total: 5790.5,
     });
   });
 

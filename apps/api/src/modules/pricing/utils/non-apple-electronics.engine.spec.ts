@@ -129,12 +129,21 @@ describe('isolated non-Apple electronics engine', () => {
     expect(calculate({ acquisitionCost: 50, offerIncrement: -1 }).offerIncrement).toBe(100);
   });
 
-  it.each([0, -1, NaN, Infinity, -Infinity, 0.001, Number.MAX_VALUE, '50', null, undefined])(
-    'rejects invalid acquisition cost %s',
-    (value) => {
-      expect(() => calculate({ acquisitionCost: value as number })).toThrow(RangeError);
-    },
-  );
+  it.each([
+    0,
+    -1,
+    NaN,
+    Infinity,
+    -Infinity,
+    0.001,
+    2677.0675,
+    Number.MAX_VALUE,
+    '50',
+    null,
+    undefined,
+  ])('rejects invalid acquisition cost %s', (value) => {
+    expect(() => calculate({ acquisitionCost: value as number })).toThrow(RangeError);
+  });
 
   it.each([-1, NaN, Infinity, 0.001, '20'])('rejects invalid additional charges %s', (value) => {
     for (const field of ['defaultFreight', 'defaultPaymentFee']) {

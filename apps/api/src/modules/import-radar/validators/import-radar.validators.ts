@@ -13,6 +13,19 @@ export function toNumber(value: number | string | null | undefined) {
   return Number(value ?? 0);
 }
 
+export function roundMoneyToCents(value: number): number {
+  if (!Number.isFinite(value)) {
+    throw new RangeError('Invalid monetary amount');
+  }
+
+  const cents = Math.round((value + Number.EPSILON) * 100);
+  if (!Number.isSafeInteger(cents)) {
+    throw new RangeError('Monetary amount exceeds safe precision');
+  }
+
+  return cents / 100;
+}
+
 function normalize(value: string) {
   return value
     .normalize('NFD')

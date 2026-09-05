@@ -344,7 +344,7 @@ describe('Pricing canonical originality routing', () => {
   });
 
   it('prices an explicit-source Non-Apple import without Product.id or catalogProductId', async () => {
-    const fixture = setup(true, 700);
+    const fixture = setup(true, 2677.07);
     fixture.dto = {
       ...fixture.dto,
       catalogProductId: undefined,
@@ -377,7 +377,7 @@ describe('Pricing canonical originality routing', () => {
       financialClassification: 'NON_APPLE',
       catalogProductId: null,
       calculationStatus: 'ready',
-      desiredNetProfit: 300,
+      engineMetadata: { acquisitionCost: 2677.07 },
       offerDraft: { payload: { productId: null, sourceQuoteId: 'temporary-py-external-py-id' } },
     });
   });

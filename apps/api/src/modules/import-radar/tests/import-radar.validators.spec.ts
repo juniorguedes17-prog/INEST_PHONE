@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { identifyRedirectRule, toNumber } from '../validators/import-radar.validators';
+import {
+  identifyRedirectRule,
+  roundMoneyToCents,
+  toNumber,
+} from '../validators/import-radar.validators';
 
 const settings = {
   dollarQuote: 5.35,
@@ -58,5 +62,17 @@ describe('import radar validators', () => {
 
     expect(rule).toBeUndefined();
     expect(toNumber(null)).toBe(0);
+  });
+
+  it.each([
+    [69.8175, 69.82],
+    [1.005, 1.01],
+    [2327.25, 2327.25],
+  ])('rounds monetary values to cents without floating-point drift: %s', (value, expected) => {
+    expect(roundMoneyToCents(value)).toBe(expected);
+  });
+
+  it.each([NaN, Infinity, -Infinity])('rejects non-finite monetary values: %s', (value) => {
+    expect(() => roundMoneyToCents(value)).toThrow(RangeError);
   });
 });
