@@ -8,9 +8,16 @@ import { ComprasParaguaiProvider } from './providers/compras-paraguai.provider';
 import { MockImportProvider } from './providers/mock-import.provider';
 import { ImportRadarRepository } from './repository/import-radar.repository';
 import { ImportRadarService } from './service/import-radar.service';
+import { ShippingWeightsModule } from './shipping-weights/shipping-weights.module';
 
 @Module({
-  imports: [PrismaModule, SettingsModule, EvolutionWebhookModule, ManufacturersModule],
+  imports: [
+    PrismaModule,
+    SettingsModule,
+    EvolutionWebhookModule,
+    ManufacturersModule,
+    ShippingWeightsModule,
+  ],
   controllers: [ImportRadarController],
   providers: [
     ImportRadarService,

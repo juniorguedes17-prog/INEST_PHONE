@@ -539,6 +539,19 @@ model ManufacturerAlias {
   @@map("fabricante_alias")
 }
 
+/// Peso operacional de envio, reutilizavel entre fontes sem depender de Product.
+model ShippingWeightRecord {
+  id                    String   @id @default(uuid()) @db.Uuid
+  shippingWeightKey     String   @unique(map: "uq_peso_envio_chave") @map("chave_peso_envio") @db.Text
+  shippingWeightLbs     Decimal  @map("peso_envio_lbs") @db.Decimal(8, 3)
+  createdBy             String?  @map("created_by") @db.Uuid
+  updatedBy             String?  @map("updated_by") @db.Uuid
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("peso_envio_operacional")
+}
+
 model Product {
   id                    String            @id @default(uuid()) @db.Uuid
   categoryId            String            @map("categoria_id") @db.Uuid
