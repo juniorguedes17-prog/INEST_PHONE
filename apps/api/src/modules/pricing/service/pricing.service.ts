@@ -41,6 +41,8 @@ import {
   resolveProfitIdentity,
   type ProfitIdentityResolution,
 } from './profit-identity-shadow';
+import { resolveFinancialClassification } from '../../import-radar/financial-classification';
+import { formatSourceDisplayName } from '../../import-radar/source-display-name';
 
 function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResolution) {
   switch (resolution.status) {
@@ -290,19 +292,38 @@ export class PricingService {
       this.settingsService.getSettings(),
       this.pricingRepository.listPricingConfigurations(),
       this.profitProvider.getCatalog(),
-      this.pricingRepository.findActiveCatalogProductById(dto.catalogProductId),
+      dto.catalogProductId
+        ? this.pricingRepository.findActiveCatalogProductById(dto.catalogProductId)
+        : Promise.resolve(null),
     ]);
-    if (!catalogProduct || !catalogProduct.productDescription) {
+    if (dto.catalogProductId && !catalogProduct) {
       throw new BadRequestException('Produto canonico ativo nao encontrado para esta importacao.');
     }
 
     const profitCondition = this.resolveTemporaryProfitCondition(
       dto,
-      catalogProduct.profitCondition,
+      catalogProduct?.profitCondition,
     );
-    const profitProductDescription = catalogProduct.productDescription;
+    const profitProductDescription =
+      catalogProduct?.productDescription?.trim() ||
+      dto.displayName?.trim() ||
+      dto.productName.trim();
+    const financialClassification = resolveFinancialClassification({
+      canonicalProduct: catalogProduct,
+      productName: dto.productName,
+      category: dto.category,
+      model: dto.model,
+      capacity: dto.capacity,
+      color: dto.color,
+      condition: profitCondition,
+      sourceManufacturer: dto.sourceManufacturer,
+      sourceManufacturerProvenance: dto.sourceManufacturerProvenance,
+    });
+    if (financialClassification.classification === 'UNRESOLVED') {
+      throw new BadRequestException('Classificacao financeira do produto externo nao resolvida.');
+    }
     const nonApple = this.calculateNonApplePricing(
-      catalogProduct.isAppleOriginal,
+      financialClassification.classification === 'NON_APPLE' ? false : true,
       dto.totalCost,
       settings,
       pricingConfigurations,
@@ -311,6 +332,7 @@ export class PricingService {
       return this.buildTemporaryImportResult({
         dto,
         catalogProduct,
+        financialClassification: financialClassification.classification,
         profitCondition,
         profitProductDescription,
         profitCatalog,
@@ -321,6 +343,82 @@ export class PricingService {
         nonApple,
       });
     }
+
+    if (!profitCondition) {
+      return this.buildTemporaryImportResult({
+        dto,
+        catalogProduct,
+        financialClassification: financialClassification.classification,
+        profitCondition,
+        profitProductDescription,
+        profitCatalog,
+        pricingConfigurations,
+        settings,
+        desiredNetProfit: null,
+        calculationStatus: 'condition_unresolved',
+        calculationError: 'Condicao do produto externo ausente ou invalida.',
+      });
+    }
+
+    if (!catalogProduct) {
+      const identity = resolveProfitIdentity(profitCatalog, {
+        productDescription: profitProductDescription,
+        condition: profitCondition,
+        category: dto.category,
+        color: dto.color,
+      });
+      if (identity.status === 'insufficient_identity' || identity.status === 'ambiguous_identity') {
+        return this.buildTemporaryImportResult({
+          dto,
+          catalogProduct,
+          financialClassification: financialClassification.classification,
+          profitCondition,
+          profitProductDescription,
+          profitCatalog,
+          pricingConfigurations,
+          settings,
+          desiredNetProfit: null,
+          calculationStatus: identity.status,
+          calculationError:
+            identity.status === 'ambiguous_identity'
+              ? 'Identidade financeira ambigua para este produto.'
+              : 'Informacoes insuficientes para identificar a configuracao financeira.',
+        });
+      }
+      if (identity.status === 'collision') {
+        return this.buildTemporaryImportResult({
+          dto,
+          catalogProduct,
+          financialClassification: financialClassification.classification,
+          profitCondition,
+          profitProductDescription,
+          profitCatalog,
+          pricingConfigurations,
+          settings,
+          desiredNetProfit: null,
+          calculationStatus: 'collision',
+          calculationError: 'Mais de um cadastro possui a mesma identidade financeira.',
+        });
+      }
+      return this.buildTemporaryImportResult({
+        dto,
+        catalogProduct,
+        financialClassification: financialClassification.classification,
+        profitCondition,
+        profitProductDescription,
+        profitCatalog,
+        pricingConfigurations,
+        settings,
+        desiredNetProfit: identity.status === 'found' ? identity.record.netProfit : null,
+        calculationStatus: identity.status === 'found' ? 'ready' : 'missing_profit',
+        calculationError:
+          identity.status === 'found'
+            ? null
+            : 'Lucro liquido nao cadastrado para este modelo e condicao.',
+        profitRecordId: identity.status === 'found' ? identity.record.productId : null,
+      });
+    }
+
     const profitLookup = this.findProfit(
       profitCatalog,
       catalogProduct.profitProductId,
@@ -332,6 +430,7 @@ export class PricingService {
       return this.buildTemporaryImportResult({
         dto,
         catalogProduct,
+        financialClassification: financialClassification.classification,
         profitCondition,
         profitProductDescription,
         profitCatalog,
@@ -351,6 +450,7 @@ export class PricingService {
     return this.buildTemporaryImportResult({
       dto,
       catalogProduct,
+      financialClassification: financialClassification.classification,
       profitCondition,
       profitProductDescription,
       profitCatalog,
@@ -364,6 +464,7 @@ export class PricingService {
   private buildTemporaryImportResult({
     dto,
     catalogProduct,
+    financialClassification,
     profitCondition,
     profitProductDescription,
     profitCatalog,
@@ -373,20 +474,27 @@ export class PricingService {
     calculationStatus,
     calculationError = null,
     nonApple = null,
+    profitRecordId = null,
   }: {
     dto: TemporaryImportPricingDto;
-    catalogProduct: NonNullable<
-      Awaited<ReturnType<PricingRepository['findActiveCatalogProductById']>>
-    >;
-    profitCondition: ProfitCondition;
+    catalogProduct: Awaited<ReturnType<PricingRepository['findActiveCatalogProductById']>>;
+    financialClassification: 'APPLE' | 'NON_APPLE';
+    profitCondition: ProfitCondition | null;
     profitProductDescription: string;
     profitCatalog: Awaited<ReturnType<ProductProfitProvider['getCatalog']>>;
     pricingConfigurations: Awaited<ReturnType<PricingRepository['listPricingConfigurations']>>;
     settings: Awaited<ReturnType<SettingsService['getSettings']>>;
     desiredNetProfit: number | null;
-    calculationStatus: 'ready' | 'missing_profit';
+    calculationStatus:
+      | 'ready'
+      | 'missing_profit'
+      | 'condition_unresolved'
+      | 'insufficient_identity'
+      | 'ambiguous_identity'
+      | 'collision';
     calculationError?: string | null;
     nonApple?: ReturnType<PricingService['calculateNonApplePricing']>;
+    profitRecordId?: string | null;
   }) {
     const calculation =
       nonApple ??
@@ -396,18 +504,24 @@ export class PricingService {
         settings,
         pricingConfigurations,
       );
-    const productName = dto.productName.trim();
+    const productName = formatSourceDisplayName({
+      sourceName: dto.displayName?.trim() || dto.productName,
+      sourceManufacturer: dto.sourceManufacturer,
+      model: dto.model,
+      capacity: dto.capacity,
+    });
 
     return {
       temporary: true,
       origin: 'PY' as const,
       ...(nonApple ? { engineMetadata: nonApple.engineMetadata } : {}),
+      financialClassification,
       calculationStatus,
       calculationError,
-      catalogProductId: catalogProduct.id,
+      catalogProductId: catalogProduct?.id ?? null,
       recalculationRequest: dto,
       product: {
-        id: catalogProduct.id,
+        id: catalogProduct?.id ?? null,
         name: productName,
         category: dto.category,
         brand: dto.brand ?? '',
@@ -419,7 +533,7 @@ export class PricingService {
         city: dto.city ?? '',
         productUrl: dto.productUrl,
         priceUsd: dto.priceUsd,
-        isAppleOriginal: catalogProduct.isAppleOriginal ?? null,
+        isAppleOriginal: catalogProduct?.isAppleOriginal ?? null,
       },
       importCosts: {
         dollarQuote: dto.dollarQuote,
@@ -445,10 +559,13 @@ export class PricingService {
         source: nonApple ? 'non_apple_electronics_policy' : 'native_product_catalog',
         condition: profitCondition,
         productDescription: profitProductDescription,
-        recordId:
-          nonApple || catalogProduct.profitProductId === null
-            ? null
-            : String(catalogProduct.profitProductId),
+        recordId: nonApple
+          ? null
+          : (profitRecordId ??
+            (catalogProduct?.profitProductId === null ||
+            catalogProduct?.profitProductId === undefined
+              ? null
+              : String(catalogProduct.profitProductId))),
         updatedAt: profitCatalog.fetchedAt,
       },
       offerDraft:
@@ -460,7 +577,7 @@ export class PricingService {
               route: '/offers',
               createdAt: new Date().toISOString(),
               payload: {
-                productId: catalogProduct.id,
+                productId: catalogProduct?.id ?? null,
                 sourceQuoteId: `temporary-py-${dto.sourceProductId}`,
                 productName,
                 color: dto.color ?? '',
@@ -1020,7 +1137,7 @@ export class PricingService {
   private resolveTemporaryProfitCondition(
     dto: TemporaryImportPricingDto,
     catalogCondition: string | null | undefined,
-  ): ProfitCondition {
+  ): ProfitCondition | null {
     if (dto.condition && dto.condition === catalogCondition) return dto.condition;
     if (
       catalogCondition === 'NOVO' ||
@@ -1029,6 +1146,8 @@ export class PricingService {
     ) {
       return catalogCondition;
     }
+
+    if (!dto.condition) return null;
 
     const productReference = `${dto.productName} ${dto.model ?? ''}`.toUpperCase();
     if (productReference.includes('CPO')) return 'CPO';

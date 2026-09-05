@@ -68,8 +68,15 @@ export class ComprasParaguaiProvider implements ImportProvider {
     try {
       const html = await this.fetchPublicHtml(product.productUrl);
       const offers = parseProductOffers(html);
+      const sourceManufacturer = parseSourceManufacturer(html);
+      const sourceFields = sourceManufacturer
+        ? {
+            sourceManufacturer,
+            sourceManufacturerProvenance: 'EXPLICIT_SOURCE' as const,
+          }
+        : {};
       if (!offers.length) {
-        return product;
+        return { ...product, ...sourceFields };
       }
 
       const ordered = [...offers].sort((a, b) => a.priceUsd - b.priceUsd);
@@ -89,10 +96,13 @@ export class ComprasParaguaiProvider implements ImportProvider {
         availability: cheapest.availability,
         priceUsd: cheapest.priceUsd,
         minimumPriceUsd: cheapest.priceUsd,
-        averagePriceUsd: roundMoney(prices.reduce((total, price) => total + price, 0) / prices.length),
+        averagePriceUsd: roundMoney(
+          prices.reduce((total, price) => total + price, 0) / prices.length,
+        ),
         maximumPriceUsd: mostExpensive.priceUsd,
         storeCount: stores.size || product.storeCount,
         offerCount: offers.length,
+        ...sourceFields,
       };
     } catch (error) {
       this.logger.warn(
@@ -119,7 +129,9 @@ export class ComprasParaguaiProvider implements ImportProvider {
       }
       return await response.text();
     } catch (error) {
-      this.logger.error(`Falha ao consultar pagina publica do Compras Paraguai: ${getErrorMessage(error)}`);
+      this.logger.error(
+        `Falha ao consultar pagina publica do Compras Paraguai: ${getErrorMessage(error)}`,
+      );
       throw new ServiceUnavailableException(
         'O Compras Paraguai esta indisponivel no momento. Tente novamente em alguns minutos.',
       );
@@ -179,7 +191,7 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
       ),
       productUrl,
       imageUrl: image
-        ? extractAttribute(image, 'src') ?? extractAttribute(image, 'data-src')
+        ? (extractAttribute(image, 'src') ?? extractAttribute(image, 'data-src'))
         : undefined,
       consultedAt,
       origin: 'PY',
@@ -236,6 +248,36 @@ export function parseProductOffers(html: string): ParsedOffer[] {
   return uniqueBy(offers, (offer) => `${normalizeText(offer.store)}|${offer.priceUsd}`);
 }
 
+/**
+ * Extracts only the source's labelled manufacturer property. Product title,
+ * inferred brand and arbitrary page text are intentionally excluded.
+ */
+export function parseSourceManufacturer(html: string): string | undefined {
+  const values = new Set<string>();
+
+  for (const row of extractElementsByTag(html, 'tr')) {
+    collectManufacturerFromSemanticBlock(row.full, values);
+  }
+  for (const item of extractElementsByTag(html, 'li')) {
+    collectManufacturerFromSemanticBlock(item.full, values);
+  }
+  for (const definition of extractElementsByTag(html, 'dl')) {
+    const pairs = Array.from(
+      definition.full.matchAll(/<dt\b[^>]*>([\s\S]*?)<\/dt>\s*<dd\b[^>]*>([\s\S]*?)<\/dd>/gi),
+    );
+    for (const pair of pairs) {
+      if (cleanText(stripHtml(pair[1] ?? '')) === 'Marca') {
+        addManufacturer(cleanText(stripHtml(pair[2] ?? '')), values);
+      }
+    }
+  }
+
+  const labelledValue = html.match(/<[^>]+>\s*Marca\s*<\/[^>]+>\s*<[^>]+>\s*([^<]+?)\s*<\//i)?.[1];
+  if (labelledValue) addManufacturer(cleanText(decodeHtmlEntities(labelledValue)), values);
+
+  return values.size === 1 ? [...values][0] : undefined;
+}
+
 interface HtmlElement {
   openingTag: string;
   content: string;
@@ -258,6 +300,19 @@ function extractElementsByClass(html: string, className: string): HtmlElement[] 
   return uniqueBy(elements, (element) => `${element.openingTag}|${element.content}`);
 }
 
+function extractElementsByTag(html: string, tagName: string): HtmlElement[] {
+  const elements: HtmlElement[] = [];
+  const pattern = new RegExp(`<${escapeRegExp(tagName)}\\b[^>]*>`, 'gi');
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html))) {
+    const openingTag = match[0];
+    if (!openingTag) continue;
+    const element = extractElementAt(html, match.index, tagName, openingTag);
+    if (element) elements.push(element);
+  }
+  return elements;
+}
+
 function findElementByClass(
   html: string,
   className: string,
@@ -268,10 +323,7 @@ function findElementByClass(
   );
 }
 
-function findAnchor(
-  html: string,
-  predicate: (href: string) => boolean,
-): HtmlElement | undefined {
+function findAnchor(html: string, predicate: (href: string) => boolean): HtmlElement | undefined {
   const pattern = /<a\b[^>]*>/gi;
   let match: RegExpExecArray | null;
   while ((match = pattern.exec(html))) {
@@ -335,18 +387,31 @@ function hasClass(tag: string, className: string): boolean {
 }
 
 function extractAttribute(tag: string, attribute: string): string | undefined {
-  const pattern = new RegExp(`\\b${escapeRegExp(attribute)}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const pattern = new RegExp(
+    `\\b${escapeRegExp(attribute)}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+    'i',
+  );
   const match = tag.match(pattern);
   return decodeHtmlEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? '') || undefined;
 }
 
 function stripHtml(value: string): string {
-  return decodeHtmlEntities(value.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' '));
+  return decodeHtmlEntities(
+    value
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  );
 }
 
 function decodeHtmlEntities(value: string): string {
   const named: Record<string, string> = {
-    amp: '&', apos: "'", gt: '>', lt: '<', nbsp: ' ', quot: '"',
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    nbsp: ' ',
+    quot: '"',
   };
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_entity, code: string) => {
     if (code.startsWith('#x')) return decodeCodePoint(code.slice(2), 16, `&${code};`);
@@ -385,13 +450,33 @@ export function inferProductAttributes(name: string) {
     name.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/i)?.[0]?.replace(/\s+/g, ' ');
   const model =
     macBookAttributes?.model ??
-    name.match(/\b(iPhone\s+[\w\s-]+?|MacBook\s+(?:Air|Pro|Neo)(?:\s+\w+){0,4}|iPad(?:\s+\w+){0,3}|Apple\s+Watch(?:\s+\w+){0,3}|AirPods(?:\s+\w+){0,2})(?=\s+\d+\s*(?:GB|TB)|$)/i)?.[0]?.trim();
-  const colors = ['preto', 'branco', 'azul', 'verde', 'rosa', 'roxo', 'natural', 'desert', 'dourado', 'prata', 'grafite'];
+    name
+      .match(
+        /\b(iPhone\s+[\w\s-]+?|MacBook\s+(?:Air|Pro|Neo)(?:\s+\w+){0,4}|iPad(?:\s+\w+){0,3}|Apple\s+Watch(?:\s+\w+){0,3}|AirPods(?:\s+\w+){0,2})(?=\s+\d+\s*(?:GB|TB)|$)/i,
+      )?.[0]
+      ?.trim();
+  const colors = [
+    'preto',
+    'branco',
+    'azul',
+    'verde',
+    'rosa',
+    'roxo',
+    'natural',
+    'desert',
+    'dourado',
+    'prata',
+    'grafite',
+  ];
   const color = colors.find((candidate) => normalized.includes(candidate));
 
   return {
     category,
-    brand: normalized.includes('apple') || ['iphone', 'macbook', 'ipad', 'airpods'].some((term) => normalized.includes(term)) ? 'Apple' : undefined,
+    brand:
+      normalized.includes('apple') ||
+      ['iphone', 'macbook', 'ipad', 'airpods'].some((term) => normalized.includes(term))
+        ? 'Apple'
+        : undefined,
     model,
     capacity,
     color: color ? color.charAt(0).toUpperCase() + color.slice(1) : undefined,
@@ -402,10 +487,10 @@ function inferMacBookAttributes(name: string) {
   const familyMatch = name.match(/\bMacBook\s+(Air|Pro|Neo)\b/i);
   if (!familyMatch) return undefined;
 
-  const chip = name
-    .match(/\b(?:M\d+|A\d+)(?:\s+(?:Pro|Max|Ultra))?\b/i)?.[0]
-    ?.replace(/\s+/g, ' ');
-  const display = name.match(/\b(13|14|15|16)(?:\.\d+)?\s*(?:["\u201c\u201d\u2033]|pol(?:egadas?)?)?\b/i)?.[1];
+  const chip = name.match(/\b(?:M\d+|A\d+)(?:\s+(?:Pro|Max|Ultra))?\b/i)?.[0]?.replace(/\s+/g, ' ');
+  const display = name.match(
+    /\b(13|14|15|16)(?:\.\d+)?\s*(?:["\u201c\u201d\u2033]|pol(?:egadas?)?)?\b/i,
+  )?.[1];
   const memory = Array.from(name.matchAll(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/gi))
     .map((match) => {
       const amount = match[1] ?? '';
@@ -456,7 +541,8 @@ function extractCity(value: string): string | undefined {
 
 function extractAvailability(value: string): string | undefined {
   const normalized = normalizeText(value);
-  if (normalized.includes('sem estoque') || normalized.includes('indisponivel')) return 'Indisponivel';
+  if (normalized.includes('sem estoque') || normalized.includes('indisponivel'))
+    return 'Indisponivel';
   if (normalized.includes('em estoque') || normalized.includes('disponivel')) return 'Disponivel';
   return undefined;
 }
@@ -465,12 +551,29 @@ function cleanText(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function collectManufacturerFromSemanticBlock(html: string, values: Set<string>) {
+  const text = cleanText(stripHtml(html));
+  const match = text.match(/^Marca\s*[:|-]?\s*(.+)$/i);
+  if (match?.[1]) addManufacturer(match[1], values);
+}
+
+function addManufacturer(value: string, values: Set<string>) {
+  const normalized = cleanText(value).replace(/^[:|-]\s*/, '');
+  if (normalized) values.add(normalized);
+}
+
 function normalizeText(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 function slugify(value: string): string {
-  return normalizeText(value).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 function roundMoney(value: number): number {

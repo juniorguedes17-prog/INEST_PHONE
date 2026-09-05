@@ -1,5 +1,6 @@
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
 import type { ImportProductCondition } from '../condition-normalizer';
+import type { SourceManufacturerProvenance } from '../financial-classification';
 
 export interface ImportProviderProduct {
   id: string;
@@ -10,6 +11,8 @@ export interface ImportProviderProduct {
   productUrl: string;
   imageUrl?: string;
   brand?: string;
+  sourceManufacturer?: string | null;
+  sourceManufacturerProvenance?: SourceManufacturerProvenance;
   model?: string;
   capacity?: string;
   color?: string;

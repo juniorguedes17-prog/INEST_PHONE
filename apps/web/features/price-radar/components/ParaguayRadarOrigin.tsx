@@ -193,10 +193,8 @@ export function ParaguayRadarOrigin() {
 
   async function sendToPricing() {
     if (!calculation) return;
-    if (!calculation.catalogProductId || calculation.productResolution.status !== 'FOUND') {
-      setError(
-        'Este produto nao possui uma identidade canonica unica e nao pode ser enviado para Precificacao.',
-      );
+    if (calculation.pricingEligibility.status !== 'ELIGIBLE') {
+      setError(pricingEligibilityMessage(calculation.pricingEligibility.reason));
       return;
     }
 
@@ -617,8 +615,7 @@ function CalculationModal({
   onClose: () => void;
   onSendToPricing: () => void;
 }) {
-  const canSendToPricing =
-    calculation?.productResolution.status === 'FOUND' && Boolean(calculation.catalogProductId);
+  const canSendToPricing = calculation?.pricingEligibility.status === 'ELIGIBLE';
 
   return (
     <Modal open={Boolean(calculation)} title="Custo estimado - Paraguai" onClose={onClose}>
@@ -646,7 +643,7 @@ function CalculationModal({
           </div>
           {!canSendToPricing ? (
             <p className="text-sm font-bold text-red-700" role="alert">
-              Produto sem identidade canonica unica. Envio para Precificacao bloqueado.
+              {pricingEligibilityMessage(calculation.pricingEligibility.reason)}
             </p>
           ) : null}
           <div className="grid gap-2 sm:grid-cols-2">
@@ -679,8 +676,9 @@ function buildTemporaryPricingRequest(
   const supplier = toPlainText(product.store) || toPlainText(product.provider);
   return {
     sourceProductId: product.id,
-    catalogProductId: calculation.catalogProductId!,
+    catalogProductId: calculation.catalogProductId,
     productName: product.name,
+    displayName: calculation.sourceCommercialIdentity.displayName,
     category: product.category || 'Sem categoria',
     supplier,
     store: supplier,
@@ -695,6 +693,9 @@ function buildTemporaryPricingRequest(
     correiosLabel: calculation.breakdown.correiosLabel,
     totalCost: calculation.total,
     brand: product.brand,
+    sourceManufacturer: calculation.sourceCommercialIdentity.sourceManufacturer,
+    sourceManufacturerProvenance:
+      calculation.sourceCommercialIdentity.sourceManufacturerProvenance ?? undefined,
     model: product.model || product.name,
     capacity: product.capacity,
     color: product.color,
@@ -702,6 +703,20 @@ function buildTemporaryPricingRequest(
     city: product.city,
     matchedProductType: calculation.matchedProductType,
   };
+}
+
+function pricingEligibilityMessage(reason: ImportCalculation['pricingEligibility']['reason']) {
+  switch (reason) {
+    case 'condition_unresolved':
+      return 'Condicao do produto nao resolvida. Envio para Precificacao bloqueado.';
+    case 'financial_identity_insufficient':
+      return 'Informacoes insuficientes para identificar a configuracao financeira Apple.';
+    case 'financial_identity_ambiguous':
+      return 'Identidade financeira Apple ambigua. Envio para Precificacao bloqueado.';
+    case 'classification_unresolved':
+    default:
+      return 'Classificacao financeira do produto externo nao resolvida. Envio para Precificacao bloqueado.';
+  }
 }
 
 function toPlainText(value: unknown): string {

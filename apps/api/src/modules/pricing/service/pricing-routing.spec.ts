@@ -268,6 +268,51 @@ describe('Pricing canonical originality routing', () => {
     expect(result.profit).toMatchObject({ source: 'non_apple_electronics_policy', recordId: null });
   });
 
+  it('prices an explicit-source Non-Apple import without Product.id or catalogProductId', async () => {
+    const fixture = setup(true, 700);
+    fixture.dto = {
+      ...fixture.dto,
+      catalogProductId: undefined,
+      productName: 'Camera Digital Canon EOS Rebel T7 24.1MP',
+      displayName: 'Canon EOS Rebel T7 24.1MP',
+      category: 'Outros',
+      brand: undefined,
+      model: undefined,
+      capacity: undefined,
+      color: undefined,
+      sourceManufacturer: 'Canon',
+      sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      condition: undefined,
+    };
+    fixture.repository.findActiveCatalogProductById.mockResolvedValue(null);
+
+    const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+    expect(result).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      catalogProductId: null,
+      calculationStatus: 'ready',
+      desiredNetProfit: 300,
+      offerDraft: { payload: { productId: null, sourceQuoteId: 'temporary-py-external-py-id' } },
+    });
+  });
+
+  it('uses structured Apple financial identity without Product.id', async () => {
+    const fixture = setup(true, 700, 500);
+    fixture.dto = { ...fixture.dto, catalogProductId: undefined };
+    fixture.repository.findActiveCatalogProductById.mockResolvedValue(null);
+
+    const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+    expect(result).toMatchObject({
+      financialClassification: 'APPLE',
+      catalogProductId: null,
+      calculationStatus: 'ready',
+      desiredNetProfit: 500,
+      offerDraft: { payload: { productId: null } },
+    });
+  });
+
   it('routes BR legacy lookup only after an active canonical product was located', async () => {
     const fixture = setup(false);
     fixture.quote.productId = '';

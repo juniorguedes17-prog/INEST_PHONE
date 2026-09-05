@@ -17,6 +17,12 @@ import {
   type ProductNormalizationInput,
 } from '../../evolution-webhook/product-normalization.service';
 import { normalizeProductCondition, type ImportProductCondition } from '../condition-normalizer';
+import {
+  resolveFinancialClassification,
+  type FinancialClassificationResult,
+} from '../financial-classification';
+import { formatSourceDisplayName } from '../source-display-name';
+import { deriveProfitLookupIdentity } from '@inest/product-identity';
 
 @Injectable()
 export class ImportRadarService {
@@ -96,12 +102,49 @@ export class ImportRadarService {
       productResolution.status === 'FOUND'
         ? (catalog.find((product) => product.id === productResolution.productId) ?? null)
         : null;
+    const sourceCondition = normalizeProductCondition(dto.condition ?? dto.name);
+    const condition =
+      this.toStructuredCondition(catalogProduct?.profitCondition) ??
+      (sourceCondition.status === 'RESOLVED' ? sourceCondition.condition : null);
+    const financialClassification = resolveFinancialClassification({
+      canonicalProduct: catalogProduct,
+      productName: dto.name,
+      category: dto.category,
+      model: dto.model,
+      capacity: dto.capacity,
+      color: dto.color,
+      condition,
+      sourceManufacturer: dto.sourceManufacturer,
+      sourceManufacturerProvenance: dto.sourceManufacturerProvenance,
+    });
     const result = {
       product: dto,
+      sourceCommercialIdentity: {
+        sourceProductId: dto.id,
+        sourceName: dto.name,
+        displayName: formatSourceDisplayName({
+          sourceName: dto.name,
+          sourceManufacturer: dto.sourceManufacturer,
+          model: dto.model,
+          capacity: dto.capacity,
+        }),
+        source: dto.origin ?? 'PY',
+        sourceUrl: dto.productUrl,
+        supplier: dto.store,
+        sourceManufacturer: dto.sourceManufacturer ?? null,
+        sourceManufacturerProvenance: dto.sourceManufacturerProvenance ?? null,
+      },
       productResolution,
       catalogProductId:
         productResolution.status === 'FOUND' ? (productResolution.productId ?? null) : null,
-      condition: this.toStructuredCondition(catalogProduct?.profitCondition),
+      condition,
+      financialClassification: financialClassification.classification,
+      pricingEligibility: this.resolvePricingEligibility({
+        dto,
+        catalogProduct,
+        condition,
+        financialClassification,
+      }),
       matchedProductType: redirectRule?.productType ?? 'Nao identificado',
       dollarQuote: importSettings.dollarQuote,
       breakdown: {
@@ -234,6 +277,48 @@ export class ImportRadarService {
 
   private toStructuredCondition(value: string | null | undefined) {
     return value === 'NOVO' || value === 'SEMINOVO' || value === 'CPO' ? value : null;
+  }
+
+  private resolvePricingEligibility({
+    dto,
+    catalogProduct,
+    condition,
+    financialClassification,
+  }: {
+    dto: CalculateImportCostDto;
+    catalogProduct:
+      Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>[number] | null;
+    condition: ImportProductCondition | null;
+    financialClassification: FinancialClassificationResult;
+  }) {
+    if (financialClassification.classification === 'UNRESOLVED') {
+      return { status: 'BLOCKED' as const, reason: 'classification_unresolved' as const };
+    }
+    if (financialClassification.classification === 'NON_APPLE') {
+      return { status: 'ELIGIBLE' as const, reason: null };
+    }
+    if (!condition) {
+      return { status: 'BLOCKED' as const, reason: 'condition_unresolved' as const };
+    }
+    if (catalogProduct?.isAppleOriginal === true) {
+      return { status: 'ELIGIBLE' as const, reason: null };
+    }
+
+    const identity = deriveProfitLookupIdentity({
+      productName: dto.name,
+      category: dto.category,
+      model: dto.model,
+      capacity: dto.capacity,
+      color: dto.color,
+      quality: condition,
+    });
+    if (identity.status === 'ambiguous_identity') {
+      return { status: 'BLOCKED' as const, reason: 'financial_identity_ambiguous' as const };
+    }
+    if (identity.status !== 'valid') {
+      return { status: 'BLOCKED' as const, reason: 'financial_identity_insufficient' as const };
+    }
+    return { status: 'ELIGIBLE' as const, reason: null };
   }
 
   private observeParaguayPricingNormalization(

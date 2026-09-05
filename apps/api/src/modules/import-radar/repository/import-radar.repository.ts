@@ -43,6 +43,7 @@ export class ImportRadarRepository {
         productDescription: true,
         productType: true,
         profitCondition: true,
+        isAppleOriginal: true,
         variantAttributes: true,
         category: { select: { name: true } },
         model: { select: { name: true } },

@@ -10,6 +10,8 @@ export interface ImportProduct {
   provider: string;
   dollarQuote: number;
   brand?: string;
+  sourceManufacturer?: string | null;
+  sourceManufacturerProvenance?: 'EXPLICIT_SOURCE';
   model?: string;
   capacity?: string;
   color?: string;
@@ -38,6 +40,26 @@ export interface ImportCalculation {
   product: ImportProduct;
   catalogProductId: string | null;
   condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
+  sourceCommercialIdentity: {
+    sourceProductId: string;
+    sourceName: string;
+    displayName: string;
+    source: string;
+    sourceUrl: string;
+    supplier: string;
+    sourceManufacturer: string | null;
+    sourceManufacturerProvenance: 'EXPLICIT_SOURCE' | null;
+  };
+  financialClassification: 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
+  pricingEligibility: {
+    status: 'ELIGIBLE' | 'BLOCKED';
+    reason:
+      | 'classification_unresolved'
+      | 'condition_unresolved'
+      | 'financial_identity_insufficient'
+      | 'financial_identity_ambiguous'
+      | null;
+  };
   productResolution: {
     status: 'FOUND' | 'MISSING' | 'AMBIGUOUS';
     productId?: string;

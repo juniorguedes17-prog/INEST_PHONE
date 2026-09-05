@@ -111,12 +111,28 @@ export class TemporaryImportPricingDto {
   sourceProductId!: string;
 
   @ApiProperty()
+  @IsOptional()
   @IsUUID()
-  catalogProductId!: string;
+  catalogProductId?: string;
 
   @ApiProperty()
   @IsString()
   productName!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  displayName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  sourceManufacturer?: string | null;
+
+  @ApiPropertyOptional({ enum: ['EXPLICIT_SOURCE'] })
+  @IsOptional()
+  @IsIn(['EXPLICIT_SOURCE'])
+  sourceManufacturerProvenance?: 'EXPLICIT_SOURCE';
 
   @ApiProperty()
   @IsString()

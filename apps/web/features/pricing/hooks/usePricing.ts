@@ -355,19 +355,34 @@ export function usePricing({
     setSaving(true);
     setSuccess(null);
     try {
-      const catalogProduct = await getProduct(item.catalogProductId);
+      if (!item.profit.condition) {
+        throw new Error('Condicao financeira nao resolvida para cadastrar o Lucro Liquido.');
+      }
+      const catalogProduct = item.catalogProductId ? await getProduct(item.catalogProductId) : null;
+      const [products, references] = catalogProduct
+        ? [[], { categories: [], models: [], colors: [], storages: [] }]
+        : await Promise.all([listProducts(emptyProductFilters), getProductReferences()]);
       const registration = resolveProfitRegistration({
         item: toProfitRegistrationItem(item),
         netProfit,
-        products: [],
-        references: { categories: [], models: [], colors: [], storages: [] },
+        products,
+        references,
         catalogProduct,
       });
-      if (registration.action !== 'update') {
-        throw new Error('Produto canonico indisponivel para cadastrar o Lucro Liquido.');
+      if (registration.action === 'incomplete') {
+        throw new Error(registration.message);
       }
 
-      await updateProduct(registration.productId, registration.payload);
+      if (registration.action === 'update') {
+        await updateProduct(registration.productId, registration.payload);
+      } else if (registration.action === 'create-model-and-product') {
+        await createProfitRegistration({
+          product: registration.payload,
+          model: registration.model,
+        });
+      } else {
+        await createProduct(registration.payload);
+      }
       const recalculated = await calculateTemporaryImportPricing(item.recalculationRequest);
       setTemporaryImportPricing(recalculated);
 
@@ -414,17 +429,21 @@ export function usePricing({
 }
 
 function toProfitRegistrationItem(item: TemporaryImportPricing): BrazilRadarQuotePricing {
+  const condition = item.profit.condition;
+  if (!condition) {
+    throw new Error('Condicao financeira nao resolvida para cadastrar o Lucro Liquido.');
+  }
   return {
     temporary: true,
     origin: 'BR',
     source: 'BRAZIL_RADAR',
     sourceQuoteId: `temporary-py-${item.recalculationRequest.sourceProductId}`,
     catalogProductId: item.catalogProductId,
-    calculationStatus: item.calculationStatus,
+    calculationStatus: item.calculationStatus === 'ready' ? 'ready' : 'missing_profit',
     calculationError: item.calculationError,
     product: {
       ...item.product,
-      condition: item.profit.condition,
+      condition,
     },
     costProduct: item.importCosts.totalCost,
     desiredNetProfit: item.desiredNetProfit,
@@ -432,7 +451,7 @@ function toProfitRegistrationItem(item: TemporaryImportPricing): BrazilRadarQuot
     salePrice: item.salePrice,
     offerPrice: item.offerPrice,
     pricingCosts: item.pricingCosts,
-    profit: item.profit,
+    profit: { ...item.profit, condition },
     offerDraft: item.offerDraft,
   };
 }

@@ -4,6 +4,7 @@ import {
   inferProductAttributes,
   parseProductOffers,
   parseSearchResults,
+  parseSourceManufacturer,
 } from './compras-paraguai.provider';
 
 const searchFixture = `
@@ -31,6 +32,10 @@ const offersFixture = `
       <span>Ciudad del Este - Disponivel</span>
     </article>
   </section>
+`;
+
+const detailWithManufacturerFixture = `
+  <table><tr><th>Marca</th><td>Canon</td></tr></table>
 `;
 
 describe('ComprasParaguaiProvider parsers', () => {
@@ -73,8 +78,16 @@ describe('ComprasParaguaiProvider parsers', () => {
     ]);
   });
 
+  it('extrai somente a Marca sem promover o titulo a fabricante authoritative', () => {
+    expect(parseSourceManufacturer(detailWithManufacturerFixture)).toBe('Canon');
+    expect(parseSourceManufacturer(searchFixture)).toBeUndefined();
+    expect(parseSourceManufacturer('<dl><dt>Marca</dt><dd>Apple</dd></dl>')).toBe('Apple');
+  });
+
   it('retorna lista vazia quando a fonte nao possui resultados', () => {
-    expect(parseSearchResults('<main>Nenhum produto encontrado</main>', '2026-07-13T00:00:00.000Z')).toEqual([]);
+    expect(
+      parseSearchResults('<main>Nenhum produto encontrado</main>', '2026-07-13T00:00:00.000Z'),
+    ).toEqual([]);
   });
 
   it('identifica familias sem aproximar produtos distintos', () => {

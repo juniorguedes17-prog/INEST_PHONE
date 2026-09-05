@@ -129,8 +129,9 @@ export type PricingOfferTarget =
 
 export interface TemporaryImportPricingRequest {
   sourceProductId: string;
-  catalogProductId: string;
+  catalogProductId?: string | null;
   productName: string;
+  displayName?: string;
   category: string;
   supplier: string;
   store: string;
@@ -145,6 +146,8 @@ export interface TemporaryImportPricingRequest {
   correiosLabel: number;
   totalCost: number;
   brand?: string;
+  sourceManufacturer?: string | null;
+  sourceManufacturerProvenance?: 'EXPLICIT_SOURCE';
   model?: string;
   capacity?: string;
   color?: string;
@@ -156,12 +159,19 @@ export interface TemporaryImportPricingRequest {
 export interface TemporaryImportPricing {
   temporary: true;
   origin: 'PY';
-  calculationStatus: 'ready' | 'missing_profit';
+  financialClassification: 'APPLE' | 'NON_APPLE';
+  calculationStatus:
+    | 'ready'
+    | 'missing_profit'
+    | 'condition_unresolved'
+    | 'insufficient_identity'
+    | 'ambiguous_identity'
+    | 'collision';
   calculationError: string | null;
-  catalogProductId: string;
+  catalogProductId: string | null;
   recalculationRequest: TemporaryImportPricingRequest;
   product: {
-    id: string;
+    id: string | null;
     name: string;
     category: string;
     brand: string;
@@ -197,7 +207,7 @@ export interface TemporaryImportPricing {
   offerPrice: number | null;
   profit: {
     source: string;
-    condition: 'NOVO' | 'SEMINOVO' | 'CPO';
+    condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
     productDescription: string;
     recordId: string | null;
     updatedAt: string;

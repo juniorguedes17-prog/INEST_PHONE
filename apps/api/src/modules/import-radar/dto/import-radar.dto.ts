@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNumber, IsOptional, IsString, IsUrl, Min } from 'class-validator';
 import type { ImportProductCondition } from '../condition-normalizer';
+import type { SourceManufacturerProvenance } from '../financial-classification';
 
 export class ImportSearchQueryDto {
   @ApiPropertyOptional()
@@ -54,6 +55,16 @@ export class ImportProductDto {
   @IsOptional()
   @IsString()
   brand?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  sourceManufacturer?: string | null;
+
+  @ApiPropertyOptional({ enum: ['EXPLICIT_SOURCE'] })
+  @IsOptional()
+  @IsString()
+  sourceManufacturerProvenance?: SourceManufacturerProvenance;
 
   @ApiPropertyOptional()
   @IsOptional()

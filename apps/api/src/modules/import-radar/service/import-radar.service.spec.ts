@@ -86,8 +86,49 @@ describe('ImportRadarService catalog product handoff', () => {
 
     expect(result).toMatchObject({
       catalogProductId: null,
-      condition: null,
+      condition: 'NOVO',
       productResolution: { status: 'MISSING' },
+    });
+  });
+
+  it('authorizes an explicit-source Non-Apple item without a canonical Product', async () => {
+    const result = await createService([]).calculate(
+      {
+        ...importProduct,
+        name: 'Camera Digital Canon EOS Rebel T7 24.1MP',
+        category: 'Outros',
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+        sourceManufacturer: 'Canon',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      catalogProductId: null,
+      financialClassification: 'NON_APPLE',
+      pricingEligibility: { status: 'ELIGIBLE', reason: null },
+    });
+  });
+
+  it('does not authorize inferred manufacturer text without provenance', async () => {
+    const result = await createService([]).calculate(
+      {
+        ...importProduct,
+        name: 'Camera Digital Canon EOS Rebel T7 24.1MP',
+        category: 'Outros',
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
     });
   });
 
@@ -99,7 +140,7 @@ describe('ImportRadarService catalog product handoff', () => {
 
     expect(result).toMatchObject({
       catalogProductId: null,
-      condition: null,
+      condition: 'NOVO',
       productResolution: { status: 'AMBIGUOUS', candidateCount: 2 },
     });
   });

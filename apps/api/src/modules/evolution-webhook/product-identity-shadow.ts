@@ -23,6 +23,7 @@ export interface ProductIdShadowCandidate {
   productDescription: string | null;
   productType: string;
   profitCondition: string | null;
+  isAppleOriginal?: boolean | null;
   variantAttributes: unknown;
   category: { name: string } | null;
   model: { name: string } | null;
