@@ -29,7 +29,12 @@ export class SettingsRepository {
     });
   }
 
-  async upsertSystemConfiguration(key: string, value: string, type = 'texto', scope = SETTINGS_SCOPE) {
+  async upsertSystemConfiguration(
+    key: string,
+    value: string,
+    type = 'texto',
+    scope = SETTINGS_SCOPE,
+  ) {
     return this.prisma.systemConfiguration.upsert({
       where: {
         key_scope: {
@@ -55,6 +60,12 @@ export class SettingsRepository {
       where: {
         scope: SETTINGS_SCOPE,
       },
+    });
+  }
+
+  deleteSystemConfiguration(key: string, scope = SETTINGS_SCOPE) {
+    return this.prisma.systemConfiguration.deleteMany({
+      where: { key, scope },
     });
   }
 

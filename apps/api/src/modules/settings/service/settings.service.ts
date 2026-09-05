@@ -12,6 +12,12 @@ import {
   normalizeOfferIncrement,
   OFFER_INCREMENT_KEY,
 } from '../../pricing/utils/offer-increment';
+import {
+  getDefaultNonAppleElectronicsPolicy,
+  NON_APPLE_ELECTRONICS_POLICY_KEY,
+  NON_APPLE_ELECTRONICS_RULE_VERSION,
+  parseNonAppleElectronicsPolicy,
+} from '../../pricing/utils/non-apple-electronics.policy';
 import { UpdateSettingsDto } from '../dto/settings.dto';
 import { SettingsRepository } from '../repository/settings.repository';
 import { defaultSettings } from '../settings.defaults';
@@ -131,6 +137,9 @@ export class SettingsService {
 
   async updateSettings(settings: UpdateSettingsDto, user?: AuthenticatedUser) {
     const oldValue = await this.getSettings();
+    const receivesNonApplePolicy =
+      settings.pricing !== undefined &&
+      Object.prototype.hasOwnProperty.call(settings.pricing, 'nonAppleElectronicsPolicy');
     const nextSettings = {
       general: settings.general ?? oldValue.general,
       financial: settings.financial ?? oldValue.financial,
@@ -147,12 +156,15 @@ export class SettingsService {
     };
 
     this.assertValidPricingSettings(nextSettings.pricing);
+    if (receivesNonApplePolicy) {
+      this.assertValidNonAppleElectronicsPolicy(nextSettings.pricing.nonAppleElectronicsPolicy);
+    }
     this.assertValidInstallmentSettings(
       nextSettings.installmentRates,
       nextSettings.installmentMessageTemplate,
     );
     await this.persistSystemSettings(nextSettings);
-    await this.persistPricingSettings(nextSettings.pricing);
+    await this.persistPricingSettings(nextSettings.pricing, receivesNonApplePolicy);
     await this.settingsRepository.upsertFinancialConfiguration(nextSettings.financial, user?.id);
     await this.settingsRepository.upsertImportConfiguration(nextSettings.importation);
 
@@ -163,13 +175,23 @@ export class SettingsService {
       newValue,
       context: {
         event: 'settings.updated',
+        ...(receivesNonApplePolicy
+          ? {
+              key: NON_APPLE_ELECTRONICS_POLICY_KEY,
+              scope: PRICING_CONFIGURATION_SCOPE,
+              version: NON_APPLE_ELECTRONICS_RULE_VERSION,
+            }
+          : {}),
       },
     });
 
     return newValue;
   }
 
-  async resetDefaults(user?: AuthenticatedUser) {
+  async resetDefaults(user?: AuthenticatedUser, target?: 'non_apple_electronics_policy') {
+    if (target === NON_APPLE_ELECTRONICS_POLICY_KEY) {
+      return this.resetNonAppleElectronicsPolicy(user);
+    }
     const oldValue = await this.getSettings();
 
     await this.settingsRepository.deleteSystemConfigurations();
@@ -250,10 +272,14 @@ export class SettingsService {
       ),
       commercialRoundingEnding1: endings[0]!,
       commercialRoundingEnding2: endings[1]!,
+      nonAppleElectronicsPolicy: this.getEffectiveNonAppleElectronicsPolicy(pricingConfigurations),
     };
   }
 
-  private async persistPricingSettings(settings: Required<UpdateSettingsDto>['pricing']) {
+  private async persistPricingSettings(
+    settings: Required<UpdateSettingsDto>['pricing'],
+    persistNonApplePolicy = false,
+  ) {
     this.assertValidPricingSettings(settings);
     const endings = [settings.commercialRoundingEnding1, settings.commercialRoundingEnding2];
 
@@ -277,6 +303,16 @@ export class SettingsService {
         PRICING_CONFIGURATION_SCOPE,
       ),
     ]);
+
+    if (persistNonApplePolicy) {
+      const policy = this.assertValidNonAppleElectronicsPolicy(settings.nonAppleElectronicsPolicy);
+      await this.settingsRepository.upsertSystemConfiguration(
+        NON_APPLE_ELECTRONICS_POLICY_KEY,
+        JSON.stringify(policy),
+        'json',
+        PRICING_CONFIGURATION_SCOPE,
+      );
+    }
   }
 
   private assertValidPricingSettings(settings: Required<UpdateSettingsDto>['pricing']) {
@@ -292,6 +328,53 @@ export class SettingsService {
         'O acrescimo da oferta deve ser um valor nao negativo com ate duas casas decimais.',
       );
     }
+  }
+
+  private assertValidNonAppleElectronicsPolicy(value: unknown) {
+    const policy = parseNonAppleElectronicsPolicy(value);
+    if (!policy) {
+      throw new BadRequestException('A policy de precificacao de eletronicos e invalida.');
+    }
+    return policy;
+  }
+
+  private getEffectiveNonAppleElectronicsPolicy(
+    pricingConfigurations: Array<{ key: string; value: string }>,
+  ) {
+    const rawPolicy = pricingConfigurations.find(
+      (item) => item.key === NON_APPLE_ELECTRONICS_POLICY_KEY,
+    )?.value;
+    if (!rawPolicy) return getDefaultNonAppleElectronicsPolicy();
+
+    try {
+      return (
+        parseNonAppleElectronicsPolicy(JSON.parse(rawPolicy)) ??
+        getDefaultNonAppleElectronicsPolicy()
+      );
+    } catch {
+      return getDefaultNonAppleElectronicsPolicy();
+    }
+  }
+
+  private async resetNonAppleElectronicsPolicy(user?: AuthenticatedUser) {
+    const oldPolicy = (await this.getSettings()).pricing.nonAppleElectronicsPolicy;
+    await this.settingsRepository.deleteSystemConfiguration(
+      NON_APPLE_ELECTRONICS_POLICY_KEY,
+      PRICING_CONFIGURATION_SCOPE,
+    );
+    const newPolicy = (await this.getSettings()).pricing.nonAppleElectronicsPolicy;
+    await this.settingsRepository.createAuditLog({
+      userId: user?.id,
+      oldValue: oldPolicy,
+      newValue: newPolicy,
+      context: {
+        event: 'settings.non_apple_electronics_policy.reset',
+        key: NON_APPLE_ELECTRONICS_POLICY_KEY,
+        scope: PRICING_CONFIGURATION_SCOPE,
+        version: NON_APPLE_ELECTRONICS_RULE_VERSION,
+      },
+    });
+    return this.getSettings();
   }
 
   private assertValidInstallmentSettings(

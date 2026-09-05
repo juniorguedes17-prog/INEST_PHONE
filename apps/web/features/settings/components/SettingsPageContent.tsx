@@ -31,10 +31,34 @@ const settingsSections: Array<{ id: SettingsSection; label: string }> = [
   { id: 'offers', label: 'Ofertas' },
 ];
 
+const nonAppleProfitBandLabels = [
+  'Custo até R$100',
+  'Custo de R$100,01 a R$200',
+  'Custo de R$200,01 a R$300',
+  'Custo de R$300,01 a R$500',
+  'Custo de R$500,01 a R$1.000',
+  'Custo de R$1.000,01 a R$2.000',
+  'Custo de R$2.000,01 a R$3.000',
+  'Custo de R$3.000,01 a R$5.000',
+  'Custo acima de R$5.000',
+] as const;
+
+const nonAppleFixedCostBandLabels = ['Custo até R$500', 'Custo acima de R$500'] as const;
+
 export function SettingsPageContent() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
-  const { settings, setSettings, loading, saving, error, success, reload, save, resetDefaults } =
-    useSettings();
+  const {
+    settings,
+    setSettings,
+    loading,
+    saving,
+    error,
+    success,
+    reload,
+    save,
+    resetDefaults,
+    resetNonAppleElectronicsDefaults,
+  } = useSettings();
 
   useEffect(() => {
     if (settings) {
@@ -172,6 +196,40 @@ export function SettingsPageContent() {
         infinityPay: {
           ...current.installmentRates.infinityPay,
           debitRatePercent,
+        },
+      },
+    }));
+  }
+
+  function updateNonAppleProfitBand(
+    index: number,
+    field: 'profitPercentOnCost' | 'fixedProfit' | 'minimumProfit',
+    value: number,
+  ) {
+    updateSettings((current) => ({
+      ...current,
+      pricing: {
+        ...current.pricing,
+        nonAppleElectronicsPolicy: {
+          ...current.pricing.nonAppleElectronicsPolicy,
+          profitBands: current.pricing.nonAppleElectronicsPolicy.profitBands.map(
+            (band, bandIndex) => (bandIndex === index ? { ...band, [field]: value } : band),
+          ),
+        },
+      },
+    }));
+  }
+
+  function updateNonAppleFixedCostBand(index: number, fixedCost: number) {
+    updateSettings((current) => ({
+      ...current,
+      pricing: {
+        ...current.pricing,
+        nonAppleElectronicsPolicy: {
+          ...current.pricing.nonAppleElectronicsPolicy,
+          fixedCostBands: current.pricing.nonAppleElectronicsPolicy.fixedCostBands.map(
+            (band, bandIndex) => (bandIndex === index ? { ...band, fixedCost } : band),
+          ),
         },
       },
     }));
@@ -390,6 +448,111 @@ export function SettingsPageContent() {
                   }))
                 }
               />
+            </div>
+          </SettingsCard>
+        </div>
+
+        <div className={activeSection === 'pricing' ? 'xl:col-span-2' : 'hidden'}>
+          <SettingsCard
+            eyebrow="Precificação"
+            title="Precificação de Eletrônicos"
+            description="Parâmetros comerciais aplicados somente ao motor Non-Apple. Os limites das faixas são fixos."
+          >
+            <div className="mb-6 flex justify-end">
+              <ActionButton
+                variant="secondary"
+                onClick={() => void resetNonAppleElectronicsDefaults()}
+                disabled={saving}
+              >
+                Restaurar padrões
+              </ActionButton>
+            </div>
+            <div className="grid gap-4">
+              {settings.pricing.nonAppleElectronicsPolicy.profitBands.map((band, index) => (
+                <section
+                  key={band.id}
+                  className="rounded-xl border border-inest-line bg-inest-soft p-4"
+                >
+                  <p className="mb-4 text-sm font-black text-inest-text">
+                    {nonAppleProfitBandLabels[index]}
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {band.profitPercentOnCost !== null ? (
+                      <PercentageInput
+                        label="Lucro sobre custo"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={band.profitPercentOnCost}
+                        onChange={(event) =>
+                          updateNonAppleProfitBand(
+                            index,
+                            'profitPercentOnCost',
+                            toNumber(event.target.value),
+                          )
+                        }
+                      />
+                    ) : null}
+                    {band.fixedProfit !== null ? (
+                      <CurrencyInput
+                        label="Lucro fixo"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={band.fixedProfit}
+                        onChange={(event) =>
+                          updateNonAppleProfitBand(
+                            index,
+                            'fixedProfit',
+                            toNumber(event.target.value),
+                          )
+                        }
+                      />
+                    ) : null}
+                    {band.minimumProfit !== null ? (
+                      <CurrencyInput
+                        label="Piso de lucro"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={band.minimumProfit}
+                        onChange={(event) =>
+                          updateNonAppleProfitBand(
+                            index,
+                            'minimumProfit',
+                            toNumber(event.target.value),
+                          )
+                        }
+                      />
+                    ) : null}
+                  </div>
+                </section>
+              ))}
+            </div>
+            <div className="mt-6 border-t border-inest-line pt-6">
+              <p className="mb-4 text-sm font-black text-inest-text">Custo fixo Non-Apple</p>
+              <div className="grid gap-4 md:grid-cols-2">
+                {settings.pricing.nonAppleElectronicsPolicy.fixedCostBands.map((band, index) => (
+                  <section
+                    key={band.id}
+                    className="rounded-xl border border-inest-line bg-inest-soft p-4"
+                  >
+                    <p className="mb-4 text-sm font-black text-inest-text">
+                      {nonAppleFixedCostBandLabels[index]}
+                    </p>
+                    <CurrencyInput
+                      label="Custo fixo"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={band.fixedCost}
+                      onChange={(event) =>
+                        updateNonAppleFixedCostBand(index, toNumber(event.target.value))
+                      }
+                    />
+                  </section>
+                ))}
+              </div>
             </div>
           </SettingsCard>
         </div>

@@ -7,6 +7,7 @@ import {
   IsIn,
   IsInt,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Max,
@@ -14,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import type { NonAppleElectronicsPolicy } from '../../pricing/utils/non-apple-electronics.policy';
 
 export class GeneralSettingsDto {
   @ApiProperty()
@@ -89,6 +91,18 @@ export class PricingSettingsDto {
   @Min(0)
   @Max(99)
   commercialRoundingEnding2!: number;
+
+  @ApiProperty({ required: false, type: 'object' })
+  @IsOptional()
+  @IsObject()
+  nonAppleElectronicsPolicy?: NonAppleElectronicsPolicy;
+}
+
+export class ResetSettingsDto {
+  @ApiProperty({ required: false, enum: ['non_apple_electronics_policy'] })
+  @IsOptional()
+  @IsIn(['non_apple_electronics_policy'])
+  target?: 'non_apple_electronics_policy';
 }
 
 export class ImportRedirectRuleDto {

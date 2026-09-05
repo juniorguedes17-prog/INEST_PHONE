@@ -8,6 +8,7 @@ import {
   COMMERCIAL_ROUNDING_ENDING_ONE_KEY,
   COMMERCIAL_ROUNDING_ENDING_TWO_KEY,
 } from '../utils/commercial-price-rounding';
+import { getDefaultNonAppleElectronicsPolicy } from '../utils/non-apple-electronics.policy';
 import { PricingService } from './pricing.service';
 
 type Origin = 'CATALOG' | 'BR' | 'PY';
@@ -17,6 +18,7 @@ function setup(
   isAppleOriginal: boolean | null | undefined,
   cost = 700,
   profit: number | null = null,
+  nonAppleElectronicsPolicy = getDefaultNonAppleElectronicsPolicy(),
 ) {
   const product = {
     id: 'catalog-product',
@@ -99,6 +101,7 @@ function setup(
   const settings = {
     getSettings: vi.fn().mockResolvedValue({
       financial: { globalFixedCost: 200, defaultFreight: 50, defaultPaymentFee: 100 },
+      pricing: { nonAppleElectronicsPolicy },
     }),
   };
   const normalization = {
@@ -318,4 +321,27 @@ describe('Pricing canonical originality routing', () => {
       }
     },
   );
+
+  it('applies a persisted policy only to false', async () => {
+    const policy = getDefaultNonAppleElectronicsPolicy();
+    policy.profitBands[0]!.profitPercentOnCost = 150;
+    policy.fixedCostBands[1]!.fixedCost = 999;
+
+    const nonApple = await setup(false, 50, null, policy).calculate('CATALOG');
+    expect(nonApple).toMatchObject({
+      desiredNetProfit: 75,
+      engineMetadata: { fixedCost: 0, rawBasePrice: 125 },
+    });
+
+    for (const classification of [true, null, undefined]) {
+      const apple = await setup(classification, 700, 500, policy).calculate('CATALOG');
+      expect(apple).toMatchObject({
+        desiredNetProfit: 500,
+        salePrice: 1570,
+        offerPrice: 1645,
+        calculationStatus: 'ready',
+      });
+      expect(apple).not.toHaveProperty('engineMetadata');
+    }
+  });
 });

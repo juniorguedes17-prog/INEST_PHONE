@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { calculateNonAppleElectronics as calculate } from './non-apple-electronics.engine';
-import { NON_APPLE_PROFIT_BANDS } from './non-apple-electronics.policy';
+import {
+  getDefaultNonAppleElectronicsPolicy,
+  NON_APPLE_PROFIT_BANDS,
+} from './non-apple-electronics.policy';
 
 describe('isolated non-Apple electronics engine', () => {
   it.each([
@@ -148,5 +151,37 @@ describe('isolated non-Apple electronics engine', () => {
     });
     expect(Object.isFrozen(NON_APPLE_PROFIT_BANDS)).toBe(true);
     expect(NON_APPLE_PROFIT_BANDS.every(Object.isFrozen)).toBe(true);
+  });
+
+  it('uses editable percentage, floor and fixed-cost values without changing boundaries', () => {
+    const policy = getDefaultNonAppleElectronicsPolicy();
+    policy.profitBands[0]!.profitPercentOnCost = 150;
+    policy.profitBands[5]!.minimumProfit = 500;
+    policy.fixedCostBands[1]!.fixedCost = 200;
+
+    expect(calculate({ acquisitionCost: 50, policy, offerIncrement: 0 })).toMatchObject({
+      targetProfit: 75,
+      fixedCost: 0,
+      rawBasePrice: 125,
+    });
+    expect(calculate({ acquisitionCost: 1500, policy, offerIncrement: 0 })).toMatchObject({
+      targetProfit: 500,
+      fixedCost: 200,
+      rawBasePrice: 2200,
+      band: { lowerBoundExclusive: 1000, upperBoundInclusive: 2000 },
+    });
+  });
+
+  it('falls back to the versioned default for an invalid policy document', () => {
+    const invalidPolicy = getDefaultNonAppleElectronicsPolicy() as unknown as {
+      version: string;
+    };
+    invalidPolicy.version = '9.9.9';
+
+    expect(calculate({ acquisitionCost: 700, policy: invalidPolicy as never })).toMatchObject({
+      targetProfit: 300,
+      fixedCost: 150,
+      rawBasePrice: 1150,
+    });
   });
 });

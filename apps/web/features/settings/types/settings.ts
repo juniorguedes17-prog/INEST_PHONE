@@ -20,6 +20,25 @@ export interface PricingSettings {
   offerIncrement: number;
   commercialRoundingEnding1: number;
   commercialRoundingEnding2: number;
+  nonAppleElectronicsPolicy: NonAppleElectronicsPolicy;
+}
+
+export interface NonAppleElectronicsProfitBand {
+  id: string;
+  profitPercentOnCost: number | null;
+  fixedProfit: number | null;
+  minimumProfit: number | null;
+}
+
+export interface NonAppleElectronicsFixedCostBand {
+  id: string;
+  fixedCost: number;
+}
+
+export interface NonAppleElectronicsPolicy {
+  version: '1.0.0';
+  profitBands: NonAppleElectronicsProfitBand[];
+  fixedCostBands: NonAppleElectronicsFixedCostBand[];
 }
 
 export interface ImportRedirectRule {

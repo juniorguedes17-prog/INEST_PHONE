@@ -44,6 +44,18 @@ export async function resetSettingsDefaults(): Promise<SettingsPayload> {
   return normalizeSettings(await parseResponse<SettingsPayload>(response));
 }
 
+export async function resetNonAppleElectronicsDefaults(): Promise<SettingsPayload> {
+  const response = await authenticatedFetch(`${env.apiUrl}/settings/reset-defaults`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ target: 'non_apple_electronics_policy' }),
+  });
+
+  return normalizeSettings(await parseResponse<SettingsPayload>(response));
+}
+
 export async function updateUserTheme(theme: ThemePreference): Promise<SettingsPayload> {
   const currentSettings = await getSettings();
 

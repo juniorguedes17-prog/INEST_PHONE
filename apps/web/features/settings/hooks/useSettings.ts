@@ -1,7 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { getSettings, resetSettingsDefaults, updateSettings } from '../services/settings-service';
+import {
+  getSettings,
+  resetNonAppleElectronicsDefaults as resetNonAppleElectronicsDefaultsRequest,
+  resetSettingsDefaults,
+  updateSettings,
+} from '../services/settings-service';
 import { SettingsPayload } from '../types/settings';
 
 export function useSettings() {
@@ -72,6 +77,26 @@ export function useSettings() {
     }
   }
 
+  async function resetNonAppleElectronicsDefaults() {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const savedSettings = await resetNonAppleElectronicsDefaultsRequest();
+      setSettings(savedSettings);
+      setSuccess('Padrões da precificação de eletrônicos restaurados.');
+    } catch (settingsError) {
+      setError(
+        settingsError instanceof Error
+          ? settingsError.message
+          : 'Não foi possível restaurar os padrões da precificação de eletrônicos.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return {
     settings,
     setSettings,
@@ -82,5 +107,6 @@ export function useSettings() {
     reload: loadSettings,
     save,
     resetDefaults,
+    resetNonAppleElectronicsDefaults,
   };
 }

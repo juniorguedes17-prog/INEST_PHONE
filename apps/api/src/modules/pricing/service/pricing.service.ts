@@ -728,6 +728,7 @@ export class PricingService {
         },
         commercialEndings: this.getCommercialPriceEndings(pricingConfigurations),
         offerIncrement: this.getOfferIncrement(pricingConfigurations),
+        policy: settings.pricing?.nonAppleElectronicsPolicy,
       });
     } catch (error) {
       if (error instanceof RangeError) throw new BadRequestException(error.message);

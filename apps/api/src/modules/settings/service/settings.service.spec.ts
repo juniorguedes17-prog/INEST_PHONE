@@ -6,6 +6,10 @@ import {
   PRICING_CONFIGURATION_SCOPE,
 } from '../../pricing/utils/commercial-price-rounding';
 import { OFFER_INCREMENT_KEY } from '../../pricing/utils/offer-increment';
+import {
+  getDefaultNonAppleElectronicsPolicy,
+  NON_APPLE_ELECTRONICS_POLICY_KEY,
+} from '../../pricing/utils/non-apple-electronics.policy';
 import { SettingsRepository } from '../repository/settings.repository';
 import { defaultSettings } from '../settings.defaults';
 import { SettingsService } from './settings.service';
@@ -24,8 +28,24 @@ function createRepository(
       ),
     findFinancialConfiguration: vi.fn().mockResolvedValue(null),
     findImportConfiguration: vi.fn().mockResolvedValue(null),
-    upsertSystemConfiguration: vi.fn().mockResolvedValue({}),
+    upsertSystemConfiguration: vi
+      .fn()
+      .mockImplementation((key: string, value: string, _type?: string, scope?: string) => {
+        const configurations =
+          scope === PRICING_CONFIGURATION_SCOPE ? pricingConfigurations : globalConfigurations;
+        const existing = configurations.find((item) => item.key === key);
+        if (existing) existing.value = value;
+        else configurations.push({ key, value });
+        return Promise.resolve({});
+      }),
     deleteSystemConfigurations: vi.fn().mockResolvedValue({}),
+    deleteSystemConfiguration: vi.fn().mockImplementation((key: string, scope: string) => {
+      if (scope === PRICING_CONFIGURATION_SCOPE) {
+        const index = pricingConfigurations.findIndex((item) => item.key === key);
+        if (index >= 0) pricingConfigurations.splice(index, 1);
+      }
+      return Promise.resolve({});
+    }),
     upsertFinancialConfiguration: vi.fn().mockResolvedValue({}),
     upsertImportConfiguration: vi.fn().mockResolvedValue({}),
     createAuditLog: vi.fn().mockResolvedValue({}),
@@ -112,7 +132,7 @@ describe('SettingsService commercial price endings', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
-    expect(settings.pricing).toEqual({
+    expect(settings.pricing).toMatchObject({
       offerIncrement: 100,
       commercialRoundingEnding1: 49,
       commercialRoundingEnding2: 70,
@@ -307,6 +327,178 @@ describe('SettingsService commercial price endings', () => {
       'installmentMessageTemplate',
       defaultSettings.installmentMessageTemplate,
       'texto_longo',
+    );
+  });
+});
+
+describe('SettingsService non-Apple electronics policy', () => {
+  it('returns the versioned default when no override exists', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(service.getSettings()).resolves.toMatchObject({
+      pricing: { nonAppleElectronicsPolicy: getDefaultNonAppleElectronicsPolicy() },
+    });
+  });
+
+  it('uses a complete persisted policy and falls back for malformed JSON', async () => {
+    const customPolicy = getDefaultNonAppleElectronicsPolicy();
+    customPolicy.profitBands[0]!.profitPercentOnCost = 135;
+    const repository = createRepository([
+      { key: NON_APPLE_ELECTRONICS_POLICY_KEY, value: JSON.stringify(customPolicy) },
+    ]);
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(service.getSettings()).resolves.toMatchObject({
+      pricing: { nonAppleElectronicsPolicy: customPolicy },
+    });
+
+    repository.findSystemConfigurations.mockImplementation((scope?: string) =>
+      Promise.resolve(
+        scope === PRICING_CONFIGURATION_SCOPE
+          ? [{ key: NON_APPLE_ELECTRONICS_POLICY_KEY, value: '{' }]
+          : [],
+      ),
+    );
+    await expect(service.getSettings()).resolves.toMatchObject({
+      pricing: { nonAppleElectronicsPolicy: getDefaultNonAppleElectronicsPolicy() },
+    });
+  });
+
+  it.each([
+    [
+      'partial document',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => policy.profitBands.pop(),
+    ],
+    [
+      'unsupported version',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => {
+        policy.version = '9.9.9' as '1.0.0';
+      },
+    ],
+    [
+      'negative percentage',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => {
+        policy.profitBands[0]!.profitPercentOnCost = -1;
+      },
+    ],
+    [
+      'negative floor',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => {
+        policy.profitBands[5]!.minimumProfit = -1;
+      },
+    ],
+    [
+      'negative fixed cost',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => {
+        policy.fixedCostBands[1]!.fixedCost = -1;
+      },
+    ],
+    [
+      'non-finite value',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => {
+        policy.profitBands[0]!.profitPercentOnCost = Number.NaN;
+      },
+    ],
+    [
+      'duplicate id',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => {
+        policy.profitBands[1]!.id = policy.profitBands[0]!.id;
+      },
+    ],
+    [
+      'reordered id',
+      (policy: ReturnType<typeof getDefaultNonAppleElectronicsPolicy>) => {
+        policy.profitBands.reverse();
+      },
+    ],
+  ])('rejects %s before writing', async (_label, mutate) => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const policy = getDefaultNonAppleElectronicsPolicy();
+    mutate(policy);
+
+    await expect(
+      service.updateSettings({
+        pricing: {
+          offerIncrement: 100,
+          commercialRoundingEnding1: 49,
+          commercialRoundingEnding2: 70,
+          nonAppleElectronicsPolicy: policy,
+        },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('writes a valid complete policy with one JSON upsert and audits old/new values', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const policy = getDefaultNonAppleElectronicsPolicy();
+    policy.profitBands[0]!.profitPercentOnCost = 130;
+
+    await service.updateSettings(
+      {
+        pricing: {
+          offerIncrement: 100,
+          commercialRoundingEnding1: 49,
+          commercialRoundingEnding2: 70,
+          nonAppleElectronicsPolicy: policy,
+        },
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      NON_APPLE_ELECTRONICS_POLICY_KEY,
+      JSON.stringify(policy),
+      'json',
+      PRICING_CONFIGURATION_SCOPE,
+    );
+    expect(
+      repository.upsertSystemConfiguration.mock.calls.filter(
+        (call: unknown[]) => call[0] === NON_APPLE_ELECTRONICS_POLICY_KEY,
+      ),
+    ).toHaveLength(1);
+    expect(repository.createAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        oldValue: expect.any(Object),
+        newValue: expect.any(Object),
+        context: expect.objectContaining({ key: NON_APPLE_ELECTRONICS_POLICY_KEY }),
+      }),
+    );
+  });
+
+  it('removes only the policy override and returns the versioned default on reset', async () => {
+    const policy = getDefaultNonAppleElectronicsPolicy();
+    policy.fixedCostBands[1]!.fixedCost = 200;
+    const repository = createRepository([
+      { key: NON_APPLE_ELECTRONICS_POLICY_KEY, value: JSON.stringify(policy) },
+      { key: OFFER_INCREMENT_KEY, value: '75' },
+    ]);
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    const result = await service.resetDefaults(
+      { id: 'user-1' } as never,
+      'non_apple_electronics_policy',
+    );
+
+    expect(repository.deleteSystemConfiguration).toHaveBeenCalledWith(
+      NON_APPLE_ELECTRONICS_POLICY_KEY,
+      PRICING_CONFIGURATION_SCOPE,
+    );
+    expect(repository.deleteSystemConfigurations).not.toHaveBeenCalled();
+    expect(result.pricing).toMatchObject({
+      offerIncrement: 75,
+      nonAppleElectronicsPolicy: getDefaultNonAppleElectronicsPolicy(),
+    });
+    expect(repository.createAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        oldValue: policy,
+        newValue: getDefaultNonAppleElectronicsPolicy(),
+      }),
     );
   });
 });
