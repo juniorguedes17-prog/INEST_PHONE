@@ -1,6 +1,7 @@
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
 import type { ImportProductCondition } from '../condition-normalizer';
 import type { SourceManufacturerProvenance } from '../financial-classification';
+import type { ImportProviderOrigin } from './source-commercial-identity.interface';
 
 export interface ImportProviderProduct {
   id: string;
@@ -21,7 +22,7 @@ export interface ImportProviderProduct {
   availability?: string;
   storeUrl?: string;
   consultedAt?: string;
-  origin?: 'PY' | 'US' | 'MOCK';
+  origin?: ImportProviderOrigin;
   externalId?: string;
   minimumPriceUsd?: number;
   averagePriceUsd?: number;
