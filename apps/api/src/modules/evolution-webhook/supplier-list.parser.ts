@@ -481,17 +481,6 @@ function isConditionSectionHeading(value: string, activeCondition: ProductCondit
   );
 }
 
-function isSwapConditionHeading(value: string) {
-  const normalized = value
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
-    .replace(/[-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-
-  return normalized === 'swap' || normalized === 'lista swap';
-}
-
 function isDescriptiveNewLineWithinCpo(value: string, activeCondition: ProductCondition | null) {
   const resolution = normalizeProductCondition(value);
   return (
