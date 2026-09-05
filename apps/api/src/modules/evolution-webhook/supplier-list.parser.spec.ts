@@ -7,6 +7,33 @@ import {
 } from './supplier-list.parser';
 
 describe('supplier list parser', () => {
+  it.each([
+    ['REFURBISHED', 'SEMINOVO'],
+    ['PRE-OWNED', 'SEMINOVO'],
+    ['RECONDITIONED', 'SEMINOVO'],
+    ['RENEWED', 'SEMINOVO'],
+    ['OPEN BOX', 'SEMINOVO'],
+    ['recondicionado pela Apple', 'SEMINOVO'],
+    ['APPLE CERTIFIED REFURBISHED', 'CPO'],
+    ['CPO', 'CPO'],
+  ])('usa a condition universal para o contexto %s', (heading, condition) => {
+    const [item] = parseSupplierListText(`${heading}\niPhone 17 Pro 256GB\nPreto R$ 4.500`);
+
+    expect(item?.condition).toBe(condition);
+  });
+
+  it('nao assume NOVO sem evidencia de condition', () => {
+    const [item] = parseSupplierListText('iPhone 17 Pro 256GB\nPreto R$ 4.500');
+
+    expect(item?.condition).toBeNull();
+  });
+
+  it('nao herda condition quando a linha do produto contem evidencia conflitante', () => {
+    const [item] = parseSupplierListText('SEMINOVO\niPhone 17 Pro 256GB NEW USED\nPreto R$ 4.500');
+
+    expect(item?.condition).toBeNull();
+  });
+
   it('processa uma lista textual com produto, cor e preco em linhas separadas', () => {
     const items = parseSupplierListText(`
       IPHONES LACRADOS
@@ -53,7 +80,10 @@ describe('supplier list parser', () => {
     ).toEqual([]);
     expect(rejections).toEqual([
       expect.objectContaining({ rawLine: 'R$ 6.650', reason: 'missing_product_context' }),
-      expect.objectContaining({ rawLine: 'iPhone 17 Pro 256GB', reason: 'invalid_or_missing_price' }),
+      expect.objectContaining({
+        rawLine: 'iPhone 17 Pro 256GB',
+        reason: 'invalid_or_missing_price',
+      }),
     ]);
   });
 
@@ -97,7 +127,7 @@ describe('supplier list parser', () => {
       nextLines: [],
       activeProductHeading: null,
       activeCategory: null,
-      activeCondition: 'NOVO',
+      activeCondition: null,
       qualityGrade: null,
       detectedPrice: 900,
     });
@@ -119,7 +149,7 @@ describe('supplier list parser', () => {
       nextLines: [],
       activeProductHeading: 'iPhone 15 128GB',
       activeCategory: null,
-      activeCondition: 'NOVO',
+      activeCondition: null,
       qualityGrade: 'A',
       detectedPrice: null,
     });
@@ -136,10 +166,7 @@ describe('supplier list parser', () => {
       'missing_product_context',
       'invalid_or_missing_price',
     ]);
-    expect(rejections.map(({ rawLine }) => rawLine)).toEqual([
-      'R$ 6.650',
-      'iPhone 17 Pro 256GB',
-    ]);
+    expect(rejections.map(({ rawLine }) => rawLine)).toEqual(['R$ 6.650', 'iPhone 17 Pro 256GB']);
   });
 
   it('mantem a condicao CPO e nao trata valores brasileiros como texto', () => {
@@ -172,7 +199,7 @@ describe('supplier list parser', () => {
     expect(item).toMatchObject({ condition: 'SEMINOVO', price: 3500 });
   });
 
-  it('trata SEMINOVOS como nova secao mesmo apos um produto anterior', () => {
+  it('trata SEMINOVOS como nova secao sem assumir NOVO no produto anterior', () => {
     const items = parseSupplierListText(`
       iPhone 15 128GB
       Preto R$ 3.000
@@ -181,7 +208,7 @@ describe('supplier list parser', () => {
       Azul R$ 4.000
     `);
 
-    expect(items.map((item) => item.condition)).toEqual(['NOVO', 'SEMINOVO']);
+    expect(items.map((item) => item.condition)).toEqual([null, 'SEMINOVO']);
   });
 
   it('permite que uma nova secao NOVO substitua o contexto CPO', () => {
@@ -271,18 +298,18 @@ describe('supplier list parser', () => {
     expect(items.map((item) => item.condition)).toEqual(['CPO', 'NOVO']);
   });
 
-  it('mantem NOVO quando a linha informa somente bateria', () => {
+  it('mantem condition nao resolvida quando a linha informa somente bateria', () => {
     const [item] = parseSupplierListText('iPhone 16 128GB\nBateria 100%\nPreto R$ 4.000');
 
-    expect(item).toMatchObject({ condition: 'NOVO', price: 4000 });
+    expect(item).toMatchObject({ condition: null, price: 4000 });
   });
 
-  it('reconhece recondicionado pela apple como CPO', () => {
+  it('classifica recondicionado pela apple como SEMINOVO sem Certified ou CPO', () => {
     const [item] = parseSupplierListText(
       'Recondicionado pela Apple iPhone 15 Pro 256GB\nPreto R$ 3.500',
     );
 
-    expect(item).toMatchObject({ condition: 'CPO', price: 3500 });
+    expect(item).toMatchObject({ condition: 'SEMINOVO', price: 3500 });
   });
 
   it('reconhece SWAP inline como SEMINOVO sem alterar a identidade por downstream', () => {
@@ -611,7 +638,7 @@ describe('supplier list parser', () => {
     );
     expect(novoAndSeminovo).toHaveLength(2);
     expect(novoAndSeminovo.map((item) => item.condition)).toEqual(
-      expect.arrayContaining(['NOVO', 'SEMINOVO']),
+      expect.arrayContaining([null, 'SEMINOVO']),
     );
     expect(cpoAndSeminovo).toHaveLength(2);
     expect(cpoAndSeminovo.map((item) => item.condition)).toEqual(
@@ -935,7 +962,7 @@ describe('supplier list parser', () => {
         expect.objectContaining({
           normalizedName: 'iphone 15 128gb',
           price: 3600,
-          condition: 'NOVO',
+          condition: null,
         }),
         expect.objectContaining({ price: 2750, condition: 'SEMINOVO' }),
         expect.objectContaining({ normalizedName: 'mac mini m2 8 256', price: 3200 }),

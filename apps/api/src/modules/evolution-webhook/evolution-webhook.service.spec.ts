@@ -129,7 +129,11 @@ describe('EvolutionWebhookService', () => {
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-inconclusive-short', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-inconclusive-short',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'iPhone B 256GB\nSilver R$ 5.500' },
       },
     });
@@ -148,7 +152,11 @@ describe('EvolutionWebhookService', () => {
     const payload = {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-shadow-only', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-shadow-only',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'IPHONES SEMINOVOS\niPhone 15 128GB\nPreto R$ 2.100' },
       },
     };
@@ -192,10 +200,30 @@ describe('EvolutionWebhookService', () => {
 
   it('mantem a identidade de oferta por familia sem depender de productId', () => {
     const families = [
-      { category: 'iPhone', normalizedName: 'iPhone 17 Pro 256GB', model: 'iPhone 17 Pro', capacity: '256GB' },
-      { category: 'iPad', normalizedName: 'iPad 11 A16 128GB Wi-Fi', model: 'iPad 11', capacity: '128GB' },
-      { category: 'MacBook', normalizedName: 'MacBook Neo 13 8GB 512GB', model: 'MacBook Neo 13', capacity: '512GB' },
-      { category: 'Apple Watch', normalizedName: 'Apple Watch S11 42MM GPS', model: 'Apple Watch S11', capacity: null },
+      {
+        category: 'iPhone',
+        normalizedName: 'iPhone 17 Pro 256GB',
+        model: 'iPhone 17 Pro',
+        capacity: '256GB',
+      },
+      {
+        category: 'iPad',
+        normalizedName: 'iPad 11 A16 128GB Wi-Fi',
+        model: 'iPad 11',
+        capacity: '128GB',
+      },
+      {
+        category: 'MacBook',
+        normalizedName: 'MacBook Neo 13 8GB 512GB',
+        model: 'MacBook Neo 13',
+        capacity: '512GB',
+      },
+      {
+        category: 'Apple Watch',
+        normalizedName: 'Apple Watch S11 42MM GPS',
+        model: 'Apple Watch S11',
+        capacity: null,
+      },
     ];
 
     for (const family of families) {
@@ -240,7 +268,11 @@ describe('EvolutionWebhookService', () => {
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-promo-silver', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-promo-silver',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'PROMOÇÃO SWAP\niPhone 17 Pro Max 256GB\nSilver R$ 6.990' },
       },
     });
@@ -395,7 +427,13 @@ describe('EvolutionWebhookService', () => {
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
-      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul', condition: 'SEMINOVO' })],
+      items: [
+        currentItem('item-b', 'Produto B 256GB', 6000, {
+          capacity: '256GB',
+          color: 'azul',
+          condition: 'SEMINOVO',
+        }),
+      ],
     });
 
     await service.receive(webhookSecret, {
@@ -420,7 +458,10 @@ describe('EvolutionWebhookService', () => {
       include: { items: true },
     });
     expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'item-b' }, data: expect.objectContaining({ price: 5500 }) }),
+      expect.objectContaining({
+        where: { id: 'item-b' },
+        data: expect.objectContaining({ price: 5500 }),
+      }),
     );
   });
 
@@ -450,7 +491,11 @@ describe('EvolutionWebhookService', () => {
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'used-partial-message', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'used-partial-message',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'PROMOÇÃO SWAP\niPhone 15 128GB\nAzul R$ 2.900' },
       },
     });
@@ -475,7 +520,10 @@ describe('EvolutionWebhookService', () => {
       expect.objectContaining({ where: { id: 'primary-list-id' } }),
     );
     expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'used-u2' }, data: expect.objectContaining({ price: 2900 }) }),
+      expect.objectContaining({
+        where: { id: 'used-u2' },
+        data: expect.objectContaining({ price: 2900 }),
+      }),
     );
     expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'used-u1' } }),
@@ -490,7 +538,11 @@ describe('EvolutionWebhookService', () => {
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'missing-used-partial', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'missing-used-partial',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'PROMOÇÃO SWAP\niPhone 15 128GB\nAzul R$ 2.900' },
       },
     });
@@ -556,7 +608,9 @@ describe('EvolutionWebhookService', () => {
       });
     }
 
-    expect(transaction.supplierCurrentList.findUnique.mock.calls.map(([call]) => call.where)).toEqual([
+    expect(
+      transaction.supplierCurrentList.findUnique.mock.calls.map(([call]) => call.where),
+    ).toEqual([
       {
         supplierContactId_snapshotScope: {
           supplierContactId: 'supplier-a',
@@ -582,17 +636,18 @@ describe('EvolutionWebhookService', () => {
 
   it.each([
     ['UNKNOWN', 'PROMOÇÃO\niPhone 15 128GB\nAzul R$ 2.900'],
-    [
-      'AMBIGUOUS',
-      'PROMOÇÃO SWAP LACRADOS\niPhone 15 128GB\nAzul R$ 2.900',
-    ],
+    ['AMBIGUOUS', 'PROMOÇÃO SWAP LACRADOS\niPhone 15 128GB\nAzul R$ 2.900'],
   ])('preserva todos os snapshots para partial %s', async (_status, conversation) => {
     const { service, transaction } = createService();
 
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: `partial-${_status.toLowerCase()}`, remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: `partial-${_status.toLowerCase()}`,
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation },
       },
     });
@@ -817,7 +872,11 @@ Azul R$ 3.000`,
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-general-complete', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-general-complete',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: {
           conversation: `LISTA GERAL
 iPhone 16 128GB NOVO
@@ -854,7 +913,9 @@ Verde R$ 2.500`,
     expect(debug).toHaveBeenCalledWith(
       expect.stringContaining('"event":"evolution.snapshot_transition"'),
     );
-    expect(debug).toHaveBeenCalledWith(expect.stringContaining('"removedScopes":["catalog:primary","catalog:used"]'));
+    expect(debug).toHaveBeenCalledWith(
+      expect.stringContaining('"removedScopes":["catalog:primary","catalog:used"]'),
+    );
     debug.mockRestore();
   });
 
@@ -882,7 +943,9 @@ Verde R$ 2.500`;
       });
     }
 
-    expect(transaction.supplierCurrentList.deleteMany.mock.calls.map(([call]) => call.where)).toEqual([
+    expect(
+      transaction.supplierCurrentList.deleteMany.mock.calls.map(([call]) => call.where),
+    ).toEqual([
       {
         supplierContactId: 'supplier-a',
         snapshotScope: { in: ['catalog:primary', 'catalog:used'] },
@@ -900,14 +963,22 @@ Verde R$ 2.500`;
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-general-to-used', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-general-to-used',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'IPHONE SWAP AMERICANOS\niPhone 15 128GB\nAzul R$ 3.000' },
       },
     });
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-general-to-primary', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-general-to-primary',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'LISTA APPLE LACRADOS\niPhone 16 128GB\nPreto R$ 4.000' },
       },
     });
@@ -954,7 +1025,11 @@ Verde R$ 2.500`;
       service.receive(webhookSecret, {
         event: 'MESSAGES_UPSERT',
         data: {
-          key: { id: 'message-general-rollback', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+          key: {
+            id: 'message-general-rollback',
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
           message: {
             conversation: `LISTA GERAL
 iPhone 16 128GB NOVO
@@ -1038,13 +1113,12 @@ Verde R$ 2.500`,
       'catalog:primary',
       'catalog:used',
     ]);
-    expect(writes[0].create.items.create.map((item: { condition: string }) => item.condition)).toEqual([
-      'NOVO',
-      'CPO',
-    ]);
-    expect(writes[1].create.items.create.map((item: { condition: string }) => item.condition)).toEqual([
-      'SEMINOVO',
-    ]);
+    expect(
+      writes[0].create.items.create.map((item: { condition: string }) => item.condition),
+    ).toEqual(['NOVO', 'CPO']);
+    expect(
+      writes[1].create.items.create.map((item: { condition: string }) => item.condition),
+    ).toEqual(['SEMINOVO']);
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
   });
 
@@ -1272,10 +1346,18 @@ Prata R$ 7.500`;
           condition: 'SEMINOVO',
         }),
         currentItem('cpo', 'iPhone 17 Pro Max 256GB CPO', 6500, {
-          category: 'iPhone', model: 'iPhone 17 Pro Max 256GB', capacity: '256GB', color: 'silver', condition: 'CPO',
+          category: 'iPhone',
+          model: 'iPhone 17 Pro Max 256GB',
+          capacity: '256GB',
+          color: 'silver',
+          condition: 'CPO',
         }),
         currentItem('seminovo', 'iPhone 17 Pro Max 256GB Seminovo', 6200, {
-          category: 'iPhone', model: 'iPhone 17 Pro Max 256GB', capacity: '256GB', color: 'silver', condition: 'SEMINOVO',
+          category: 'iPhone',
+          model: 'iPhone 17 Pro Max 256GB',
+          capacity: '256GB',
+          color: 'silver',
+          condition: 'SEMINOVO',
         }),
       ],
     });
@@ -1289,7 +1371,10 @@ Prata R$ 7.500`;
     });
 
     expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'novo' }, data: expect.objectContaining({ price: 6990 }) }),
+      expect.objectContaining({
+        where: { id: 'novo' },
+        data: expect.objectContaining({ price: 6990 }),
+      }),
     );
     expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'cpo' } }),
@@ -1374,7 +1459,11 @@ Prata R$ 7.500`;
             color: 'azul',
             condition: 'SEMINOVO',
           }),
-          currentItem('item-c', 'Produto C 512GB', 7000, { capacity: '512GB', color: 'preto', condition: 'SEMINOVO' }),
+          currentItem('item-c', 'Produto C 512GB', 7000, {
+            capacity: '512GB',
+            color: 'preto',
+            condition: 'SEMINOVO',
+          }),
         ],
       })
       .mockResolvedValueOnce({
@@ -1386,7 +1475,11 @@ Prata R$ 7.500`;
             color: 'azul',
             condition: 'SEMINOVO',
           }),
-          currentItem('item-c', 'Produto C 512GB', 7000, { capacity: '512GB', color: 'preto', condition: 'SEMINOVO' }),
+          currentItem('item-c', 'Produto C 512GB', 7000, {
+            capacity: '512GB',
+            color: 'preto',
+            condition: 'SEMINOVO',
+          }),
         ],
       });
 
@@ -1410,7 +1503,13 @@ Prata R$ 7.500`;
     const { service, transaction } = createService();
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
-      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul', condition: 'SEMINOVO' })],
+      items: [
+        currentItem('item-b', 'Produto B 256GB', 6000, {
+          capacity: '256GB',
+          color: 'azul',
+          condition: 'SEMINOVO',
+        }),
+      ],
     });
 
     const payload = {
@@ -1439,13 +1538,21 @@ Prata R$ 7.500`;
 
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'current-list-id',
-      items: [currentItem('item-b', 'Produto B 256GB', 6000, { capacity: '256GB', color: 'azul', condition: 'SEMINOVO' })],
+      items: [
+        currentItem('item-b', 'Produto B 256GB', 6000, {
+          capacity: '256GB',
+          color: 'azul',
+          condition: 'SEMINOVO',
+        }),
+      ],
     });
     transaction.supplierCurrentList.update.mockImplementation(async ({ data }) => {
       state = { ...state, rawContent: data.rawContent };
       return {};
     });
-    transaction.supplierCurrentListItem.update.mockRejectedValueOnce(new Error('partial update failed'));
+    transaction.supplierCurrentListItem.update.mockRejectedValueOnce(
+      new Error('partial update failed'),
+    );
     prisma.$transaction.mockImplementation(async (callback) => {
       const transactionStateBefore = { ...state };
       try {
@@ -1460,7 +1567,11 @@ Prata R$ 7.500`;
       service.receive(webhookSecret, {
         event: 'MESSAGES_UPSERT',
         data: {
-          key: { id: 'message-partial-failure', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+          key: {
+            id: 'message-partial-failure',
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
           message: { conversation: 'PROMOÇÃO SWAP\nProduto B 256GB\nAzul R$ 5.500' },
         },
       }),
@@ -1586,7 +1697,11 @@ Prata R$ 7.500`;
     const result = await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-inconclusive', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-inconclusive',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: {
           conversation: 'PROMOÇÃO - LISTA COMPLETA\nProduto B 256GB\nAzul R$ 5.500',
         },
@@ -1629,7 +1744,11 @@ Prata R$ 7.500`;
     const result = await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-rejected-line', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-rejected-line',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'iPhone 17 Pro 256GB' },
       },
     });
@@ -1693,7 +1812,11 @@ Prata R$ 7.500`;
     const result = await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'message-supplier-not-found', remoteJid: '13153886169@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'message-supplier-not-found',
+          remoteJid: '13153886169@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: 'iPhone 17 Pro 256GB\nPreto R$ 6.400' },
       },
     });
@@ -1713,7 +1836,7 @@ Prata R$ 7.500`;
     warn.mockRestore();
   });
 
-  it('executa a mesma observacao shadow durante o repair sem regravar snapshot equivalente', async () => {
+  it('atualiza condition implicita para nao resolvida durante o repair', async () => {
     const { service, prisma } = createService();
     const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
     prisma.supplierCurrentList.findMany.mockResolvedValue([
@@ -1741,7 +1864,17 @@ Prata R$ 7.500`;
 
     await service.repairCurrentLists();
 
-    expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(prisma.supplierCurrentList.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'current-list-id' },
+        data: expect.objectContaining({
+          items: {
+            deleteMany: {},
+            create: [expect.objectContaining({ condition: null })],
+          },
+        }),
+      }),
+    );
     expect(debug).toHaveBeenCalledWith(expect.stringContaining('evolution.product_id.shadow'));
     debug.mockRestore();
   });
@@ -1868,9 +2001,7 @@ Verde R$ 2.500`;
         snapshotScope: 'catalog:used',
         sourceMessageId: 'message-mixed-repair',
         rawContent,
-        items: [
-          currentItem('stale-used', 'Produto antigo used', 900, { condition: 'SEMINOVO' }),
-        ],
+        items: [currentItem('stale-used', 'Produto antigo used', 900, { condition: 'SEMINOVO' })],
       },
     ]);
 
@@ -1878,16 +2009,15 @@ Verde R$ 2.500`;
 
     expect(prisma.supplierCurrentList.update).toHaveBeenCalledTimes(2);
     const updates = prisma.supplierCurrentList.update.mock.calls.map(([call]) => call);
-    expect(updates[0].data.items.create.map((item: { condition: string }) => item.condition)).toEqual([
-      'NOVO',
-      'CPO',
-    ]);
-    expect(updates[1].data.items.create.map((item: { condition: string }) => item.condition)).toEqual([
-      'SEMINOVO',
-    ]);
+    expect(
+      updates[0].data.items.create.map((item: { condition: string }) => item.condition),
+    ).toEqual(['NOVO', 'CPO']);
+    expect(
+      updates[1].data.items.create.map((item: { condition: string }) => item.condition),
+    ).toEqual(['SEMINOVO']);
   });
 
-  it('nao regrava um snapshot equivalente durante o repair', async () => {
+  it('atualiza snapshots legados com condition implicita durante o repair', async () => {
     const { service, prisma } = createService();
     prisma.supplierCurrentList.findMany.mockResolvedValue([
       {
@@ -1914,7 +2044,17 @@ Verde R$ 2.500`;
     await service.repairCurrentLists();
     await service.repairCurrentLists();
 
-    expect(prisma.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(prisma.supplierCurrentList.update).toHaveBeenCalledTimes(2);
+    expect(prisma.supplierCurrentList.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          items: {
+            deleteMany: {},
+            create: [expect.objectContaining({ condition: null })],
+          },
+        }),
+      }),
+    );
   });
 
   it('preserva a lista atual quando o rawContent nao produz snapshot valido', async () => {

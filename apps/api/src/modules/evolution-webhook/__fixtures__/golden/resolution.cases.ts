@@ -1,6 +1,10 @@
 import { defineGoldenCases, goldenCatalogProduct } from './golden.types';
 
-const airpodsCatalogProduct = (id: string, productDescription: string, profitCondition = 'NOVO') => ({
+const airpodsCatalogProduct = (
+  id: string,
+  productDescription: string,
+  profitCondition = 'NOVO',
+) => ({
   id,
   productDescription,
   productType: 'AIRPODS',
@@ -20,8 +24,9 @@ export const resolutionCases = defineGoldenCases([
     input: { rawText: 'iPhone 17 Air 256GB\nBlack R$ 4.500' },
     catalog: [goldenCatalogProduct('iphone-17-air-256-new', 'iPhone 17 Air 256GB')],
     expected: {
+      identities: [{ itemIndex: 0, canonicalCondition: null }],
       resolutions: [
-        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'iphone-17-air-256-new' },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },
@@ -50,8 +55,9 @@ export const resolutionCases = defineGoldenCases([
     input: { rawText: 'iPhone 17 Air 256GB\nBlack R$ 4.500' },
     catalog: [],
     expected: {
+      identities: [{ itemIndex: 0, canonicalCondition: null }],
       resolutions: [
-        { itemIndex: 0, status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },
@@ -112,12 +118,13 @@ export const resolutionCases = defineGoldenCases([
       goldenCatalogProduct('iphone-17-air-256-b', 'iPhone 17 Air 256GB'),
     ],
     expected: {
+      identities: [{ itemIndex: 0, canonicalCondition: null }],
       resolutions: [
         {
           itemIndex: 0,
-          status: 'AMBIGUOUS',
-          reason: 'multiple_catalog_candidates',
-          candidateCount: 2,
+          status: 'MISSING',
+          reason: 'identity_insufficient',
+          candidateCount: 0,
         },
       ],
     },
@@ -128,9 +135,9 @@ export const resolutionCases = defineGoldenCases([
     input: { rawText: 'AirPods Max R$ 1.500' },
     catalog: [airpodsCatalogProduct('airpods-max-1-new', 'AirPods Max')],
     expected: {
-      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max', canonicalCondition: 'Novo' }],
+      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max', canonicalCondition: null }],
       resolutions: [
-        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'airpods-max-1-new' },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },
@@ -140,9 +147,9 @@ export const resolutionCases = defineGoldenCases([
     input: { rawText: 'AirPods Max USB-C R$ 1.500' },
     catalog: [airpodsCatalogProduct('airpods-max-1-new', 'AirPods Max')],
     expected: {
-      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max', canonicalCondition: 'Novo' }],
+      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max', canonicalCondition: null }],
       resolutions: [
-        { itemIndex: 0, status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },
@@ -155,9 +162,9 @@ export const resolutionCases = defineGoldenCases([
       airpodsCatalogProduct('airpods-max-2-new', 'AirPods Max 2'),
     ],
     expected: {
-      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max-2', canonicalCondition: 'Novo' }],
+      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max-2', canonicalCondition: null }],
       resolutions: [
-        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'airpods-max-2-new' },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },
@@ -179,9 +186,9 @@ export const resolutionCases = defineGoldenCases([
     input: { rawText: 'AirPods Max 2 R$ 1.500' },
     catalog: [airpodsCatalogProduct('airpods-max-2-cpo', 'AirPods Max 2', 'CPO')],
     expected: {
-      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max-2', canonicalCondition: 'Novo' }],
+      identities: [{ itemIndex: 0, canonicalModelKey: 'airpods-max-2', canonicalCondition: null }],
       resolutions: [
-        { itemIndex: 0, status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },

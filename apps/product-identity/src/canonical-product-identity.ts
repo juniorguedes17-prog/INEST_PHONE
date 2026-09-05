@@ -2,6 +2,7 @@ import {
   canonicalModelRegistry,
   type CanonicalModelRegistryEntry,
 } from './canonical-model-registry';
+import { normalizeProductCondition } from './product-condition-normalizer';
 
 export interface CanonicalProductSource {
   productDescription?: string | null;
@@ -22,7 +23,7 @@ export interface CanonicalProductIdentity {
   canonicalModelMatched: boolean;
   canonicalModelConfidence: number;
   canonicalModelMatchMethod: 'exact_alias' | 'deterministic' | 'unclassified';
-  canonicalCondition: string;
+  canonicalCondition: string | null;
   canonicalRam: string | null;
   canonicalStorage: string | null;
   canonicalColor: string | null;
@@ -46,14 +47,39 @@ export const canonicalColorAliases = [
   { value: 'branco', label: 'Branco', swatch: '#f8fafc', terms: ['white', 'branco'] },
   { value: 'prata', label: 'Prata', swatch: '#d4d4d8', terms: ['silver', 'prata'] },
   { value: 'azul-profundo', label: 'Azul Profundo', swatch: '#1e3a8a', terms: ['deep blue'] },
-  { value: 'azul', label: 'Azul', swatch: '#2563eb', terms: ['blue', 'azul', 'skyblue', 'sky blue'] },
+  {
+    value: 'azul',
+    label: 'Azul',
+    swatch: '#2563eb',
+    terms: ['blue', 'azul', 'skyblue', 'sky blue'],
+  },
   { value: 'rosa', label: 'Rosa', swatch: '#f9a8d4', terms: ['pink', 'rosa', 'rose', 'blush'] },
-  { value: 'roxo', label: 'Roxo', swatch: '#8b5cf6', terms: ['purple', 'roxo', 'lilas', 'lavender'] },
+  {
+    value: 'roxo',
+    label: 'Roxo',
+    swatch: '#8b5cf6',
+    terms: ['purple', 'roxo', 'lilas', 'lavender'],
+  },
   { value: 'verde', label: 'Verde', swatch: '#22c55e', terms: ['green', 'verde', 'sage'] },
-  { value: 'laranja', label: 'Laranja', swatch: '#f97316', terms: ['orange', 'laranja', 'cosmic orange'] },
+  {
+    value: 'laranja',
+    label: 'Laranja',
+    swatch: '#f97316',
+    terms: ['orange', 'laranja', 'cosmic orange'],
+  },
   { value: 'amarelo', label: 'Amarelo', swatch: '#eab308', terms: ['yellow', 'amarelo', 'citrus'] },
-  { value: 'dourado', label: 'Dourado', swatch: '#d4a72c', terms: ['gold', 'dourado', 'starlight'] },
-  { value: 'titanio-natural', label: 'Titanio Natural', swatch: '#a8a29e', terms: ['natural titanium', 'titanio natural', 'natural'] },
+  {
+    value: 'dourado',
+    label: 'Dourado',
+    swatch: '#d4a72c',
+    terms: ['gold', 'dourado', 'starlight'],
+  },
+  {
+    value: 'titanio-natural',
+    label: 'Titanio Natural',
+    swatch: '#a8a29e',
+    terms: ['natural titanium', 'titanio natural', 'natural'],
+  },
   { value: 'deserto', label: 'Titanio Deserto', swatch: '#c6a477', terms: ['desert', 'deserto'] },
 ] as const;
 
@@ -282,9 +308,7 @@ function resolveRegistryAlias(text: string): CanonicalModelRegistryEntry | 'conf
 
   const bestScore = Math.max(...matches.map(({ score }) => score));
   const bestEntries = new Map(
-    matches
-      .filter(({ score }) => score === bestScore)
-      .map(({ entry }) => [entry.key, entry]),
+    matches.filter(({ score }) => score === bestScore).map(({ entry }) => [entry.key, entry]),
   );
 
   return bestEntries.size === 1 ? ([...bestEntries.values()][0] ?? null) : 'conflict';
@@ -300,10 +324,18 @@ function resolveCategory(text: string) {
   if (/\bimac\b/.test(text)) return 'iMac';
   if (/\bmac\s+studio\b/.test(text)) return 'Mac Studio';
   if (/\bmacbook\b|\bmac\s+(?:air|pro|neo|mini)\b/.test(text)) return 'MacBook';
-  if (/\bapple\s*watch\b|\bwatch\b|\b(?:series\s*\d+|s\s*\d+|se\s*\d+|ultra\s*\d+)\s+\d{2}(?:mm)?\b/.test(text)) {
+  if (
+    /\bapple\s*watch\b|\bwatch\b|\b(?:series\s*\d+|s\s*\d+|se\s*\d+|ultra\s*\d+)\s+\d{2}(?:mm)?\b/.test(
+      text,
+    )
+  ) {
     return 'Apple Watch';
   }
-  if (/\bair\s*pods?\b|\bairpods?\b|\bairtag\b|\bpencil\b|\bmagic\s+(?:mouse|keyboard)\b|\bearpods?\b|\bcabo\b|\bfonte\b|\bcarregador\b/.test(text)) {
+  if (
+    /\bair\s*pods?\b|\bairpods?\b|\bairtag\b|\bpencil\b|\bmagic\s+(?:mouse|keyboard)\b|\bearpods?\b|\bcabo\b|\bfonte\b|\bcarregador\b/.test(
+      text,
+    )
+  ) {
     return 'Acessorios';
   }
   return 'Eletronicos';
@@ -320,8 +352,9 @@ function deriveDeterministicModelLabel({
   screen: string | null;
   chip: string | null;
 }) {
-  const iphone = text.match(/\b(?:iphone|iph)\s*(\d{1,2})\s*(pro\s*max|promax|pm|pro|plus|air|e)?\b/)
-    ?? (category === 'iPhone'
+  const iphone =
+    text.match(/\b(?:iphone|iph)\s*(\d{1,2})\s*(pro\s*max|promax|pm|pro|plus|air|e)?\b/) ??
+    (category === 'iPhone'
       ? text.match(/\b(1[1-9])\s*(pro\s*max|promax|pm|pro|plus|air|e)?\b/)
       : null);
   if (iphone) {
@@ -363,7 +396,9 @@ function deriveDeterministicModelLabel({
     return joinLabel('iPad', family, ipadChip, screen);
   }
 
-  const airpods = text.match(/\bair\s*pods?\s*(pro|max)?\s*(\d+)?\b|\bairpods?\s*(pro|max)?\s*(\d+)?\b/);
+  const airpods = text.match(
+    /\bair\s*pods?\s*(pro|max)?\s*(\d+)?\b|\bairpods?\s*(pro|max)?\s*(\d+)?\b/,
+  );
   if (airpods) {
     const variant = airpods[1] ?? airpods[3];
     const generation = airpods[2] ?? airpods[4];
@@ -392,7 +427,9 @@ function resolveRam(text: string, category: string) {
     ),
     (match) => match[1] ?? match[2] ?? match[3],
   );
-  const memoryCandidates = Array.from(text.matchAll(/\b(\d{1,3})gb\b/g), (match) => Number(match[1]));
+  const memoryCandidates = Array.from(text.matchAll(/\b(\d{1,3})gb\b/g), (match) =>
+    Number(match[1]),
+  );
   const abbreviated = resolveMacBookAbbreviatedMemory(text, category);
   const inferred = ['MacBook', 'iMac', 'Mac Studio'].includes(category)
     ? memoryCandidates.filter((value) => value <= 64).map((value) => `${value}GB`)
@@ -479,7 +516,9 @@ function resolveCompactMemory(text: string, category: string) {
       storage: parseMacBookStorageToken(match[2]),
     }),
   ).filter((pair): pair is { ram: string; storage: string } => Boolean(pair.ram && pair.storage));
-  const distinctPairs = [...new Map(pairs.map((pair) => [`${pair.ram}|${pair.storage}`, pair])).values()];
+  const distinctPairs = [
+    ...new Map(pairs.map((pair) => [`${pair.ram}|${pair.storage}`, pair])).values(),
+  ];
 
   if (distinctPairs.length !== 1) {
     return { ram: null, storage: null, conflict: distinctPairs.length > 1 };
@@ -537,20 +576,18 @@ function resolveScreen(text: string, category: string) {
     const size = text.match(/\b(3[89]|4[02469])mm\b/)?.[1];
     return size ? `${size}mm` : null;
   }
-  const sizePattern = category === 'iMac'
-    ? '(?:1[7-9]|2[0-9]|3[0-2])'
-    : '1[0-6]';
+  const sizePattern = category === 'iMac' ? '(?:1[7-9]|2[0-9]|3[0-2])' : '1[0-6]';
   const explicitMatch = text.match(
     new RegExp(`\\b(${sizePattern}(?:\\.\\d+)?)inch\\b|\\b(${sizePattern}(?:\\.\\d+)?)\\s*["”″]`),
   );
   const explicit = explicitMatch?.[1] ?? explicitMatch?.[2];
   if (explicit) return `${explicit.replace(/\.\d$/, '')}"`;
   if (category === 'MacBook' || category === 'iMac' || /\bipad\s+(?:air|pro|mini)\b/.test(text)) {
-    const contextualSizePattern = category === 'iMac'
-      ? '(?:1[7-9]|2[0-9]|3[0-2])'
-      : '1[0-6]';
+    const contextualSizePattern = category === 'iMac' ? '(?:1[7-9]|2[0-9]|3[0-2])' : '1[0-6]';
     const contextual = text.match(
-      new RegExp(`\\b(?:m\\d+(?:\\s+(?:pro|max|ultra))?|air|pro|neo)\\s+(${contextualSizePattern}(?:\\.\\d+)?)\\b`),
+      new RegExp(
+        `\\b(?:m\\d+(?:\\s+(?:pro|max|ultra))?|air|pro|neo)\\s+(${contextualSizePattern}(?:\\.\\d+)?)\\b`,
+      ),
     )?.[1];
     if (contextual) return `${contextual.replace(/\.\d$/, '')}"`;
   }
@@ -583,9 +620,11 @@ function resolveColor(text: string) {
 }
 
 function resolveCondition(text: string) {
-  if (/\bcpo\b|certified pre owned|refurbished/.test(text)) return 'CPO';
-  if (/seminovo|semi novo|usado|vitrine|open box|swap/.test(text)) return 'Seminovo';
-  return 'Novo';
+  const resolution = normalizeProductCondition(text);
+  if (resolution.status !== 'RESOLVED') return null;
+  if (resolution.condition === 'NOVO') return 'Novo';
+  if (resolution.condition === 'SEMINOVO') return 'Seminovo';
+  return 'CPO';
 }
 
 function normalizeIphoneVariant(value: string) {

@@ -26,6 +26,30 @@ test('cor diferencia a variante sem alterar a identidade de lucro', () => {
   assert.equal(orange.profit.key, white.profit.key);
 });
 
+test('a identidade financeira usa a mesma condition universal e falha fechada', () => {
+  const refurbished = deriveExtendedProductIdentity({
+    productName: 'iPhone 17 Pro 256GB Refurbished',
+  });
+  const preOwned = deriveExtendedProductIdentity({
+    productName: 'iPhone 17 Pro 256GB Pre-Owned',
+  });
+  const certified = deriveExtendedProductIdentity({
+    productName: 'iPhone 17 Pro 256GB Apple Certified Refurbished',
+  });
+  const unknown = deriveExtendedProductIdentity({
+    productName: 'iPhone 17 Pro 256GB UNKNOWN',
+  });
+  const conflicting = deriveExtendedProductIdentity({
+    productName: 'iPhone 17 Pro 256GB NEW USED',
+  });
+
+  assert.equal(refurbished.profit.attributes.condition, 'seminovo');
+  assert.equal(preOwned.profit.attributes.condition, 'seminovo');
+  assert.equal(certified.profit.attributes.condition, 'cpo');
+  assert.equal(unknown.variant.status, 'insufficient_identity');
+  assert.equal(conflicting.variant.status, 'insufficient_identity');
+});
+
 test('acabamentos comerciais conservadores continuam distintos na variante', () => {
   const black = deriveCanonicalVariantIdentity(novo('iPhone 17 Pro 256GB', 'Black'));
   const midnight = deriveCanonicalVariantIdentity(novo('iPhone 17 Pro 256GB', 'Midnight'));

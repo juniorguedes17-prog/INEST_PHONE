@@ -5,6 +5,64 @@ import {
   normalizeCanonicalProductIdentity,
   normalizeCanonicalText,
 } from './canonical-product-identity';
+import { normalizeProductCondition } from './product-condition-normalizer';
+
+test('normaliza Product Condition pela politica universal homologada', () => {
+  for (const [source, condition] of [
+    ['NEW', 'NOVO'],
+    ['NOVO', 'NOVO'],
+    ['LACRADO', 'NOVO'],
+    ['USED', 'SEMINOVO'],
+    ['PRE-OWNED', 'SEMINOVO'],
+    ['REFURBISHED', 'SEMINOVO'],
+    ['RECONDITIONED', 'SEMINOVO'],
+    ['RENEWED', 'SEMINOVO'],
+    ['OPEN BOX', 'SEMINOVO'],
+    ['recondicionado pela Apple', 'SEMINOVO'],
+    ['CPO', 'CPO'],
+    ['APPLE CPO', 'CPO'],
+    ['APPLE CERTIFIED PRE-OWNED', 'CPO'],
+    ['APPLE CERTIFIED REFURBISHED', 'CPO'],
+  ] as const) {
+    assert.deepEqual(normalizeProductCondition(source), { status: 'RESOLVED', condition });
+  }
+
+  assert.deepEqual(normalizeProductCondition('NEW + USED'), {
+    status: 'UNRESOLVED',
+    condition: null,
+    reason: 'conflicting',
+  });
+  assert.deepEqual(normalizeProductCondition('condicao desconhecida'), {
+    status: 'UNRESOLVED',
+    condition: null,
+    reason: 'unknown',
+  });
+  assert.deepEqual(normalizeProductCondition(''), {
+    status: 'UNRESOLVED',
+    condition: null,
+    reason: 'unknown',
+  });
+});
+
+test('Product Identity nao assume NOVO para condition desconhecida ou conflitante', () => {
+  assert.equal(
+    normalizeCanonicalProductIdentity('iPhone 17 Pro 256GB UNKNOWN').canonicalCondition,
+    null,
+  );
+  assert.equal(
+    normalizeCanonicalProductIdentity('iPhone 17 Pro 256GB NEW USED').canonicalCondition,
+    null,
+  );
+  assert.equal(
+    normalizeCanonicalProductIdentity('iPhone 17 Pro 256GB Refurbished').canonicalCondition,
+    'Seminovo',
+  );
+  assert.equal(
+    normalizeCanonicalProductIdentity('iPhone 17 Pro 256GB Apple Certified Refurbished')
+      .canonicalCondition,
+    'CPO',
+  );
+});
 
 test('preserva a identidade homologada de iPhone Pro Max', () => {
   const result = normalizeCanonicalProductIdentity({
@@ -114,19 +172,29 @@ test('completa invariantes seguras de MacBook Air e Pro', () => {
   const pro = normalizeCanonicalProductIdentity('MacBook Pro M5 Pro 16" 24G 1TB');
 
   assert.deepEqual(
-    [air.canonicalModelKey, air.canonicalChip, air.canonicalScreen, air.canonicalRam, air.canonicalStorage],
+    [
+      air.canonicalModelKey,
+      air.canonicalChip,
+      air.canonicalScreen,
+      air.canonicalRam,
+      air.canonicalStorage,
+    ],
     ['macbook-air-m5-13', 'M5', '13"', '16GB', '512GB'],
   );
   assert.deepEqual(
-    [pro.canonicalModelKey, pro.canonicalChip, pro.canonicalScreen, pro.canonicalRam, pro.canonicalStorage],
+    [
+      pro.canonicalModelKey,
+      pro.canonicalChip,
+      pro.canonicalScreen,
+      pro.canonicalRam,
+      pro.canonicalStorage,
+    ],
     ['macbook-pro-m5-pro-16', 'M5 Pro', '16"', '24GB', '1TB'],
   );
 });
 
 test('converge o MacBook Neo 13 e aplica invariantes canônicas do modelo', () => {
-  const supplier = normalizeCanonicalProductIdentity(
-    'MacBook Neo (A18) Pro 13" 8/256GB',
-  );
+  const supplier = normalizeCanonicalProductIdentity('MacBook Neo (A18) Pro 13" 8/256GB');
   const catalog = normalizeCanonicalProductIdentity('MacBook Neo (13”) 8/256GB');
 
   assert.equal(supplier.canonicalModelKey, 'macbook-neo-13');
@@ -218,7 +286,11 @@ test('completa conectividade iPad no nível da família e preserva Cellular expl
   );
   assert.equal(ipad9.canonicalConnectivitySource, 'safe_default');
   assert.deepEqual(
-    [ipad9English.canonicalModelKey, ipad9English.canonicalScreen, ipad9English.canonicalConnectivity],
+    [
+      ipad9English.canonicalModelKey,
+      ipad9English.canonicalScreen,
+      ipad9English.canonicalConnectivity,
+    ],
     ['ipad-9', '10.2"', 'Wi-Fi'],
   );
   assert.equal(ipad9Cellular.canonicalConnectivity, 'Wi-Fi + Cellular');

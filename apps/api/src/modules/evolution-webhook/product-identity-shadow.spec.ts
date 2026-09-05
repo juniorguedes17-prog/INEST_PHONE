@@ -62,7 +62,8 @@ describe('product identity ingestion shadow', () => {
     expect(observation?.identity.canonical.canonicalModelKey).toBe('ipad-11');
     expect(observation?.identity.canonical.canonicalScreen).toBe('11"');
     expect(observation?.identity.canonical.canonicalScreenSource).toBe('model_invariant');
-    expect(observation?.identity.profit.status).toBe('valid');
+    expect(observation?.identity.canonical.canonicalCondition).toBeNull();
+    expect(observation?.identity.profit.status).toBe('insufficient_identity');
   });
 
   it('observa Apple Watch GPS sem substituir conectividade ou preco', () => {

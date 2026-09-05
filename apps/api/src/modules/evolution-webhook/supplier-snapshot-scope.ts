@@ -82,9 +82,9 @@ export function resolveSupplierSnapshotScope(
   const allUsed =
     conditions.length > 0 && conditions.every((condition) => condition === 'SEMINOVO');
   const hasUsedItems = conditions.includes('SEMINOVO');
-  const hasPrimaryItems = conditions.some(
-    (condition) => condition === 'NOVO' || condition === 'CPO',
-  );
+  const hasPrimaryItems =
+    conditions.some((condition) => condition === 'NOVO' || condition === 'CPO') ||
+    hasPrimarySegmentBeforeUsedSection(rawText);
   const isBroadMixedDocument = categoryCount >= 2 && hasUsedItems && hasPrimaryItems;
 
   if (hasUsedPreamble && hasPrimaryPreamble) return ambiguous(evidence);
@@ -147,6 +147,15 @@ function markersIn(text: string) {
   if (PRIMARY_MARKER.test(normalized)) markers.push('primary');
   if (GENERAL_MARKER.test(normalized)) markers.push('general');
   return markers;
+}
+
+function hasPrimarySegmentBeforeUsedSection(rawText: string) {
+  const lines = rawText.split(/\r?\n/).map(cleanLine).filter(Boolean);
+  const firstUsedSectionIndex = lines.findIndex((line) => USED_MARKER.test(line));
+  return (
+    firstUsedSectionIndex > 0 &&
+    lines.slice(0, firstUsedSectionIndex).some((line) => OFFER_MARKER.test(line))
+  );
 }
 
 function cleanLine(value: string) {

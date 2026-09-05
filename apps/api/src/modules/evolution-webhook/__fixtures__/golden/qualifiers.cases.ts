@@ -15,11 +15,11 @@ export const qualifierCases = defineGoldenCases([
           itemIndex: 0,
           canonicalModelKey: 'iphone-17-pro',
           canonicalStorage: '256GB',
-          canonicalCondition: 'Novo',
+          canonicalCondition: null,
         },
       ],
       resolutions: [
-        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'iphone-17-pro-256-new' },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },
@@ -30,9 +30,16 @@ export const qualifierCases = defineGoldenCases([
     input: { rawText: 'iPhone 17 Pro 256GB HN/A\nBlack R$ 4.500' },
     catalog,
     expected: {
-      identities: [{ itemIndex: 0, canonicalModelKey: 'iphone-17-pro', canonicalStorage: '256GB' }],
+      identities: [
+        {
+          itemIndex: 0,
+          canonicalModelKey: 'iphone-17-pro',
+          canonicalStorage: '256GB',
+          canonicalCondition: null,
+        },
+      ],
       resolutions: [
-        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'iphone-17-pro-256-new' },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },
@@ -43,9 +50,16 @@ export const qualifierCases = defineGoldenCases([
     input: { rawText: 'iPhone 17 Pro 256GB eSIM\nBlack R$ 4.500' },
     catalog,
     expected: {
-      identities: [{ itemIndex: 0, canonicalModelKey: 'iphone-17-pro', canonicalStorage: '256GB' }],
+      identities: [
+        {
+          itemIndex: 0,
+          canonicalModelKey: 'iphone-17-pro',
+          canonicalStorage: '256GB',
+          canonicalCondition: null,
+        },
+      ],
       resolutions: [
-        { itemIndex: 0, status: 'FOUND', candidateCount: 1, productKey: 'iphone-17-pro-256-new' },
+        { itemIndex: 0, status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 },
       ],
     },
   },

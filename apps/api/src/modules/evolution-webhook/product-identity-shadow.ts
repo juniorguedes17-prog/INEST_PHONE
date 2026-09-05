@@ -65,6 +65,9 @@ export function resolveProductIdShadow(
   }
 
   const targetDimensions = identityDimensions(identity);
+  if (!targetDimensions.condition) {
+    return { status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 };
+  }
   const candidates = catalog.filter((product) =>
     matchesCatalogProduct(product, identity, targetDimensions),
   );

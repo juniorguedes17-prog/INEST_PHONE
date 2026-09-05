@@ -5,11 +5,10 @@ import {
   type CanonicalProductSource,
 } from './canonical-product-identity';
 import { canonicalModelRegistry } from './canonical-model-registry';
+import { normalizeProductCondition } from './product-condition-normalizer';
 
 export type ProductIdentityResolutionStatus =
-  | 'valid'
-  | 'insufficient_identity'
-  | 'ambiguous_identity';
+  'valid' | 'insufficient_identity' | 'ambiguous_identity';
 
 export type ProductIdentityFamily =
   | 'iphone'
@@ -212,17 +211,21 @@ export function auditProfitIdentityCatalog(
 function createIdentityContext(input: CanonicalProductSource | string): IdentityContext {
   const source = typeof input === 'string' ? { productName: input } : input;
   const canonical = normalizeCanonicalProductIdentity(source);
-  const text = normalizeCanonicalText([
-    source.productDescription,
-    source.productName,
-    source.category,
-    source.model,
-    source.capacity,
-    source.color,
-    source.quality,
-    source.productType,
-    source.notes,
-  ].filter(Boolean).join(' '));
+  const text = normalizeCanonicalText(
+    [
+      source.productDescription,
+      source.productName,
+      source.category,
+      source.model,
+      source.capacity,
+      source.color,
+      source.quality,
+      source.productType,
+      source.notes,
+    ]
+      .filter(Boolean)
+      .join(' '),
+  );
   const family = resolveFamily(canonical);
   const feature = resolveFeature(text);
 
@@ -235,7 +238,7 @@ function createIdentityContext(input: CanonicalProductSource | string): Identity
     ambiguity: !canonical.canonicalModelMatched && hasConflictingRegistryMatches(text),
     values: {
       model: canonical.canonicalModelKey || null,
-      condition: resolveExplicitCondition(source, text, canonical),
+      condition: resolveExplicitCondition(text),
       ram: canonical.canonicalRam ?? resolveSlashRam(text),
       storage: canonical.canonicalStorage ?? resolveSlashStorage(text),
       screen: canonical.canonicalScreen,
@@ -255,12 +258,13 @@ function createIdentityContext(input: CanonicalProductSource | string): Identity
 
 function deriveProfitFromContext(context: IdentityContext): ProfitLookupIdentity {
   const policy = profitIdentityPolicies.find((item) => item.family === context.family);
-  const required = policy ? contextualRequiredDimensions(policy, context) : ['model'] as const;
+  const required = policy ? contextualRequiredDimensions(policy, context) : (['model'] as const);
   const missingAttributes = required.filter((dimension) => !context.values[dimension]);
   const status = resolveStatus(context, Boolean(policy), missingAttributes);
-  const dimensions = status === 'valid' && policy
-    ? buildDimensions([...required, ...policy.optional], context.values)
-    : {};
+  const dimensions =
+    status === 'valid' && policy
+      ? buildDimensions([...required, ...policy.optional], context.values)
+      : {};
 
   return {
     status,
@@ -278,17 +282,14 @@ function deriveVariantFromContext(
   context: IdentityContext,
   profit: ProfitLookupIdentity,
 ): CanonicalVariantIdentity {
-  const dimensions = profit.status === 'valid'
-    ? {
-        ...profit.attributes,
-        ...(context.canonical.canonicalColor
-          ? { color: context.canonical.canonicalColor }
-          : {}),
-        ...(context.commercialFinish
-          ? { commercialFinish: context.commercialFinish }
-          : {}),
-      }
-    : {};
+  const dimensions =
+    profit.status === 'valid'
+      ? {
+          ...profit.attributes,
+          ...(context.canonical.canonicalColor ? { color: context.canonical.canonicalColor } : {}),
+          ...(context.commercialFinish ? { commercialFinish: context.commercialFinish } : {}),
+        }
+      : {};
 
   return {
     status: profit.status,
@@ -350,16 +351,9 @@ function resolveFamily(identity: CanonicalProductIdentity): ProductIdentityFamil
   return 'unknown';
 }
 
-function resolveExplicitCondition(
-  source: CanonicalProductSource,
-  text: string,
-  canonical: CanonicalProductIdentity,
-) {
-  if (source.quality?.trim()) return canonical.canonicalCondition;
-  if (/\b(?:novo|new|lacrado|seminovo|semi novo|usado|vitrine|open box|swap|cpo|refurbished)\b/.test(text)) {
-    return canonical.canonicalCondition;
-  }
-  return null;
+function resolveExplicitCondition(text: string) {
+  const resolution = normalizeProductCondition(text);
+  return resolution.status === 'RESOLVED' ? resolution.condition : null;
 }
 
 function buildDimensions(
@@ -373,8 +367,13 @@ function buildDimensions(
   }, {});
 }
 
-function buildIdentityKey(family: ProductIdentityFamily, dimensions: Readonly<Record<string, string>>) {
-  return [family, ...Object.entries(dimensions).map(([name, value]) => `${name}=${value}`)].join('|');
+function buildIdentityKey(
+  family: ProductIdentityFamily,
+  dimensions: Readonly<Record<string, string>>,
+) {
+  return [family, ...Object.entries(dimensions).map(([name, value]) => `${name}=${value}`)].join(
+    '|',
+  );
 }
 
 function normalizeKeyPart(value: string) {
@@ -480,7 +479,9 @@ function hasConflictingRegistryMatches(text: string) {
   if (!matches.length) return false;
   if (new Set(matches.map((match) => match.category)).size > 1) return true;
   const bestScore = Math.max(...matches.map((match) => match.score));
-  return new Set(matches.filter((match) => match.score === bestScore).map((match) => match.key)).size > 1;
+  return (
+    new Set(matches.filter((match) => match.score === bestScore).map((match) => match.key)).size > 1
+  );
 }
 
 function containsPhrase(text: string, phrase: string) {

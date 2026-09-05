@@ -185,17 +185,17 @@ export function buildBrazilRadarFacetsFromIndex(
   return {
     categories: countIndexedFacetValues(index, categoryIds, (row) => [row.category], categoryOrder),
     models: countIndexedModels(index, modelIds),
-    conditions: countIndexedFacetValues(index, conditionIds, (row) => [row.condition], conditionOrder),
+    conditions: countIndexedFacetValues(
+      index,
+      conditionIds,
+      (row) => [row.condition],
+      conditionOrder,
+    ),
     colors: countIndexedFacetValues(index, colorIds, (row) => row.colors).map((option) => ({
       ...option,
       swatch: canonicalColorAliases.find((color) => color.value === option.value)?.swatch,
     })),
-    capacities: countIndexedFacetValues(
-      index,
-      capacityIds,
-      (row) => row.capacities,
-      capacityOrder,
-    ),
+    capacities: countIndexedFacetValues(index, capacityIds, (row) => row.capacities, capacityOrder),
     priceMin: getIndexedPriceBoundary(index, priceIds, 'min'),
     priceMax: getIndexedPriceBoundary(index, priceIds, 'max'),
   };
@@ -439,7 +439,7 @@ function normalizeBrazilRadarFilterRow(quote: PriceQuoteItem): BrazilRadarFilter
     category: getCanonicalCategory(quote),
     model: identity.canonicalModelKey,
     modelLabel: identity.canonicalModelMatched ? identity.canonicalModelLabel : '',
-    condition: identity.canonicalCondition,
+    condition: identity.canonicalCondition ?? '',
     colors: getCanonicalColors(quote),
     capacities: getCanonicalCapacitiesFromIdentity(quote, identity),
     price: quote.costProduct,
@@ -465,7 +465,7 @@ function getCanonicalCapacitiesFromIdentity(
 }
 
 export function getCanonicalCondition(source: CatalogFacetSource) {
-  return normalizeCanonicalProductIdentity(source).canonicalCondition;
+  return normalizeCanonicalProductIdentity(source).canonicalCondition ?? '';
 }
 
 function countFacetValues(
@@ -493,11 +493,7 @@ function countFacetValues(
   });
 }
 
-function addFacetValues(
-  facet: Map<string, Set<string>>,
-  values: string | string[],
-  id: string,
-) {
+function addFacetValues(facet: Map<string, Set<string>>, values: string | string[], id: string) {
   const normalizedValues = Array.isArray(values) ? values : [values];
   new Set(normalizedValues.filter(Boolean)).forEach((value) => {
     const ids = facet.get(value) ?? new Set<string>();
@@ -592,7 +588,9 @@ function countIndexedModels(index: RadarFacetIndex, ids: Set<string>) {
     });
   });
 
-  return Array.from(counts, ([value, option]) => ({ value, ...option })).sort(sortModelsNewestFirst);
+  return Array.from(counts, ([value, option]) => ({ value, ...option })).sort(
+    sortModelsNewestFirst,
+  );
 }
 
 function sortFacetOptions(options: FacetOption[], preferredOrder: string[]) {
@@ -617,8 +615,7 @@ function getIndexedPriceBoundary(
   const values = Array.from(ids)
     .map((id) => index.rows.get(id)?.price)
     .filter(
-      (value): value is number =>
-        typeof value === 'number' && Number.isFinite(value) && value >= 0,
+      (value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0,
     );
   if (!values.length) return 0;
   return boundary === 'min' ? Math.floor(Math.min(...values)) : Math.ceil(Math.max(...values));

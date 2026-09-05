@@ -23,6 +23,32 @@ export const conditionCases = defineGoldenCases([
     expected: { parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO' }] },
   },
   {
+    id: 'condition-universal-refurbished-001',
+    rule: 'P0 universal generic refurbished is SEMINOVO',
+    input: { rawText: 'REFURBISHED\niPhone 16 128GB\nPreto R$ 3.500' },
+    expected: { parsedItems: [{ itemIndex: 0, condition: 'SEMINOVO' }] },
+  },
+  {
+    id: 'condition-universal-apple-certified-001',
+    rule: 'P0 universal Apple Certified has CPO precedence',
+    input: {
+      rawText: 'APPLE CERTIFIED REFURBISHED\niPhone 16 128GB\nPreto R$ 3.500',
+    },
+    expected: { parsedItems: [{ itemIndex: 0, condition: 'CPO' }] },
+  },
+  {
+    id: 'condition-universal-conflict-001',
+    rule: 'P0 universal conflicting condition is fail-closed',
+    input: { rawText: 'NEW USED\niPhone 16 128GB\nPreto R$ 3.500' },
+    expected: { parsedItems: [{ itemIndex: 0, condition: null }] },
+  },
+  {
+    id: 'condition-universal-missing-001',
+    rule: 'P0 universal missing condition is never implicit NOVO',
+    input: { rawText: 'iPhone 16 128GB\nPreto R$ 3.500' },
+    expected: { parsedItems: [{ itemIndex: 0, condition: null }] },
+  },
+  {
     id: 'condition-seminovos-header-001',
     rule: 'P0.1A SEMINOVOS context',
     originCommit: 'b508392',
