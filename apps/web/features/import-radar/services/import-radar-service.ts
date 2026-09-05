@@ -19,6 +19,8 @@ function toCalculateImportCostPayload(product: ImportProduct): CalculateImportCo
     productUrl: product.productUrl,
     imageUrl: product.imageUrl,
     brand: product.brand,
+    sourceManufacturer: product.sourceManufacturer,
+    sourceManufacturerProvenance: product.sourceManufacturerProvenance,
     model: product.model,
     capacity: product.capacity,
     color: product.color,
@@ -36,6 +38,18 @@ function toCalculateImportCostPayload(product: ImportProduct): CalculateImportCo
     offerCount: product.offerCount,
     condition: product.condition,
   };
+}
+
+export async function confirmImportManufacturer(
+  product: ImportProduct,
+  confirmation: { canonicalName: string; alias?: string },
+): Promise<ImportCalculation> {
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/confirm-manufacturer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...toCalculateImportCostPayload(product), confirmation }),
+  });
+  return parseResponse<ImportCalculation>(response);
 }
 
 async function parseResponse<T>(response: Response): Promise<T> {

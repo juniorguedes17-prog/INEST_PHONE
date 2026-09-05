@@ -97,6 +97,17 @@ export class BrazilRadarQuotePricingDto {
   sourceQuoteId!: string;
 }
 
+export class ConfirmBrazilRadarManufacturerDto extends BrazilRadarQuotePricingDto {
+  @ApiProperty()
+  @IsString()
+  canonicalName!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  alias?: string;
+}
+
 export class ReplaceBrazilRadarWorkSnapshotDto {
   @ApiProperty({ type: [String] })
   @IsArray()

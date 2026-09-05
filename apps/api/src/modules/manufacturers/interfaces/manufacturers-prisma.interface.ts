@@ -21,4 +21,7 @@ export interface ManufacturersPrismaClient {
     findUnique(args: unknown): Promise<ManufacturerResolverAlias | null>;
     create(args: unknown): Promise<ManufacturerResolverAlias>;
   };
+  auditLog?: {
+    create(args: unknown): Promise<unknown>;
+  };
 }

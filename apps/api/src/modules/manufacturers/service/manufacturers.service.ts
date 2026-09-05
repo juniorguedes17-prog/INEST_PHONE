@@ -66,6 +66,114 @@ export class ManufacturersService {
   setIdentityStatus(id: string, status: 'ACTIVE' | 'INACTIVE') {
     return this.repository.setIdentityStatus(id, status);
   }
+
+  async confirm(input: {
+    canonicalName: string;
+    alias?: string | null;
+    userId: string;
+    context: Record<string, unknown>;
+  }) {
+    const canonicalName = input.canonicalName.trim();
+    const alias = (input.alias?.trim() || canonicalName).trim();
+    const normalizedCanonicalName = normalizeManufacturerAlias(canonicalName);
+    const normalizedAlias = normalizeManufacturerAlias(alias);
+    if (!normalizedCanonicalName || !normalizedAlias) {
+      throw new BadRequestException('Nome canonico e alias do fabricante sao obrigatorios.');
+    }
+    if (
+      isReservedAppleManufacturerAlias(canonicalName) ||
+      isReservedAppleManufacturerAlias(alias)
+    ) {
+      throw new BadRequestException('Apple nao pode ser confirmado no registry externo.');
+    }
+
+    const existingAlias = await this.repository.findAliasByNormalizedAlias(normalizedAlias);
+    if (existingAlias) {
+      if (
+        existingAlias.manufacturer.status !== 'ACTIVE' ||
+        normalizeManufacturerAlias(existingAlias.manufacturer.canonicalName) !==
+          normalizedCanonicalName
+      ) {
+        throw new ConflictException('Alias normalizado ja pertence a outro fabricante.');
+      }
+      await this.repository.createAuditLog({
+        userId: input.userId,
+        operationType: 'UPDATE',
+        entityId: existingAlias.manufacturer.id,
+        oldValue: { alias: existingAlias.alias },
+        newValue: { alias: existingAlias.alias, reused: true },
+        context: { event: 'manufacturers.inline_confirmation.reused', ...input.context },
+      });
+      return this.resolve({
+        evidence: alias,
+        matchMode: 'EXACT_ALIAS',
+        provenance: 'EXPLICIT_SOURCE_VALIDATED',
+      });
+    }
+
+    const manufacturerKey = toManufacturerKey(normalizedCanonicalName);
+    let identity = await this.repository.findIdentityByKey(manufacturerKey);
+    let operationType: 'CREATE' | 'UPDATE' = 'UPDATE';
+    if (identity) {
+      if (
+        identity.status !== 'ACTIVE' ||
+        normalizeManufacturerAlias(identity.canonicalName) !== normalizedCanonicalName
+      ) {
+        throw new ConflictException('manufacturerKey ja pertence a outro fabricante.');
+      }
+    } else {
+      try {
+        identity = await this.repository.createIdentity({ manufacturerKey, canonicalName });
+        operationType = 'CREATE';
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+        identity = await this.repository.findIdentityByKey(manufacturerKey);
+        if (!identity || identity.status !== 'ACTIVE') {
+          throw new ConflictException('manufacturerKey ja pertence a outro fabricante.');
+        }
+      }
+    }
+
+    try {
+      await this.repository.createAlias({
+        manufacturerId: identity.id,
+        alias,
+        normalizedAlias,
+      });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const collidedAlias = await this.repository.findAliasByNormalizedAlias(normalizedAlias);
+      if (
+        !collidedAlias ||
+        collidedAlias.manufacturer.id !== identity.id ||
+        normalizeManufacturerAlias(collidedAlias.manufacturer.canonicalName) !==
+          normalizedCanonicalName
+      ) {
+        throw new ConflictException('Alias normalizado ja pertence a outro fabricante.');
+      }
+    }
+
+    await this.repository.createAuditLog({
+      userId: input.userId,
+      operationType,
+      entityId: identity.id,
+      newValue: { manufacturerKey: identity.manufacturerKey, canonicalName, alias },
+      context: { event: 'manufacturers.inline_confirmation.created', ...input.context },
+    });
+    return this.resolve({
+      evidence: alias,
+      matchMode: 'EXACT_ALIAS',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
+    });
+  }
+}
+
+function toManufacturerKey(normalizedCanonicalName: string) {
+  const key = normalizedCanonicalName.replace(/\s+/g, '-');
+  if (!key || key.length > 120) {
+    throw new BadRequestException('Nome canonico do fabricante invalido.');
+  }
+  return key;
 }
 
 function isUniqueConstraintError(error: unknown) {

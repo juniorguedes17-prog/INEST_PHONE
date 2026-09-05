@@ -1,10 +1,23 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { Permissions } from '../../auth/decorators/permissions.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
   CalculateImportCostDto,
+  ConfirmImportManufacturerDto,
   ImportSearchQueryDto,
   UpdateDollarQuoteDto,
 } from '../dto/import-radar.dto';
@@ -15,7 +28,9 @@ import { ImportRadarService } from '../service/import-radar.service';
 @UseGuards(JwtAuthGuard)
 @Controller('import-radar')
 export class ImportRadarController {
-  constructor(@Inject(ImportRadarService) private readonly importRadarService: ImportRadarService) {}
+  constructor(
+    @Inject(ImportRadarService) private readonly importRadarService: ImportRadarService,
+  ) {}
 
   @Get('search')
   @ApiOperation({ summary: 'Pesquisa produtos internacionais por provider.' })
@@ -33,6 +48,19 @@ export class ImportRadarController {
   @ApiOperation({ summary: 'Calcula custo estimado de importacao.' })
   calculate(@Body() dto: CalculateImportCostDto, @CurrentUser() user: AuthenticatedUser) {
     return this.importRadarService.calculate(dto, user);
+  }
+
+  @Post('confirm-manufacturer')
+  @UseGuards(PermissionsGuard)
+  @Permissions('settings:configure')
+  @ApiOperation({
+    summary: 'Confirma fabricante externo e recalcula somente o item de importacao.',
+  })
+  confirmManufacturer(
+    @Body() dto: ConfirmImportManufacturerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.importRadarService.confirmManufacturer(dto, user);
   }
 
   @Get('history')

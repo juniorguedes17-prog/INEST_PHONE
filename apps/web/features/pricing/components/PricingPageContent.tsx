@@ -28,7 +28,11 @@ import {
   buildFacetOptions,
 } from '@/features/price-radar/components/ProductFacetsDrawer';
 import { getProductCardPresentation } from '@/utils/product-card-presentation';
-import { PricingOfferTarget, TemporaryImportPricing } from '../types/pricing';
+import {
+  BrazilRadarQuotePricing,
+  PricingOfferTarget,
+  TemporaryImportPricing,
+} from '../types/pricing';
 
 type MissingProfitItem =
   | { kind: 'brazil'; item: ReturnType<typeof usePricing>['brazilRadarPricings'][number] }
@@ -69,6 +73,9 @@ export function PricingPageContent() {
   const [profitModalError, setProfitModalError] = useState<string | null>(null);
   const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(() => new Set());
   const [profitItem, setProfitItem] = useState<MissingProfitItem | null>(null);
+  const [manufacturerItem, setManufacturerItem] = useState<BrazilRadarQuotePricing | null>(null);
+  const [manufacturerName, setManufacturerName] = useState('');
+  const [manufacturerError, setManufacturerError] = useState<string | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
   const models = useMemo(() => buildCanonicalModelFacetOptions(pricing.items), [pricing.items]);
   const colors = useUnique(pricing.items.flatMap((item) => getCanonicalColors(item)));
@@ -218,6 +225,22 @@ export function PricingPageContent() {
     }
   }
 
+  async function saveManufacturer() {
+    if (!manufacturerItem || !manufacturerName.trim()) return;
+    setManufacturerError(null);
+    try {
+      await pricing.confirmBrazilManufacturer(manufacturerItem, manufacturerName.trim());
+      setManufacturerItem(null);
+      setManufacturerName('');
+    } catch (manufacturerConfirmationError) {
+      setManufacturerError(
+        manufacturerConfirmationError instanceof Error
+          ? manufacturerConfirmationError.message
+          : 'Nao foi possivel confirmar o fabricante.',
+      );
+    }
+  }
+
   return (
     <div className="grid gap-4">
       <PageHeader
@@ -357,6 +380,11 @@ export function PricingPageContent() {
                     }
                     onGenerateOffer={() => pricing.generateBrazilRadarOffer(item)}
                     onRegisterProfit={() => openProfitModal({ kind: 'brazil', item })}
+                    onConfirmManufacturer={() => {
+                      setManufacturerItem(item);
+                      setManufacturerName('');
+                      setManufacturerError(null);
+                    }}
                   />
                 ))}
                 {pricing.temporaryImportPricing ? (
@@ -471,6 +499,15 @@ export function PricingPageContent() {
         }}
         onSave={() => void saveMissingProfit()}
       />
+      <ManufacturerConfirmationModal
+        item={manufacturerItem}
+        value={manufacturerName}
+        error={manufacturerError}
+        saving={pricing.saving}
+        onChange={setManufacturerName}
+        onClose={() => setManufacturerItem(null)}
+        onSave={() => void saveManufacturer()}
+      />
     </div>
   );
 }
@@ -490,6 +527,7 @@ function BrazilRadarQuotePricingCard({
   onSelect,
   onGenerateOffer,
   onRegisterProfit,
+  onConfirmManufacturer,
 }: {
   item: ReturnType<typeof usePricing>['brazilRadarPricings'][number];
   generating: boolean;
@@ -497,6 +535,7 @@ function BrazilRadarQuotePricingCard({
   onSelect: (selected: boolean) => void;
   onGenerateOffer: () => void;
   onRegisterProfit: () => void;
+  onConfirmManufacturer: () => void;
 }) {
   const presentation = getProductCardPresentation({
     canonicalDescription: item.profit.productDescription,
@@ -586,8 +625,80 @@ function BrazilRadarQuotePricingCard({
             Cadastrar lucro
           </ActionButton>
         ) : null}
+        {item.pricingEligibility.status === 'NEEDS_INPUT' ? (
+          <ActionButton
+            variant="primary"
+            className="mt-1 h-9 w-full px-3 text-xs md:w-auto"
+            disabled={generating}
+            onClick={onConfirmManufacturer}
+          >
+            Confirmar fabricante
+          </ActionButton>
+        ) : null}
       </div>
     </article>
+  );
+}
+
+function ManufacturerConfirmationModal({
+  item,
+  value,
+  error,
+  saving,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  item: BrazilRadarQuotePricing | null;
+  value: string;
+  error: string | null;
+  saving: boolean;
+  onChange: (value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  if (!item) return null;
+  return (
+    <Modal
+      open
+      title="Confirmar fabricante"
+      onClose={onClose}
+      footer={
+        <>
+          <ActionButton variant="secondary" disabled={saving} onClick={onClose}>
+            Cancelar
+          </ActionButton>
+          <ActionButton type="submit" form="manufacturer-confirmation-form" disabled={saving}>
+            {saving ? 'Confirmando...' : 'Confirmar fabricante'}
+          </ActionButton>
+        </>
+      }
+    >
+      <form
+        id="manufacturer-confirmation-form"
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave();
+        }}
+      >
+        <p className="text-sm text-inest-muted">
+          Precisamos confirmar o fabricante de <strong>{item.product.name}</strong> para continuar.
+        </p>
+        <label className="grid gap-2 text-sm font-bold text-inest-text">
+          Fabricante
+          <input
+            autoFocus
+            required
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Informe o fabricante"
+            className="field-control"
+          />
+        </label>
+        {error ? <p className="text-sm font-bold text-red-700">{error}</p> : null}
+      </form>
+    </Modal>
   );
 }
 

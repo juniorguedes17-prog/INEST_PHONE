@@ -313,6 +313,43 @@ describe('Pricing canonical originality routing', () => {
     });
   });
 
+  it('keeps BR manufacturer resolution as a fallback and routes a confirmed alias through P4', async () => {
+    const fixture = setup(null, 1690);
+    fixture.quote.productId = '';
+    fixture.quote.productName = 'Garmin Vivoactive 6';
+    fixture.quote.model = 'Vivoactive 6';
+    fixture.quote.category = 'Smartwatch';
+    fixture.quote.condition = 'CPO';
+    fixture.repository.findActiveCatalogProduct.mockResolvedValue(null);
+    fixture.manufacturers.resolve.mockResolvedValueOnce({
+      status: 'MISSING',
+      normalizedEvidence: 'garmin vivoactive 6',
+    });
+
+    await expect(fixture.calculate('BR')).resolves.toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      financialClassificationReason: 'manufacturer_missing',
+      pricingEligibility: { status: 'NEEDS_INPUT', inputType: 'MANUFACTURER' },
+    });
+
+    fixture.manufacturers.resolve.mockResolvedValueOnce({
+      status: 'FOUND',
+      manufacturerId: 'manufacturer-garmin',
+      manufacturerKey: 'garmin',
+      canonicalName: 'Garmin',
+      provenance: 'DETERMINISTIC_ALIAS',
+      normalizedEvidence: 'garmin vivoactive 6',
+      matchedAlias: 'Garmin',
+      normalizedAlias: 'garmin',
+    });
+    await expect(fixture.calculate('BR')).resolves.toMatchObject({
+      financialClassification: 'NON_APPLE',
+      manufacturerKey: 'garmin',
+      calculationStatus: 'ready',
+      engineMetadata: { engine: 'NON_APPLE_ELECTRONICS' },
+    });
+  });
+
   it('uses structured Apple financial identity without Product.id', async () => {
     const fixture = setup(true, 700, 500);
     fixture.dto = { ...fixture.dto, catalogProductId: undefined };

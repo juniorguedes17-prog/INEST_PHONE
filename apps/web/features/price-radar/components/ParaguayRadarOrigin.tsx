@@ -16,6 +16,7 @@ import {
 import { ProductFacetsDrawer, buildFacetOptions } from './ProductFacetsDrawer';
 import {
   calculateImportCost,
+  confirmImportManufacturer,
   searchImportProducts,
 } from '@/features/import-radar/services/import-radar-service';
 import { ImportCalculation, ImportProduct } from '@/features/import-radar/types/import-radar';
@@ -211,6 +212,33 @@ export function ParaguayRadarOrigin() {
         pricingError instanceof Error
           ? pricingError.message
           : 'Não foi possível enviar este produto para a Precificação.',
+      );
+    } finally {
+      setSendingToPricing(false);
+    }
+  }
+
+  async function confirmManufacturer(canonicalName: string) {
+    if (!calculation) return;
+    setSendingToPricing(true);
+    setError(null);
+    try {
+      const recalculated = await confirmImportManufacturer(calculation.product, { canonicalName });
+      if (recalculated.pricingEligibility.status !== 'ELIGIBLE') {
+        setCalculation(recalculated);
+        return;
+      }
+      const pricing = await calculateTemporaryImportPricing(
+        buildTemporaryPricingRequest(recalculated),
+      );
+      window.sessionStorage.setItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY, JSON.stringify(pricing));
+      setCalculation(null);
+      router.push('/pricing?temporaryImport=py');
+    } catch (confirmationError) {
+      setError(
+        confirmationError instanceof Error
+          ? confirmationError.message
+          : 'Nao foi possivel confirmar o fabricante.',
       );
     } finally {
       setSendingToPricing(false);
@@ -494,6 +522,7 @@ export function ParaguayRadarOrigin() {
         sending={sendingToPricing}
         onClose={() => setCalculation(null)}
         onSendToPricing={() => void sendToPricing()}
+        onConfirmManufacturer={(canonicalName) => void confirmManufacturer(canonicalName)}
       />
     </div>
   );
@@ -609,13 +638,16 @@ function CalculationModal({
   sending,
   onClose,
   onSendToPricing,
+  onConfirmManufacturer,
 }: {
   calculation: ImportCalculation | null;
   sending: boolean;
   onClose: () => void;
   onSendToPricing: () => void;
+  onConfirmManufacturer: (canonicalName: string) => void;
 }) {
   const canSendToPricing = calculation?.pricingEligibility.status === 'ELIGIBLE';
+  const needsManufacturer = calculation?.pricingEligibility.status === 'NEEDS_INPUT';
 
   return (
     <Modal open={Boolean(calculation)} title="Custo estimado - Paraguai" onClose={onClose}>
@@ -645,6 +677,33 @@ function CalculationModal({
             <p className="text-sm font-bold text-red-700" role="alert">
               {pricingEligibilityMessage(calculation.pricingEligibility.reason)}
             </p>
+          ) : null}
+          {needsManufacturer ? (
+            <form
+              className="grid gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const value = new FormData(event.currentTarget).get('canonicalName');
+                if (typeof value === 'string' && value.trim()) onConfirmManufacturer(value.trim());
+              }}
+            >
+              <p className="text-sm font-bold text-amber-900">
+                Precisamos confirmar o fabricante para continuar.
+              </p>
+              <label className="grid gap-1 text-sm font-bold text-inest-text">
+                Fabricante
+                <input
+                  name="canonicalName"
+                  required
+                  defaultValue={calculation?.pricingEligibility.input?.suggestedValue ?? ''}
+                  className="field-control"
+                  placeholder="Informe o fabricante"
+                />
+              </label>
+              <ActionButton type="submit" disabled={sending}>
+                {sending ? 'Confirmando...' : 'Confirmar fabricante'}
+              </ActionButton>
+            </form>
           ) : null}
           <div className="grid gap-2 sm:grid-cols-2">
             <ActionButton

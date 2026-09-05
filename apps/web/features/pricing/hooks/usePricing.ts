@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   calculateBrazilRadarQuotePricing,
+  confirmBrazilRadarManufacturer,
   calculateTemporaryImportPricing,
   generateOfferDraft,
   getBrazilRadarPricingWorkSnapshot,
@@ -351,6 +352,26 @@ export function usePricing({
     }
   }
 
+  async function confirmBrazilManufacturer(item: BrazilRadarQuotePricing, canonicalName: string) {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const recalculated = await confirmBrazilRadarManufacturer({
+        sourceQuoteId: item.sourceQuoteId,
+        canonicalName,
+      });
+      setBrazilRadarPricings((current) =>
+        current.map((currentItem) =>
+          currentItem.sourceQuoteId === recalculated.sourceQuoteId ? recalculated : currentItem,
+        ),
+      );
+      setSuccess('Fabricante confirmado e cotacao recalculada.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function registerTemporaryImportProfit(item: TemporaryImportPricing, netProfit: string) {
     setSaving(true);
     setSuccess(null);
@@ -424,6 +445,7 @@ export function usePricing({
     prepareOfferBatch,
     sendOfferDraftBatch,
     registerBrazilRadarProfit,
+    confirmBrazilManufacturer,
     registerTemporaryImportProfit,
   };
 }
@@ -440,6 +462,9 @@ function toProfitRegistrationItem(item: TemporaryImportPricing): BrazilRadarQuot
     sourceQuoteId: `temporary-py-${item.recalculationRequest.sourceProductId}`,
     catalogProductId: item.catalogProductId,
     financialClassification: item.financialClassification,
+    financialClassificationReason: item.financialClassificationReason,
+    manufacturerKey: item.manufacturerKey,
+    manufacturerProvenance: item.manufacturerProvenance,
     pricingEligibility: { status: 'ELIGIBLE', reason: null },
     calculationStatus: item.calculationStatus === 'ready' ? 'ready' : 'missing_profit',
     calculationError: item.calculationError,

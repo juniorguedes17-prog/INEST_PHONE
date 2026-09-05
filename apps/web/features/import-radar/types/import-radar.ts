@@ -51,14 +51,31 @@ export interface ImportCalculation {
     sourceManufacturerProvenance: 'EXPLICIT_SOURCE' | null;
   };
   financialClassification: 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
+  financialClassificationReason:
+    | 'canonical_product'
+    | 'apple_registry'
+    | 'manufacturer_registry'
+    | 'manufacturer_missing'
+    | 'manufacturer_ambiguous'
+    | 'manufacturer_conflict'
+    | 'classification_unresolved';
+  manufacturerKey: string | null;
+  manufacturerProvenance: string | null;
   pricingEligibility: {
-    status: 'ELIGIBLE' | 'BLOCKED';
+    status: 'ELIGIBLE' | 'NEEDS_INPUT' | 'BLOCKED';
     reason:
       | 'classification_unresolved'
       | 'condition_unresolved'
       | 'financial_identity_insufficient'
       | 'financial_identity_ambiguous'
       | null;
+    inputType?: 'MANUFACTURER';
+    diagnosticReason?:
+      | 'manufacturer_missing'
+      | 'manufacturer_ambiguous'
+      | 'manufacturer_conflict'
+      | 'classification_unresolved';
+    input?: { type: 'MANUFACTURER'; suggestedValue?: string };
   };
   productResolution: {
     status: 'FOUND' | 'MISSING' | 'AMBIGUOUS';

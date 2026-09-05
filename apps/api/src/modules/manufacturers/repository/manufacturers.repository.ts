@@ -48,6 +48,19 @@ export class ManufacturersRepository {
     return this.prisma.manufacturerAlias.create({ data: input, include: { manufacturer: true } });
   }
 
+  createAuditLog(data: {
+    userId: string;
+    operationType: 'CREATE' | 'UPDATE';
+    entityId: string;
+    oldValue?: unknown;
+    newValue: unknown;
+    context: Record<string, unknown>;
+  }) {
+    return this.prisma.auditLog?.create({
+      data: { entity: 'manufacturer_identity', ...data },
+    });
+  }
+
   private get prisma(): ManufacturersPrismaClient {
     return this.prismaService as unknown as ManufacturersPrismaClient;
   }

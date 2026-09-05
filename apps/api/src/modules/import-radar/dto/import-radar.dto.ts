@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, IsUrl, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsNumber, IsOptional, IsString, IsUrl, Min, ValidateNested } from 'class-validator';
 import type { ImportProductCondition } from '../condition-normalizer';
 import type { SourceManufacturerProvenance } from '../financial-classification';
 
@@ -154,6 +155,24 @@ export class ImportProductDto {
 }
 
 export class CalculateImportCostDto extends ImportProductDto {}
+
+export class ConfirmManufacturerDto {
+  @ApiProperty()
+  @IsString()
+  canonicalName!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  alias?: string;
+}
+
+export class ConfirmImportManufacturerDto extends CalculateImportCostDto {
+  @ApiProperty({ type: ConfirmManufacturerDto })
+  @ValidateNested()
+  @Type(() => ConfirmManufacturerDto)
+  confirmation!: ConfirmManufacturerDto;
+}
 
 export class UpdateDollarQuoteDto {
   @ApiProperty()

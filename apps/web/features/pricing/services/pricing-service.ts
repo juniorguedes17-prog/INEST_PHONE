@@ -3,6 +3,7 @@ import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
   BrazilRadarQuotePricing,
   BrazilRadarPricingBatchStorage,
+  ConfirmBrazilRadarManufacturerRequest,
   BrazilRadarQuotePricingRequest,
   OfferDraft,
   PricingFilters,
@@ -78,6 +79,20 @@ export async function calculateBrazilRadarQuotePricing(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  return parseResponse<BrazilRadarQuotePricing>(response);
+}
+
+export async function confirmBrazilRadarManufacturer(
+  payload: ConfirmBrazilRadarManufacturerRequest,
+): Promise<BrazilRadarQuotePricing> {
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/pricing/radar-quote/confirm-manufacturer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
   return parseResponse<BrazilRadarQuotePricing>(response);
 }
 

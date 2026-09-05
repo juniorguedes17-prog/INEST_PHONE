@@ -37,6 +37,46 @@ export interface FinancialClassificationResult {
   provenance?: FinancialClassificationAuthorityProvenance;
 }
 
+export type PricingEligibilityStatus = 'ELIGIBLE' | 'NEEDS_INPUT' | 'BLOCKED';
+export type PricingEligibilityInputType = 'MANUFACTURER';
+
+/**
+ * A server-side projection of Financial Classification for an interactive
+ * source flow. It never introduces a second financial classifier.
+ */
+export interface PricingEligibilityDecision {
+  status: PricingEligibilityStatus;
+  reason:
+    | 'classification_unresolved'
+    | 'condition_unresolved'
+    | 'financial_identity_insufficient'
+    | 'financial_identity_ambiguous'
+    | null;
+  inputType?: PricingEligibilityInputType;
+  diagnosticReason?: FinancialClassificationReason;
+}
+
+export function resolveClassificationPricingEligibility(
+  classification: FinancialClassificationResult,
+): PricingEligibilityDecision {
+  if (classification.classification !== 'UNRESOLVED') {
+    return { status: 'ELIGIBLE', reason: null };
+  }
+  if (classification.reason === 'manufacturer_missing') {
+    return {
+      status: 'NEEDS_INPUT',
+      reason: 'classification_unresolved',
+      inputType: 'MANUFACTURER',
+      diagnosticReason: classification.reason,
+    };
+  }
+  return {
+    status: 'BLOCKED',
+    reason: 'classification_unresolved',
+    diagnosticReason: classification.reason,
+  };
+}
+
 /**
  * Routes a source product financially. It deliberately never derives a
  * third-party manufacturer from product text, inferred brand, or AI output.

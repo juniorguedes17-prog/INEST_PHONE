@@ -12,10 +12,13 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { Permissions } from '../../auth/decorators/permissions.decorator';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
   BrazilRadarQuotePricingDto,
+  ConfirmBrazilRadarManufacturerDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
   ReplaceBrazilRadarWorkSnapshotDto,
@@ -91,5 +94,16 @@ export class PricingController {
   @ApiOperation({ summary: 'Prepara uma cotacao do Radar Brasil para Precificacao.' })
   calculateBrazilRadarQuote(@Body() dto: BrazilRadarQuotePricingDto) {
     return this.pricingService.calculateBrazilRadarQuote(dto);
+  }
+
+  @Post('radar-quote/confirm-manufacturer')
+  @UseGuards(PermissionsGuard)
+  @Permissions('settings:configure')
+  @ApiOperation({ summary: 'Confirma fabricante externo e recalcula somente a cotacao BR.' })
+  confirmBrazilRadarManufacturer(
+    @Body() dto: ConfirmBrazilRadarManufacturerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pricingService.confirmBrazilRadarManufacturer(dto, user);
   }
 }

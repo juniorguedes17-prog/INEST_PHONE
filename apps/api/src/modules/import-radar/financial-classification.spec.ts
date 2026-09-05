@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { resolveFinancialClassification } from './financial-classification';
+import {
+  resolveClassificationPricingEligibility,
+  resolveFinancialClassification,
+} from './financial-classification';
 
 describe('resolveFinancialClassification', () => {
   const source = {
@@ -109,5 +112,37 @@ describe('resolveFinancialClassification', () => {
         },
       }),
     ).toMatchObject({ classification: 'UNRESOLVED', reason: 'manufacturer_ambiguous' });
+  });
+
+  it('projects only manufacturer_missing as resolvable input', () => {
+    expect(
+      resolveClassificationPricingEligibility({
+        classification: 'UNRESOLVED',
+        reason: 'manufacturer_missing',
+      }),
+    ).toMatchObject({
+      status: 'NEEDS_INPUT',
+      reason: 'classification_unresolved',
+      inputType: 'MANUFACTURER',
+      diagnosticReason: 'manufacturer_missing',
+    });
+    expect(
+      resolveClassificationPricingEligibility({
+        classification: 'UNRESOLVED',
+        reason: 'manufacturer_ambiguous',
+      }),
+    ).toMatchObject({ status: 'BLOCKED', diagnosticReason: 'manufacturer_ambiguous' });
+    expect(
+      resolveClassificationPricingEligibility({
+        classification: 'UNRESOLVED',
+        reason: 'manufacturer_conflict',
+      }),
+    ).toMatchObject({ status: 'BLOCKED', diagnosticReason: 'manufacturer_conflict' });
+    expect(
+      resolveClassificationPricingEligibility({
+        classification: 'NON_APPLE',
+        reason: 'canonical_product',
+      }),
+    ).toMatchObject({ status: 'ELIGIBLE' });
   });
 });

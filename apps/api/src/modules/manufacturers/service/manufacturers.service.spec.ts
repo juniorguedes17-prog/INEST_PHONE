@@ -17,6 +17,7 @@ type Identity = {
 class MemoryManufacturersRepository {
   readonly identities: Identity[] = [];
   readonly aliases: ManufacturerResolverAlias[] = [];
+  readonly audits: unknown[] = [];
 
   async listActiveAliases() {
     return this.aliases.filter((entry) => entry.manufacturer.status === 'ACTIVE');
@@ -68,6 +69,10 @@ class MemoryManufacturersRepository {
     };
     this.aliases.push(record);
     return record;
+  }
+
+  async createAuditLog(data: unknown) {
+    this.audits.push(data);
   }
 }
 
@@ -139,5 +144,57 @@ describe('ManufacturersService', () => {
       service.createAlias({ manufacturerId: orbit.id, alias: 'acme inc' }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(repository.aliases).toHaveLength(1);
+  });
+
+  it('confirms a manufacturer once, audits it, and reuses its alias idempotently', async () => {
+    const { service, repository } = setup();
+    await expect(
+      service.confirm({
+        canonicalName: 'Garmin',
+        alias: 'Garmin',
+        userId: 'settings-user',
+        context: { origin: 'BR', sourceQuoteId: 'quote-1' },
+      }),
+    ).resolves.toMatchObject({ status: 'FOUND', manufacturerKey: 'garmin' });
+    expect(repository.identities).toHaveLength(1);
+    expect(repository.aliases).toHaveLength(1);
+    expect(repository.audits).toHaveLength(1);
+
+    await expect(
+      service.confirm({
+        canonicalName: 'Garmin',
+        alias: 'GARMIN',
+        userId: 'settings-user',
+        context: { origin: 'BR', sourceQuoteId: 'quote-1' },
+      }),
+    ).resolves.toMatchObject({ status: 'FOUND', manufacturerKey: 'garmin' });
+    expect(repository.identities).toHaveLength(1);
+    expect(repository.aliases).toHaveLength(1);
+    expect(repository.audits).toHaveLength(2);
+  });
+
+  it('rejects an alias collision and Apple confirmation', async () => {
+    const { service } = setup();
+    await service.confirm({
+      canonicalName: 'Orbit',
+      alias: 'Orbit',
+      userId: 'settings-user',
+      context: {},
+    });
+    await expect(
+      service.confirm({
+        canonicalName: 'Different Orbit',
+        alias: 'Orbit',
+        userId: 'settings-user',
+        context: {},
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.confirm({
+        canonicalName: 'Apple',
+        userId: 'settings-user',
+        context: {},
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
 });

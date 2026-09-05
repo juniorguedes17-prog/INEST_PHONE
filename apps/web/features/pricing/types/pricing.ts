@@ -71,6 +71,11 @@ export interface BrazilRadarQuotePricingRequest {
   sourceQuoteId: string;
 }
 
+export interface ConfirmBrazilRadarManufacturerRequest extends BrazilRadarQuotePricingRequest {
+  canonicalName: string;
+  alias?: string;
+}
+
 export interface BrazilRadarQuotePricing {
   temporary: true;
   origin: 'BR';
@@ -78,9 +83,14 @@ export interface BrazilRadarQuotePricing {
   sourceQuoteId: string;
   catalogProductId: string | null;
   financialClassification: 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
+  financialClassificationReason: string;
+  manufacturerKey: string | null;
+  manufacturerProvenance: string | null;
   pricingEligibility: {
-    status: 'ELIGIBLE' | 'BLOCKED';
+    status: 'ELIGIBLE' | 'NEEDS_INPUT' | 'BLOCKED';
     reason: 'classification_unresolved' | null;
+    inputType?: 'MANUFACTURER';
+    diagnosticReason?: string;
   };
   product: {
     id: string | null;
@@ -170,6 +180,9 @@ export interface TemporaryImportPricing {
   temporary: true;
   origin: 'PY';
   financialClassification: 'APPLE' | 'NON_APPLE';
+  financialClassificationReason: string;
+  manufacturerKey: string | null;
+  manufacturerProvenance: string | null;
   calculationStatus:
     | 'ready'
     | 'missing_profit'

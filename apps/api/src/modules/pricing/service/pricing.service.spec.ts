@@ -1270,7 +1270,12 @@ describe('PricingService native product profit integration', () => {
 
     expect(result).toMatchObject({
       financialClassification: 'UNRESOLVED',
-      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+      financialClassificationReason: 'manufacturer_missing',
+      pricingEligibility: {
+        status: 'NEEDS_INPUT',
+        reason: 'classification_unresolved',
+        inputType: 'MANUFACTURER',
+      },
       calculationStatus: 'classification_unresolved',
       calculationError: 'Classificacao financeira do produto externo nao resolvida.',
       desiredNetProfit: null,

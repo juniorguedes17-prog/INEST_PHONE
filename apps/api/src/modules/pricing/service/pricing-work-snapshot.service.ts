@@ -52,7 +52,7 @@ export class PricingWorkSnapshotService {
     await this.workSnapshots.replace(
       user.id,
       WORK_SNAPSHOT_SCOPES.PRICING_BRAZIL_RADAR,
-      payload as Prisma.InputJsonValue,
+      payload as unknown as Prisma.InputJsonValue,
     );
 
     return payload;

@@ -3,6 +3,7 @@ import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.inte
 import { SettingsService } from '../../settings/service/settings.service';
 import {
   BrazilRadarQuotePricingDto,
+  ConfirmBrazilRadarManufacturerDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
   TemporaryImportPricingDto,
@@ -43,6 +44,7 @@ import {
 } from './profit-identity-shadow';
 import {
   resolveFinancialClassification,
+  resolveClassificationPricingEligibility,
   type FinancialClassificationResult,
 } from '../../import-radar/financial-classification';
 import { formatSourceDisplayName } from '../../import-radar/source-display-name';
@@ -645,7 +647,7 @@ export class PricingService {
           ? 'Condicao da cotacao do Radar Brasil diverge da condicao do produto mestre associado.'
           : null;
     const canResolveProfit = !productIdUnavailable && !conditionError;
-    const financialClassification = resolveFinancialClassification({
+    const baseFinancialClassification = resolveFinancialClassification({
       canonicalProduct: catalogProduct,
       productName: quote.productName,
       category: quote.category,
@@ -654,10 +656,23 @@ export class PricingService {
       color: quote.color,
       condition: quoteProfitCondition ?? quote.condition,
     });
-    const pricingEligibility =
-      financialClassification.classification === 'UNRESOLVED'
-        ? { status: 'BLOCKED' as const, reason: 'classification_unresolved' as const }
-        : { status: 'ELIGIBLE' as const, reason: null };
+    const manufacturerResolution =
+      baseFinancialClassification.classification === 'UNRESOLVED'
+        ? await this.resolveTextManufacturer(quote.productName)
+        : null;
+    const financialClassification = manufacturerResolution
+      ? resolveFinancialClassification({
+          canonicalProduct: catalogProduct,
+          productName: quote.productName,
+          category: quote.category,
+          model: quote.model,
+          capacity: quote.capacity,
+          color: quote.color,
+          condition: quoteProfitCondition ?? quote.condition,
+          manufacturerResolution,
+        })
+      : baseFinancialClassification;
+    const pricingEligibility = resolveClassificationPricingEligibility(financialClassification);
     const nonApple =
       canResolveProfit && financialClassification.classification === 'NON_APPLE'
         ? this.calculateNonApplePricing(
@@ -806,6 +821,9 @@ export class PricingService {
       sourceQuoteId: quote.id,
       catalogProductId: catalogProduct?.id ?? null,
       financialClassification: financialClassification.classification,
+      financialClassificationReason: financialClassification.reason,
+      manufacturerKey: financialClassification.manufacturerKey ?? null,
+      manufacturerProvenance: financialClassification.provenance ?? null,
       pricingEligibility,
       product: {
         id: catalogProduct?.id ?? null,
@@ -867,6 +885,35 @@ export class PricingService {
     };
   }
 
+  async confirmBrazilRadarManufacturer(
+    dto: ConfirmBrazilRadarManufacturerDto,
+    user: AuthenticatedUser,
+  ) {
+    if (!this.manufacturersService) {
+      throw new BadRequestException('Servico de fabricantes indisponivel.');
+    }
+    const current = await this.calculateBrazilRadarQuote({ sourceQuoteId: dto.sourceQuoteId });
+    if (current.financialClassification === 'APPLE') {
+      throw new BadRequestException('Produto Apple nao pode ser confirmado no registry externo.');
+    }
+    if (current.financialClassificationReason !== 'manufacturer_missing') {
+      throw new BadRequestException(
+        'A confirmacao de fabricante nao e necessaria para esta cotacao.',
+      );
+    }
+    await this.manufacturersService.confirm({
+      canonicalName: dto.canonicalName,
+      alias: dto.alias,
+      userId: user.id,
+      context: {
+        origin: 'BR',
+        sourceQuoteId: dto.sourceQuoteId,
+        sourceName: current.product.name,
+      },
+    });
+    return this.calculateBrazilRadarQuote({ sourceQuoteId: dto.sourceQuoteId });
+  }
+
   private calculateNonApplePricing(
     isAppleOriginal: boolean | null | undefined,
     acquisitionCost: number,
@@ -924,6 +971,20 @@ export class PricingService {
       evidence: sourceManufacturer,
       matchMode: 'EXACT_ALIAS',
       provenance: 'EXPLICIT_SOURCE_VALIDATED',
+    });
+  }
+
+  private async resolveTextManufacturer(productName: string) {
+    if (!this.manufacturersService) {
+      return {
+        status: 'MISSING' as const,
+        normalizedEvidence: normalizeManufacturerAlias(productName),
+      };
+    }
+    return this.manufacturersService.resolve({
+      evidence: productName,
+      matchMode: 'TEXT_BOUNDARY',
+      provenance: 'DETERMINISTIC_ALIAS',
     });
   }
 

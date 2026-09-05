@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { SettingsService } from '../../settings/service/settings.service';
 import {
   CalculateImportCostDto,
+  ConfirmImportManufacturerDto,
   ImportSearchQueryDto,
   UpdateDollarQuoteDto,
 } from '../dto/import-radar.dto';
@@ -19,7 +20,9 @@ import {
 import { normalizeProductCondition, type ImportProductCondition } from '../condition-normalizer';
 import {
   resolveFinancialClassification,
+  resolveClassificationPricingEligibility,
   type FinancialClassificationResult,
+  type PricingEligibilityDecision,
 } from '../financial-classification';
 import { formatSourceDisplayName } from '../source-display-name';
 import { deriveProfitLookupIdentity } from '@inest/product-identity';
@@ -194,6 +197,52 @@ export class ImportRadarService {
     return result;
   }
 
+  async confirmManufacturer(dto: ConfirmImportManufacturerDto, user: AuthenticatedUser) {
+    if (!this.manufacturersService) {
+      throw new BadRequestException('Servico de fabricantes indisponivel.');
+    }
+    const catalog = await this.repository.listActiveCatalogProducts();
+    const { productResolution } = this.analyzeCatalogProduct(dto, catalog);
+    const catalogProduct =
+      productResolution.status === 'FOUND'
+        ? (catalog.find((product) => product.id === productResolution.productId) ?? null)
+        : null;
+    const conditionResolution = normalizeProductCondition(dto.condition ?? dto.name);
+    const manufacturerResolution = await this.resolveExplicitSourceManufacturer(
+      dto.sourceManufacturer,
+      dto.sourceManufacturerProvenance,
+    );
+    const classification = resolveFinancialClassification({
+      canonicalProduct: catalogProduct,
+      productName: dto.name,
+      category: dto.category,
+      model: dto.model,
+      capacity: dto.capacity,
+      color: dto.color,
+      condition: conditionResolution.status === 'RESOLVED' ? conditionResolution.condition : null,
+      manufacturerResolution,
+    });
+    if (classification.classification === 'APPLE') {
+      throw new BadRequestException('Produto Apple nao pode ser confirmado no registry externo.');
+    }
+    if (classification.reason !== 'manufacturer_missing') {
+      throw new BadRequestException('A confirmacao de fabricante nao e necessaria para este item.');
+    }
+
+    await this.manufacturersService.confirm({
+      canonicalName: dto.confirmation.canonicalName,
+      alias: dto.confirmation.alias,
+      userId: user.id,
+      context: {
+        origin: dto.origin ?? 'PY',
+        sourceProductId: dto.id,
+        sourceName: dto.name,
+        sourceManufacturer: dto.sourceManufacturer ?? null,
+      },
+    });
+    return this.calculate(dto, user);
+  }
+
   history() {
     return this.repository.listHistory();
   }
@@ -329,9 +378,15 @@ export class ImportRadarService {
       Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>[number] | null;
     condition: ImportProductCondition | null;
     financialClassification: FinancialClassificationResult;
-  }) {
-    if (financialClassification.classification === 'UNRESOLVED') {
-      return { status: 'BLOCKED' as const, reason: 'classification_unresolved' as const };
+  }): PricingEligibilityDecision & { input?: { type: 'MANUFACTURER'; suggestedValue?: string } } {
+    const classificationDecision = resolveClassificationPricingEligibility(financialClassification);
+    if (classificationDecision.status !== 'ELIGIBLE') {
+      return classificationDecision.status === 'NEEDS_INPUT' && dto.sourceManufacturer?.trim()
+        ? {
+            ...classificationDecision,
+            input: { type: 'MANUFACTURER', suggestedValue: dto.sourceManufacturer.trim() },
+          }
+        : classificationDecision;
     }
     if (financialClassification.classification === 'NON_APPLE') {
       return { status: 'ELIGIBLE' as const, reason: null };

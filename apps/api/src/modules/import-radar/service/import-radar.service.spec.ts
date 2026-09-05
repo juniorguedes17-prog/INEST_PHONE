@@ -30,7 +30,8 @@ function createService(
     ProductNormalizationService,
     'isPricingNormalizationEnabled' | 'normalize'
   >,
-  manufacturerResolver?: Pick<ManufacturersService, 'resolve'>,
+  manufacturerResolver?: Pick<ManufacturersService, 'resolve'> &
+    Partial<Pick<ManufacturersService, 'confirm'>>,
 ) {
   const repository = {
     listActiveCatalogProducts: vi.fn().mockResolvedValue(catalog),
@@ -151,8 +152,79 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(result).toMatchObject({
       financialClassification: 'UNRESOLVED',
       financialClassificationReason: 'manufacturer_missing',
-      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+      pricingEligibility: {
+        status: 'NEEDS_INPUT',
+        reason: 'classification_unresolved',
+        inputType: 'MANUFACTURER',
+        diagnosticReason: 'manufacturer_missing',
+        input: { type: 'MANUFACTURER', suggestedValue: 'NovaMarca' },
+      },
     });
+  });
+
+  it('confirms a missing external manufacturer and recalculates only that import item', async () => {
+    const manufacturerResolver = {
+      resolve: vi
+        .fn()
+        .mockResolvedValueOnce({ status: 'MISSING', normalizedEvidence: 'garmin' })
+        .mockResolvedValueOnce({
+          status: 'FOUND',
+          manufacturerId: 'manufacturer-garmin',
+          manufacturerKey: 'garmin',
+          canonicalName: 'Garmin',
+          provenance: 'EXPLICIT_SOURCE_VALIDATED',
+          normalizedEvidence: 'garmin',
+          matchedAlias: 'Garmin',
+          normalizedAlias: 'garmin',
+        }),
+      confirm: vi.fn().mockResolvedValue({ status: 'FOUND' }),
+    };
+    const result = await createService([], undefined, manufacturerResolver).confirmManufacturer(
+      {
+        ...importProduct,
+        name: 'Garmin Vivoactive 6',
+        category: 'Smartwatch',
+        model: undefined,
+        capacity: undefined,
+        condition: 'CPO',
+        sourceManufacturer: 'Garmin',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+        confirmation: { canonicalName: 'Garmin' },
+      },
+      { id: 'settings-user' } as never,
+    );
+
+    expect(manufacturerResolver.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canonicalName: 'Garmin',
+        userId: 'settings-user',
+        context: expect.objectContaining({ sourceProductId: importProduct.id }),
+      }),
+    );
+    expect(result).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      manufacturerKey: 'garmin',
+      pricingEligibility: { status: 'ELIGIBLE' },
+    });
+  });
+
+  it('rejects Apple before an external manufacturer can be confirmed', async () => {
+    const manufacturerResolver = {
+      resolve: vi.fn(),
+      confirm: vi.fn(),
+    };
+    await expect(
+      createService([], undefined, manufacturerResolver).confirmManufacturer(
+        {
+          ...importProduct,
+          sourceManufacturer: 'Apple',
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+          confirmation: { canonicalName: 'Apple' },
+        },
+        { id: 'settings-user' } as never,
+      ),
+    ).rejects.toThrow('Produto Apple');
+    expect(manufacturerResolver.confirm).not.toHaveBeenCalled();
   });
 
   it('fails closed for an explicit manufacturer with ambiguous registry matches', async () => {
