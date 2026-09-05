@@ -2,6 +2,7 @@ export interface ProductReference {
   id: string;
   name?: string;
   slug?: string;
+  normalizedName?: string;
   type?: string;
   categoryId?: string;
   productType?: string;

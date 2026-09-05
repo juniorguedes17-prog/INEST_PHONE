@@ -30,7 +30,10 @@ type ProfitRegistrationResolution =
       payload: ProfitRegistrationProductPayload;
       model: ProfitRegistrationModelPayload;
     }
-  | { action: 'incomplete'; message: string };
+  | { action: 'incomplete'; reason: ProfitRegistrationIncompleteReason; message: string };
+
+type ProfitRegistrationIncompleteReason =
+  'NO_CANONICAL_MODEL' | 'MULTIPLE_CANONICAL_MODELS' | 'INCOMPATIBLE_PRODUCT_TYPE';
 
 const catalogProductTypes = new Set([
   'IPHONE_SEALED',
@@ -43,11 +46,19 @@ const catalogProductTypes = new Set([
   'ACCESSORY',
 ]);
 
-type CatalogProductTypeResolution = {
-  category: ProductReferences['categories'][number];
-  model: ProductReferences['models'][number];
-  productType: string;
-};
+type CatalogProductTypeResolution =
+  | {
+      action: 'existing-model';
+      category: ProductReferences['categories'][number];
+      model: ProductReferences['models'][number];
+      productType: string;
+    }
+  | {
+      action: 'create-canonical-model';
+      category: ProductReferences['categories'][number];
+      productType: string;
+    }
+  | { action: 'incomplete'; reason: ProfitRegistrationIncompleteReason };
 
 export function resolveProfitRegistration({
   item,
@@ -87,6 +98,7 @@ export function resolveProfitRegistration({
   if (!identity.canonicalModelMatched || !identity.canonicalModelKey) {
     return {
       action: 'incomplete',
+      reason: 'NO_CANONICAL_MODEL',
       message:
         'Nao foi possivel identificar com seguranca o modelo necessario para cadastrar o Lucro Liquido.',
     };
@@ -101,16 +113,20 @@ export function resolveProfitRegistration({
       }).canonicalModelKey === identity.canonicalModelKey,
   );
 
-  const catalogType = resolveCatalogProductType(canonicalModelCandidates, references);
-  if (!catalogType) {
+  const catalogType = resolveCatalogProductType(
+    canonicalModelCandidates,
+    references,
+    identity.canonicalModelKey,
+  );
+  if (catalogType.action === 'incomplete') {
     return {
       action: 'incomplete',
-      message:
-        'O modelo canonico nao possui uma categoria comercial compativel com tipo de produto valido.',
+      reason: catalogType.reason,
+      message: incompleteRegistrationMessage(catalogType.reason),
     };
   }
 
-  const { category, model, productType } = catalogType;
+  const { category, productType } = catalogType;
 
   const storageId = findStorageId(references, identity.canonicalStorage);
   const colorId = findColorId(references, identity.canonicalColor, item.product.color);
@@ -125,31 +141,116 @@ export function resolveProfitRegistration({
     netProfit,
   };
 
+  if (catalogType.action === 'create-canonical-model') {
+    return {
+      action: 'create-model-and-product',
+      payload: productPayload,
+      model: {
+        name: identity.canonicalModelLabel,
+        canonicalModelKey: identity.canonicalModelKey,
+        productType,
+      },
+    };
+  }
+
   return {
     action: 'create',
-    payload: { ...productPayload, modelId: model.id },
+    payload: { ...productPayload, modelId: catalogType.model.id },
   };
 }
 
 function resolveCatalogProductType(
   canonicalModelCandidates: ProductReferences['models'],
   references: ProductReferences,
-): CatalogProductTypeResolution | null {
-  const matches = canonicalModelCandidates.flatMap((model) => {
-    const productType = model.productType;
-    if (!model.id || !model.categoryId || !isCatalogProductType(productType)) return [];
+  canonicalModelKey: string,
+): CatalogProductTypeResolution {
+  if (canonicalModelCandidates.length === 0) {
+    return { action: 'incomplete', reason: 'NO_CANONICAL_MODEL' };
+  }
 
-    return references.categories
-      .filter(
-        (category) =>
-          category.id === model.categoryId &&
-          category.type === model.productType &&
-          isCatalogProductType(category.type),
-      )
-      .map((category) => ({ category, model, productType }));
+  const matches = canonicalModelCandidates.map((model) => {
+    const productType = model.productType;
+    if (!model.id || !model.categoryId || !isCatalogProductType(productType)) return null;
+
+    const category = references.categories.find(
+      (candidate) =>
+        candidate.id === model.categoryId &&
+        candidate.type === productType &&
+        isCatalogProductType(candidate.type),
+    );
+    return category ? { category, model, productType } : null;
   });
 
-  return matches.length === 1 ? (matches[0] ?? null) : null;
+  if (matches.some((match) => match === null)) {
+    return { action: 'incomplete', reason: 'INCOMPATIBLE_PRODUCT_TYPE' };
+  }
+
+  const compatibleMatches = matches.filter(
+    (match): match is NonNullable<typeof match> => match !== null,
+  );
+  const productTypes = new Set(compatibleMatches.map((match) => match.productType));
+  if (productTypes.size !== 1) {
+    return { action: 'incomplete', reason: 'INCOMPATIBLE_PRODUCT_TYPE' };
+  }
+
+  const categories = new Map(compatibleMatches.map((match) => [match.category.id, match.category]));
+  if (categories.size !== 1) {
+    return { action: 'incomplete', reason: 'MULTIPLE_CANONICAL_MODELS' };
+  }
+
+  const [match] = compatibleMatches;
+  if (!match) {
+    return { action: 'incomplete', reason: 'NO_CANONICAL_MODEL' };
+  }
+
+  const models = new Map(
+    compatibleMatches.map((candidate) => [candidate.model.id, candidate.model]),
+  );
+  if (models.size === 1) {
+    return {
+      action: 'existing-model',
+      category: match.category,
+      model: match.model,
+      productType: match.productType,
+    };
+  }
+
+  const canonicalModels = compatibleMatches.filter(
+    (candidate) => candidate.model.normalizedName === canonicalModelKey,
+  );
+  if (canonicalModels.length === 1) {
+    const [canonicalModel] = canonicalModels;
+    if (!canonicalModel) {
+      return { action: 'incomplete', reason: 'MULTIPLE_CANONICAL_MODELS' };
+    }
+    return {
+      action: 'existing-model',
+      category: canonicalModel.category,
+      model: canonicalModel.model,
+      productType: canonicalModel.productType,
+    };
+  }
+
+  if (canonicalModels.length > 1) {
+    return { action: 'incomplete', reason: 'MULTIPLE_CANONICAL_MODELS' };
+  }
+
+  return {
+    action: 'create-canonical-model',
+    category: match.category,
+    productType: match.productType,
+  };
+}
+
+function incompleteRegistrationMessage(reason: ProfitRegistrationIncompleteReason) {
+  switch (reason) {
+    case 'NO_CANONICAL_MODEL':
+      return 'Nao foi encontrado um Model canonico compativel para cadastrar o Lucro Liquido.';
+    case 'MULTIPLE_CANONICAL_MODELS':
+      return 'Mais de um Model canonico compativel foi encontrado para cadastrar o Lucro Liquido.';
+    case 'INCOMPATIBLE_PRODUCT_TYPE':
+      return 'O Model canonico possui categoria comercial ou tipo de produto incompativel.';
+  }
 }
 
 function isCatalogProductType(value: string | undefined): value is string {

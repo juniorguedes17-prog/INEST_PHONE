@@ -174,6 +174,8 @@ test('falha de forma fechada quando o Model canonico esta ausente', () => {
   });
 
   assert.equal(result.action, 'incomplete');
+  if (result.action !== 'incomplete') return;
+  assert.equal(result.reason, 'NO_CANONICAL_MODEL');
 });
 
 test('resolve categorias comerciais distintas para CPO e SEMINOVO', () => {
@@ -236,29 +238,7 @@ test('falha de forma fechada para categoria comercial ausente ou ambigua', () =>
   assert.equal(ambiguous.action, 'incomplete');
 });
 
-test('falha de forma fechada para modelos canonicos ambiguos ou incompativeis', () => {
-  const ambiguous = resolveProfitRegistration({
-    item,
-    netProfit: '500',
-    products: [],
-    references: {
-      ...references,
-      models: [
-        {
-          id: 'model-a',
-          categoryId: 'category-iphone',
-          name: 'iPhone 17 Pro Max',
-          productType: 'IPHONE_SEALED',
-        },
-        {
-          id: 'model-b',
-          categoryId: 'category-iphone',
-          name: 'iPhone 17 Pro Max',
-          productType: 'IPHONE_SEALED',
-        },
-      ],
-    },
-  });
+test('falha de forma fechada para Model com ProductType incompativel', () => {
   const incompatible = resolveProfitRegistration({
     item,
     netProfit: '500',
@@ -276,8 +256,230 @@ test('falha de forma fechada para modelos canonicos ambiguos ou incompativeis', 
     },
   });
 
-  assert.equal(ambiguous.action, 'incomplete');
   assert.equal(incompatible.action, 'incomplete');
+  if (incompatible.action !== 'incomplete') return;
+  assert.equal(incompatible.reason, 'INCOMPATIBLE_PRODUCT_TYPE');
+});
+
+test('cria Model canonico quando referencias fisicas convergem para o mesmo MacBook Neo', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'MacBook Neo 8/256GB 13"',
+        model: 'MacBook Neo',
+        category: 'MacBook',
+        capacity: '256GB',
+        condition: 'CPO',
+      },
+      profit: { ...item.profit, productDescription: 'MacBook Neo 8/256GB 13"' },
+    },
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [{ id: 'category-macbook', name: 'MacBook', type: 'MACBOOK' }],
+      models: [
+        {
+          id: 'model-neo-256',
+          categoryId: 'category-macbook',
+          name: 'MacBook Neo A18 Pro 13" 8GB/256GB',
+          productType: 'MACBOOK',
+        },
+        {
+          id: 'model-neo-512',
+          categoryId: 'category-macbook',
+          name: 'MacBook Neo A18 Pro 13" 8GB/512GB',
+          productType: 'MACBOOK',
+        },
+      ],
+      storages: [{ id: 'storage-256', displayName: '256GB' }],
+    },
+  });
+
+  assert.equal(result.action, 'create-model-and-product');
+  if (result.action !== 'create-model-and-product') return;
+  assert.deepEqual(result.model, {
+    name: 'MacBook Neo 13"',
+    canonicalModelKey: 'macbook-neo-13',
+    productType: 'MACBOOK',
+  });
+  assert.equal(result.payload.productType, 'MACBOOK');
+  assert.equal(result.payload.profitCondition, 'CPO');
+});
+
+test('mantem MacBook Neo sem screen em fail-closed', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'MacBook Neo (6gpu/5gpu/8ram/256gb SSD)',
+        model: 'MacBook Neo',
+        category: 'MacBook',
+        capacity: '256GB',
+        condition: 'CPO',
+      },
+      profit: { ...item.profit, productDescription: 'MacBook Neo (6gpu/5gpu/8ram/256gb SSD)' },
+    },
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [{ id: 'category-macbook', name: 'MacBook', type: 'MACBOOK' }],
+      models: [
+        {
+          id: 'model-neo-13',
+          categoryId: 'category-macbook',
+          name: 'MacBook Neo A18 Pro 13" 8GB/256GB',
+          productType: 'MACBOOK',
+        },
+      ],
+    },
+  });
+
+  assert.equal(result.action, 'incomplete');
+  if (result.action !== 'incomplete') return;
+  assert.equal(result.reason, 'NO_CANONICAL_MODEL');
+});
+
+test('reutiliza a referencia cujo normalizedName ja e a chave canonica', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'MacBook Neo 8/256GB 13"',
+        model: 'MacBook Neo',
+        category: 'MacBook',
+        capacity: '256GB',
+        condition: 'CPO',
+      },
+      profit: { ...item.profit, productDescription: 'MacBook Neo 8/256GB 13"' },
+    },
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [{ id: 'category-macbook', name: 'MacBook', type: 'MACBOOK' }],
+      models: [
+        {
+          id: 'model-neo-256',
+          categoryId: 'category-macbook',
+          name: 'MacBook Neo A18 Pro 13" 8GB/256GB',
+          productType: 'MACBOOK',
+        },
+        {
+          id: 'model-neo-512',
+          categoryId: 'category-macbook',
+          name: 'MacBook Neo A18 Pro 13" 8GB/512GB',
+          productType: 'MACBOOK',
+        },
+        {
+          id: 'model-neo-canonical',
+          categoryId: 'category-macbook',
+          name: 'MacBook Neo 13"',
+          normalizedName: 'macbook-neo-13',
+          productType: 'MACBOOK',
+        },
+      ],
+      storages: [{ id: 'storage-256', displayName: '256GB' }],
+    },
+  });
+
+  assert.equal(result.action, 'create');
+  if (result.action !== 'create') return;
+  assert.equal(result.payload.modelId, 'model-neo-canonical');
+});
+
+test('trata referencias fisicas equivalentes como uma identidade canonica em todas as familias', () => {
+  const cases = [
+    {
+      name: 'iPhone 17 Pro Max 2TB',
+      model: 'iPhone 17 Pro Max',
+      category: 'iPhone',
+      type: 'IPHONE_SEALED',
+    },
+    { name: 'iPad 11 A16 256GB', model: 'iPad 11', category: 'iPad', type: 'IPAD' },
+    {
+      name: 'MacBook Air M4 13" 16GB 256GB',
+      model: 'MacBook Air M4 13"',
+      category: 'MacBook',
+      type: 'MACBOOK',
+    },
+    {
+      name: 'Apple Watch Series 11 46mm GPS',
+      model: 'Apple Watch Series 11 46mm',
+      category: 'Apple Watch',
+      type: 'APPLE_WATCH',
+    },
+    { name: 'AirPods 4', model: 'AirPods 4', category: 'Acessorios', type: 'AIRPODS' },
+    {
+      name: 'Apple Pencil USB-C',
+      model: 'Apple Pencil USB-C',
+      category: 'Acessorios',
+      type: 'ACCESSORY',
+    },
+  ];
+
+  cases.forEach(({ name, model, category, type }) => {
+    const result = resolveProfitRegistration({
+      item: {
+        ...item,
+        product: { ...item.product, name, model, category },
+        profit: { ...item.profit, productDescription: name },
+      },
+      netProfit: '500',
+      products: [],
+      references: {
+        ...references,
+        categories: [{ id: `category-${type}`, name: 'Categoria comercial', type }],
+        models: [
+          { id: `model-${type}-a`, categoryId: `category-${type}`, name: model, productType: type },
+          { id: `model-${type}-b`, categoryId: `category-${type}`, name: model, productType: type },
+        ],
+      },
+    });
+
+    assert.equal(result.action, 'create-model-and-product', name);
+    if (result.action !== 'create-model-and-product') return;
+    assert.equal(result.model.productType, type, name);
+    assert.equal(result.payload.productType, type, name);
+  });
+});
+
+test('bloqueia referencias canonicas com tipos comerciais divergentes', () => {
+  const result = resolveProfitRegistration({
+    item,
+    netProfit: '500',
+    products: [],
+    references: {
+      ...references,
+      categories: [
+        { id: 'category-sealed', name: 'iPhone Lacrado', type: 'IPHONE_SEALED' },
+        { id: 'category-cpo', name: 'Apple CPO', type: 'APPLE_CPO' },
+      ],
+      models: [
+        {
+          id: 'model-sealed',
+          categoryId: 'category-sealed',
+          name: 'iPhone 17 Pro Max',
+          productType: 'IPHONE_SEALED',
+        },
+        {
+          id: 'model-cpo',
+          categoryId: 'category-cpo',
+          name: 'iPhone 17 Pro Max',
+          productType: 'APPLE_CPO',
+        },
+      ],
+    },
+  });
+
+  assert.equal(result.action, 'incomplete');
+  if (result.action !== 'incomplete') return;
+  assert.equal(result.reason, 'INCOMPATIBLE_PRODUCT_TYPE');
 });
 
 test('falha de forma fechada para Category ausente, tipo divergente ou desconhecido', () => {
