@@ -21,6 +21,8 @@ import {
   ImportSearchQueryDto,
   UpdateDollarQuoteDto,
 } from '../dto/import-radar.dto';
+import { RegisterShippingWeightDto } from '../shipping-weights/shipping-weight-registration.dto';
+import { ShippingWeightRegistrationService } from '../shipping-weights/shipping-weight-registration.service';
 import { ImportRadarService } from '../service/import-radar.service';
 
 @ApiTags('Import Radar')
@@ -30,6 +32,8 @@ import { ImportRadarService } from '../service/import-radar.service';
 export class ImportRadarController {
   constructor(
     @Inject(ImportRadarService) private readonly importRadarService: ImportRadarService,
+    @Inject(ShippingWeightRegistrationService)
+    private readonly shippingWeightRegistrationService: ShippingWeightRegistrationService,
   ) {}
 
   @Get('search')
@@ -61,6 +65,17 @@ export class ImportRadarController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.importRadarService.confirmManufacturer(dto, user);
+  }
+
+  @Post('shipping-weights')
+  @UseGuards(PermissionsGuard)
+  @Permissions('products:edit')
+  @ApiOperation({ summary: 'Confirma peso operacional de envio para uma identidade logistica.' })
+  registerShippingWeight(
+    @Body() dto: RegisterShippingWeightDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.shippingWeightRegistrationService.register(dto, user);
   }
 
   @Get('history')

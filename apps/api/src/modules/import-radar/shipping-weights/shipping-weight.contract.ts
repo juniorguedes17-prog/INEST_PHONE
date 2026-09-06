@@ -63,3 +63,10 @@ export interface UpsertShippingWeightInput {
   userId: string;
   context?: Readonly<Record<string, unknown>>;
 }
+
+export type RegisterMissingShippingWeightInput = UpsertShippingWeightInput;
+
+export interface RegisteredShippingWeight {
+  record: ShippingWeightRecord;
+  outcome: 'CREATED' | 'IDEMPOTENT';
+}

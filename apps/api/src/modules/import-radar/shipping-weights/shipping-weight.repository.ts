@@ -18,6 +18,7 @@ export interface ShippingWeightPersistenceRecord {
 interface ShippingWeightsPrismaClient {
   shippingWeightRecord: {
     findUnique(args: unknown): Promise<ShippingWeightPersistenceRecord | null>;
+    create(args: unknown): Promise<ShippingWeightPersistenceRecord>;
     upsert(args: unknown): Promise<ShippingWeightPersistenceRecord>;
   };
   auditLog?: {
@@ -31,6 +32,18 @@ export class ShippingWeightRepository {
 
   findByShippingWeightKey(shippingWeightKey: string) {
     return this.prisma.shippingWeightRecord.findUnique({ where: { shippingWeightKey } });
+  }
+
+  /** Atomic create used by missing-weight confirmation: it never overwrites. */
+  createWeight(input: { shippingWeightKey: string; shippingWeightLbs: string; userId: string }) {
+    return this.prisma.shippingWeightRecord.create({
+      data: {
+        shippingWeightKey: input.shippingWeightKey,
+        shippingWeightLbs: input.shippingWeightLbs,
+        createdBy: input.userId,
+        updatedBy: input.userId,
+      },
+    });
   }
 
   /** Prisma upsert is the single atomic write for one unique logistics key. */

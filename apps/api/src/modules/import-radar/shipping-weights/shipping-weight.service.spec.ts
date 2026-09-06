@@ -17,6 +17,26 @@ class MemoryShippingWeightRepository {
     return this.records.get(shippingWeightKey) ?? null;
   }
 
+  async createWeight(input: {
+    shippingWeightKey: string;
+    shippingWeightLbs: string;
+    userId: string;
+  }) {
+    if (this.records.has(input.shippingWeightKey)) throw { code: 'P2002' };
+    const now = new Date();
+    const record: ShippingWeightPersistenceRecord = {
+      id: `shipping-weight-${this.records.size + 1}`,
+      shippingWeightKey: input.shippingWeightKey,
+      shippingWeightLbs: { toString: () => input.shippingWeightLbs },
+      createdBy: input.userId,
+      updatedBy: input.userId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.records.set(input.shippingWeightKey, record);
+    return record;
+  }
+
   async upsertWeight(input: {
     shippingWeightKey: string;
     shippingWeightLbs: string;
@@ -132,5 +152,35 @@ describe('ShippingWeightService', () => {
 
     expect(repository.records).toHaveLength(2);
     expect([...repository.records.values()].every((record) => !('weightKg' in record))).toBe(true);
+  });
+
+  it('creates a missing weight once, is idempotent for the same concurrent value, and rejects a different one', async () => {
+    const { service, repository } = setup();
+    const key = keyFor();
+
+    const sameWeight = await Promise.all([
+      service.registerMissingWeight({
+        shippingWeightKey: key,
+        shippingWeightLbs: 3.95,
+        userId: 'user-1',
+      }),
+      service.registerMissingWeight({
+        shippingWeightKey: key,
+        shippingWeightLbs: 3.95,
+        userId: 'user-2',
+      }),
+    ]);
+
+    expect(sameWeight.map((result) => result.outcome).sort()).toEqual(['CREATED', 'IDEMPOTENT']);
+    expect(repository.records).toHaveLength(1);
+    await expect(
+      service.registerMissingWeight({
+        shippingWeightKey: key,
+        shippingWeightLbs: 4,
+        userId: 'user-3',
+      }),
+    ).rejects.toThrow('Ja existe um peso operacional de envio diferente');
+    expect(repository.records.get(key)?.shippingWeightLbs.toString()).toBe('3.950');
+    expect(repository.audits).toHaveLength(1);
   });
 });
