@@ -132,6 +132,7 @@ function calculateShipping(input: ReiDoImportadoCostCalculatorInput) {
   if (input.logisticsClassification === 'CELULAR') {
     const quantity = assertCellularQuantity(input.quantity);
     const baseShippingUsd = input.phoneShippingUsd * quantity;
+    const shippingDiscountUsd = (baseShippingUsd * input.airFreightDiscountPercent) / 100;
 
     return {
       shippingWeightLbs: input.shippingWeightLbs ?? null,
@@ -139,9 +140,9 @@ function calculateShipping(input: ReiDoImportadoCostCalculatorInput) {
       weightKg: null,
       halfKgBlocks: null,
       baseShippingUsd,
-      shippingDiscountPercent: 0,
-      shippingDiscountUsd: 0,
-      shippingUsd: baseShippingUsd,
+      shippingDiscountPercent: input.airFreightDiscountPercent,
+      shippingDiscountUsd,
+      shippingUsd: baseShippingUsd - shippingDiscountUsd,
     };
   }
 

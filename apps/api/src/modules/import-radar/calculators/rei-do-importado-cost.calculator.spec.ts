@@ -40,29 +40,55 @@ function expectCalculationError(
 
 describe('calculateReiDoImportadoCost', () => {
   it.each([
-    [1, 150],
-    [2, 300],
-  ])('charges US$ 150 per cellular unit without a freight discount', (quantity, shippingUsd) => {
-    const result = calculateReiDoImportadoCost(
-      input({
-        logisticsClassification: 'CELULAR',
+    [1, 150, 15, 135],
+    [2, 300, 30, 270],
+  ])(
+    'applies the configured freight discount to %s cellular unit(s)',
+    (quantity, baseShippingUsd, shippingDiscountUsd, shippingUsd) => {
+      const result = calculateReiDoImportadoCost(
+        input({
+          logisticsClassification: 'CELULAR',
+          quantity,
+          shippingWeightLbs: null,
+        }),
+      );
+
+      expect(result.breakdown).toMatchObject({
+        classification: 'CELULAR',
         quantity,
         shippingWeightLbs: null,
-      }),
-    );
+        weightKg: null,
+        halfKgBlocks: null,
+        baseShippingUsd,
+        shippingDiscountPercent: 10,
+        shippingDiscountUsd,
+        shippingUsd,
+      });
+    },
+  );
 
-    expect(result.breakdown).toMatchObject({
-      classification: 'CELULAR',
-      quantity,
-      shippingWeightLbs: null,
-      weightKg: null,
-      halfKgBlocks: null,
-      baseShippingUsd: shippingUsd,
-      shippingDiscountPercent: 0,
-      shippingDiscountUsd: 0,
-      shippingUsd,
-    });
-  });
+  it.each([
+    [0, 0, 150],
+    [100, 150, 0],
+  ])(
+    'uses the configured %s%% cellular freight discount',
+    (discount, shippingDiscountUsd, shippingUsd) => {
+      const result = calculateReiDoImportadoCost(
+        input({
+          logisticsClassification: 'CELULAR',
+          quantity: 1,
+          airFreightDiscountPercent: discount,
+        }),
+      );
+
+      expect(result.breakdown).toMatchObject({
+        baseShippingUsd: 150,
+        shippingDiscountPercent: discount,
+        shippingDiscountUsd,
+        shippingUsd,
+      });
+    },
+  );
 
   it('keeps an available cellular weight as audit context without using it for freight', () => {
     const result = calculateReiDoImportadoCost(
@@ -77,7 +103,7 @@ describe('calculateReiDoImportadoCost', () => {
       shippingWeightLbs: 3.95,
       weightKg: null,
       halfKgBlocks: null,
-      shippingUsd: 150,
+      shippingUsd: 135,
     });
   });
 
@@ -112,6 +138,7 @@ describe('calculateReiDoImportadoCost', () => {
         phoneShippingUsd: 95,
         insurancePercent: 0,
         usTaxPercent: 0,
+        airFreightDiscountPercent: 0,
       }),
     );
 
@@ -120,6 +147,7 @@ describe('calculateReiDoImportadoCost', () => {
       shippingUsd: 190,
       insurancePercent: 0,
       taxPercent: 0,
+      shippingDiscountUsd: 0,
     });
   });
 
@@ -137,6 +165,24 @@ describe('calculateReiDoImportadoCost', () => {
 
     expect(result.breakdown.productValueBrl).toBe(1000);
     expect(result.breakdown.insuranceBrl).toBe(150);
+  });
+
+  it('reflects the discounted cellular freight in FinalCost', () => {
+    const result = calculateReiDoImportadoCost(
+      input({
+        logisticsClassification: 'CELULAR',
+        quantity: 1,
+        shippingWeightLbs: null,
+      }),
+    );
+
+    expect(result.breakdown).toMatchObject({
+      shippingUsd: 135,
+      shippingBrl: 675,
+      insuranceBrl: 75,
+      taxBrl: 35,
+    });
+    expect(result.finalCost).toEqual({ currency: 'BRL', amountBrl: 1285 });
   });
 
   it('keeps final BRL components cent-safe when conversions and insurance produce fractions', () => {
