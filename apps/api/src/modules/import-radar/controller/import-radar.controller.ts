@@ -36,6 +36,7 @@ import { ShippingWeightRegistrationService } from '../shipping-weights/shipping-
 import { ImportRadarService } from '../service/import-radar.service';
 import { UsaEnrichmentInputDecisionService } from '../service/usa-enrichment-input-decision.service';
 import { UsaCostPreflightService } from '../service/usa-cost-preflight.service';
+import { UsaCostExecutionService } from '../service/usa-cost-execution.service';
 
 @ApiTags('Import Radar')
 @ApiBearerAuth()
@@ -52,6 +53,9 @@ export class ImportRadarController {
     @Optional()
     @Inject(UsaCostPreflightService)
     private readonly usaCostPreflightService?: UsaCostPreflightService,
+    @Optional()
+    @Inject(UsaCostExecutionService)
+    private readonly usaCostExecutionService?: UsaCostExecutionService,
   ) {}
 
   @Get('search')
@@ -119,6 +123,25 @@ export class ImportRadarController {
       throw new Error('Servico de preflight USA indisponivel.');
     }
     return this.usaCostPreflightService.preflight({
+      sourceProduct: dto.sourceProduct as UsaSourceProduct,
+      redirector:
+        dto.redirector.redirector === 'RED_DELAWARE'
+          ? {
+              redirector: 'RED_DELAWARE',
+              shippingMode: dto.redirector.shippingMode as 'EXPRESS',
+            }
+          : { redirector: 'REI_DO_IMPORTADO' },
+      composition: dto.composition,
+    });
+  }
+
+  @Post('usa-cost')
+  @ApiOperation({ summary: 'Executa o custo USA somente apos preflight aprovado.' })
+  executeUsaCost(@Body() dto: UsaCostPreflightDto) {
+    if (!this.usaCostExecutionService) {
+      throw new Error('Servico de custo USA indisponivel.');
+    }
+    return this.usaCostExecutionService.execute({
       sourceProduct: dto.sourceProduct as UsaSourceProduct,
       redirector:
         dto.redirector.redirector === 'RED_DELAWARE'

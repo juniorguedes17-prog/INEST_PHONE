@@ -15,6 +15,7 @@ import { ImportRadarService } from './service/import-radar.service';
 import { UsaLunaEnrichmentShadowService } from './service/usa-luna-enrichment-shadow.service';
 import { UsaLunaEnrichmentValidatorService } from './service/usa-luna-enrichment-validator.service';
 import { UsaCostPreflightService } from './service/usa-cost-preflight.service';
+import { UsaCostExecutionService } from './service/usa-cost-execution.service';
 import { UsaProvidersOrchestrator } from './service/usa-providers-orchestrator.service';
 import { ShippingWeightsModule } from './shipping-weights/shipping-weights.module';
 
@@ -33,6 +34,7 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
     UsaLunaEnrichmentValidatorService,
     UsaEnrichmentInputDecisionService,
     UsaCostPreflightService,
+    UsaCostExecutionService,
     UsaProvidersOrchestrator,
     ImportRadarRepository,
     MockImportProvider,
