@@ -4,6 +4,7 @@ import { SettingsModule } from '../settings/settings.module';
 import { EvolutionWebhookModule } from '../evolution-webhook/evolution-webhook.module';
 import { ManufacturersModule } from '../manufacturers/manufacturers.module';
 import { ImportRadarController } from './controller/import-radar.controller';
+import { AmazonUsProvider } from './providers/amazon-us.provider';
 import { AppleUsProvider } from './providers/apple-us.provider';
 import { ComprasParaguaiProvider } from './providers/compras-paraguai.provider';
 import { MockImportProvider } from './providers/mock-import.provider';
@@ -26,6 +27,7 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
     MockImportProvider,
     ComprasParaguaiProvider,
     AppleUsProvider,
+    AmazonUsProvider,
   ],
   exports: [ImportRadarService],
 })
