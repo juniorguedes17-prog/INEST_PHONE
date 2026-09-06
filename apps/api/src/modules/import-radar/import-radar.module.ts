@@ -8,6 +8,7 @@ import { AmazonUsProvider } from './providers/amazon-us.provider';
 import { AppleUsProvider } from './providers/apple-us.provider';
 import { ComprasParaguaiProvider } from './providers/compras-paraguai.provider';
 import { MockImportProvider } from './providers/mock-import.provider';
+import { UpcItemDbUsProvider } from './providers/upcitemdb-us.provider';
 import { ImportRadarRepository } from './repository/import-radar.repository';
 import { ImportRadarService } from './service/import-radar.service';
 import { ShippingWeightsModule } from './shipping-weights/shipping-weights.module';
@@ -28,6 +29,7 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
     ComprasParaguaiProvider,
     AppleUsProvider,
     AmazonUsProvider,
+    UpcItemDbUsProvider,
   ],
   exports: [ImportRadarService],
 })
