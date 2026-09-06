@@ -24,10 +24,23 @@ describe('resolveUsaRetailerTaxTreatment', () => {
     });
   });
 
-  it('returns TAXABLE only for a trusted, normalized retailer outside the exempt list', () => {
+  it.each(['Apple Store USA', 'Apple Store', 'Apple US Store'])(
+    'recognizes Apple Store USA alias %s as TAXABLE',
+    (retailer) => {
+      expect(
+        resolveUsaRetailerTaxTreatment({ retailerEvidence: [trustedStore(retailer)] }),
+      ).toEqual({
+        taxTreatment: 'TAXABLE',
+        retailer: { retailerKey: 'apple-store-usa', canonicalName: 'Apple Store USA' },
+        provenance: ['SOURCE_STORE'],
+      });
+    },
+  );
+
+  it('fails closed for a trusted retailer outside the seven homologated entries', () => {
     expect(resolveUsaRetailerTaxTreatment({ retailerEvidence: [trustedStore('Target')] })).toEqual({
-      taxTreatment: 'TAXABLE',
-      retailer: { retailerKey: 'target', canonicalName: 'Target' },
+      taxTreatment: 'UNRESOLVED',
+      reason: 'RETAILER_UNRECOGNIZED',
       provenance: ['SOURCE_STORE'],
     });
   });
@@ -49,10 +62,22 @@ describe('resolveUsaRetailerTaxTreatment', () => {
         retailerEvidence: [trustedStore('Best Buy')],
       }),
     ).toMatchObject({ taxTreatment: 'EXEMPT', retailer: { retailerKey: 'best-buy' } });
-    expect(resolveUsaRetailerTaxTreatment({ manufacturerKey: 'canon' })).toMatchObject({
+    expect(
+      resolveUsaRetailerTaxTreatment({
+        manufacturerKey: 'apple',
+        retailerEvidence: [trustedStore('Apple Store USA')],
+      }),
+    ).toMatchObject({ taxTreatment: 'TAXABLE', retailer: { retailerKey: 'apple-store-usa' } });
+    expect(resolveUsaRetailerTaxTreatment({ manufacturerKey: 'apple' })).toMatchObject({
       taxTreatment: 'UNRESOLVED',
       reason: 'RETAILER_MISSING',
     });
+    expect(
+      resolveUsaRetailerTaxTreatment({
+        manufacturerKey: 'canon',
+        retailerEvidence: [trustedStore('Apple Store USA')],
+      }),
+    ).toMatchObject({ taxTreatment: 'TAXABLE', retailer: { retailerKey: 'apple-store-usa' } });
   });
 
   it('fails closed when trusted retailer evidence conflicts', () => {

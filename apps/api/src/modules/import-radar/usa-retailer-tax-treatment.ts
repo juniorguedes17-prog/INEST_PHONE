@@ -1,4 +1,4 @@
-export const USA_RETAILER_TAX_POLICY_VERSION = 'usa-retailer-tax:v1';
+export const USA_RETAILER_TAX_POLICY_VERSION = 'usa-retailer-tax:v2';
 
 export type UsaTaxTreatment = 'EXEMPT' | 'TAXABLE' | 'UNRESOLVED';
 export type UsaRetailerEvidenceProvenance = 'SOURCE_STORE' | 'EXPLICIT_RETAILER';
@@ -32,7 +32,8 @@ export type UsaRetailerTaxTreatmentResolution =
     }
   | {
       taxTreatment: 'UNRESOLVED';
-      reason: 'RETAILER_MISSING' | 'RETAILER_UNTRUSTED' | 'RETAILER_CONFLICT';
+      reason:
+        'RETAILER_MISSING' | 'RETAILER_UNTRUSTED' | 'RETAILER_CONFLICT' | 'RETAILER_UNRECOGNIZED';
       provenance: readonly UsaRetailerEvidenceProvenance[];
     };
 
@@ -40,23 +41,46 @@ interface UsaRetailerPolicyEntry {
   retailerKey: string;
   canonicalName: string;
   aliases: readonly string[];
+  taxTreatment: Exclude<UsaTaxTreatment, 'UNRESOLVED'>;
 }
 
-const exemptRetailerPolicy: readonly UsaRetailerPolicyEntry[] = [
-  { retailerKey: 'amazon', canonicalName: 'Amazon', aliases: ['amazon'] },
-  { retailerKey: 'ebay', canonicalName: 'eBay', aliases: ['ebay'] },
-  { retailerKey: 'walmart', canonicalName: 'Walmart', aliases: ['walmart'] },
-  { retailerKey: 'best-buy', canonicalName: 'Best Buy', aliases: ['best buy'] },
+const retailerTaxPolicy: readonly UsaRetailerPolicyEntry[] = [
+  { retailerKey: 'amazon', canonicalName: 'Amazon', aliases: ['amazon'], taxTreatment: 'EXEMPT' },
+  { retailerKey: 'ebay', canonicalName: 'eBay', aliases: ['ebay'], taxTreatment: 'EXEMPT' },
+  {
+    retailerKey: 'walmart',
+    canonicalName: 'Walmart',
+    aliases: ['walmart'],
+    taxTreatment: 'EXEMPT',
+  },
+  {
+    retailerKey: 'best-buy',
+    canonicalName: 'Best Buy',
+    aliases: ['best buy'],
+    taxTreatment: 'EXEMPT',
+  },
   {
     retailerKey: 'bh-photo-video',
     canonicalName: 'B&H Photo Video',
     aliases: ['b h photo video', 'b h photo'],
+    taxTreatment: 'EXEMPT',
   },
-  { retailerKey: 'adorama', canonicalName: 'Adorama', aliases: ['adorama'] },
+  {
+    retailerKey: 'adorama',
+    canonicalName: 'Adorama',
+    aliases: ['adorama'],
+    taxTreatment: 'EXEMPT',
+  },
+  {
+    retailerKey: 'apple-store-usa',
+    canonicalName: 'Apple Store USA',
+    aliases: ['apple store', 'apple store usa', 'apple us store'],
+    taxTreatment: 'TAXABLE',
+  },
 ] as const;
 
-const exemptRetailersByAlias = new Map(
-  exemptRetailerPolicy.flatMap((entry) =>
+const retailersByAlias = new Map(
+  retailerTaxPolicy.flatMap((entry) =>
     entry.aliases.map((alias) => [normalizeRetailerName(alias), entry] as const),
   ),
 );
@@ -87,10 +111,12 @@ export function resolveUsaRetailerTaxTreatment(
   }
 
   const retailer = retailers[0]!;
+  const policy = retailerTaxPolicy.find((entry) => entry.retailerKey === retailer.retailerKey);
+  if (!policy) {
+    return { taxTreatment: 'UNRESOLVED', reason: 'RETAILER_UNRECOGNIZED', provenance };
+  }
   return {
-    taxTreatment: exemptRetailerPolicy.some((entry) => entry.retailerKey === retailer.retailerKey)
-      ? 'EXEMPT'
-      : 'TAXABLE',
+    taxTreatment: policy.taxTreatment,
     retailer,
     provenance,
   };
@@ -100,11 +126,11 @@ function toNormalizedRetailer(evidence: UsaRetailerEvidence): NormalizedUsaRetai
   const normalized = normalizeRetailerName(evidence.retailer);
   if (!normalized) return null;
 
-  const exemptRetailer = exemptRetailersByAlias.get(normalized);
-  if (exemptRetailer) {
+  const retailerPolicy = retailersByAlias.get(normalized);
+  if (retailerPolicy) {
     return {
-      retailerKey: exemptRetailer.retailerKey,
-      canonicalName: exemptRetailer.canonicalName,
+      retailerKey: retailerPolicy.retailerKey,
+      canonicalName: retailerPolicy.canonicalName,
     };
   }
 
