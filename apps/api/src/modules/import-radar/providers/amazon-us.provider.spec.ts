@@ -154,6 +154,7 @@ describe('AmazonUsProvider', () => {
       category: 'CELL_PHONES',
     });
     const result = resolveUsaRetailerTaxTreatment({
+      redirector: 'REI_DO_IMPORTADO',
       retailerEvidence: [
         {
           retailer: product!.retailer,

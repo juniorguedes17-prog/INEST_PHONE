@@ -36,6 +36,7 @@ describe('parseUpcItemDbOffers', () => {
     expect(candidate?.product.retailer).toBeNull();
     expect(
       resolveUsaRetailerTaxTreatment({
+        redirector: 'REI_DO_IMPORTADO',
         retailerEvidence: [
           {
             retailer: candidate?.product.retailer,

@@ -112,6 +112,7 @@ describe('AppleUsProvider', () => {
   it('is structurally compatible with the existing Apple Store USA TAX treatment', () => {
     const [product] = parseAppleUsCatalogHtml(iphoneCatalogHtml, 'iPhone');
     const result = resolveUsaRetailerTaxTreatment({
+      redirector: 'REI_DO_IMPORTADO',
       retailerEvidence: [
         {
           retailer: product!.retailer,
