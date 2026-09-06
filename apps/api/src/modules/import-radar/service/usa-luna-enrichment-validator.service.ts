@@ -45,6 +45,8 @@ export interface UsaNormalizedProductField {
 export interface UsaNormalizedProductContext {
   sourceProduct: UsaSourceProduct;
   fields: Record<UsaEnrichmentField, UsaNormalizedProductField>;
+  /** Runtime-only candidate values; never an authority or persisted memory. */
+  candidateValues: Partial<Record<UsaEnrichmentField, string>>;
   candidateFields: UsaEnrichmentField[];
   validatedFields: UsaEnrichmentField[];
   insufficientFields: UsaEnrichmentField[];
@@ -105,6 +107,11 @@ export class UsaLunaEnrichmentValidatorService {
     const context: UsaNormalizedProductContext = {
       sourceProduct: product,
       fields,
+      candidateValues: Object.fromEntries(
+        enrichmentFields
+          .map((field) => [field, candidateValueFor(field, candidate)])
+          .filter((entry): entry is [UsaEnrichmentField, string] => entry[1] !== null),
+      ),
       candidateFields: enrichmentFields.filter(
         (field) => candidateValueFor(field, candidate) !== null,
       ),

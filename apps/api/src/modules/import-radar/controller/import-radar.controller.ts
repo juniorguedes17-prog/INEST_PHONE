@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Optional,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -22,11 +23,17 @@ import {
   UpdateDollarQuoteDto,
 } from '../dto/import-radar.dto';
 import {
+  UsaEnrichmentDecisionDto,
+  UsaManufacturerConfirmationDto,
+} from '../dto/usa-enrichment.dto';
+import type { UsaSourceProduct } from '../usa-source-product.adapter';
+import {
   RegisterShippingWeightDto,
   ResolveShippingWeightDto,
 } from '../shipping-weights/shipping-weight-registration.dto';
 import { ShippingWeightRegistrationService } from '../shipping-weights/shipping-weight-registration.service';
 import { ImportRadarService } from '../service/import-radar.service';
+import { UsaEnrichmentInputDecisionService } from '../service/usa-enrichment-input-decision.service';
 
 @ApiTags('Import Radar')
 @ApiBearerAuth()
@@ -37,6 +44,9 @@ export class ImportRadarController {
     @Inject(ImportRadarService) private readonly importRadarService: ImportRadarService,
     @Inject(ShippingWeightRegistrationService)
     private readonly shippingWeightRegistrationService: ShippingWeightRegistrationService,
+    @Optional()
+    @Inject(UsaEnrichmentInputDecisionService)
+    private readonly usaEnrichmentInputDecisionService?: UsaEnrichmentInputDecisionService,
   ) {}
 
   @Get('search')
@@ -68,6 +78,33 @@ export class ImportRadarController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.importRadarService.confirmManufacturer(dto, user);
+  }
+
+  @Post('usa-enrichment/resolve')
+  @ApiOperation({ summary: 'Resolve lacunas semanticas de um Source Product USA.' })
+  resolveUsaEnrichment(@Body() dto: UsaEnrichmentDecisionDto) {
+    if (!this.usaEnrichmentInputDecisionService) {
+      throw new Error('Servico de decisoes de enriquecimento USA indisponivel.');
+    }
+    return this.usaEnrichmentInputDecisionService.resolve(dto.sourceProduct as UsaSourceProduct);
+  }
+
+  @Post('usa-enrichment/confirm-manufacturer')
+  @UseGuards(PermissionsGuard)
+  @Permissions('settings:configure')
+  @ApiOperation({ summary: 'Confirma fabricante USA e reprocessa somente o item atual.' })
+  confirmUsaManufacturer(
+    @Body() dto: UsaManufacturerConfirmationDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!this.usaEnrichmentInputDecisionService) {
+      throw new Error('Servico de decisoes de enriquecimento USA indisponivel.');
+    }
+    return this.usaEnrichmentInputDecisionService.confirmManufacturer(
+      dto.sourceProduct as UsaSourceProduct,
+      { canonicalName: dto.canonicalName, alias: dto.alias },
+      user,
+    );
   }
 
   @Post('shipping-weights')
