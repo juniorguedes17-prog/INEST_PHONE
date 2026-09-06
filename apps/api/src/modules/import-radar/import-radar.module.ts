@@ -11,6 +11,7 @@ import { MockImportProvider } from './providers/mock-import.provider';
 import { UpcItemDbUsProvider } from './providers/upcitemdb-us.provider';
 import { ImportRadarRepository } from './repository/import-radar.repository';
 import { ImportRadarService } from './service/import-radar.service';
+import { UsaProvidersOrchestrator } from './service/usa-providers-orchestrator.service';
 import { ShippingWeightsModule } from './shipping-weights/shipping-weights.module';
 
 @Module({
@@ -24,6 +25,7 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
   controllers: [ImportRadarController],
   providers: [
     ImportRadarService,
+    UsaProvidersOrchestrator,
     ImportRadarRepository,
     MockImportProvider,
     ComprasParaguaiProvider,
