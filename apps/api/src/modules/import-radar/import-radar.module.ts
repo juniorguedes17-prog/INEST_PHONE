@@ -12,6 +12,7 @@ import { UpcItemDbUsProvider } from './providers/upcitemdb-us.provider';
 import { ImportRadarRepository } from './repository/import-radar.repository';
 import { ImportRadarService } from './service/import-radar.service';
 import { UsaLunaEnrichmentShadowService } from './service/usa-luna-enrichment-shadow.service';
+import { UsaLunaEnrichmentValidatorService } from './service/usa-luna-enrichment-validator.service';
 import { UsaProvidersOrchestrator } from './service/usa-providers-orchestrator.service';
 import { ShippingWeightsModule } from './shipping-weights/shipping-weights.module';
 
@@ -27,6 +28,7 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
   providers: [
     ImportRadarService,
     UsaLunaEnrichmentShadowService,
+    UsaLunaEnrichmentValidatorService,
     UsaProvidersOrchestrator,
     ImportRadarRepository,
     MockImportProvider,
