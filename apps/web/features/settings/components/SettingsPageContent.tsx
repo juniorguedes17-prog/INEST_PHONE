@@ -178,6 +178,27 @@ export function SettingsPageContent() {
     }));
   }
 
+  function updateReiDoImportado(
+    field:
+      | 'phoneShippingUsd'
+      | 'otherProductsShippingUsdPerHalfKg'
+      | 'insurancePercent'
+      | 'usTaxPercent'
+      | 'airFreightDiscountPercent',
+    value: number,
+  ) {
+    updateSettings((current) => ({
+      ...current,
+      usaImport: {
+        ...current.usaImport,
+        reiDoImportado: {
+          ...current.usaImport.reiDoImportado,
+          [field]: value,
+        },
+      },
+    }));
+  }
+
   function updateInstallmentRate(
     provider: 'infinityPay' | 'pagBank' | 'nubank',
     installments: number,
@@ -819,7 +840,7 @@ export function SettingsPageContent() {
         </SettingsCard>
       </div>
 
-      <div className={activeSection === 'importation' ? '' : 'hidden'}>
+      <div className={activeSection === 'importation' ? 'grid gap-6' : 'hidden'}>
         <SettingsCard
           eyebrow="Importação USA"
           title="Red Delaware"
@@ -872,6 +893,66 @@ export function SettingsPageContent() {
               disabled={saving}
             >
               {saving ? 'Salvando...' : 'Salvar Red Delaware'}
+            </ActionButton>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          eyebrow="Importação USA"
+          title="Rei do Importado"
+          description="Parâmetros homologados para o futuro custo de origem."
+        >
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <UsdInput
+              label="Frete celular (US$/unidade)"
+              value={settings.usaImport.reiDoImportado.phoneShippingUsd}
+              onChange={(value) => updateReiDoImportado('phoneShippingUsd', parseNumber(value))}
+            />
+            <UsdInput
+              label="Frete demais produtos (US$/0,5 kg)"
+              value={settings.usaImport.reiDoImportado.otherProductsShippingUsdPerHalfKg}
+              onChange={(value) =>
+                updateReiDoImportado('otherProductsShippingUsdPerHalfKg', parseNumber(value))
+              }
+            />
+            <PercentageInput
+              label="Seguro"
+              value={settings.usaImport.reiDoImportado.insurancePercent}
+              onChange={(event) =>
+                updateReiDoImportado('insurancePercent', toNumber(event.target.value))
+              }
+            />
+            <PercentageInput
+              label="TAX americano"
+              value={settings.usaImport.reiDoImportado.usTaxPercent}
+              onChange={(event) =>
+                updateReiDoImportado('usTaxPercent', toNumber(event.target.value))
+              }
+            />
+            <PercentageInput
+              label="Desconto no frete aéreo"
+              value={settings.usaImport.reiDoImportado.airFreightDiscountPercent}
+              onChange={(event) =>
+                updateReiDoImportado('airFreightDiscountPercent', toNumber(event.target.value))
+              }
+            />
+          </div>
+
+          <div className="mt-6 grid gap-2 border-t border-inest-line pt-4 sm:flex sm:justify-end">
+            <ActionButton
+              variant="secondary"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => void resetDefaults()}
+              disabled={saving}
+            >
+              Restaurar padrões
+            </ActionButton>
+            <ActionButton
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => void save(settings)}
+              disabled={saving}
+            >
+              {saving ? 'Salvando...' : 'Salvar Rei do Importado'}
             </ActionButton>
           </div>
         </SettingsCard>
