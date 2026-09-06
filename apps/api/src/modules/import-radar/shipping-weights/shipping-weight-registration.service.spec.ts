@@ -5,7 +5,10 @@ import type { ManufacturerResolution } from '../../manufacturers/manufacturer-re
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 import type { ShippingWeightPersistenceRecord } from './shipping-weight.repository';
 import { ShippingWeightRepository } from './shipping-weight.repository';
-import type { RegisterShippingWeightDto } from './shipping-weight-registration.dto';
+import type {
+  RegisterShippingWeightDto,
+  ResolveShippingWeightDto,
+} from './shipping-weight-registration.dto';
 import { ShippingWeightRegistrationService } from './shipping-weight-registration.service';
 import { ShippingWeightService } from './shipping-weight.service';
 
@@ -101,6 +104,80 @@ function setup(manufacturerResolution?: ManufacturerResolution) {
 }
 
 describe('ShippingWeightRegistrationService', () => {
+  it('returns MISSING_WEIGHT read-only for a resolved identity without a record', async () => {
+    const { service, repository } = setup();
+
+    await expect(service.resolve(dto())).resolves.toEqual({ status: 'MISSING_WEIGHT' });
+    expect(repository.records).toHaveLength(0);
+    expect(repository.audits).toHaveLength(0);
+  });
+
+  it.each([
+    [0.5, 0.5],
+    [0.65, 0.65],
+    [3.95, 3.95],
+  ])('hands off an existing shipping weight %s without writes', async (weight, expected) => {
+    const { service, repository } = setup();
+    await service.register({ ...dto(), shippingWeightLbs: weight }, user);
+    const recordsBeforeRead = repository.records.size;
+    const auditsBeforeRead = repository.audits.length;
+
+    await expect(service.resolve(dto())).resolves.toEqual({
+      status: 'WEIGHT_FOUND',
+      shippingWeightLbs: expected,
+    });
+    expect(repository.records).toHaveLength(recordsBeforeRead);
+    expect(repository.audits).toHaveLength(auditsBeforeRead);
+  });
+
+  it('performs the READ → WRITE → READ handoff without exposing or accepting a key', async () => {
+    const { service, repository } = setup();
+    const firstSource = dto({ sourceName: 'iPhone 16 128GB' });
+    const secondSource: ResolveShippingWeightDto = {
+      ...dto({
+        sourceProductId: 'same-identity-other-source',
+        sourceName: 'iPhone 16 128GB',
+        supplier: 'Other Store',
+        origin: 'PY',
+      }),
+    };
+
+    await expect(service.resolve(firstSource)).resolves.toEqual({ status: 'MISSING_WEIGHT' });
+    await expect(
+      service.register({ ...firstSource, shippingWeightLbs: 2 }, user),
+    ).resolves.toMatchObject({
+      status: 'WEIGHT_FOUND',
+      registration: 'CREATED',
+      shippingWeightLbs: 2,
+    });
+    await expect(service.resolve(secondSource)).resolves.toEqual({
+      status: 'WEIGHT_FOUND',
+      shippingWeightLbs: 2,
+    });
+    await expect(
+      service.resolve(dto({ sourceName: 'iPhone 16 256GB', sourceProductId: 'other-storage' })),
+    ).resolves.toEqual({ status: 'MISSING_WEIGHT' });
+    expect(repository.records).toHaveLength(1);
+  });
+
+  it('keeps insufficient and ambiguous identity decisions read-only', async () => {
+    const insufficient = setup();
+    await expect(
+      insufficient.service.resolve(dto({ sourceName: 'iPhone 16 Pro' })),
+    ).resolves.toMatchObject({ status: 'KEY_INSUFFICIENT' });
+    expect(insufficient.repository.records).toHaveLength(0);
+    expect(insufficient.repository.audits).toHaveLength(0);
+
+    const ambiguous = setup();
+    await expect(
+      ambiguous.service.resolve(
+        dto({ sourceName: 'iPhone 16 Pro 256GB Apple Watch Series 11 46mm' }),
+      ),
+    ).resolves.toEqual({ status: 'KEY_AMBIGUOUS', ambiguousSources: ['product_identity'] });
+    expect(ambiguous.repository.records).toHaveLength(0);
+    expect(ambiguous.repository.audits).toHaveLength(0);
+  });
+
   it('derives a US Apple key server-side and persists a missing weight without Product.id', async () => {
     const { service, repository } = setup();
     const result = await service.register(dto(), user);
@@ -191,5 +268,30 @@ describe('ShippingWeightRegistrationService', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(repository.records).toHaveLength(0);
+  });
+
+  it('keeps resolved Non-Apple manufacturer identity insufficient during read-only resolution', async () => {
+    const { service, repository } = setup({
+      status: 'FOUND',
+      manufacturerId: 'manufacturer-1',
+      manufacturerKey: 'canon',
+      canonicalName: 'Canon',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
+      normalizedEvidence: 'canon',
+      matchedAlias: 'Canon',
+      normalizedAlias: 'canon',
+    });
+
+    await expect(
+      service.resolve(
+        dto({
+          sourceName: 'Canon EOS Rebel T7',
+          sourceManufacturer: 'Canon',
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+        }),
+      ),
+    ).resolves.toMatchObject({ status: 'KEY_INSUFFICIENT' });
+    expect(repository.records).toHaveLength(0);
+    expect(repository.audits).toHaveLength(0);
   });
 });

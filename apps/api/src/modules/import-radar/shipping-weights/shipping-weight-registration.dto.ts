@@ -2,6 +2,9 @@ import { Type } from 'class-transformer';
 import { IsIn, IsNumber, IsOptional, IsString, IsUrl, ValidateNested } from 'class-validator';
 import type { ImportProductCondition } from '../condition-normalizer';
 import type { SourceManufacturerProvenance } from '../financial-classification';
+import type { ExternalRadarOrigin } from '../interfaces/source-commercial-identity.interface';
+
+const externalRadarOrigins = ['BR', 'PY', 'US'] as const;
 
 export class ShippingWeightSourceProductDto {
   @IsString()
@@ -16,8 +19,8 @@ export class ShippingWeightSourceProductDto {
   @IsUrl()
   sourceUrl!: string;
 
-  @IsIn(['US'])
-  origin!: 'US';
+  @IsIn(externalRadarOrigins)
+  origin!: ExternalRadarOrigin;
 
   @IsOptional()
   @IsString()
@@ -58,7 +61,7 @@ export class ShippingWeightCompositionDto {
   kind!: 'SINGLE_ITEM' | 'UNSTRUCTURED_BUNDLE';
 }
 
-export class RegisterShippingWeightDto {
+export class ResolveShippingWeightDto {
   @ValidateNested()
   @Type(() => ShippingWeightSourceProductDto)
   sourceProduct!: ShippingWeightSourceProductDto;
@@ -66,7 +69,9 @@ export class RegisterShippingWeightDto {
   @ValidateNested()
   @Type(() => ShippingWeightCompositionDto)
   composition!: ShippingWeightCompositionDto;
+}
 
+export class RegisterShippingWeightDto extends ResolveShippingWeightDto {
   @IsNumber()
   shippingWeightLbs!: number;
 }

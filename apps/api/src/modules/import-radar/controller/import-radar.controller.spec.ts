@@ -7,7 +7,10 @@ import { ImportRadarController } from './import-radar.controller';
 
 function contextFor(
   permissions: string[],
-  handler: 'confirmManufacturer' | 'registerShippingWeight' = 'confirmManufacturer',
+  handler:
+    | 'confirmManufacturer'
+    | 'registerShippingWeight'
+    | 'resolveShippingWeight' = 'confirmManufacturer',
 ): ExecutionContext {
   return {
     getHandler: () => ImportRadarController.prototype[handler],
@@ -31,5 +34,11 @@ describe('ImportRadarController manufacturer confirmation permissions', () => {
 
     expect(guard.canActivate(contextFor(['products:edit'], 'registerShippingWeight'))).toBe(true);
     expect(guard.canActivate(contextFor([], 'registerShippingWeight'))).toBe(false);
+  });
+
+  it('keeps shipping-weight resolution authenticated by the controller without edit permission', () => {
+    const guard = new PermissionsGuard(new Reflector());
+
+    expect(guard.canActivate(contextFor([], 'resolveShippingWeight'))).toBe(true);
   });
 });

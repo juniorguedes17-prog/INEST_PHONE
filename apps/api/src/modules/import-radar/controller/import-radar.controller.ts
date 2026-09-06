@@ -21,7 +21,10 @@ import {
   ImportSearchQueryDto,
   UpdateDollarQuoteDto,
 } from '../dto/import-radar.dto';
-import { RegisterShippingWeightDto } from '../shipping-weights/shipping-weight-registration.dto';
+import {
+  RegisterShippingWeightDto,
+  ResolveShippingWeightDto,
+} from '../shipping-weights/shipping-weight-registration.dto';
 import { ShippingWeightRegistrationService } from '../shipping-weights/shipping-weight-registration.service';
 import { ImportRadarService } from '../service/import-radar.service';
 
@@ -76,6 +79,12 @@ export class ImportRadarController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.shippingWeightRegistrationService.register(dto, user);
+  }
+
+  @Post('shipping-weights/resolve')
+  @ApiOperation({ summary: 'Consulta a decisao de peso operacional de envio sem persistir dados.' })
+  resolveShippingWeight(@Body() dto: ResolveShippingWeightDto) {
+    return this.shippingWeightRegistrationService.resolve(dto);
   }
 
   @Get('history')

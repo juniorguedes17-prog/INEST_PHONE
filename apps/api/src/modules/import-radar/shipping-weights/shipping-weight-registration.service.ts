@@ -10,7 +10,10 @@ import type {
   ShippingWeightManufacturerResolution,
   ShippingWeightResolution,
 } from './shipping-weight.contract';
-import type { RegisterShippingWeightDto } from './shipping-weight-registration.dto';
+import type {
+  RegisterShippingWeightDto,
+  ResolveShippingWeightDto,
+} from './shipping-weight-registration.dto';
 import { ShippingWeightService, normalizeShippingWeightLbs } from './shipping-weight.service';
 
 @Injectable()
@@ -24,6 +27,13 @@ export class ShippingWeightRegistrationService {
     const keyInput = await this.buildKeyInput(dto);
     const resolution = await this.shippingWeightService.resolveWeight(keyInput);
     return this.registerResolvedWeight(resolution, dto, user);
+  }
+
+  /** Read-only decision handoff. Internal keys never leave this boundary. */
+  async resolve(dto: ResolveShippingWeightDto) {
+    return toShippingWeightDecision(
+      await this.shippingWeightService.resolveWeight(await this.buildKeyInput(dto)),
+    );
   }
 
   private async registerResolvedWeight(
@@ -66,7 +76,7 @@ export class ShippingWeightRegistrationService {
     };
   }
 
-  private async buildKeyInput(dto: RegisterShippingWeightDto): Promise<ShippingWeightKeyInput> {
+  private async buildKeyInput(dto: ResolveShippingWeightDto): Promise<ShippingWeightKeyInput> {
     const source = dto.sourceProduct;
     const productIdentity = deriveExtendedProductIdentity({
       productName: source.sourceName,
@@ -108,7 +118,7 @@ export class ShippingWeightRegistrationService {
   }
 
   private async resolveManufacturer(
-    source: RegisterShippingWeightDto['sourceProduct'],
+    source: ResolveShippingWeightDto['sourceProduct'],
     canonicalAppleModelMatched: boolean,
   ): Promise<ShippingWeightManufacturerResolution> {
     if (canonicalAppleModelMatched) return { status: 'RESOLVED', manufacturerKey: 'apple' };
@@ -127,6 +137,22 @@ export class ShippingWeightRegistrationService {
         provenance: 'EXPLICIT_SOURCE_VALIDATED',
       }),
     );
+  }
+}
+
+function toShippingWeightDecision(resolution: ShippingWeightResolution) {
+  switch (resolution.status) {
+    case 'WEIGHT_FOUND':
+      return { status: 'WEIGHT_FOUND' as const, shippingWeightLbs: resolution.shippingWeightLbs };
+    case 'MISSING_WEIGHT':
+      return { status: 'MISSING_WEIGHT' as const };
+    case 'KEY_INSUFFICIENT':
+      return {
+        status: 'KEY_INSUFFICIENT' as const,
+        missingAttributes: resolution.missingAttributes,
+      };
+    case 'KEY_AMBIGUOUS':
+      return { status: 'KEY_AMBIGUOUS' as const, ambiguousSources: resolution.ambiguousSources };
   }
 }
 
