@@ -1,0 +1,162 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { ProductNormalizationService } from '../../evolution-webhook/product-normalization.service';
+import type { UsaSourceProduct } from '../usa-source-product.adapter';
+import {
+  UsaLunaEnrichmentShadowService,
+  deriveDeterministicIdentityState,
+  shouldCallUsaLuna,
+} from './usa-luna-enrichment-shadow.service';
+
+const lunaCandidate = {
+  context: 'NORMALIZE_PRICING_US' as const,
+  enrichmentStatus: 'CANDIDATE' as const,
+  candidate: {
+    manufacturerCandidate: 'Apple',
+    categoryCandidate: 'iPhone',
+    familyCandidate: 'iphone',
+    modelCandidate: 'iPhone 17 Pro',
+    storageCandidate: '256GB',
+    ramCandidate: null,
+    chipCandidate: null,
+    screenCandidate: null,
+    colorCandidate: 'Orange',
+    connectivityCandidate: null,
+    conditionCandidate: 'NOVO' as const,
+    quantityCandidate: null,
+    featureCandidates: [],
+    connectorCandidate: null,
+    powerCandidate: null,
+    lengthCandidate: null,
+  },
+  schemaValid: true,
+  lunaCalled: true,
+  model: 'gpt-5.6-luna',
+  inputTokens: 10,
+  outputTokens: 20,
+  estimatedCostUsd: 0.01,
+  latencyMs: 15,
+};
+
+function product(overrides: Partial<UsaSourceProduct> = {}): UsaSourceProduct {
+  const sourceName = overrides.sourceName ?? 'Apple iPhone 17 Pro 256GB Orange';
+  return {
+    providerName: 'apple_us',
+    sourceProductId: 'apple-us:iphone-17-pro-256-orange',
+    sourceName,
+    displayName: sourceName,
+    source: 'US',
+    sourceUrl: 'https://example.test/iphone',
+    supplier: 'Apple USA',
+    sourceManufacturer: 'Apple',
+    sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+    retailer: 'Apple Store USA',
+    category: 'iPhone',
+    model: 'iPhone 17 Pro',
+    capacity: '256GB',
+    color: 'Orange',
+    condition: 'NOVO',
+    priceUsd: 1099,
+    ...overrides,
+  };
+}
+
+function createService() {
+  const productNormalization = {
+    enrichUsaProduct: vi.fn().mockResolvedValue(lunaCandidate),
+  };
+  return {
+    productNormalization,
+    service: new UsaLunaEnrichmentShadowService(
+      productNormalization as unknown as ProductNormalizationService,
+    ),
+  };
+}
+
+describe('UsaLunaEnrichmentShadowService', () => {
+  it('hands Apple, Amazon, and UPCitemdb source products to NORMALIZE_PRICING_US without mutating them', async () => {
+    const { productNormalization, service } = createService();
+    const apple = product({ capacity: undefined });
+    const amazon = product({
+      providerName: 'amazon_us',
+      sourceProductId: 'amazon-us:B0EXAMPLE',
+      retailer: 'Amazon',
+      sourceManufacturer: null,
+      sourceManufacturerProvenance: null,
+      capacity: undefined,
+    });
+    const upc = product({
+      providerName: 'upcitemdb_us',
+      sourceProductId: 'upcitemdb-us:000123',
+      retailer: null,
+      sourceManufacturer: null,
+      sourceManufacturerProvenance: null,
+      capacity: undefined,
+      sourceName: 'Walmart listed iPhone 17 Pro',
+    });
+    const before = structuredClone([apple, amazon, upc]);
+
+    const observations = await service.observe([apple, amazon, upc]);
+
+    expect(observations).toHaveLength(3);
+    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(3);
+    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'US',
+        provider: 'upcitemdb_us',
+        retailer: null,
+        sourceProductId: 'upcitemdb-us:000123',
+      }),
+    );
+    expect(productNormalization.enrichUsaProduct.mock.calls.flat()).not.toContain(1099);
+    expect([apple, amazon, upc]).toEqual(before);
+    expect(upc.retailer).toBeNull();
+    expect(observations[2]?.result?.candidate).not.toHaveProperty('retailer');
+    expect(observations[2]?.result?.candidate).not.toHaveProperty('priceUsd');
+  });
+
+  it('does not call Luna twice for the same provider source product in one execution', async () => {
+    const { productNormalization, service } = createService();
+    const source = product({ capacity: undefined });
+
+    const observations = await service.observe([source, { ...source }]);
+
+    expect(observations).toHaveLength(1);
+    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not require Luna for a deterministically complete product', async () => {
+    const { productNormalization, service } = createService();
+    const source = product({ sourceName: 'iPhone 17 Pro 256GB Orange' });
+
+    const [observation] = await service.observe([source]);
+
+    expect(observation).toMatchObject({
+      deterministicState: 'RESOLVED',
+      lunaCalled: false,
+      result: null,
+      skipReason: 'DETERMINISTICALLY_COMPLETE',
+    });
+    expect(productNormalization.enrichUsaProduct).not.toHaveBeenCalled();
+  });
+
+  it('contains a Luna failure as a shadow observation', async () => {
+    const { productNormalization, service } = createService();
+    productNormalization.enrichUsaProduct.mockRejectedValue(new Error('network unavailable'));
+
+    const [observation] = await service.observe([product({ capacity: undefined })]);
+
+    expect(observation).toMatchObject({
+      lunaCalled: true,
+      result: { enrichmentStatus: 'MODEL_ERROR', candidate: null },
+    });
+  });
+
+  it('keeps the trigger conservative and deterministic', () => {
+    const complete = product({ sourceName: 'iPhone 17 Pro 256GB Orange' });
+    const incomplete = product({ capacity: undefined });
+
+    expect(deriveDeterministicIdentityState(complete)).toBe('RESOLVED');
+    expect(shouldCallUsaLuna(complete, 'RESOLVED')).toBe(false);
+    expect(shouldCallUsaLuna(incomplete, 'INSUFFICIENT')).toBe(true);
+  });
+});

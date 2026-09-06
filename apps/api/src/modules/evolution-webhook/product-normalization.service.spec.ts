@@ -71,6 +71,52 @@ function response(candidate: Record<string, unknown> = {}) {
   };
 }
 
+function usaEnrichmentResponse(candidate: Record<string, unknown> = {}) {
+  return {
+    ok: true,
+    status: 200,
+    json: vi.fn().mockResolvedValue({
+      output_text: JSON.stringify({
+        manufacturerCandidate: 'Apple',
+        categoryCandidate: 'MacBook',
+        familyCandidate: 'macbook',
+        modelCandidate: 'MacBook Air M5',
+        storageCandidate: '512GB',
+        ramCandidate: '16GB',
+        chipCandidate: 'M5',
+        screenCandidate: '13"',
+        colorCandidate: 'Midnight',
+        connectivityCandidate: null,
+        conditionCandidate: 'NOVO',
+        quantityCandidate: null,
+        featureCandidates: [],
+        connectorCandidate: null,
+        powerCandidate: null,
+        lengthCandidate: null,
+        ...candidate,
+      }),
+      usage: { input_tokens: 10, output_tokens: 20 },
+    }),
+  };
+}
+
+function usaEnrichmentInput() {
+  return {
+    source: 'US' as const,
+    provider: 'apple_us',
+    sourceProductId: 'apple-us:macbook-air-m5',
+    sourceName: 'Apple MacBook Air 13 M5 16GB 512GB Midnight',
+    retailer: 'Apple Store USA',
+    sourceManufacturer: 'Apple',
+    category: 'MacBook',
+    model: 'MacBook Air M5',
+    capacity: '512GB',
+    color: 'Midnight',
+    condition: 'NOVO',
+    deterministicState: 'INSUFFICIENT' as const,
+  };
+}
+
 describe('ProductNormalizationService', () => {
   beforeEach(() => {
     vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
@@ -403,5 +449,68 @@ describe('ProductNormalizationService', () => {
       expect.stringContaining('"event":"pricing.ai_normalization.shadow"'),
     );
     expect(logger).toHaveBeenCalledWith(expect.stringContaining('"source":"PY"'));
+  });
+
+  it('reutiliza NORMALIZE_PRICING_US para produzir somente candidatos sem autoridade comercial ou financeira', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const result = await service.enrichUsaProduct(usaEnrichmentInput());
+
+    expect(result).toMatchObject({
+      context: 'NORMALIZE_PRICING_US',
+      enrichmentStatus: 'CANDIDATE',
+      schemaValid: true,
+      lunaCalled: true,
+      candidate: { modelCandidate: 'MacBook Air M5', storageCandidate: '512GB' },
+    });
+    expect(result.candidate).not.toHaveProperty('priceUsd');
+    expect(result.candidate).not.toHaveProperty('retailer');
+    expect(result.candidate).not.toHaveProperty('seller');
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(options.body));
+    expect(body.text.format.name).toBe('usa_product_enrichment_candidate');
+    expect(body.input[1].content[0].text).toContain('NORMALIZE_PRICING_US');
+    expect(body.input[1].content[0].text).not.toContain('priceUsd');
+    expect(body.input[1].content[0].text).not.toContain('shippingWeight');
+  });
+
+  it.each([{ priceUsd: 100 }, { retailer: 'Walmart' }, { seller: 'third-party' }])(
+    'rejeita candidato USA com campo proibido: %o',
+    async (forbiddenField) => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(usaEnrichmentResponse(forbiddenField)));
+      const service = new ProductNormalizationService(
+        createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+      );
+
+      const result = await service.enrichUsaProduct(usaEnrichmentInput());
+
+      expect(result).toMatchObject({
+        enrichmentStatus: 'INVALID_STRUCTURED_OUTPUT',
+        schemaValid: false,
+        candidate: null,
+      });
+    },
+  );
+
+  it('preserva a falha Luna USA como observacao de timeout sem propagar erro', async () => {
+    const timeout = Object.assign(new Error('aborted'), { name: 'AbortError' });
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(timeout));
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const result = await service.enrichUsaProduct(usaEnrichmentInput());
+
+    expect(result).toMatchObject({
+      enrichmentStatus: 'TIMEOUT',
+      schemaValid: false,
+      candidate: null,
+      lunaCalled: true,
+      errorCode: 'timeout',
+    });
   });
 });
