@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { SettingsModule } from '../settings/settings.module';
+import { PricingModule } from '../pricing/pricing.module';
+import { OffersModule } from '../offers/offers.module';
 import { EvolutionWebhookModule } from '../evolution-webhook/evolution-webhook.module';
 import { ManufacturersModule } from '../manufacturers/manufacturers.module';
 import { ImportRadarController } from './controller/import-radar.controller';
@@ -16,6 +18,7 @@ import { UsaLunaEnrichmentShadowService } from './service/usa-luna-enrichment-sh
 import { UsaLunaEnrichmentValidatorService } from './service/usa-luna-enrichment-validator.service';
 import { UsaCostPreflightService } from './service/usa-cost-preflight.service';
 import { UsaCostExecutionService } from './service/usa-cost-execution.service';
+import { UsaPricedOfferService } from './service/usa-priced-offer.service';
 import { UsaProvidersOrchestrator } from './service/usa-providers-orchestrator.service';
 import { ShippingWeightsModule } from './shipping-weights/shipping-weights.module';
 
@@ -23,6 +26,8 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
   imports: [
     PrismaModule,
     SettingsModule,
+    PricingModule,
+    OffersModule,
     EvolutionWebhookModule,
     ManufacturersModule,
     ShippingWeightsModule,
@@ -35,6 +40,7 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
     UsaEnrichmentInputDecisionService,
     UsaCostPreflightService,
     UsaCostExecutionService,
+    UsaPricedOfferService,
     UsaProvidersOrchestrator,
     ImportRadarRepository,
     MockImportProvider,
@@ -43,6 +49,6 @@ import { ShippingWeightsModule } from './shipping-weights/shipping-weights.modul
     AmazonUsProvider,
     UpcItemDbUsProvider,
   ],
-  exports: [ImportRadarService],
+  exports: [ImportRadarService, UsaPricedOfferService],
 })
 export class ImportRadarModule {}

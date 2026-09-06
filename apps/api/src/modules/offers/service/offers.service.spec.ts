@@ -159,4 +159,86 @@ describe('OffersService', () => {
       ),
     ).rejects.toThrow('origin, provider e sourceProductId');
   });
+
+  it('persists an already-priced external draft without reading Pricing again', async () => {
+    const repository = {
+      ensureOfficialTemplates: vi.fn(),
+      findTemplateByProductType: vi.fn().mockResolvedValue({
+        id: 'template-1',
+        content: '{{produto}} {{preco_oferta}}',
+      }),
+      createOffer: vi.fn().mockResolvedValue({
+        id: 'offer-us-priced',
+        message: 'Canon R$ 2.799,90',
+        status: 'GENERATED',
+        salePrice: 2677.09,
+        offerPrice: 2799.9,
+        createdAt: new Date('2026-09-06T12:00:00.000Z'),
+        commercialTemplate: { id: 'template-1', name: 'Template', productType: 'IPHONE_SEALED' },
+        items: [
+          {
+            id: 'item-us-priced',
+            productId: null,
+            externalOrigin: 'US',
+            externalProvider: 'UPCITEMDB',
+            externalSourceProductId: 'upc:canon-t7',
+            externalSourceName: 'Canon EOS Rebel T7',
+            externalSourceUrl: 'https://example.test/canon',
+            externalRetailer: 'B&H Photo Video',
+            salePrice: 2677.09,
+            offerPrice: 2799.9,
+          },
+        ],
+      }),
+      createAuditLog: vi.fn(),
+    };
+    const pricing = { findOne: vi.fn() };
+    const settings = {
+      getSettings: vi.fn().mockResolvedValue({
+        offers: { defaultDeadline: '5 dias', defaultWarranty: '90 dias' },
+      }),
+    };
+    const service = new OffersService(
+      repository as unknown as OffersRepository,
+      pricing as unknown as PricingService,
+      settings as unknown as SettingsService,
+    );
+
+    await expect(
+      service.persistPricedOfferDraft(
+        {
+          targetModule: 'offers',
+          route: '/offers',
+          source: 'pricing',
+          payload: {
+            productId: null,
+            externalIdentity: {
+              origin: 'US',
+              provider: 'UPCITEMDB',
+              sourceProductId: 'upc:canon-t7',
+              sourceName: 'Canon EOS Rebel T7',
+              sourceUrl: 'https://example.test/canon',
+              retailer: 'B&H Photo Video',
+            },
+            productName: 'Canon EOS Rebel T7',
+            color: '',
+            capacity: '',
+            salePrice: 2677.09,
+            offerPrice: 2799.9,
+            deliveryTime: '',
+            warranty: '',
+          },
+        },
+        { id: 'user-1' } as never,
+      ),
+    ).resolves.toMatchObject({
+      productId: null,
+      externalIdentity: { origin: 'US', provider: 'UPCITEMDB', sourceProductId: 'upc:canon-t7' },
+    });
+
+    expect(pricing.findOne).not.toHaveBeenCalled();
+    expect(repository.createOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ salePrice: 2677.09, offerPrice: 2799.9 }),
+    );
+  });
 });

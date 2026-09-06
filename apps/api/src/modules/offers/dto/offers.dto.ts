@@ -115,7 +115,7 @@ export class UpdateOfferTemplateDto {
   content!: string;
 }
 
-class OfferDraftPayloadDto {
+export class OfferDraftPayloadDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsUUID()
@@ -163,7 +163,7 @@ class OfferDraftPayloadDto {
   warranty!: string;
 }
 
-class OfferDraftDto {
+export class OfferDraftDto {
   @ApiProperty()
   @IsString()
   targetModule!: string;

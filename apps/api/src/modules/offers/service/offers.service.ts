@@ -2,7 +2,12 @@ import { BadRequestException, Inject, Injectable, NotFoundException } from '@nes
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { PricingService } from '../../pricing/service/pricing.service';
 import { SettingsService } from '../../settings/service/settings.service';
-import { DuplicateOfferDto, GenerateOfferDto, UpdateOfferTemplateDto } from '../dto/offers.dto';
+import {
+  DuplicateOfferDto,
+  GenerateOfferDto,
+  OfferDraftDto,
+  UpdateOfferTemplateDto,
+} from '../dto/offers.dto';
 import { OfferRecord } from '../interfaces/offers-prisma.interface';
 import { OfferItemIdentityError, resolveOfferItemIdentity } from '../offers.external-identity';
 import { OffersRepository } from '../repository/offers.repository';
@@ -86,6 +91,76 @@ export class OffersService {
       },
     });
 
+    return this.toResponse(offer);
+  }
+
+  /**
+   * Persists an OfferDraft whose commercial values have already been approved
+   * by Pricing. This is intentionally separate from the public generate
+   * endpoint: it never reads or recalculates Pricing again.
+   */
+  async persistPricedOfferDraft(draft: OfferDraftDto, user: AuthenticatedUser) {
+    await this.offersRepository.ensureOfficialTemplates();
+
+    let identity;
+    try {
+      identity = resolveOfferItemIdentity({
+        productId: draft.payload.productId,
+        externalIdentity: draft.payload.externalIdentity,
+      });
+    } catch (error) {
+      if (error instanceof OfferItemIdentityError) {
+        throw new BadRequestException('Oferta externa exige origin, provider e sourceProductId.');
+      }
+      throw error;
+    }
+
+    if (!isCentSafe(draft.payload.salePrice) || !isCentSafe(draft.payload.offerPrice)) {
+      throw new BadRequestException('OfferDraft precificado exige valores monetarios em centavos.');
+    }
+
+    const [settings, template] = await Promise.all([
+      this.settingsService.getSettings(),
+      this.resolveTemplate(undefined, draft.productType ?? 'IPHONE_SEALED'),
+    ]);
+    const sourceName =
+      identity.kind === 'EXTERNAL'
+        ? (identity.externalIdentity.sourceName ?? draft.payload.productName)
+        : draft.payload.productName;
+    const message = renderTemplate(template.content, {
+      produto: sourceName,
+      modelo: sourceName,
+      cor: draft.payload.color,
+      capacidade: draft.payload.capacity,
+      preco: this.formatCurrency(draft.payload.salePrice),
+      preco_oferta: this.formatCurrency(draft.payload.offerPrice),
+      prazo: draft.payload.deliveryTime || settings.offers.defaultDeadline,
+      garantia: draft.payload.warranty || settings.offers.defaultWarranty,
+    });
+    const offer = await this.offersRepository.createOffer({
+      identity,
+      commercialTemplateId: template.id,
+      message,
+      salePrice: draft.payload.salePrice,
+      offerPrice: draft.payload.offerPrice,
+      userId: user.id,
+    });
+    await this.offersRepository.createAuditLog({
+      userId: user.id,
+      operationType: 'CREATE',
+      entityId: offer.id,
+      newValue: offer,
+      context: {
+        event: 'offers.persisted_priced_draft',
+        source: draft.source ?? null,
+        identity: identity.kind,
+        productId: identity.kind === 'CANONICAL' ? identity.productId : null,
+        origin: identity.kind === 'EXTERNAL' ? identity.externalIdentity.origin : null,
+        provider: identity.kind === 'EXTERNAL' ? identity.externalIdentity.provider : null,
+        sourceProductId:
+          identity.kind === 'EXTERNAL' ? identity.externalIdentity.sourceProductId : null,
+      },
+    });
     return this.toResponse(offer);
   }
 
