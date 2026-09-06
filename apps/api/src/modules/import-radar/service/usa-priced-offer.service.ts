@@ -8,13 +8,10 @@ import type {
   UsaFinalCostPricingResult,
   UsaPricingCalculationStatus,
 } from '../../pricing/usa-final-cost-pricing.contract';
-import type { ProfitCondition } from '../../pricing/interfaces/profit-sheet.interface';
 import type { UsaCostExecutionInput, UsaCostExecutionResult } from './usa-cost-execution.service';
 import { UsaCostExecutionService } from './usa-cost-execution.service';
 
 export interface UsaPricedOfferInput extends UsaCostExecutionInput {
-  /** Existing resolved condition supplied by the USA normalized context. */
-  condition: ProfitCondition | null;
   /** Optional canonical Product authority; USA source products remain external by default. */
   catalogProductId?: string | null;
   /** Existing deterministic manufacturer decision, when already available. */
@@ -81,7 +78,7 @@ export class UsaPricedOfferService {
     const pricing = await this.pricingService.calculateUsaFinalCost({
       sourceProduct: input.sourceProduct,
       finalCost: costExecution.calculation.finalCost,
-      condition: input.condition,
+      condition: costExecution.preflight.condition,
       catalogProductId: input.catalogProductId,
       manufacturerResolution: input.manufacturerResolution,
     });

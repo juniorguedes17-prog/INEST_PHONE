@@ -115,7 +115,6 @@ describe('ImportRadarController manufacturer confirmation permissions', () => {
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceProduct,
-        condition: 'NOVO',
         user,
         composition: { kind: 'SINGLE_ITEM' },
       }),

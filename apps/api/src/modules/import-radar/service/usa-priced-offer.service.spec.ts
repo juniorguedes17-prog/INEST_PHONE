@@ -35,6 +35,7 @@ function readyCost(
       taxTreatment: 'EXEMPT',
       logisticClassification: null,
       quantity: null,
+      condition: 'NOVO',
       shippingWeightLbs: 1,
     },
     calculation: {
@@ -102,7 +103,6 @@ function input(
     sourceProduct,
     redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' } as const,
     composition: { kind: 'SINGLE_ITEM' as const },
-    condition: 'NOVO' as const,
     user: {
       id: 'user-1',
       email: 'user@example.test',
@@ -239,6 +239,27 @@ describe('UsaPricedOfferService', () => {
 
     expect(pricingService.calculateUsaFinalCost).toHaveBeenCalledWith(
       expect.objectContaining({ manufacturerResolution }),
+    );
+  });
+
+  it('passes the normalized preflight condition to Pricing instead of the source field', async () => {
+    const cost = readyCost();
+    if (cost.preflight.status !== 'READY_FOR_COST') {
+      throw new Error('Expected a ready cost fixture.');
+    }
+    const preflight: Extract<UsaCostExecutionResult['preflight'], { status: 'READY_FOR_COST' }> = {
+      ...cost.preflight,
+      condition: 'SEMINOVO',
+    };
+    const { service, pricingService } = setup({
+      ...cost,
+      preflight,
+    } as UsaCostExecutionResult);
+
+    await service.execute(input({ sourceProduct: { ...sourceProduct, condition: undefined } }));
+
+    expect(pricingService.calculateUsaFinalCost).toHaveBeenCalledWith(
+      expect.objectContaining({ condition: 'SEMINOVO' }),
     );
   });
 });

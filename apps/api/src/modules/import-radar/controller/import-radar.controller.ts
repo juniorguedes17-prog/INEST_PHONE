@@ -187,7 +187,6 @@ export class ImportRadarController {
             }
           : { redirector: 'REI_DO_IMPORTADO' },
       composition: dto.composition,
-      condition: dto.sourceProduct.condition ?? null,
       user,
     });
   }

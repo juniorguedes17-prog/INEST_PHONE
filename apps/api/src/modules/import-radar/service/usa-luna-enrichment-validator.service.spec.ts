@@ -227,6 +227,24 @@ describe('UsaLunaEnrichmentValidatorService', () => {
     });
   });
 
+  it('does not conflict when deterministic Renewed condition equals the Luna candidate', async () => {
+    const { service } = createService(candidate({ conditionCandidate: 'SEMINOVO' }));
+
+    const result = await service.enrich(
+      product({
+        sourceName: 'Apple iPhone 17 Pro 1TB eSIM Cosmic Orange Renewed Premium',
+        category: 'iPhone',
+        condition: undefined,
+      }),
+    );
+
+    expect(result.fields.condition).toEqual({
+      value: 'Seminovo',
+      provenance: 'DETERMINISTIC',
+      candidateStatus: 'VALIDATED',
+    });
+  });
+
   it('preserves authoritative source manufacturer on Luna conflict', async () => {
     const { service } = createService(candidate({ manufacturerCandidate: 'Nikon' }), {
       status: 'FOUND',

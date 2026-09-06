@@ -50,6 +50,7 @@ function ready(
     taxTreatment: 'EXEMPT',
     logisticClassification: redirector.redirector === 'REI_DO_IMPORTADO' ? 'OTHER' : null,
     quantity: null,
+    condition: 'NOVO',
     shippingWeightLbs: 2,
     ...overrides,
   };

@@ -385,7 +385,13 @@ function sameFieldValue(
     );
   }
   if (field === 'condition') {
-    return product.condition === candidate;
+    const currentCondition = normalizeProductCondition(current);
+    const candidateCondition = normalizeProductCondition(candidate);
+    return (
+      currentCondition.status === 'RESOLVED' &&
+      candidateCondition.status === 'RESOLVED' &&
+      currentCondition.condition === candidateCondition.condition
+    );
   }
   return normalizeCanonicalText(current) === normalizeCanonicalText(candidate);
 }

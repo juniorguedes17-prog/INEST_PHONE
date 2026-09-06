@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { SettingsService } from '../../settings/service/settings.service';
+import { normalizeProductCondition, type ImportProductCondition } from '../condition-normalizer';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
 import {
   resolveUsaRetailerTaxTreatment,
@@ -42,6 +43,8 @@ export type UsaCostPreflightResult =
       logisticClassification: 'CELULAR' | 'OTHER' | null;
       /** Validated only for Rei do Importado cellular flows. */
       quantity: number | null;
+      /** Existing P6F condition resolution, carried forward without re-derivation. */
+      condition: ImportProductCondition | null;
       shippingWeightLbs: number | null;
     }
   | {
@@ -122,6 +125,7 @@ export class UsaCostPreflightService {
     }
 
     const semanticContext = semantic.context;
+    const condition = resolveNormalizedCondition(semanticContext.fields.condition?.value);
     const logisticClassification = semanticContext.logisticClassification.classification;
     if (
       input.redirector.redirector === 'REI_DO_IMPORTADO' &&
@@ -140,7 +144,7 @@ export class UsaCostPreflightService {
         return { status: 'BLOCKED', reason: settingsReason, redirector: input.redirector };
       }
       if (logisticClassification === 'CELULAR') {
-        const quantity = parsePositiveInteger(semanticContext.fields.quantity.value);
+        const quantity = resolveOperationalQuantity(input.composition);
         if (quantity === null) {
           return {
             status: 'BLOCKED',
@@ -154,6 +158,7 @@ export class UsaCostPreflightService {
           taxTreatment: taxTreatment.taxTreatment,
           logisticClassification,
           quantity,
+          condition,
           shippingWeightLbs: null,
         };
       }
@@ -177,6 +182,7 @@ export class UsaCostPreflightService {
       input.redirector,
       taxTreatment.taxTreatment,
       logisticClassification,
+      condition,
     );
   }
 
@@ -227,6 +233,7 @@ function toWeightPreflightResult(
   redirector: UsaRedirectorSelection,
   taxTreatment: Exclude<UsaTaxTreatment, 'UNRESOLVED'>,
   logisticClassification: 'CELULAR' | 'OTHER' | 'UNRESOLVED',
+  condition: ImportProductCondition | null,
 ): UsaCostPreflightResult {
   if (resolution.status === 'WEIGHT_FOUND') {
     return {
@@ -236,6 +243,7 @@ function toWeightPreflightResult(
       logisticClassification:
         logisticClassification === 'UNRESOLVED' ? null : logisticClassification,
       quantity: null,
+      condition,
       shippingWeightLbs: resolution.shippingWeightLbs,
     };
   }
@@ -284,9 +292,17 @@ function isSupportedRedirector(value: UsaRedirectorSelection): value is UsaRedir
   return value?.redirector === 'REI_DO_IMPORTADO' || value?.redirector === 'RED_DELAWARE';
 }
 
-function parsePositiveInteger(value: string | null) {
-  const parsed = Number(value);
-  return Boolean(value) && Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
+function resolveOperationalQuantity(composition: ShippingWeightComposition): number | null {
+  // SINGLE_ITEM is the existing explicit single-commercial-item composition.
+  // No quantity is inferred for bundle compositions.
+  return composition.kind === 'SINGLE_ITEM' ? 1 : null;
+}
+
+function resolveNormalizedCondition(
+  value: string | null | undefined,
+): ImportProductCondition | null {
+  const resolution = normalizeProductCondition(value);
+  return resolution.status === 'RESOLVED' ? resolution.condition : null;
 }
 
 function validateRedSettings(settings: { firstLbUsd: number; additionalLbUsd: number }) {

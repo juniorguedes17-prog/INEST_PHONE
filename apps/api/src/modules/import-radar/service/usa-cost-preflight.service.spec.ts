@@ -48,14 +48,14 @@ type TestSettings = {
 
 function createContext(
   classification: 'CELULAR' | 'OTHER' | 'UNRESOLVED',
-  quantity: string | null = '1',
+  condition: string | null = 'NOVO',
 ) {
   return {
     logisticClassification:
       classification === 'UNRESOLVED'
         ? { classification, reason: 'INSUFFICIENT_EVIDENCE', sources: [] }
         : { classification, sources: ['PRODUCT_IDENTITY_FAMILY'] },
-    fields: { quantity: { value: quantity } },
+    fields: { quantity: { value: null }, condition: { value: condition } },
   };
 }
 
@@ -115,6 +115,7 @@ describe('UsaCostPreflightService', () => {
       taxTreatment: 'EXEMPT',
       logisticClassification: null,
       quantity: null,
+      condition: null,
       shippingWeightLbs: 2,
     });
   });
@@ -131,8 +132,8 @@ describe('UsaCostPreflightService', () => {
     expect(result).toMatchObject({ status: 'READY_FOR_COST', quantity: 1 });
   });
 
-  it('transports validated cellular quantity 2 for Rei', async () => {
-    const { service } = createService(readyDecision, createContext('CELULAR', '2'));
+  it('uses the explicit SINGLE_ITEM composition as operational quantity 1', async () => {
+    const { service } = createService(readyDecision, createContext('CELULAR'));
 
     await expect(
       service.preflight({
@@ -143,8 +144,49 @@ describe('UsaCostPreflightService', () => {
     ).resolves.toMatchObject({
       status: 'READY_FOR_COST',
       logisticClassification: 'CELULAR',
-      quantity: 2,
+      quantity: 1,
     });
+  });
+
+  it('carries the P6F-normalized condition to the ready cost contract', async () => {
+    const { service } = createService(readyDecision, createContext('CELULAR', 'Seminovo'));
+
+    await expect(
+      service.preflight({
+        sourceProduct: { ...product, condition: undefined },
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({ status: 'READY_FOR_COST', condition: 'SEMINOVO' });
+  });
+
+  it('readies the B0G45F93BH-equivalent single iPhone purchase without a Product Identity quantity', async () => {
+    const { service, shippingWeights } = createService(
+      readyDecision,
+      createContext('CELULAR', 'SEMINOVO'),
+    );
+    const renewedAmazonIphone = {
+      ...product,
+      sourceProductId: 'amazon-us:B0G45F93BH',
+      sourceName:
+        'Apple iPhone 17 Pro, US Version, 1TB, eSIM, Cosmic Orange - Unlocked (Renewed Premium)',
+      condition: undefined,
+    };
+
+    await expect(
+      service.preflight({
+        sourceProduct: renewedAmazonIphone,
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY_FOR_COST',
+      logisticClassification: 'CELULAR',
+      condition: 'SEMINOVO',
+      quantity: 1,
+      shippingWeightLbs: null,
+    });
+    expect(shippingWeights.resolve).not.toHaveBeenCalled();
   });
 
   it('allows a resolved Non-Apple item without a catalog Product', async () => {
@@ -245,10 +287,7 @@ describe('UsaCostPreflightService', () => {
   });
 
   it('does not require weight for Rei cellular', async () => {
-    const { service, shippingWeights } = createService(
-      readyDecision,
-      createContext('CELULAR', '2'),
-    );
+    const { service, shippingWeights } = createService(readyDecision, createContext('CELULAR'));
 
     const result = await service.preflight({
       sourceProduct: product,
@@ -259,7 +298,7 @@ describe('UsaCostPreflightService', () => {
     expect(result).toMatchObject({
       status: 'READY_FOR_COST',
       logisticClassification: 'CELULAR',
-      quantity: 2,
+      quantity: 1,
       shippingWeightLbs: null,
     });
     expect(shippingWeights.resolve).not.toHaveBeenCalled();
@@ -282,14 +321,14 @@ describe('UsaCostPreflightService', () => {
     expect(shippingWeights.resolve).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['0', '-1', '1.5'])('rejects invalid cellular quantity %s', async (quantity) => {
-    const { service } = createService(readyDecision, createContext('CELULAR', quantity));
+  it('does not infer quantity for a bundle composition', async () => {
+    const { service } = createService(readyDecision, createContext('CELULAR'));
 
     await expect(
       service.preflight({
         sourceProduct: product,
         redirector: redirector('REI_DO_IMPORTADO'),
-        composition: { kind: 'SINGLE_ITEM' },
+        composition: { kind: 'UNSTRUCTURED_BUNDLE' },
       }),
     ).resolves.toMatchObject({
       status: 'BLOCKED',
@@ -298,7 +337,7 @@ describe('UsaCostPreflightService', () => {
   });
 
   it('does not add quantity as a gate for Rei OTHER', async () => {
-    const { service } = createService(readyDecision, createContext('OTHER', null));
+    const { service } = createService(readyDecision, createContext('OTHER'));
 
     await expect(
       service.preflight({

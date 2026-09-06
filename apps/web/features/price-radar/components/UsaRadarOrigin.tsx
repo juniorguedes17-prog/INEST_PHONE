@@ -816,6 +816,7 @@ function humanizeUsaBlockedReason(reason: string) {
     MISSING_WEIGHT: 'Precisamos confirmar o peso para continuar.',
     SETTINGS_UNAVAILABLE: 'As configurações USA não estão disponíveis.',
     USD_BRL_QUOTE_NOT_CONFIGURED: 'A cotação USD/BRL não está configurada.',
+    QUANTITY_UNRESOLVED: 'Não foi possível confirmar a quantidade de unidades desta compra.',
     FLUXO_BLOQUEADO: 'O produto não pode continuar neste momento.',
   };
   return messages[reason] ?? 'O produto não pode continuar com segurança.';
