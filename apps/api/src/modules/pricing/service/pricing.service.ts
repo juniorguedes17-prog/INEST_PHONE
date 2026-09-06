@@ -53,6 +53,10 @@ import {
   normalizeManufacturerAlias,
 } from '../../manufacturers/manufacturer-alias-normalizer';
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
+import type {
+  UsaFinalCostPricingRequest,
+  UsaFinalCostPricingResult,
+} from '../usa-final-cost-pricing.contract';
 
 function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResolution) {
   switch (resolution.status) {
@@ -95,6 +99,18 @@ function getDirectProductProfitCalculationState(lookup: ProfitLookupResult) {
     calculationStatus: 'missing_profit' as const,
     calculationError: 'Lucro Liquido nao cadastrado para este produto e condicao.',
   };
+}
+
+function assertCentSafeAcquisitionCost(amountBrl: number) {
+  const cents = amountBrl * 100;
+  if (
+    !Number.isFinite(amountBrl) ||
+    amountBrl <= 0 ||
+    !Number.isSafeInteger(Math.round(cents)) ||
+    Math.abs(cents - Math.round(cents)) > 1e-6
+  ) {
+    throw new BadRequestException('Invalid monetary amount: acquisitionCost');
+  }
 }
 
 @Injectable()
@@ -299,6 +315,142 @@ export class PricingService {
     return draft;
   }
 
+  /**
+   * Prices a USA FinalCost through the existing Apple and Non-Apple pricing
+   * paths. It is deliberately separate from the Paraguay temporary-import
+   * contract and does not produce an OfferDraft.
+   */
+  async calculateUsaFinalCost(
+    input: UsaFinalCostPricingRequest,
+  ): Promise<UsaFinalCostPricingResult> {
+    if (input.finalCost.currency !== 'BRL') {
+      throw new BadRequestException('USA FinalCost must use BRL.');
+    }
+    assertCentSafeAcquisitionCost(input.finalCost.amountBrl);
+
+    const [settings, pricingConfigurations, profitCatalog, catalogProduct] = await Promise.all([
+      this.settingsService.getSettings(),
+      this.pricingRepository.listPricingConfigurations(),
+      this.profitProvider.getCatalog(),
+      input.catalogProductId
+        ? this.pricingRepository.findActiveCatalogProductById(input.catalogProductId)
+        : Promise.resolve(null),
+    ]);
+    if (input.catalogProductId && !catalogProduct) {
+      throw new BadRequestException('Produto canonico ativo nao encontrado para esta importacao.');
+    }
+
+    const source = input.sourceProduct;
+    const condition = input.condition;
+    const manufacturerResolution =
+      input.manufacturerResolution ??
+      (await this.resolveExplicitSourceManufacturer(
+        source.sourceManufacturer,
+        source.sourceManufacturerProvenance,
+      ));
+    const financialClassification = resolveFinancialClassification({
+      canonicalProduct: catalogProduct,
+      productName: source.sourceName,
+      category: source.category,
+      model: source.model,
+      capacity: source.capacity,
+      color: source.color,
+      condition,
+      sourceManufacturer: source.sourceManufacturer,
+      sourceManufacturerProvenance: source.sourceManufacturerProvenance,
+      manufacturerResolution,
+    });
+    const productDescription =
+      catalogProduct?.productDescription?.trim() ||
+      source.displayName?.trim() ||
+      source.sourceName.trim();
+
+    if (financialClassification.classification === 'UNRESOLVED') {
+      return this.buildUsaPricingResult({
+        input,
+        financialClassification,
+        profitCatalog,
+        catalogProduct,
+        productDescription,
+        calculationStatus: 'classification_unresolved',
+        calculationError: 'Classificacao financeira do produto externo nao resolvida.',
+      });
+    }
+
+    if (financialClassification.classification === 'NON_APPLE') {
+      const nonApple = this.calculateNonApplePricing(
+        false,
+        input.finalCost.amountBrl,
+        settings,
+        pricingConfigurations,
+      );
+      return this.buildUsaPricingResult({
+        input,
+        financialClassification,
+        profitCatalog,
+        catalogProduct,
+        productDescription,
+        calculationStatus: 'ready',
+        calculationError: null,
+        nonApple,
+      });
+    }
+
+    if (!condition) {
+      return this.buildUsaPricingResult({
+        input,
+        financialClassification,
+        profitCatalog,
+        catalogProduct,
+        productDescription,
+        calculationStatus: 'condition_unresolved',
+        calculationError: 'Condicao do produto externo ausente ou invalida.',
+      });
+    }
+
+    const profitResolution = catalogProduct
+      ? this.findProfit(
+          profitCatalog,
+          catalogProduct.profitProductId,
+          condition,
+          productDescription,
+        )
+      : resolveProfitIdentity(profitCatalog, {
+          productDescription,
+          condition,
+          category: source.category,
+          color: source.color,
+        });
+    const profitState = catalogProduct
+      ? getDirectProductProfitCalculationState(profitResolution as ProfitLookupResult)
+      : getBrazilRadarProfitCalculationState(profitResolution as ProfitIdentityResolution);
+    const desiredNetProfit =
+      profitResolution.status === 'found' ? profitResolution.record.netProfit : null;
+    const calculation =
+      profitState.calculationStatus === 'ready'
+        ? this.calculateExternalPricing(
+            input.finalCost.amountBrl,
+            desiredNetProfit,
+            settings,
+            pricingConfigurations,
+          )
+        : null;
+
+    return this.buildUsaPricingResult({
+      input,
+      financialClassification,
+      profitCatalog,
+      catalogProduct,
+      productDescription,
+      calculationStatus: profitState.calculationStatus,
+      calculationError: profitState.calculationError,
+      desiredNetProfit,
+      calculation,
+      profitRecordId:
+        profitResolution.status === 'found' ? profitResolution.record.productId : null,
+    });
+  }
+
   async calculateTemporaryImport(dto: TemporaryImportPricingDto) {
     const [settings, pricingConfigurations, profitCatalog, catalogProduct] = await Promise.all([
       this.settingsService.getSettings(),
@@ -476,6 +628,69 @@ export class PricingService {
       desiredNetProfit: profitLookup.record.netProfit,
       calculationStatus: 'ready',
     });
+  }
+
+  private buildUsaPricingResult({
+    input,
+    financialClassification,
+    profitCatalog,
+    catalogProduct,
+    productDescription,
+    calculationStatus,
+    calculationError,
+    nonApple = null,
+    calculation = null,
+    desiredNetProfit = null,
+    profitRecordId = null,
+  }: {
+    input: UsaFinalCostPricingRequest;
+    financialClassification: FinancialClassificationResult;
+    profitCatalog: Awaited<ReturnType<ProductProfitProvider['getCatalog']>>;
+    catalogProduct: Awaited<ReturnType<PricingRepository['findActiveCatalogProductById']>>;
+    productDescription: string;
+    calculationStatus: UsaFinalCostPricingResult['calculationStatus'];
+    calculationError: string | null;
+    nonApple?: ReturnType<PricingService['calculateNonApplePricing']>;
+    calculation?: ReturnType<PricingService['calculateExternalPricing']> | null;
+    desiredNetProfit?: number | null;
+    profitRecordId?: string | null;
+  }): UsaFinalCostPricingResult {
+    const effectiveCalculation = nonApple ?? calculation;
+    return {
+      origin: 'US',
+      sourceProductId: input.sourceProduct.sourceProductId,
+      catalogProductId: catalogProduct?.id ?? null,
+      acquisitionCost: input.finalCost.amountBrl,
+      financialClassification: financialClassification.classification,
+      financialClassificationReason: financialClassification.reason,
+      manufacturerKey: financialClassification.manufacturerKey ?? null,
+      calculationStatus,
+      calculationError,
+      salePrice: effectiveCalculation?.salePrice ?? null,
+      offerPrice: effectiveCalculation?.offerPrice ?? null,
+      margin: effectiveCalculation?.margin ?? null,
+      desiredNetProfit: nonApple?.engineMetadata.targetProfit ?? desiredNetProfit,
+      pricingCosts: effectiveCalculation
+        ? {
+            fixedCost: effectiveCalculation.fixedCost,
+            freight: effectiveCalculation.freight,
+            paymentFee: effectiveCalculation.paymentFee,
+            offerIncrement: effectiveCalculation.offerIncrement,
+          }
+        : null,
+      profit: {
+        source: nonApple
+          ? 'non_apple_electronics_policy'
+          : profitRecordId
+            ? 'native_product_catalog'
+            : 'unavailable',
+        condition: input.condition,
+        productDescription,
+        recordId: profitRecordId,
+        updatedAt: profitCatalog.fetchedAt,
+      },
+      ...(nonApple ? { engineMetadata: nonApple.engineMetadata } : {}),
+    };
   }
 
   private buildTemporaryImportResult({
