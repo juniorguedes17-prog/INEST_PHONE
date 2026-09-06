@@ -57,6 +57,14 @@ export interface OfferDraft {
   payload: {
     productId: string | null;
     sourceQuoteId?: string;
+    externalIdentity?: {
+      origin: 'US';
+      provider: string;
+      sourceProductId: string;
+      sourceName?: string;
+      sourceUrl?: string;
+      retailer?: string;
+    };
     productName: string;
     color: string;
     capacity: string;

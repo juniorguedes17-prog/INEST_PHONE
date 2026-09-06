@@ -1,9 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { PricingService } from '../../pricing/service/pricing.service';
 import { SettingsService } from '../../settings/service/settings.service';
 import { DuplicateOfferDto, GenerateOfferDto, UpdateOfferTemplateDto } from '../dto/offers.dto';
 import { OfferRecord } from '../interfaces/offers-prisma.interface';
+import { OfferItemIdentityError, resolveOfferItemIdentity } from '../offers.external-identity';
 import { OffersRepository } from '../repository/offers.repository';
 import { getWhatsappShareLink, renderTemplate } from '../validators/offers.validators';
 
@@ -45,6 +46,9 @@ export class OffersService {
 
   async generate(dto: GenerateOfferDto, user: AuthenticatedUser) {
     await this.offersRepository.ensureOfficialTemplates();
+    if (!dto.productId) {
+      return this.generateExternal(dto, user);
+    }
     const [pricing, settings] = await Promise.all([
       this.pricingService.findOne(dto.productId),
       this.settingsService.getSettings(),
@@ -62,7 +66,7 @@ export class OffersService {
     });
 
     const offer = await this.offersRepository.createOffer({
-      productId: pricing.productId,
+      identity: { productId: pricing.productId },
       commercialTemplateId: template.id,
       message,
       salePrice: pricing.salePrice,
@@ -82,6 +86,64 @@ export class OffersService {
       },
     });
 
+    return this.toResponse(offer);
+  }
+
+  private async generateExternal(dto: GenerateOfferDto, user: AuthenticatedUser) {
+    let identity;
+    try {
+      identity = resolveOfferItemIdentity({ externalIdentity: dto.externalIdentity });
+    } catch (error) {
+      if (error instanceof OfferItemIdentityError) {
+        throw new BadRequestException('Oferta externa exige origin, provider e sourceProductId.');
+      }
+      throw error;
+    }
+    if (identity.kind !== 'EXTERNAL') {
+      throw new BadRequestException('Identidade externa invalida.');
+    }
+    if (!isCentSafe(dto.salePrice) || !isCentSafe(dto.offerPrice)) {
+      throw new BadRequestException(
+        'Oferta externa exige precos monetarios aprovados em centavos.',
+      );
+    }
+
+    const [settings, template] = await Promise.all([
+      this.settingsService.getSettings(),
+      this.resolveTemplate(dto.templateId, dto.productType ?? 'IPHONE_SEALED'),
+    ]);
+    const sourceName =
+      identity.externalIdentity.sourceName ?? identity.externalIdentity.sourceProductId;
+    const message = renderTemplate(template.content, {
+      produto: sourceName,
+      modelo: sourceName,
+      cor: dto.color ?? '',
+      capacidade: dto.capacity ?? '',
+      preco: this.formatCurrency(dto.salePrice),
+      preco_oferta: this.formatCurrency(dto.offerPrice),
+      prazo: settings.offers.defaultDeadline,
+      garantia: settings.offers.defaultWarranty,
+    });
+    const offer = await this.offersRepository.createOffer({
+      identity,
+      commercialTemplateId: template.id,
+      message,
+      salePrice: dto.salePrice,
+      offerPrice: dto.offerPrice,
+      userId: user.id,
+    });
+    await this.offersRepository.createAuditLog({
+      userId: user.id,
+      operationType: 'CREATE',
+      entityId: offer.id,
+      newValue: offer,
+      context: {
+        event: 'offers.generated_external',
+        origin: identity.externalIdentity.origin,
+        provider: identity.externalIdentity.provider,
+        sourceProductId: identity.externalIdentity.sourceProductId,
+      },
+    });
     return this.toResponse(offer);
   }
 
@@ -185,6 +247,17 @@ export class OffersService {
       offerPrice: Number(offer.offerPrice),
       whatsappUrl: getWhatsappShareLink(offer.message),
       productId: offer.items?.[0]?.productId ?? null,
+      externalIdentity:
+        offer.items?.[0]?.productId || !offer.items?.[0]
+          ? null
+          : {
+              origin: offer.items[0].externalOrigin ?? null,
+              provider: offer.items[0].externalProvider ?? null,
+              sourceProductId: offer.items[0].externalSourceProductId ?? null,
+              sourceName: offer.items[0].externalSourceName ?? null,
+              sourceUrl: offer.items[0].externalSourceUrl ?? null,
+              retailer: offer.items[0].externalRetailer ?? null,
+            },
       product: product
         ? {
             id: product.id,
@@ -203,4 +276,12 @@ export class OffersService {
       currency: 'BRL',
     }).format(value);
   }
+}
+
+function isCentSafe(value: number | undefined): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Math.abs(value * 100 - Math.round(value * 100)) < Number.EPSILON * 100
+  );
 }

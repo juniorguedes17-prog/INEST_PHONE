@@ -5,6 +5,7 @@ import {
   OfferRecord,
   OffersPrismaClient,
 } from '../interfaces/offers-prisma.interface';
+import { OfferItemIdentityInput, resolveOfferItemIdentity } from '../offers.external-identity';
 import {
   legacyTemplateNames,
   offerVariables,
@@ -101,13 +102,14 @@ export class OffersRepository {
   }
 
   createOffer(data: {
-    productId: string;
+    identity: OfferItemIdentityInput;
     commercialTemplateId: string;
     message: string;
     salePrice: number;
     offerPrice: number;
     userId?: string | null;
   }) {
+    const identity = resolveOfferItemIdentity(data.identity);
     return this.prisma.offer.create({
       data: {
         commercialTemplateId: data.commercialTemplateId,
@@ -119,7 +121,16 @@ export class OffersRepository {
         updatedBy: data.userId,
         items: {
           create: {
-            productId: data.productId,
+            ...(identity.kind === 'CANONICAL'
+              ? { productId: identity.productId }
+              : {
+                  externalOrigin: identity.externalIdentity.origin,
+                  externalProvider: identity.externalIdentity.provider,
+                  externalSourceProductId: identity.externalIdentity.sourceProductId,
+                  externalSourceName: identity.externalIdentity.sourceName,
+                  externalSourceUrl: identity.externalIdentity.sourceUrl,
+                  externalRetailer: identity.externalIdentity.retailer,
+                }),
             salePrice: data.salePrice,
             offerPrice: data.offerPrice,
           },
@@ -130,7 +141,20 @@ export class OffersRepository {
   }
 
   duplicateOffer(offer: OfferRecord, userId?: string | null) {
-    const productId = offer.items?.[0]?.productId;
+    const item = offer.items?.[0];
+    const identity = item
+      ? resolveOfferItemIdentity({
+          productId: item.productId,
+          externalIdentity: {
+            origin: item.externalOrigin === 'US' ? 'US' : undefined,
+            provider: item.externalProvider ?? undefined,
+            sourceProductId: item.externalSourceProductId ?? undefined,
+            sourceName: item.externalSourceName,
+            sourceUrl: item.externalSourceUrl,
+            retailer: item.externalRetailer,
+          },
+        })
+      : null;
     return this.prisma.offer.create({
       data: {
         commercialTemplateId: offer.commercialTemplateId,
@@ -140,10 +164,19 @@ export class OffersRepository {
         offerPrice: offer.offerPrice,
         createdBy: userId,
         updatedBy: userId,
-        items: productId
+        items: identity
           ? {
               create: {
-                productId,
+                ...(identity.kind === 'CANONICAL'
+                  ? { productId: identity.productId }
+                  : {
+                      externalOrigin: identity.externalIdentity.origin,
+                      externalProvider: identity.externalIdentity.provider,
+                      externalSourceProductId: identity.externalIdentity.sourceProductId,
+                      externalSourceName: identity.externalIdentity.sourceName,
+                      externalSourceUrl: identity.externalIdentity.sourceUrl,
+                      externalRetailer: identity.externalIdentity.retailer,
+                    }),
                 salePrice: offer.salePrice,
                 offerPrice: offer.offerPrice,
               },

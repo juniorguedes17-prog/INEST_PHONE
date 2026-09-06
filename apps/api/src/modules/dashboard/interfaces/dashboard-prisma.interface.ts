@@ -34,7 +34,13 @@ export interface DashboardOfferRecord {
   message: string;
   createdAt: Date;
   deletedAt?: Date | null;
-  items?: Array<{ productId: string }>;
+  items?: Array<{
+    productId: string | null;
+    externalOrigin?: string | null;
+    externalProvider?: string | null;
+    externalSourceProductId?: string | null;
+    externalSourceName?: string | null;
+  }>;
 }
 
 export interface DashboardSaleRecord {

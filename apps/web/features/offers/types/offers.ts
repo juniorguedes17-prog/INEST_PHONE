@@ -25,14 +25,42 @@ export interface OfferItem {
   offerPrice: number;
   whatsappUrl: string;
   productId?: string | null;
+  externalIdentity?: {
+    origin: 'US' | null;
+    provider: string | null;
+    sourceProductId: string | null;
+    sourceName: string | null;
+    sourceUrl: string | null;
+    retailer: string | null;
+  } | null;
   product?: OfferProductSummary | null;
   createdAt: string;
 }
 
-export interface GenerateOfferPayload {
+export interface CanonicalGenerateOfferPayload {
   productId: string;
   templateId?: string;
 }
+
+export interface ExternalGenerateOfferPayload {
+  productId?: null;
+  templateId?: string;
+  externalIdentity: {
+    origin: 'US';
+    provider: string;
+    sourceProductId: string;
+    sourceName?: string;
+    sourceUrl?: string;
+    retailer?: string;
+  };
+  salePrice: number;
+  offerPrice: number;
+  productType?: string;
+  color?: string;
+  capacity?: string;
+}
+
+export type GenerateOfferPayload = CanonicalGenerateOfferPayload | ExternalGenerateOfferPayload;
 
 export interface OffersState {
   pricingItems: PricingItem[];

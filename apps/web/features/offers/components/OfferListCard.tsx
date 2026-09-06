@@ -22,8 +22,8 @@ export const OfferListCard = memo(function OfferListCard({
   onDelete,
 }: OfferListCardProps) {
   const presentation = getProductCardPresentation({
-    canonicalDescription: product?.profitProductDescription,
-    rawDescription: product?.productName,
+    canonicalDescription: product?.profitProductDescription ?? offer.externalIdentity?.sourceName,
+    rawDescription: product?.productName ?? offer.externalIdentity?.sourceName,
     condition: product?.profitCondition,
     capacity: product?.capacity,
     color: product?.color,
@@ -34,7 +34,7 @@ export const OfferListCard = memo(function OfferListCard({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-1.5">
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
-            {product ? presentation.title : 'Produto da oferta'}
+            {product || offer.externalIdentity ? presentation.title : 'Produto da oferta'}
           </h3>
           <StatusBadge tone={statusTone(offer.status)}>{translateStatus(offer.status)}</StatusBadge>
         </div>

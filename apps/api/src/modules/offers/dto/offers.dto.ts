@@ -16,10 +16,83 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-export class GenerateOfferDto {
+class ExternalOfferIdentityDto {
+  @ApiProperty({ enum: ['US'] })
+  @IsIn(['US'])
+  origin!: 'US';
+
   @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  provider!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  sourceProductId!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  sourceName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2048)
+  sourceUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  retailer?: string;
+}
+
+export class GenerateOfferDto {
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUUID()
-  productId!: string;
+  productId?: string;
+
+  @ApiPropertyOptional({ type: ExternalOfferIdentityDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ExternalOfferIdentityDto)
+  externalIdentity?: ExternalOfferIdentityDto;
+
+  @ApiPropertyOptional({ description: 'Preco de venda aprovado no fluxo server-side externo.' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  salePrice?: number;
+
+  @ApiPropertyOptional({ description: 'Preco de oferta aprovado no fluxo server-side externo.' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  offerPrice?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  productType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  color?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  capacity?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -52,6 +125,12 @@ class OfferDraftPayloadDto {
   @IsOptional()
   @IsString()
   sourceQuoteId?: string;
+
+  @ApiPropertyOptional({ type: ExternalOfferIdentityDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ExternalOfferIdentityDto)
+  externalIdentity?: ExternalOfferIdentityDto;
 
   @ApiProperty()
   @IsString()

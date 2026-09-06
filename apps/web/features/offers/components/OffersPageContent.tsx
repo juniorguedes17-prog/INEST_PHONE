@@ -83,6 +83,9 @@ export function OffersPageContent() {
           product?.model,
           product?.color,
           product?.capacity,
+          offer.externalIdentity?.sourceName,
+          offer.externalIdentity?.provider,
+          offer.externalIdentity?.retailer,
           offer.template?.name,
           offer.status,
         ]

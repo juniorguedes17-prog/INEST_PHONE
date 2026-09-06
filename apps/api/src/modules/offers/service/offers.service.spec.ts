@@ -59,4 +59,104 @@ describe('OffersService', () => {
       }),
     ]);
   });
+
+  it('creates an external USA offer without calling catalog Pricing', async () => {
+    const repository = {
+      ensureOfficialTemplates: vi.fn(),
+      findTemplateByProductType: vi.fn().mockResolvedValue({
+        id: 'template-1',
+        name: 'Template',
+        productType: 'IPHONE_SEALED',
+        content: '{{produto}} {{preco_oferta}}',
+      }),
+      createOffer: vi.fn().mockResolvedValue({
+        id: 'offer-us',
+        message: 'Apple iPhone R$ 2.699,90',
+        status: 'GENERATED',
+        salePrice: 2677.09,
+        offerPrice: 2699.9,
+        createdAt: new Date('2026-09-06T12:00:00.000Z'),
+        commercialTemplate: { id: 'template-1', name: 'Template', productType: 'IPHONE_SEALED' },
+        items: [
+          {
+            id: 'item-us',
+            productId: null,
+            externalOrigin: 'US',
+            externalProvider: 'amazon_us',
+            externalSourceProductId: 'B0EXTERNAL',
+            externalSourceName: 'Apple iPhone',
+            externalSourceUrl: 'https://www.amazon.com/dp/B0EXTERNAL',
+            externalRetailer: 'Amazon',
+            salePrice: 2677.09,
+            offerPrice: 2699.9,
+          },
+        ],
+      }),
+      createAuditLog: vi.fn(),
+    };
+    const pricing = { findOne: vi.fn() };
+    const settings = {
+      getSettings: vi.fn().mockResolvedValue({
+        offers: { defaultDeadline: '5 dias', defaultWarranty: '90 dias' },
+      }),
+    };
+    const service = new OffersService(
+      repository as unknown as OffersRepository,
+      pricing as unknown as PricingService,
+      settings as unknown as SettingsService,
+    );
+
+    await expect(
+      service.generate(
+        {
+          externalIdentity: {
+            origin: 'US',
+            provider: 'amazon_us',
+            sourceProductId: 'B0EXTERNAL',
+            sourceName: 'Apple iPhone',
+            sourceUrl: 'https://www.amazon.com/dp/B0EXTERNAL',
+            retailer: 'Amazon',
+          },
+          salePrice: 2677.09,
+          offerPrice: 2699.9,
+        },
+        { id: 'user-1' } as never,
+      ),
+    ).resolves.toMatchObject({
+      productId: null,
+      externalIdentity: {
+        origin: 'US',
+        provider: 'amazon_us',
+        sourceProductId: 'B0EXTERNAL',
+      },
+    });
+
+    expect(pricing.findOne).not.toHaveBeenCalled();
+    expect(repository.createOffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        identity: expect.objectContaining({ kind: 'EXTERNAL' }),
+        salePrice: 2677.09,
+        offerPrice: 2699.9,
+      }),
+    );
+  });
+
+  it('rejects an external item without its complete identity', async () => {
+    const service = new OffersService(
+      { ensureOfficialTemplates: vi.fn() } as unknown as OffersRepository,
+      {} as PricingService,
+      {} as SettingsService,
+    );
+
+    await expect(
+      service.generate(
+        {
+          externalIdentity: { origin: 'US', provider: 'amazon_us', sourceProductId: ' ' },
+          salePrice: 100,
+          offerPrice: 110,
+        },
+        { id: 'user-1' } as never,
+      ),
+    ).rejects.toThrow('origin, provider e sourceProductId');
+  });
 });

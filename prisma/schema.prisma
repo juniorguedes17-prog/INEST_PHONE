@@ -747,18 +747,25 @@ model Offer {
 }
 
 model OfferItem {
-  id         String   @id @default(uuid()) @db.Uuid
-  offerId    String   @map("oferta_id") @db.Uuid
-  productId  String   @map("produto_id") @db.Uuid
-  salePrice  Decimal  @map("preco_venda") @db.Decimal(12, 2)
-  offerPrice Decimal  @map("preco_oferta") @db.Decimal(12, 2)
-  createdAt  DateTime @default(now()) @map("created_at")
+  id                      String   @id @default(uuid()) @db.Uuid
+  offerId                 String   @map("oferta_id") @db.Uuid
+  productId               String?  @map("produto_id") @db.Uuid
+  externalOrigin          String?  @map("origem_externa") @db.VarChar(8)
+  externalProvider        String?  @map("provider_externo") @db.VarChar(80)
+  externalSourceProductId String?  @map("produto_origem_externo_id") @db.VarChar(255)
+  externalSourceName      String?  @map("produto_origem_externo_nome") @db.VarChar(500)
+  externalSourceUrl       String?  @map("produto_origem_externo_url") @db.VarChar(2048)
+  externalRetailer        String?  @map("varejista_externo") @db.VarChar(255)
+  salePrice               Decimal  @map("preco_venda") @db.Decimal(12, 2)
+  offerPrice              Decimal  @map("preco_oferta") @db.Decimal(12, 2)
+  createdAt               DateTime @default(now()) @map("created_at")
 
-  offer   Offer   @relation(fields: [offerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  offer   Offer    @relation(fields: [offerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   @@index([offerId], map: "idx_item_oferta_oferta_id")
   @@index([productId], map: "idx_item_oferta_produto_id")
+  @@index([externalOrigin, externalProvider, externalSourceProductId], map: "idx_item_oferta_identidade_externa")
   @@map("item_oferta")
 }
 

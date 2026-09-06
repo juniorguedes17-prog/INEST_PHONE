@@ -268,7 +268,13 @@ export class DashboardService {
     const grouped = new Map<string, { label: string; value: number }>();
     offers.forEach((offer) => {
       offer.items?.forEach((item) => {
-        const label = item.productId;
+        const label =
+          item.productId ??
+          item.externalSourceName ??
+          [item.externalOrigin, item.externalProvider, item.externalSourceProductId]
+            .filter(Boolean)
+            .join(':');
+        if (!label) return;
         grouped.set(label, { label, value: (grouped.get(label)?.value ?? 0) + 1 });
       });
     });

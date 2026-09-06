@@ -22,7 +22,13 @@ export interface OfferRecord {
   commercialTemplate?: CommercialTemplateRecord;
   items?: Array<{
     id: string;
-    productId: string;
+    productId: string | null;
+    externalOrigin?: string | null;
+    externalProvider?: string | null;
+    externalSourceProductId?: string | null;
+    externalSourceName?: string | null;
+    externalSourceUrl?: string | null;
+    externalRetailer?: string | null;
     salePrice: number | string;
     offerPrice: number | string;
     product?: {

@@ -20,7 +20,11 @@ export function prepareTemporaryOffer(
   if (!template) return null;
 
   const payload = draft.payload;
-  const draftIdentity = payload.productId ?? payload.sourceQuoteId;
+  const draftIdentity =
+    payload.productId ??
+    (payload.externalIdentity
+      ? `${payload.externalIdentity.origin}:${payload.externalIdentity.provider}:${payload.externalIdentity.sourceProductId}`
+      : payload.sourceQuoteId);
   if (!draftIdentity) return null;
 
   const message = renderOfferMessage(template.content, toTemplateVariables(draft));
