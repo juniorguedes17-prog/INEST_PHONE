@@ -105,3 +105,23 @@ export interface ImportRadarFilters {
   category: string;
   provider: string;
 }
+
+export interface UsaSourceProduct {
+  providerName: string;
+  sourceProductId: string;
+  sourceName: string;
+  displayName: string;
+  source: 'US';
+  sourceUrl: string;
+  supplier: string;
+  sourceManufacturer: string | null;
+  sourceManufacturerProvenance: 'EXPLICIT_SOURCE' | null;
+  retailer: string | null;
+  category: string;
+  model?: string;
+  capacity?: string;
+  color?: string;
+  condition?: 'NOVO' | 'SEMINOVO' | 'CPO';
+  imageUrl?: string;
+  priceUsd: number;
+}

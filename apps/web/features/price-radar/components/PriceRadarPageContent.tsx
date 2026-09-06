@@ -21,7 +21,7 @@ import { SupplierItem } from '@/features/suppliers/types/suppliers';
 import { usePriceRadar } from '../hooks/usePriceRadar';
 import { PriceQuoteFormPayload, PriceQuoteItem } from '../types/price-radar';
 import { BrazilRadarProduct, BrazilRadarProductCard } from './BrazilRadarProductCard';
-import { PreparedRadarOrigin } from './PreparedRadarOrigin';
+import { UsaRadarOrigin } from './UsaRadarOrigin';
 import { ParaguayRadarOrigin } from './ParaguayRadarOrigin';
 import { RadarToolbar } from './RadarToolbar';
 import { RadarOrigin, RadarOriginTabs } from './RadarOriginTabs';
@@ -306,7 +306,7 @@ export function PriceRadarPageContent() {
           ) : origin === 'paraguai' ? (
             <StatusBadge tone="green">Fonte oficial ativa</StatusBadge>
           ) : (
-            <StatusBadge tone="amber">Estrutura preparada</StatusBadge>
+            <StatusBadge tone="green">Busca USA ativa</StatusBadge>
           )
         }
       />
@@ -327,7 +327,7 @@ export function PriceRadarPageContent() {
       />
 
       {origin === 'paraguai' ? <ParaguayRadarOrigin /> : null}
-      {origin === 'eua' ? <PreparedRadarOrigin origin="eua" /> : null}
+      {origin === 'eua' ? <UsaRadarOrigin /> : null}
 
       {origin === 'brasil' ? (
         <>

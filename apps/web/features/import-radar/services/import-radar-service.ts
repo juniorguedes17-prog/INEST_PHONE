@@ -5,6 +5,7 @@ import {
   ImportProduct,
   ImportRadarFilters,
   ImportSearchResponse,
+  UsaSourceProduct,
 } from '../types/import-radar';
 
 type CalculateImportCostPayload = Omit<ImportProduct, 'provider' | 'priceBrl' | 'dollarQuote'>;
@@ -84,6 +85,12 @@ export async function searchImportProducts(
     `${env.apiUrl}/import-radar/search${query ? `?${query}` : ''}`,
   );
   return parseResponse<ImportSearchResponse>(response);
+}
+
+export async function searchUsaSourceProducts(query: string): Promise<UsaSourceProduct[]> {
+  const params = new URLSearchParams({ search: query });
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/usa/search?${params}`);
+  return parseResponse<UsaSourceProduct[]>(response);
 }
 
 export async function calculateImportCost(product: ImportProduct): Promise<ImportCalculation> {

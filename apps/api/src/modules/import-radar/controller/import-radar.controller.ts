@@ -37,6 +37,7 @@ import { ImportRadarService } from '../service/import-radar.service';
 import { UsaEnrichmentInputDecisionService } from '../service/usa-enrichment-input-decision.service';
 import { UsaCostPreflightService } from '../service/usa-cost-preflight.service';
 import { UsaCostExecutionService } from '../service/usa-cost-execution.service';
+import { UsaProvidersOrchestrator } from '../service/usa-providers-orchestrator.service';
 
 @ApiTags('Import Radar')
 @ApiBearerAuth()
@@ -56,12 +57,24 @@ export class ImportRadarController {
     @Optional()
     @Inject(UsaCostExecutionService)
     private readonly usaCostExecutionService?: UsaCostExecutionService,
+    @Optional()
+    @Inject(UsaProvidersOrchestrator)
+    private readonly usaProvidersOrchestrator?: UsaProvidersOrchestrator,
   ) {}
 
   @Get('search')
   @ApiOperation({ summary: 'Pesquisa produtos internacionais por provider.' })
   search(@Query() query: ImportSearchQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.importRadarService.search(query, user);
+  }
+
+  @Get('usa/search')
+  @ApiOperation({ summary: 'Pesquisa produtos USA nos providers homologados.' })
+  searchUsa(@Query() query: ImportSearchQueryDto) {
+    if (!this.usaProvidersOrchestrator) {
+      throw new Error('Orquestrador de providers USA indisponivel.');
+    }
+    return this.usaProvidersOrchestrator.search(query);
   }
 
   @Get('products/:id')
