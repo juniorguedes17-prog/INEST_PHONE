@@ -71,6 +71,22 @@ export interface UsaFinancialSettings {
   lastUpdated?: string;
 }
 
+export interface UsaImportSettings {
+  usdBrlQuote: number | null;
+  redDelaware: {
+    firstLbUsd: number;
+    additionalLbUsd: number;
+    shippingMode: 'EXPRESS';
+  };
+  reiDoImportado: {
+    phoneShippingUsd: number;
+    otherProductsShippingUsdPerHalfKg: number;
+    insurancePercent: number;
+    usTaxPercent: number;
+    airFreightDiscountPercent: number;
+  };
+}
+
 export interface OfferSettings {
   defaultWarranty: string;
   defaultDeadline: string;
@@ -110,6 +126,7 @@ export interface SettingsPayload {
   pricing: PricingSettings;
   importation: ImportSettings;
   usaFinancial: UsaFinancialSettings;
+  usaImport: UsaImportSettings;
   offers: OfferSettings;
   installmentRates: InstallmentRates;
   installmentMessageTemplate: string;

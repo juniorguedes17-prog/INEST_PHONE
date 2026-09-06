@@ -54,7 +54,6 @@ export function SettingsPageContent() {
     saving,
     error,
     success,
-    reload,
     save,
     resetDefaults,
     resetNonAppleElectronicsDefaults,
@@ -156,15 +155,25 @@ export function SettingsPageContent() {
     }));
   }
 
-  function updateUsaFinancial(
-    field: keyof Omit<SettingsPayload['usaFinancial'], 'lastUpdated'>,
-    value: number,
-  ) {
+  function updateUsaImportQuote(value: string) {
     updateSettings((current) => ({
       ...current,
-      usaFinancial: {
-        ...current.usaFinancial,
-        [field]: value,
+      usaImport: {
+        ...current.usaImport,
+        usdBrlQuote: parseOptionalNumber(value),
+      },
+    }));
+  }
+
+  function updateRedDelawareRate(field: 'firstLbUsd' | 'additionalLbUsd', value: string) {
+    updateSettings((current) => ({
+      ...current,
+      usaImport: {
+        ...current.usaImport,
+        redDelaware: {
+          ...current.usaImport.redDelaware,
+          [field]: parseNumber(value),
+        },
       },
     }));
   }
@@ -812,80 +821,39 @@ export function SettingsPageContent() {
 
       <div className={activeSection === 'importation' ? '' : 'hidden'}>
         <SettingsCard
-          eyebrow="Radar USA"
-          title="Configuração Financeira USA"
-          description="Parâmetros editáveis para a futura composição do custo de importação dos Estados Unidos."
+          eyebrow="Importação USA"
+          title="Red Delaware"
+          description="Cotação compartilhada e parâmetros homologados para o futuro custo de origem."
         >
-          <div className="mb-5 flex flex-col gap-3 border-b border-inest-line pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase text-inest-muted">Última atualização</p>
-              <p className="mt-1 text-sm font-bold text-inest-text">
-                {formatLastUpdated(settings.usaFinancial.lastUpdated)}
-              </p>
-            </div>
-            <StatusBadge tone="blue">USD / Importação</StatusBadge>
+          <div className="mb-5 border-b border-inest-line pb-4">
+            <p className="text-xs font-black uppercase text-inest-muted">Cotação USD/BRL</p>
+            <p className="mt-1 text-sm font-bold text-inest-text">
+              {settings.usaImport.usdBrlQuote === null
+                ? 'Não configurada'
+                : String(settings.usaImport.usdBrlQuote)}
+            </p>
           </div>
 
-          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <CurrencyInput
-              label="Cotação do dólar"
-              value={settings.usaFinancial.dollarQuote}
-              onChange={(event) => updateUsaFinancial('dollarQuote', toNumber(event.target.value))}
+          <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <UsdInput
+              label="Cotação USD/BRL"
+              value={settings.usaImport.usdBrlQuote}
+              onChange={updateUsaImportQuote}
+              placeholder="Não configurada"
             />
-            <CurrencyInput
-              label="Frete Aéreo"
-              value={settings.usaFinancial.airFreight}
-              onChange={(event) => updateUsaFinancial('airFreight', toNumber(event.target.value))}
+            <UsdInput
+              label="Primeira libra"
+              value={settings.usaImport.redDelaware.firstLbUsd}
+              onChange={(value) => updateRedDelawareRate('firstLbUsd', value)}
             />
-            <PercentageInput
-              label="Desconto no frete"
-              value={settings.usaFinancial.freightDiscountPercent}
-              onChange={(event) =>
-                updateUsaFinancial('freightDiscountPercent', toNumber(event.target.value))
-              }
+            <UsdInput
+              label="Libra adicional"
+              value={settings.usaImport.redDelaware.additionalLbUsd}
+              onChange={(value) => updateRedDelawareRate('additionalLbUsd', value)}
             />
-            <CurrencyInput
-              label="Taxa administrativa"
-              value={settings.usaFinancial.administrativeFee}
-              onChange={(event) =>
-                updateUsaFinancial('administrativeFee', toNumber(event.target.value))
-              }
-            />
-            <CurrencyInput
-              label="Despachante"
-              value={settings.usaFinancial.customsBroker}
-              onChange={(event) =>
-                updateUsaFinancial('customsBroker', toNumber(event.target.value))
-              }
-            />
-            <CurrencyInput
-              label="Seguro"
-              value={settings.usaFinancial.insurance}
-              onChange={(event) => updateUsaFinancial('insurance', toNumber(event.target.value))}
-            />
-            <CurrencyInput
-              label="Etiqueta"
-              value={settings.usaFinancial.label}
-              onChange={(event) => updateUsaFinancial('label', toNumber(event.target.value))}
-            />
-            <PercentageInput
-              label="Nota Fiscal"
-              value={settings.usaFinancial.invoiceTaxPercent}
-              onChange={(event) =>
-                updateUsaFinancial('invoiceTaxPercent', toNumber(event.target.value))
-              }
-            />
-            <CurrencyInput
-              label="IOF"
-              value={settings.usaFinancial.iof}
-              onChange={(event) => updateUsaFinancial('iof', toNumber(event.target.value))}
-            />
-            <CurrencyInput
-              label="Outras despesas"
-              value={settings.usaFinancial.otherExpenses}
-              onChange={(event) =>
-                updateUsaFinancial('otherExpenses', toNumber(event.target.value))
-              }
+            <ReadOnlyInput
+              label="Modalidade"
+              value={formatShippingMode(settings.usaImport.redDelaware.shippingMode)}
             />
           </div>
 
@@ -893,17 +861,17 @@ export function SettingsPageContent() {
             <ActionButton
               variant="secondary"
               className="min-h-11 w-full sm:w-auto"
-              onClick={() => void reload()}
+              onClick={() => void resetDefaults()}
               disabled={saving}
             >
-              Restaurar valores salvos
+              Restaurar padrões
             </ActionButton>
             <ActionButton
               className="min-h-11 w-full sm:w-auto"
               onClick={() => void save(settings)}
               disabled={saving}
             >
-              {saving ? 'Salvando...' : 'Salvar configuração USA'}
+              {saving ? 'Salvando...' : 'Salvar Red Delaware'}
             </ActionButton>
           </div>
         </SettingsCard>
@@ -1072,15 +1040,14 @@ function toNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function formatLastUpdated(value?: string) {
-  if (!value) {
-    return 'Ainda não atualizada';
-  }
+function parseOptionalNumber(value: string): number | null {
+  if (value.trim() === '') return null;
 
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  return parseNumber(value);
+}
+
+function parseNumber(value: string): number {
+  return Number(value.replace(',', '.'));
 }
 
 interface TextInputProps {
@@ -1196,4 +1163,46 @@ function SelectInput({ label, value, options, onChange }: SelectInputProps) {
       </select>
     </label>
   );
+}
+
+interface UsdInputProps {
+  label: string;
+  value: number | null;
+  placeholder?: string;
+  onChange: (value: string) => void;
+}
+
+function UsdInput({ label, value, placeholder, onChange }: UsdInputProps) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
+      <div className="flex h-12 items-center rounded-xl border border-inest-line bg-white px-4 focus-within:border-inest-blue">
+        <span className="mr-2 font-bold text-inest-muted">US$</span>
+        <input
+          inputMode="decimal"
+          min="0.0000000000000001"
+          step="any"
+          value={value === null ? '' : String(value)}
+          placeholder={placeholder}
+          onChange={(event) => onChange(event.target.value)}
+          className="min-w-0 flex-1 bg-transparent outline-none"
+        />
+      </div>
+    </label>
+  );
+}
+
+function ReadOnlyInput({ label, value }: { label: string; value: string }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
+      <div className="flex h-12 items-center rounded-xl border border-inest-line bg-inest-soft px-4 text-sm font-bold text-inest-text">
+        {value}
+      </div>
+    </label>
+  );
+}
+
+function formatShippingMode(mode: SettingsPayload['usaImport']['redDelaware']['shippingMode']) {
+  return mode === 'EXPRESS' ? 'Express' : mode;
 }
