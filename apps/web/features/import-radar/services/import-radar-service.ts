@@ -137,6 +137,27 @@ export async function confirmUsaManufacturer(
 export type UsaRedirectorSelection =
   { redirector: 'RED_DELAWARE'; shippingMode: 'EXPRESS' } | { redirector: 'REI_DO_IMPORTADO' };
 
+export type UsaCostPreflightResponse =
+  | { status: 'READY_FOR_COST'; shippingWeightLbs: number | null }
+  | {
+      status: 'NEEDS_INPUT';
+      reason: 'MANUFACTURER_MISSING' | 'MISSING_WEIGHT';
+      input: { type: 'MANUFACTURER' | 'WEIGHT'; suggestedValue?: string };
+    }
+  | { status: 'BLOCKED'; reason: string };
+
+export async function preflightUsaCost(
+  sourceProduct: UsaSourceProduct,
+  redirector: UsaRedirectorSelection,
+): Promise<UsaCostPreflightResponse> {
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/usa-cost-preflight`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceProduct, redirector, composition: { kind: 'SINGLE_ITEM' } }),
+  });
+  return parseResponse<UsaCostPreflightResponse>(response);
+}
+
 export interface UsaPricedOfferResponse {
   status: 'READY' | 'NEEDS_INPUT' | 'BLOCKED';
   reason: string | null;

@@ -12,10 +12,12 @@ import {
 import {
   confirmUsaManufacturer,
   executeUsaPricedOffer,
+  preflightUsaCost,
   registerUsaShippingWeight,
   resolveUsaEnrichment,
   resolveUsaShippingWeight,
   UsaEnrichmentDecision,
+  UsaCostPreflightResponse,
   UsaPricedOfferResponse,
   UsaRedirectorSelection,
   UsaShippingWeightResolution,
@@ -46,14 +48,22 @@ export function UsaRadarOrigin() {
   const [manufacturerLoading, setManufacturerLoading] = useState(false);
   const [manufacturerError, setManufacturerError] = useState<string | null>(null);
   const [redirector, setRedirector] = useState<'' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO'>('');
+  const [preflight, setPreflight] = useState<UsaCostPreflightResponse | null>(null);
+  const [preflightLoading, setPreflightLoading] = useState(false);
+  const [preflightError, setPreflightError] = useState<string | null>(null);
   const [executionLoading, setExecutionLoading] = useState(false);
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<UsaPricedOfferResponse | null>(null);
   const weightRequestRef = useRef(0);
   const flowRequestRef = useRef(0);
+  const preflightRequestRef = useRef(0);
 
   const resetOperationalState = useCallback(() => {
     flowRequestRef.current += 1;
+    preflightRequestRef.current += 1;
+    setPreflight(null);
+    setPreflightLoading(false);
+    setPreflightError(null);
     setDecision(null);
     setDecisionLoading(false);
     setDecisionError(null);
@@ -88,6 +98,7 @@ export function UsaRadarOrigin() {
         if (resolution.status === 'WEIGHT_FOUND') {
           setWeightInput(formatWeightLbs(resolution.shippingWeightLbs));
         }
+        return resolution;
       } catch (resolveError) {
         if (requestId !== weightRequestRef.current) return;
         setWeightResolution(null);
@@ -106,39 +117,96 @@ export function UsaRadarOrigin() {
     [],
   );
 
-  const resolveProductDecision = useCallback(
-    async (product: UsaSourceProduct) => {
-      const requestId = ++flowRequestRef.current;
-      setDecisionLoading(true);
-      setDecisionError(null);
-      setManufacturerError(null);
-      setExecutionError(null);
+  const resolvePreflight = useCallback(
+    async (product: UsaSourceProduct, choice: 'RED_DELAWARE' | 'REI_DO_IMPORTADO') => {
+      const requestId = ++preflightRequestRef.current;
+      setPreflight(null);
+      setPreflightLoading(true);
+      setPreflightError(null);
       setExecutionResult(null);
+      setExecutionError(null);
+      resetWeightState();
       try {
-        const response = await resolveUsaEnrichment(product);
-        if (requestId !== flowRequestRef.current) return;
-        setDecision(response.decision);
-        if (response.decision.status === 'NEEDS_INPUT') {
-          setManufacturerInput(response.decision.input.suggestedValue);
-          return;
+        const response = await preflightUsaCost(
+          product,
+          choice === 'RED_DELAWARE'
+            ? { redirector: choice, shippingMode: 'EXPRESS' }
+            : { redirector: choice },
+        );
+        if (requestId !== preflightRequestRef.current) return;
+        setPreflight(response);
+        if (response.status === 'READY_FOR_COST' && response.shippingWeightLbs !== null) {
+          setWeightResolution({
+            status: 'WEIGHT_FOUND',
+            shippingWeightLbs: response.shippingWeightLbs,
+          });
+        } else if (response.status === 'NEEDS_INPUT' && response.reason === 'MISSING_WEIGHT') {
+          setWeightResolution({ status: 'MISSING_WEIGHT' });
+        } else if (response.status === 'NEEDS_INPUT' && response.input.type === 'MANUFACTURER') {
+          setDecision({
+            status: 'NEEDS_INPUT',
+            reason: 'MANUFACTURER_MISSING',
+            input: {
+              type: 'MANUFACTURER',
+              field: 'manufacturer',
+              suggestedValue: response.input.suggestedValue ?? '',
+            },
+          });
+          setManufacturerInput(response.input.suggestedValue ?? '');
         }
-        if (response.decision.status === 'READY') {
-          void resolveSelectedWeight(product);
-        }
-      } catch (resolveError) {
-        if (requestId !== flowRequestRef.current) return;
-        setDecision(null);
-        setDecisionError(
-          resolveError instanceof Error
-            ? resolveError.message
-            : 'Não foi possível resolver as decisões do produto.',
+      } catch (error) {
+        if (requestId !== preflightRequestRef.current) return;
+        setPreflightError(
+          error instanceof Error ? error.message : 'Não foi possível verificar o produto.',
         );
       } finally {
-        if (requestId === flowRequestRef.current) setDecisionLoading(false);
+        if (requestId === preflightRequestRef.current) setPreflightLoading(false);
       }
     },
-    [resolveSelectedWeight],
+    [resetWeightState],
   );
+
+  const selectRedirector = useCallback(
+    (choice: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO') => {
+      setRedirector(choice);
+      preflightRequestRef.current += 1;
+      setPreflight(null);
+      setPreflightError(null);
+      setExecutionResult(null);
+      setExecutionError(null);
+      resetWeightState();
+      if (selectedProduct && choice) void resolvePreflight(selectedProduct, choice);
+    },
+    [resetWeightState, resolvePreflight, selectedProduct],
+  );
+
+  const resolveProductDecision = useCallback(async (product: UsaSourceProduct) => {
+    const requestId = ++flowRequestRef.current;
+    setDecisionLoading(true);
+    setDecisionError(null);
+    setManufacturerError(null);
+    setExecutionError(null);
+    setExecutionResult(null);
+    try {
+      const response = await resolveUsaEnrichment(product);
+      if (requestId !== flowRequestRef.current) return;
+      setDecision(response.decision);
+      if (response.decision.status === 'NEEDS_INPUT') {
+        setManufacturerInput(response.decision.input.suggestedValue);
+        return;
+      }
+    } catch (resolveError) {
+      if (requestId !== flowRequestRef.current) return;
+      setDecision(null);
+      setDecisionError(
+        resolveError instanceof Error
+          ? resolveError.message
+          : 'Não foi possível resolver as decisões do produto.',
+      );
+    } finally {
+      if (requestId === flowRequestRef.current) setDecisionLoading(false);
+    }
+  }, []);
 
   const selectProduct = useCallback(
     (product: UsaSourceProduct) => {
@@ -182,8 +250,8 @@ export function UsaRadarOrigin() {
         setSelectedProduct(reprocessedProduct);
         setDecision(response.decision);
         setManufacturerInput('');
-        if (response.decision.status === 'READY') {
-          void resolveSelectedWeight(reprocessedProduct);
+        if (redirector) {
+          void resolvePreflight(reprocessedProduct, redirector);
         } else if (response.decision.status === 'NEEDS_INPUT') {
           setManufacturerInput(response.decision.input.suggestedValue);
         }
@@ -198,14 +266,20 @@ export function UsaRadarOrigin() {
         if (requestId === flowRequestRef.current) setManufacturerLoading(false);
       }
     },
-    [decision, manufacturerInput, manufacturerLoading, resolveSelectedWeight, selectedProduct],
+    [
+      decision,
+      manufacturerInput,
+      manufacturerLoading,
+      redirector,
+      resolvePreflight,
+      selectedProduct,
+    ],
   );
 
   const executePricedOffer = useCallback(async () => {
     if (
       !selectedProduct ||
-      decision?.status !== 'READY' ||
-      weightResolution?.status !== 'WEIGHT_FOUND' ||
+      preflight?.status !== 'READY_FOR_COST' ||
       !redirector ||
       executionLoading
     ) {
@@ -224,12 +298,9 @@ export function UsaRadarOrigin() {
       });
       if (requestId !== flowRequestRef.current) return;
       setExecutionResult(response);
-      if (response.status === 'NEEDS_INPUT' && response.reason === 'MISSING_WEIGHT') {
-        setWeightResolution({ status: 'MISSING_WEIGHT' });
-      }
-      if (response.status === 'NEEDS_INPUT' && response.reason === 'MANUFACTURER_MISSING') {
+      if (response.status === 'NEEDS_INPUT') {
         setExecutionResult(null);
-        void resolveProductDecision(selectedProduct);
+        void resolvePreflight(selectedProduct, redirector);
       }
     } catch (executeError) {
       if (requestId !== flowRequestRef.current) return;
@@ -241,14 +312,7 @@ export function UsaRadarOrigin() {
     } finally {
       if (requestId === flowRequestRef.current) setExecutionLoading(false);
     }
-  }, [
-    decision,
-    executionLoading,
-    redirector,
-    resolveProductDecision,
-    selectedProduct,
-    weightResolution,
-  ]);
+  }, [preflight, executionLoading, redirector, resolvePreflight, selectedProduct]);
 
   const registerWeight = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -278,7 +342,10 @@ export function UsaRadarOrigin() {
           shippingWeightLbs,
         );
         if (requestId !== weightRequestRef.current) return;
-        await resolveSelectedWeight(selectedProduct, 'reprocessing');
+        const resolution = await resolveSelectedWeight(selectedProduct, 'reprocessing');
+        if (resolution?.status === 'WEIGHT_FOUND' && redirector) {
+          await resolvePreflight(selectedProduct, redirector);
+        }
       } catch (registerError) {
         if (requestId !== weightRequestRef.current) return;
         setWeightLoading(false);
@@ -290,7 +357,15 @@ export function UsaRadarOrigin() {
         );
       }
     },
-    [resolveSelectedWeight, selectedProduct, weightInput, weightLoading, weightResolution],
+    [
+      redirector,
+      resolvePreflight,
+      resolveSelectedWeight,
+      selectedProduct,
+      weightInput,
+      weightLoading,
+      weightResolution,
+    ],
   );
 
   const search = useCallback(
@@ -466,30 +541,59 @@ export function UsaRadarOrigin() {
               }
             />
           ) : null}
-          {decision?.status === 'BLOCKED' ? <BlockedState reason={decision.reason} /> : null}
-          {decision?.status === 'READY' ? (
-            <>
-              <UsaShippingWeightPanel
-                resolution={weightResolution}
-                input={weightInput}
-                loading={weightLoading}
-                operation={weightOperation}
-                error={weightError}
-                onInputChange={setWeightInput}
-                onSubmit={registerWeight}
-                onRetry={
-                  !weightResolution ? () => void resolveSelectedWeight(selectedProduct) : undefined
-                }
-              />
-              {weightResolution?.status === 'WEIGHT_FOUND' ? (
-                <UsaRedirectorPanel
-                  value={redirector}
-                  loading={executionLoading}
-                  onChange={setRedirector}
-                  onSubmit={() => void executePricedOffer()}
-                />
-              ) : null}
-            </>
+          {!redirector && decision?.status === 'BLOCKED' ? (
+            <BlockedState reason={decision.reason} />
+          ) : null}
+          <UsaRedirectorPanel
+            value={redirector}
+            loading={
+              executionLoading ||
+              preflightLoading ||
+              decisionLoading ||
+              manufacturerLoading ||
+              weightLoading
+            }
+            ready={preflight?.status === 'READY_FOR_COST'}
+            onChange={selectRedirector}
+            onSubmit={() => void executePricedOffer()}
+          />
+          {preflightLoading ? (
+            <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
+              Verificando requisitos do redirecionador...
+            </p>
+          ) : null}
+          {preflightError ? (
+            <ErrorState
+              title="Verificação USA"
+              description={preflightError}
+              action={
+                <ActionButton
+                  variant="secondary"
+                  disabled={preflightLoading}
+                  onClick={() => redirector && void resolvePreflight(selectedProduct, redirector)}
+                >
+                  Tentar novamente
+                </ActionButton>
+              }
+            />
+          ) : null}
+          {preflight?.status === 'BLOCKED' ? <BlockedState reason={preflight.reason} /> : null}
+          {preflight?.status === 'READY_FOR_COST' ||
+          (preflight?.status === 'NEEDS_INPUT' && preflight.reason === 'MISSING_WEIGHT') ? (
+            <UsaShippingWeightPanel
+              resolution={weightResolution}
+              input={weightInput}
+              loading={weightLoading}
+              operation={weightOperation}
+              error={weightError}
+              onInputChange={setWeightInput}
+              onSubmit={registerWeight}
+              onRetry={
+                !weightResolution && redirector
+                  ? () => void resolvePreflight(selectedProduct, redirector)
+                  : undefined
+              }
+            />
           ) : null}
           {executionError ? (
             <ErrorState
@@ -621,11 +725,13 @@ function UsaShippingWeightPanel({
 function UsaRedirectorPanel({
   value,
   loading,
+  ready,
   onChange,
   onSubmit,
 }: {
   value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO';
   loading: boolean;
+  ready: boolean;
   onChange: (value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO') => void;
   onSubmit: () => void;
 }) {
@@ -649,7 +755,7 @@ function UsaRedirectorPanel({
       <ActionButton
         className="min-h-11"
         variant="success"
-        disabled={!value || loading}
+        disabled={!value || loading || !ready}
         onClick={onSubmit}
       >
         {loading ? 'Processando...' : 'Calcular e gerar oferta'}
