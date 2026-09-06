@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useState } from 'react';
+import { FormEvent, useCallback, useRef, useState } from 'react';
 import {
   ActionButton,
   EmptyState,
@@ -9,7 +9,12 @@ import {
   SearchInput,
   StatusBadge,
 } from '@/components/shared';
-import { searchUsaSourceProducts } from '@/features/import-radar/services/import-radar-service';
+import {
+  registerUsaShippingWeight,
+  resolveUsaShippingWeight,
+  UsaShippingWeightResolution,
+  searchUsaSourceProducts,
+} from '@/features/import-radar/services/import-radar-service';
 import { UsaSourceProduct } from '@/features/import-radar/types/import-radar';
 
 export function UsaRadarOrigin() {
@@ -19,6 +24,108 @@ export function UsaRadarOrigin() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [weightResolution, setWeightResolution] = useState<UsaShippingWeightResolution | null>(
+    null,
+  );
+  const [weightInput, setWeightInput] = useState('');
+  const [weightLoading, setWeightLoading] = useState(false);
+  const [weightOperation, setWeightOperation] = useState<
+    'resolving' | 'saving' | 'reprocessing' | null
+  >(null);
+  const [weightError, setWeightError] = useState<string | null>(null);
+  const weightRequestRef = useRef(0);
+
+  const resetWeightState = useCallback(() => {
+    weightRequestRef.current += 1;
+    setWeightResolution(null);
+    setWeightInput('');
+    setWeightLoading(false);
+    setWeightOperation(null);
+    setWeightError(null);
+  }, []);
+
+  const resolveSelectedWeight = useCallback(
+    async (product: UsaSourceProduct, operation: 'resolving' | 'reprocessing' = 'resolving') => {
+      const requestId = ++weightRequestRef.current;
+      setWeightLoading(true);
+      setWeightOperation(operation);
+      setWeightError(null);
+      try {
+        const resolution = await resolveUsaShippingWeight(product, { kind: 'SINGLE_ITEM' });
+        if (requestId !== weightRequestRef.current) return;
+        setWeightResolution(resolution);
+        if (resolution.status === 'WEIGHT_FOUND') {
+          setWeightInput(formatWeightLbs(resolution.shippingWeightLbs));
+        }
+      } catch (resolveError) {
+        if (requestId !== weightRequestRef.current) return;
+        setWeightResolution(null);
+        setWeightError(
+          resolveError instanceof Error
+            ? resolveError.message
+            : 'Não foi possível resolver o peso operacional de envio.',
+        );
+      } finally {
+        if (requestId === weightRequestRef.current) {
+          setWeightLoading(false);
+          setWeightOperation(null);
+        }
+      }
+    },
+    [],
+  );
+
+  const selectProduct = useCallback(
+    (product: UsaSourceProduct) => {
+      resetWeightState();
+      setSelectedProduct(product);
+      void resolveSelectedWeight(product);
+    },
+    [resetWeightState, resolveSelectedWeight],
+  );
+
+  const registerWeight = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!selectedProduct || weightResolution?.status !== 'MISSING_WEIGHT' || weightLoading)
+        return;
+
+      const normalizedInput = weightInput.trim();
+      if (!/^\d+(?:\.\d{1,3})?$/.test(normalizedInput)) {
+        setWeightError('Informe um peso positivo em lbs com no máximo 3 casas decimais.');
+        return;
+      }
+      const shippingWeightLbs = Number(normalizedInput);
+      if (!Number.isFinite(shippingWeightLbs) || shippingWeightLbs <= 0) {
+        setWeightError('Informe um peso positivo em lbs com no máximo 3 casas decimais.');
+        return;
+      }
+
+      const requestId = weightRequestRef.current;
+      setWeightLoading(true);
+      setWeightOperation('saving');
+      setWeightError(null);
+      try {
+        await registerUsaShippingWeight(
+          selectedProduct,
+          { kind: 'SINGLE_ITEM' },
+          shippingWeightLbs,
+        );
+        if (requestId !== weightRequestRef.current) return;
+        await resolveSelectedWeight(selectedProduct, 'reprocessing');
+      } catch (registerError) {
+        if (requestId !== weightRequestRef.current) return;
+        setWeightLoading(false);
+        setWeightOperation(null);
+        setWeightError(
+          registerError instanceof Error
+            ? registerError.message
+            : 'Não foi possível salvar o peso operacional de envio.',
+        );
+      }
+    },
+    [resolveSelectedWeight, selectedProduct, weightInput, weightLoading, weightResolution],
+  );
 
   const search = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -27,6 +134,7 @@ export function UsaRadarOrigin() {
       if (normalizedQuery.length < 2) {
         setProducts([]);
         setSelectedProduct(null);
+        resetWeightState();
         setSearched(false);
         setError('Digite pelo menos 2 caracteres para pesquisar.');
         return;
@@ -35,6 +143,7 @@ export function UsaRadarOrigin() {
       setLoading(true);
       setError(null);
       setSelectedProduct(null);
+      resetWeightState();
       try {
         setProducts(await searchUsaSourceProducts(normalizedQuery));
         setSearched(true);
@@ -50,7 +159,7 @@ export function UsaRadarOrigin() {
         setLoading(false);
       }
     },
-    [query],
+    [query, resetWeightState],
   );
 
   return (
@@ -96,7 +205,7 @@ export function UsaRadarOrigin() {
                 selectedProduct?.sourceProductId === product.sourceProductId &&
                 selectedProduct.providerName === product.providerName
               }
-              onSelect={setSelectedProduct}
+              onSelect={selectProduct}
             />
           ))}
         </section>
@@ -115,10 +224,114 @@ export function UsaRadarOrigin() {
             {selectedProduct.providerName} · {selectedProduct.retailer ?? 'Loja não informada'} ·{' '}
             {selectedProduct.sourceProductId}
           </p>
+          <UsaShippingWeightPanel
+            resolution={weightResolution}
+            input={weightInput}
+            loading={weightLoading}
+            operation={weightOperation}
+            error={weightError}
+            onInputChange={setWeightInput}
+            onSubmit={registerWeight}
+          />
         </section>
       ) : null}
     </div>
   );
+}
+
+function UsaShippingWeightPanel({
+  resolution,
+  input,
+  loading,
+  operation,
+  error,
+  onInputChange,
+  onSubmit,
+}: {
+  resolution: UsaShippingWeightResolution | null;
+  input: string;
+  loading: boolean;
+  operation: 'resolving' | 'saving' | 'reprocessing' | null;
+  error: string | null;
+  onInputChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (loading && !resolution) {
+    return (
+      <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
+        {operation === 'reprocessing' ? 'Reprocessando o mesmo produto...' : 'Resolvendo peso...'}
+      </p>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-3 text-sm font-semibold text-red-700"
+        role="alert"
+      >
+        {error}
+      </div>
+    );
+  }
+
+  if (resolution?.status === 'WEIGHT_FOUND') {
+    return (
+      <p className="mt-4 text-sm font-bold text-emerald-700" role="status">
+        Peso: {formatWeightLbs(resolution.shippingWeightLbs)} lbs ✓
+      </p>
+    );
+  }
+
+  if (resolution?.status === 'MISSING_WEIGHT') {
+    return (
+      <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={onSubmit}>
+        <label className="grid gap-1 text-sm font-bold text-inest-text">
+          Peso em libras (lbs)
+          <input
+            className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
+            type="number"
+            min="0.001"
+            step="0.001"
+            inputMode="decimal"
+            placeholder="0.000"
+            value={input}
+            onChange={(event) => onInputChange(event.target.value)}
+            disabled={loading}
+            aria-describedby="usa-weight-help"
+          />
+          <span id="usa-weight-help" className="text-xs font-semibold text-inest-muted">
+            Precisamos confirmar o peso para continuar. Ex.: 0.500, 0.650, 3.950.
+          </span>
+        </label>
+        <ActionButton type="submit" className="min-h-11 self-end" disabled={loading}>
+          {loading
+            ? operation === 'saving'
+              ? 'Salvando...'
+              : 'Reprocessando...'
+            : 'Confirmar peso'}
+        </ActionButton>
+      </form>
+    );
+  }
+
+  if (resolution?.status === 'KEY_INSUFFICIENT') {
+    return (
+      <p className="mt-4 text-sm font-semibold text-amber-700" role="status">
+        Não foi possível determinar uma identidade logística segura para este produto.
+      </p>
+    );
+  }
+
+  if (resolution?.status === 'KEY_AMBIGUOUS') {
+    return (
+      <p className="mt-4 text-sm font-semibold text-amber-700" role="status">
+        A identidade logística deste produto está ambígua e não permite cadastrar peso.
+      </p>
+    );
+  }
+
+  return null;
 }
 
 function UsaProductCard({
@@ -200,4 +413,8 @@ function UsaProductCard({
 
 function formatUsd(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+}
+
+function formatWeightLbs(value: number) {
+  return value.toFixed(3);
 }
