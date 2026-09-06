@@ -93,6 +93,82 @@ export async function searchUsaSourceProducts(query: string): Promise<UsaSourceP
   return parseResponse<UsaSourceProduct[]>(response);
 }
 
+export type UsaEnrichmentDecision =
+  | { status: 'READY'; reason: null }
+  | {
+      status: 'NEEDS_INPUT';
+      reason: 'MANUFACTURER_MISSING';
+      input: { type: 'MANUFACTURER'; field: 'manufacturer'; suggestedValue: string };
+    }
+  | { status: 'BLOCKED'; reason: string; fields?: string[] };
+
+export interface UsaEnrichmentResponse {
+  decision: UsaEnrichmentDecision;
+  context: unknown;
+}
+
+export async function resolveUsaEnrichment(
+  sourceProduct: UsaSourceProduct,
+): Promise<UsaEnrichmentResponse> {
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/usa-enrichment/resolve`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceProduct }),
+  });
+  return parseResponse<UsaEnrichmentResponse>(response);
+}
+
+export async function confirmUsaManufacturer(
+  sourceProduct: UsaSourceProduct,
+  canonicalName: string,
+): Promise<UsaEnrichmentResponse> {
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/import-radar/usa-enrichment/confirm-manufacturer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceProduct, canonicalName }),
+    },
+  );
+  const payload = await parseResponse<UsaEnrichmentResponse & { reprocessed: true }>(response);
+  return payload;
+}
+
+export type UsaRedirectorSelection =
+  { redirector: 'RED_DELAWARE'; shippingMode: 'EXPRESS' } | { redirector: 'REI_DO_IMPORTADO' };
+
+export interface UsaPricedOfferResponse {
+  status: 'READY' | 'NEEDS_INPUT' | 'BLOCKED';
+  reason: string | null;
+  costExecution: {
+    preflight: { status: string; reason?: string };
+    calculation: {
+      finalCost: { currency: 'BRL'; amountBrl: number };
+    } | null;
+  };
+  pricing: {
+    acquisitionCost: number;
+    calculationStatus: string;
+    salePrice: number | null;
+    offerPrice: number | null;
+  } | null;
+  offerDraft: unknown | null;
+  offer: { id: string } | null;
+}
+
+export async function executeUsaPricedOffer(
+  sourceProduct: UsaSourceProduct,
+  redirector: UsaRedirectorSelection,
+  composition: UsaShippingWeightComposition,
+): Promise<UsaPricedOfferResponse> {
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/usa-priced-offer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceProduct, redirector, composition }),
+  });
+  return parseResponse<UsaPricedOfferResponse>(response);
+}
+
 export type UsaShippingWeightComposition = { kind: 'SINGLE_ITEM' };
 
 export type UsaShippingWeightResolution =

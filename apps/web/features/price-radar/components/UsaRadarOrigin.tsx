@@ -10,8 +10,14 @@ import {
   StatusBadge,
 } from '@/components/shared';
 import {
+  confirmUsaManufacturer,
+  executeUsaPricedOffer,
   registerUsaShippingWeight,
+  resolveUsaEnrichment,
   resolveUsaShippingWeight,
+  UsaEnrichmentDecision,
+  UsaPricedOfferResponse,
+  UsaRedirectorSelection,
   UsaShippingWeightResolution,
   searchUsaSourceProducts,
 } from '@/features/import-radar/services/import-radar-service';
@@ -33,7 +39,32 @@ export function UsaRadarOrigin() {
     'resolving' | 'saving' | 'reprocessing' | null
   >(null);
   const [weightError, setWeightError] = useState<string | null>(null);
+  const [decision, setDecision] = useState<UsaEnrichmentDecision | null>(null);
+  const [decisionLoading, setDecisionLoading] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [manufacturerInput, setManufacturerInput] = useState('');
+  const [manufacturerLoading, setManufacturerLoading] = useState(false);
+  const [manufacturerError, setManufacturerError] = useState<string | null>(null);
+  const [redirector, setRedirector] = useState<'' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO'>('');
+  const [executionLoading, setExecutionLoading] = useState(false);
+  const [executionError, setExecutionError] = useState<string | null>(null);
+  const [executionResult, setExecutionResult] = useState<UsaPricedOfferResponse | null>(null);
   const weightRequestRef = useRef(0);
+  const flowRequestRef = useRef(0);
+
+  const resetOperationalState = useCallback(() => {
+    flowRequestRef.current += 1;
+    setDecision(null);
+    setDecisionLoading(false);
+    setDecisionError(null);
+    setManufacturerInput('');
+    setManufacturerLoading(false);
+    setManufacturerError(null);
+    setRedirector('');
+    setExecutionLoading(false);
+    setExecutionError(null);
+    setExecutionResult(null);
+  }, []);
 
   const resetWeightState = useCallback(() => {
     weightRequestRef.current += 1;
@@ -75,14 +106,149 @@ export function UsaRadarOrigin() {
     [],
   );
 
+  const resolveProductDecision = useCallback(
+    async (product: UsaSourceProduct) => {
+      const requestId = ++flowRequestRef.current;
+      setDecisionLoading(true);
+      setDecisionError(null);
+      setManufacturerError(null);
+      setExecutionError(null);
+      setExecutionResult(null);
+      try {
+        const response = await resolveUsaEnrichment(product);
+        if (requestId !== flowRequestRef.current) return;
+        setDecision(response.decision);
+        if (response.decision.status === 'NEEDS_INPUT') {
+          setManufacturerInput(response.decision.input.suggestedValue);
+          return;
+        }
+        if (response.decision.status === 'READY') {
+          void resolveSelectedWeight(product);
+        }
+      } catch (resolveError) {
+        if (requestId !== flowRequestRef.current) return;
+        setDecision(null);
+        setDecisionError(
+          resolveError instanceof Error
+            ? resolveError.message
+            : 'Não foi possível resolver as decisões do produto.',
+        );
+      } finally {
+        if (requestId === flowRequestRef.current) setDecisionLoading(false);
+      }
+    },
+    [resolveSelectedWeight],
+  );
+
   const selectProduct = useCallback(
     (product: UsaSourceProduct) => {
+      resetOperationalState();
       resetWeightState();
       setSelectedProduct(product);
-      void resolveSelectedWeight(product);
+      void resolveProductDecision(product);
     },
-    [resetWeightState, resolveSelectedWeight],
+    [resetOperationalState, resetWeightState, resolveProductDecision],
   );
+
+  const confirmManufacturer = useCallback(
+    async (event?: FormEvent<HTMLFormElement>) => {
+      event?.preventDefault();
+      if (
+        !selectedProduct ||
+        decision?.status !== 'NEEDS_INPUT' ||
+        decision.input.type !== 'MANUFACTURER' ||
+        manufacturerLoading
+      ) {
+        return;
+      }
+
+      const canonicalName = manufacturerInput.trim();
+      if (!canonicalName) {
+        setManufacturerError('Informe o fabricante para continuar.');
+        return;
+      }
+
+      const requestId = flowRequestRef.current;
+      setManufacturerLoading(true);
+      setManufacturerError(null);
+      try {
+        const response = await confirmUsaManufacturer(selectedProduct, canonicalName);
+        if (requestId !== flowRequestRef.current) return;
+        const reprocessedProduct = {
+          ...selectedProduct,
+          sourceManufacturer: canonicalName,
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE' as const,
+        };
+        setSelectedProduct(reprocessedProduct);
+        setDecision(response.decision);
+        setManufacturerInput('');
+        if (response.decision.status === 'READY') {
+          void resolveSelectedWeight(reprocessedProduct);
+        } else if (response.decision.status === 'NEEDS_INPUT') {
+          setManufacturerInput(response.decision.input.suggestedValue);
+        }
+      } catch (confirmError) {
+        if (requestId !== flowRequestRef.current) return;
+        setManufacturerError(
+          confirmError instanceof Error
+            ? confirmError.message
+            : 'Não foi possível confirmar o fabricante.',
+        );
+      } finally {
+        if (requestId === flowRequestRef.current) setManufacturerLoading(false);
+      }
+    },
+    [decision, manufacturerInput, manufacturerLoading, resolveSelectedWeight, selectedProduct],
+  );
+
+  const executePricedOffer = useCallback(async () => {
+    if (
+      !selectedProduct ||
+      decision?.status !== 'READY' ||
+      weightResolution?.status !== 'WEIGHT_FOUND' ||
+      !redirector ||
+      executionLoading
+    ) {
+      return;
+    }
+
+    const redirectorSelection: UsaRedirectorSelection =
+      redirector === 'RED_DELAWARE' ? { redirector, shippingMode: 'EXPRESS' } : { redirector };
+    const requestId = flowRequestRef.current;
+    setExecutionLoading(true);
+    setExecutionError(null);
+    setExecutionResult(null);
+    try {
+      const response = await executeUsaPricedOffer(selectedProduct, redirectorSelection, {
+        kind: 'SINGLE_ITEM',
+      });
+      if (requestId !== flowRequestRef.current) return;
+      setExecutionResult(response);
+      if (response.status === 'NEEDS_INPUT' && response.reason === 'MISSING_WEIGHT') {
+        setWeightResolution({ status: 'MISSING_WEIGHT' });
+      }
+      if (response.status === 'NEEDS_INPUT' && response.reason === 'MANUFACTURER_MISSING') {
+        setExecutionResult(null);
+        void resolveProductDecision(selectedProduct);
+      }
+    } catch (executeError) {
+      if (requestId !== flowRequestRef.current) return;
+      setExecutionError(
+        executeError instanceof Error
+          ? executeError.message
+          : 'Não foi possível concluir o fluxo USA.',
+      );
+    } finally {
+      if (requestId === flowRequestRef.current) setExecutionLoading(false);
+    }
+  }, [
+    decision,
+    executionLoading,
+    redirector,
+    resolveProductDecision,
+    selectedProduct,
+    weightResolution,
+  ]);
 
   const registerWeight = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -134,6 +300,7 @@ export function UsaRadarOrigin() {
       if (normalizedQuery.length < 2) {
         setProducts([]);
         setSelectedProduct(null);
+        resetOperationalState();
         resetWeightState();
         setSearched(false);
         setError('Digite pelo menos 2 caracteres para pesquisar.');
@@ -143,6 +310,7 @@ export function UsaRadarOrigin() {
       setLoading(true);
       setError(null);
       setSelectedProduct(null);
+      resetOperationalState();
       resetWeightState();
       try {
         setProducts(await searchUsaSourceProducts(normalizedQuery));
@@ -159,8 +327,12 @@ export function UsaRadarOrigin() {
         setLoading(false);
       }
     },
-    [query, resetWeightState],
+    [query, resetOperationalState, resetWeightState],
   );
+
+  const retrySearch = useCallback(() => {
+    void search({ preventDefault() {} } as FormEvent<HTMLFormElement>);
+  }, [search]);
 
   return (
     <div className="grid gap-4">
@@ -185,7 +357,17 @@ export function UsaRadarOrigin() {
         </div>
       </section>
 
-      {error ? <ErrorState title="Busca USA" description={error} /> : null}
+      {error ? (
+        <ErrorState
+          title="Busca USA"
+          description={error}
+          action={
+            <ActionButton variant="secondary" onClick={retrySearch}>
+              Tentar novamente
+            </ActionButton>
+          }
+        />
+      ) : null}
       {loading ? <LoadingState /> : null}
       {!loading && searched && !error && !products.length ? (
         <EmptyState title="Nenhum produto encontrado." description="Tente outro termo de busca." />
@@ -224,15 +406,108 @@ export function UsaRadarOrigin() {
             {selectedProduct.providerName} · {selectedProduct.retailer ?? 'Loja não informada'} ·{' '}
             {selectedProduct.sourceProductId}
           </p>
-          <UsaShippingWeightPanel
-            resolution={weightResolution}
-            input={weightInput}
-            loading={weightLoading}
-            operation={weightOperation}
-            error={weightError}
-            onInputChange={setWeightInput}
-            onSubmit={registerWeight}
-          />
+          {decisionLoading ? (
+            <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
+              Resolvendo produto...
+            </p>
+          ) : null}
+          {decisionError ? (
+            <ErrorState
+              title="Decisão USA"
+              description={decisionError}
+              action={
+                <ActionButton
+                  variant="secondary"
+                  onClick={() => void resolveProductDecision(selectedProduct)}
+                >
+                  Tentar novamente
+                </ActionButton>
+              }
+            />
+          ) : null}
+          {decision?.status === 'NEEDS_INPUT' ? (
+            <form
+              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+              onSubmit={confirmManufacturer}
+            >
+              <label className="grid gap-1 text-sm font-bold text-inest-text">
+                Fabricante
+                <input
+                  className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
+                  value={manufacturerInput}
+                  onChange={(event) => setManufacturerInput(event.target.value)}
+                  disabled={manufacturerLoading}
+                  placeholder="Fabricante"
+                />
+                <span className="text-xs font-semibold text-inest-muted">
+                  Precisamos confirmar o fabricante para continuar.
+                  {decision.input.suggestedValue
+                    ? ` Sugestão: ${decision.input.suggestedValue}.`
+                    : ''}
+                </span>
+              </label>
+              <ActionButton
+                type="submit"
+                className="min-h-11 self-end"
+                disabled={manufacturerLoading}
+              >
+                {manufacturerLoading ? 'Confirmando...' : 'Confirmar fabricante'}
+              </ActionButton>
+            </form>
+          ) : null}
+          {manufacturerError ? (
+            <ErrorState
+              title="Fabricante"
+              description={manufacturerError}
+              action={
+                <ActionButton variant="secondary" onClick={() => void confirmManufacturer()}>
+                  Tentar novamente
+                </ActionButton>
+              }
+            />
+          ) : null}
+          {decision?.status === 'BLOCKED' ? <BlockedState reason={decision.reason} /> : null}
+          {decision?.status === 'READY' ? (
+            <>
+              <UsaShippingWeightPanel
+                resolution={weightResolution}
+                input={weightInput}
+                loading={weightLoading}
+                operation={weightOperation}
+                error={weightError}
+                onInputChange={setWeightInput}
+                onSubmit={registerWeight}
+                onRetry={
+                  !weightResolution ? () => void resolveSelectedWeight(selectedProduct) : undefined
+                }
+              />
+              {weightResolution?.status === 'WEIGHT_FOUND' ? (
+                <UsaRedirectorPanel
+                  value={redirector}
+                  loading={executionLoading}
+                  onChange={setRedirector}
+                  onSubmit={() => void executePricedOffer()}
+                />
+              ) : null}
+            </>
+          ) : null}
+          {executionError ? (
+            <ErrorState
+              title="Fluxo USA"
+              description={executionError}
+              action={
+                <ActionButton variant="secondary" onClick={() => void executePricedOffer()}>
+                  Tentar novamente
+                </ActionButton>
+              }
+            />
+          ) : null}
+          {executionLoading ? (
+            <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
+              Calculando custo, precificando e gerando oferta...
+            </p>
+          ) : null}
+          {executionResult ? <UsaExecutionResult result={executionResult} /> : null}
         </section>
       ) : null}
     </div>
@@ -247,6 +522,7 @@ function UsaShippingWeightPanel({
   error,
   onInputChange,
   onSubmit,
+  onRetry,
 }: {
   resolution: UsaShippingWeightResolution | null;
   input: string;
@@ -255,6 +531,7 @@ function UsaShippingWeightPanel({
   error: string | null;
   onInputChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onRetry?: () => void;
 }) {
   if (loading && !resolution) {
     return (
@@ -271,6 +548,13 @@ function UsaShippingWeightPanel({
         role="alert"
       >
         {error}
+        {onRetry ? (
+          <div className="mt-3">
+            <ActionButton variant="secondary" onClick={onRetry}>
+              Tentar novamente
+            </ActionButton>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -332,6 +616,103 @@ function UsaShippingWeightPanel({
   }
 
   return null;
+}
+
+function UsaRedirectorPanel({
+  value,
+  loading,
+  onChange,
+  onSubmit,
+}: {
+  value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO';
+  loading: boolean;
+  onChange: (value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO') => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="mt-4 grid gap-3 rounded-xl border border-inest-line/70 bg-white/70 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <label className="grid gap-1 text-sm font-bold text-inest-text">
+        Redirecionador
+        <select
+          className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
+          value={value}
+          onChange={(event) =>
+            onChange(event.target.value as '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO')
+          }
+          disabled={loading}
+        >
+          <option value="">Selecione para continuar</option>
+          <option value="RED_DELAWARE">Red Delaware</option>
+          <option value="REI_DO_IMPORTADO">Rei do Importado</option>
+        </select>
+      </label>
+      <ActionButton
+        className="min-h-11"
+        variant="success"
+        disabled={!value || loading}
+        onClick={onSubmit}
+      >
+        {loading ? 'Processando...' : 'Calcular e gerar oferta'}
+      </ActionButton>
+    </div>
+  );
+}
+
+function UsaExecutionResult({ result }: { result: UsaPricedOfferResponse }) {
+  if (result.status !== 'READY' || !result.pricing || !result.costExecution.calculation) {
+    return <BlockedState reason={result.reason ?? 'FLUXO_BLOQUEADO'} />;
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" role="status">
+      <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
+        Oferta USA concluída
+      </p>
+      <div className="mt-2 grid gap-1 text-sm font-semibold text-inest-text sm:grid-cols-3">
+        <span>FinalCost: {formatBrl(result.costExecution.calculation.finalCost.amountBrl)}</span>
+        <span>Preço: {formatBrl(result.pricing.salePrice)}</span>
+        <span>Oferta: {formatBrl(result.pricing.offerPrice)}</span>
+      </div>
+      {result.offer?.id ? (
+        <p className="mt-2 text-xs font-semibold text-emerald-700">
+          Oferta registrada: {result.offer.id}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function BlockedState({ reason }: { reason: string }) {
+  return (
+    <div
+      className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-sm font-semibold text-amber-800"
+      role="status"
+    >
+      {humanizeUsaBlockedReason(reason)}
+    </div>
+  );
+}
+
+function humanizeUsaBlockedReason(reason: string) {
+  const messages: Record<string, string> = {
+    KEY_INSUFFICIENT: 'Não foi possível identificar com segurança a configuração deste produto.',
+    KEY_AMBIGUOUS: 'Encontramos mais de uma configuração possível para este produto.',
+    MANUFACTURER_AMBIGUOUS: 'Não foi possível confirmar o fabricante com segurança.',
+    RETAILER_UNRESOLVED: 'Não foi possível confirmar a loja desta oferta.',
+    LOGISTIC_CLASSIFICATION_UNRESOLVED: 'Não foi possível classificar este produto com segurança.',
+    ENRICHMENT_CONFLICT: 'Encontramos informações conflitantes para este produto.',
+    condition_unresolved: 'A condição do produto não foi resolvida com segurança.',
+    insufficient_identity: 'A identidade financeira do produto é insuficiente.',
+    ambiguous_identity: 'A identidade financeira do produto é ambígua.',
+    missing_profit: 'Não existe lucro homologado para este produto.',
+    collision: 'Existe conflito entre registros de lucro para este produto.',
+    classification_unresolved: 'Não foi possível classificar este produto financeiramente.',
+    MISSING_WEIGHT: 'Precisamos confirmar o peso para continuar.',
+    SETTINGS_UNAVAILABLE: 'As configurações USA não estão disponíveis.',
+    USD_BRL_QUOTE_NOT_CONFIGURED: 'A cotação USD/BRL não está configurada.',
+    FLUXO_BLOQUEADO: 'O produto não pode continuar neste momento.',
+  };
+  return messages[reason] ?? 'O produto não pode continuar com segurança.';
 }
 
 function UsaProductCard({
@@ -417,4 +798,10 @@ function formatUsd(value: number) {
 
 function formatWeightLbs(value: number) {
   return value.toFixed(3);
+}
+
+function formatBrl(value: number | null) {
+  return value === null
+    ? '—'
+    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }

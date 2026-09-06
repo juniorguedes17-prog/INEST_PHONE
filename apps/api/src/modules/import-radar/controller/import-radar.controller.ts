@@ -37,6 +37,7 @@ import { ImportRadarService } from '../service/import-radar.service';
 import { UsaEnrichmentInputDecisionService } from '../service/usa-enrichment-input-decision.service';
 import { UsaCostPreflightService } from '../service/usa-cost-preflight.service';
 import { UsaCostExecutionService } from '../service/usa-cost-execution.service';
+import { UsaPricedOfferService } from '../service/usa-priced-offer.service';
 import { UsaProvidersOrchestrator } from '../service/usa-providers-orchestrator.service';
 
 @ApiTags('Import Radar')
@@ -60,6 +61,9 @@ export class ImportRadarController {
     @Optional()
     @Inject(UsaProvidersOrchestrator)
     private readonly usaProvidersOrchestrator?: UsaProvidersOrchestrator,
+    @Optional()
+    @Inject(UsaPricedOfferService)
+    private readonly usaPricedOfferService?: UsaPricedOfferService,
   ) {}
 
   @Get('search')
@@ -164,6 +168,27 @@ export class ImportRadarController {
             }
           : { redirector: 'REI_DO_IMPORTADO' },
       composition: dto.composition,
+    });
+  }
+
+  @Post('usa-priced-offer')
+  @ApiOperation({ summary: 'Executa o fluxo USA ate Pricing e Offer.' })
+  executeUsaPricedOffer(@Body() dto: UsaCostPreflightDto, @CurrentUser() user: AuthenticatedUser) {
+    if (!this.usaPricedOfferService) {
+      throw new Error('Servico de oferta precificada USA indisponivel.');
+    }
+    return this.usaPricedOfferService.execute({
+      sourceProduct: dto.sourceProduct as UsaSourceProduct,
+      redirector:
+        dto.redirector.redirector === 'RED_DELAWARE'
+          ? {
+              redirector: 'RED_DELAWARE',
+              shippingMode: dto.redirector.shippingMode as 'EXPRESS',
+            }
+          : { redirector: 'REI_DO_IMPORTADO' },
+      composition: dto.composition,
+      condition: dto.sourceProduct.condition ?? null,
+      user,
     });
   }
 

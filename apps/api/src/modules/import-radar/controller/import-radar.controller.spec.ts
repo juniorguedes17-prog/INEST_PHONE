@@ -1,8 +1,9 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { ImportRadarService } from '../service/import-radar.service';
+import { UsaPricedOfferService } from '../service/usa-priced-offer.service';
 import { UsaProvidersOrchestrator } from '../service/usa-providers-orchestrator.service';
 import { ImportRadarController } from './import-radar.controller';
 
@@ -71,5 +72,53 @@ describe('ImportRadarController manufacturer confirmation permissions', () => {
     const guard = new PermissionsGuard(new Reflector());
 
     expect(guard.canActivate(contextFor([], 'resolveShippingWeight'))).toBe(true);
+  });
+
+  it('exposes the existing USA priced-offer composition without adding business rules', async () => {
+    const execute = vi.fn().mockResolvedValue({ status: 'BLOCKED', reason: 'MISSING_WEIGHT' });
+    const pricedOffers = { execute };
+    const sourceProduct = {
+      source: 'US' as const,
+      providerName: 'amazon_us',
+      sourceProductId: 'amazon-us:item',
+      sourceName: 'Canon Camera',
+      displayName: 'Canon Camera',
+      sourceUrl: 'https://example.test/canon',
+      supplier: 'Amazon',
+      sourceManufacturer: 'Canon',
+      sourceManufacturerProvenance: 'EXPLICIT_SOURCE' as const,
+      retailer: 'Amazon',
+      category: 'Camera',
+      condition: 'NOVO' as const,
+      priceUsd: 500,
+    };
+    const user = { id: 'user-1' } as never;
+    const controller = new ImportRadarController(
+      {} as ImportRadarService,
+      {} as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      pricedOffers as unknown as UsaPricedOfferService,
+    );
+
+    await controller.executeUsaPricedOffer(
+      {
+        sourceProduct,
+        redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+        composition: { kind: 'SINGLE_ITEM' },
+      },
+      user,
+    );
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceProduct,
+        condition: 'NOVO',
+        user,
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    );
   });
 });
