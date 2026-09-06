@@ -18,7 +18,7 @@ import {
   NON_APPLE_ELECTRONICS_RULE_VERSION,
   parseNonAppleElectronicsPolicy,
 } from '../../pricing/utils/non-apple-electronics.policy';
-import { UpdateSettingsDto } from '../dto/settings.dto';
+import { UpdateSettingsDto, UsaImportSettingsDto } from '../dto/settings.dto';
 import { SettingsRepository } from '../repository/settings.repository';
 import { defaultSettings } from '../settings.defaults';
 import {
@@ -111,6 +111,43 @@ export class SettingsService {
         ),
         lastUpdated: system.usaFinancialLastUpdated || undefined,
       },
+      usaImport: {
+        usdBrlQuote: this.parseOptionalPositiveNumber(system.usaImportUsdBrlQuote),
+        redDelaware: {
+          firstLbUsd: this.getNonNegativeSystemNumber(
+            system.usaRedDelawareFirstLbUsd,
+            defaultSettings.usaImport.redDelaware.firstLbUsd,
+          ),
+          additionalLbUsd: this.getNonNegativeSystemNumber(
+            system.usaRedDelawareAdditionalLbUsd,
+            defaultSettings.usaImport.redDelaware.additionalLbUsd,
+          ),
+          // EXPRESS is the only homologated mode and is not a mutable setting.
+          shippingMode: 'EXPRESS',
+        },
+        reiDoImportado: {
+          phoneShippingUsd: this.getNonNegativeSystemNumber(
+            system.usaReiDoImportadoPhoneShippingUsd,
+            defaultSettings.usaImport.reiDoImportado.phoneShippingUsd,
+          ),
+          otherProductsShippingUsdPerHalfKg: this.getNonNegativeSystemNumber(
+            system.usaReiDoImportadoOtherProductsShippingUsdPerHalfKg,
+            defaultSettings.usaImport.reiDoImportado.otherProductsShippingUsdPerHalfKg,
+          ),
+          insurancePercent: this.getPercentSystemNumber(
+            system.usaReiDoImportadoInsurancePercent,
+            defaultSettings.usaImport.reiDoImportado.insurancePercent,
+          ),
+          usTaxPercent: this.getPercentSystemNumber(
+            system.usaReiDoImportadoUsTaxPercent,
+            defaultSettings.usaImport.reiDoImportado.usTaxPercent,
+          ),
+          airFreightDiscountPercent: this.getPercentSystemNumber(
+            system.usaReiDoImportadoAirFreightDiscountPercent,
+            defaultSettings.usaImport.reiDoImportado.airFreightDiscountPercent,
+          ),
+        },
+      },
       offers: {
         ...defaultSettings.offers,
         defaultWarranty: system.defaultWarranty ?? defaultSettings.offers.defaultWarranty,
@@ -140,6 +177,7 @@ export class SettingsService {
     const receivesNonApplePolicy =
       settings.pricing !== undefined &&
       Object.prototype.hasOwnProperty.call(settings.pricing, 'nonAppleElectronicsPolicy');
+    const receivesUsaImport = settings.usaImport !== undefined;
     const nextSettings = {
       general: settings.general ?? oldValue.general,
       financial: settings.financial ?? oldValue.financial,
@@ -148,6 +186,9 @@ export class SettingsService {
       usaFinancial: settings.usaFinancial
         ? { ...settings.usaFinancial, lastUpdated: new Date().toISOString() }
         : oldValue.usaFinancial,
+      usaImport: receivesUsaImport
+        ? this.normalizeUsaImportSettings(settings.usaImport!)
+        : oldValue.usaImport,
       offers: settings.offers ?? oldValue.offers,
       installmentRates: settings.installmentRates ?? oldValue.installmentRates,
       installmentMessageTemplate:
@@ -156,6 +197,7 @@ export class SettingsService {
     };
 
     this.assertValidPricingSettings(nextSettings.pricing);
+    this.assertValidUsaImportSettings(nextSettings.usaImport);
     if (receivesNonApplePolicy) {
       this.assertValidNonAppleElectronicsPolicy(nextSettings.pricing.nonAppleElectronicsPolicy);
     }
@@ -182,6 +224,7 @@ export class SettingsService {
               version: NON_APPLE_ELECTRONICS_RULE_VERSION,
             }
           : {}),
+        ...(receivesUsaImport ? { scope: 'usa_import' } : {}),
       },
     });
 
@@ -251,12 +294,54 @@ export class SettingsService {
       ['usaIof', String(settings.usaFinancial.iof), 'moeda'],
       ['usaOtherExpenses', String(settings.usaFinancial.otherExpenses), 'moeda'],
       ['usaFinancialLastUpdated', settings.usaFinancial.lastUpdated ?? '', 'data_hora'],
+      ['usaRedDelawareFirstLbUsd', String(settings.usaImport.redDelaware.firstLbUsd), 'moeda'],
+      [
+        'usaRedDelawareAdditionalLbUsd',
+        String(settings.usaImport.redDelaware.additionalLbUsd),
+        'moeda',
+      ],
+      [
+        'usaReiDoImportadoPhoneShippingUsd',
+        String(settings.usaImport.reiDoImportado.phoneShippingUsd),
+        'moeda',
+      ],
+      [
+        'usaReiDoImportadoOtherProductsShippingUsdPerHalfKg',
+        String(settings.usaImport.reiDoImportado.otherProductsShippingUsdPerHalfKg),
+        'moeda',
+      ],
+      [
+        'usaReiDoImportadoInsurancePercent',
+        String(settings.usaImport.reiDoImportado.insurancePercent),
+        'percentual',
+      ],
+      [
+        'usaReiDoImportadoUsTaxPercent',
+        String(settings.usaImport.reiDoImportado.usTaxPercent),
+        'percentual',
+      ],
+      [
+        'usaReiDoImportadoAirFreightDiscountPercent',
+        String(settings.usaImport.reiDoImportado.airFreightDiscountPercent),
+        'percentual',
+      ],
     ];
 
     await Promise.all(
       entries.map(([key, value, type]) =>
         this.settingsRepository.upsertSystemConfiguration(key, value, type),
       ),
+    );
+
+    if (settings.usaImport.usdBrlQuote === null) {
+      await this.settingsRepository.deleteSystemConfiguration('usaImportUsdBrlQuote');
+      return;
+    }
+
+    await this.settingsRepository.upsertSystemConfiguration(
+      'usaImportUsdBrlQuote',
+      String(settings.usaImport.usdBrlQuote),
+      'moeda',
     );
   }
 
@@ -327,6 +412,49 @@ export class SettingsService {
       throw new BadRequestException(
         'O acrescimo da oferta deve ser um valor nao negativo com ate duas casas decimais.',
       );
+    }
+  }
+
+  private normalizeUsaImportSettings(settings: UsaImportSettingsDto) {
+    return {
+      ...settings,
+      usdBrlQuote: settings.usdBrlQuote ?? null,
+      redDelaware: {
+        ...settings.redDelaware,
+        shippingMode: 'EXPRESS' as const,
+      },
+    };
+  }
+
+  private assertValidUsaImportSettings(settings: Required<UpdateSettingsDto>['usaImport']) {
+    const quote = settings.usdBrlQuote;
+    if (quote !== null && quote !== undefined && (!Number.isFinite(quote) || quote <= 0)) {
+      throw new BadRequestException(
+        'A cotacao USD/BRL USA deve ser um numero finito maior que zero.',
+      );
+    }
+
+    const monetaryValues = [
+      settings.redDelaware.firstLbUsd,
+      settings.redDelaware.additionalLbUsd,
+      settings.reiDoImportado.phoneShippingUsd,
+      settings.reiDoImportado.otherProductsShippingUsdPerHalfKg,
+    ];
+    if (monetaryValues.some((value) => !Number.isFinite(value) || value < 0)) {
+      throw new BadRequestException('Os valores USA devem ser numeros finitos nao negativos.');
+    }
+
+    const percentages = [
+      settings.reiDoImportado.insurancePercent,
+      settings.reiDoImportado.usTaxPercent,
+      settings.reiDoImportado.airFreightDiscountPercent,
+    ];
+    if (percentages.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) {
+      throw new BadRequestException('Os percentuais USA devem estar entre zero e cem.');
+    }
+
+    if (settings.redDelaware.shippingMode !== 'EXPRESS') {
+      throw new BadRequestException('EXPRESS e a unica modalidade homologada para Red Delaware.');
     }
   }
 
@@ -404,5 +532,24 @@ export class SettingsService {
     }
 
     return defaultSettings.userPreferences.language;
+  }
+
+  private parseOptionalPositiveNumber(value?: string): number | null {
+    if (value === undefined) return null;
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  private getNonNegativeSystemNumber(value: string | undefined, fallback: number): number {
+    if (value === undefined) return fallback;
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  }
+
+  private getPercentSystemNumber(value: string | undefined, fallback: number): number {
+    const parsed = this.getNonNegativeSystemNumber(value, fallback);
+    return parsed <= 100 ? parsed : fallback;
   }
 }

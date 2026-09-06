@@ -16,6 +16,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { NonAppleElectronicsPolicy } from '../../pricing/utils/non-apple-electronics.policy';
+import type { RedirectorShippingMode } from '../../import-radar/usa-cost.contract';
 
 export class GeneralSettingsDto {
   @ApiProperty()
@@ -220,6 +221,74 @@ export class UsaFinancialSettingsDto {
   lastUpdated?: string;
 }
 
+export class UsaRedDelawareSettingsDto {
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  firstLbUsd!: number;
+
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  additionalLbUsd!: number;
+
+  @ApiProperty({ enum: ['EXPRESS'] })
+  @IsIn(['EXPRESS'])
+  shippingMode!: RedirectorShippingMode;
+}
+
+export class UsaReiDoImportadoSettingsDto {
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  phoneShippingUsd!: number;
+
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  otherProductsShippingUsdPerHalfKg!: number;
+
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(100)
+  insurancePercent!: number;
+
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(100)
+  usTaxPercent!: number;
+
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  @Max(100)
+  airFreightDiscountPercent!: number;
+}
+
+/**
+ * USA origin-cost parameters only. A missing quote is represented by null,
+ * never by zero or by the Paraguay import quote.
+ */
+export class UsaImportSettingsDto {
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(Number.EPSILON)
+  usdBrlQuote?: number | null;
+
+  @ApiProperty({ type: UsaRedDelawareSettingsDto })
+  @ValidateNested()
+  @Type(() => UsaRedDelawareSettingsDto)
+  redDelaware!: UsaRedDelawareSettingsDto;
+
+  @ApiProperty({ type: UsaReiDoImportadoSettingsDto })
+  @ValidateNested()
+  @Type(() => UsaReiDoImportadoSettingsDto)
+  reiDoImportado!: UsaReiDoImportadoSettingsDto;
+}
+
 export class OfferSettingsDto {
   @ApiProperty()
   @IsString()
@@ -336,6 +405,12 @@ export class UpdateSettingsDto {
   @ValidateNested()
   @Type(() => UsaFinancialSettingsDto)
   usaFinancial?: UsaFinancialSettingsDto;
+
+  @ApiProperty({ type: UsaImportSettingsDto, required: false })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UsaImportSettingsDto)
+  usaImport?: UsaImportSettingsDto;
 
   @ApiProperty({ type: OfferSettingsDto, required: false })
   @IsOptional()

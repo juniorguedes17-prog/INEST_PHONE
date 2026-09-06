@@ -38,11 +38,17 @@ function createRepository(
         else configurations.push({ key, value });
         return Promise.resolve({});
       }),
-    deleteSystemConfigurations: vi.fn().mockResolvedValue({}),
+    deleteSystemConfigurations: vi.fn().mockImplementation(() => {
+      globalConfigurations.splice(0, globalConfigurations.length);
+      return Promise.resolve({});
+    }),
     deleteSystemConfiguration: vi.fn().mockImplementation((key: string, scope: string) => {
       if (scope === PRICING_CONFIGURATION_SCOPE) {
         const index = pricingConfigurations.findIndex((item) => item.key === key);
         if (index >= 0) pricingConfigurations.splice(index, 1);
+      } else {
+        const index = globalConfigurations.findIndex((item) => item.key === key);
+        if (index >= 0) globalConfigurations.splice(index, 1);
       }
       return Promise.resolve({});
     }),
@@ -328,6 +334,169 @@ describe('SettingsService commercial price endings', () => {
       defaultSettings.installmentMessageTemplate,
       'texto_longo',
     );
+  });
+});
+
+describe('SettingsService USA import configuration', () => {
+  function usaImportSettings(overrides: Record<string, unknown> = {}) {
+    return {
+      ...structuredClone(defaultSettings.usaImport),
+      ...overrides,
+    };
+  }
+
+  it('returns an unconfigured USA quote and the homologated redirector defaults', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(service.getSettings()).resolves.toMatchObject({
+      usaImport: {
+        usdBrlQuote: null,
+        redDelaware: {
+          firstLbUsd: 27.89,
+          additionalLbUsd: 11.5,
+          shippingMode: 'EXPRESS',
+        },
+        reiDoImportado: {
+          phoneShippingUsd: 150,
+          otherProductsShippingUsdPerHalfKg: 120,
+          insurancePercent: 15,
+          usTaxPercent: 7,
+          airFreightDiscountPercent: 10,
+        },
+      },
+    });
+  });
+
+  it('persists one shared USD/BRL quote and the redirector parameters without formulas', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const usaImport = usaImportSettings({ usdBrlQuote: 6.12 });
+
+    await service.updateSettings({ usaImport }, { id: 'user-1' } as never);
+
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaImportUsdBrlQuote',
+      '6.12',
+      'moeda',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaRedDelawareFirstLbUsd',
+      '27.89',
+      'moeda',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaRedDelawareAdditionalLbUsd',
+      '11.5',
+      'moeda',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaReiDoImportadoPhoneShippingUsd',
+      '150',
+      'moeda',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaReiDoImportadoOtherProductsShippingUsdPerHalfKg',
+      '120',
+      'moeda',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaReiDoImportadoInsurancePercent',
+      '15',
+      'percentual',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaReiDoImportadoUsTaxPercent',
+      '7',
+      'percentual',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaReiDoImportadoAirFreightDiscountPercent',
+      '10',
+      'percentual',
+    );
+    expect(repository.createAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        context: expect.objectContaining({ scope: 'usa_import' }),
+      }),
+    );
+  });
+
+  it('clears the shared quote when it is absent and never substitutes zero', async () => {
+    const repository = createRepository([], [{ key: 'usaImportUsdBrlQuote', value: '6.12' }]);
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await service.updateSettings({ usaImport: usaImportSettings({ usdBrlQuote: null }) });
+
+    expect(repository.deleteSystemConfiguration).toHaveBeenCalledWith('usaImportUsdBrlQuote');
+    await expect(service.getSettings()).resolves.toMatchObject({
+      usaImport: { usdBrlQuote: null },
+    });
+  });
+
+  it('restores the USA quote to unconfigured on reset without persisting a zero value', async () => {
+    const repository = createRepository([], [{ key: 'usaImportUsdBrlQuote', value: '6.12' }]);
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    const result = await service.resetDefaults({ id: 'user-1' } as never);
+
+    expect(result.usaImport.usdBrlQuote).toBeNull();
+    expect(repository.upsertSystemConfiguration.mock.calls).not.toContainEqual([
+      'usaImportUsdBrlQuote',
+      '0',
+      'moeda',
+    ]);
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid USA quote %s before writing',
+    async (usdBrlQuote) => {
+      const repository = createRepository();
+      const service = new SettingsService(repository as unknown as SettingsRepository);
+
+      await expect(
+        service.updateSettings({ usaImport: usaImportSettings({ usdBrlQuote }) }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [
+      'negative Red Delaware first pound',
+      { redDelaware: { ...defaultSettings.usaImport.redDelaware, firstLbUsd: -0.01 } },
+    ],
+    [
+      'negative Rei phone shipping',
+      { reiDoImportado: { ...defaultSettings.usaImport.reiDoImportado, phoneShippingUsd: -1 } },
+    ],
+    [
+      'insurance above one hundred',
+      { reiDoImportado: { ...defaultSettings.usaImport.reiDoImportado, insurancePercent: 101 } },
+    ],
+    [
+      'non-finite Rei tax',
+      { reiDoImportado: { ...defaultSettings.usaImport.reiDoImportado, usTaxPercent: Number.NaN } },
+    ],
+  ])('rejects %s before writing', async (_label, overrides) => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(
+      service.updateSettings({ usaImport: usaImportSettings(overrides) }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
+  });
+
+  it('treats an invalid persisted quote as unconfigured instead of falling back to PY', async () => {
+    const repository = createRepository([], [{ key: 'usaImportUsdBrlQuote', value: '0' }]);
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await expect(service.getSettings()).resolves.toMatchObject({
+      importation: { dollarQuote: 5.35 },
+      usaImport: { usdBrlQuote: null },
+    });
   });
 });
 

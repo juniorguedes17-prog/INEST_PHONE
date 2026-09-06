@@ -84,6 +84,21 @@ export const defaultSettings: Required<UpdateSettingsDto> = {
     otherExpenses: 0,
     lastUpdated: undefined,
   },
+  usaImport: {
+    usdBrlQuote: null,
+    redDelaware: {
+      firstLbUsd: 27.89,
+      additionalLbUsd: 11.5,
+      shippingMode: 'EXPRESS',
+    },
+    reiDoImportado: {
+      phoneShippingUsd: 150,
+      otherProductsShippingUsdPerHalfKg: 120,
+      insurancePercent: 15,
+      usTaxPercent: 7,
+      airFreightDiscountPercent: 10,
+    },
+  },
   offers: {
     defaultWarranty: 'Garantia padrao iNest Phone',
     defaultDeadline: 'Prazo a confirmar',
