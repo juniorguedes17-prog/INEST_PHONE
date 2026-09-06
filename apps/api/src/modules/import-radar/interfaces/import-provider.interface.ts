@@ -7,6 +7,12 @@ export interface ImportProviderProduct {
   id: string;
   name: string;
   store: string;
+  /**
+   * The retailer where the item is purchased, when the provider can expose it
+   * as a structured source field. It remains distinct from the provider and
+   * from the source manufacturer.
+   */
+  retailer?: string | null;
   category: string;
   priceUsd: number;
   productUrl: string;
