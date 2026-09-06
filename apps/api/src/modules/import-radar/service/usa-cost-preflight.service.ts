@@ -40,6 +40,8 @@ export type UsaCostPreflightResult =
       redirector: UsaRedirectorSelection;
       taxTreatment: Exclude<UsaTaxTreatment, 'UNRESOLVED'>;
       logisticClassification: 'CELULAR' | 'OTHER' | null;
+      /** Validated only for Rei do Importado cellular flows. */
+      quantity: number | null;
       shippingWeightLbs: number | null;
     }
   | {
@@ -138,7 +140,8 @@ export class UsaCostPreflightService {
         return { status: 'BLOCKED', reason: settingsReason, redirector: input.redirector };
       }
       if (logisticClassification === 'CELULAR') {
-        if (!isPositiveInteger(semanticContext.fields.quantity.value)) {
+        const quantity = parsePositiveInteger(semanticContext.fields.quantity.value);
+        if (quantity === null) {
           return {
             status: 'BLOCKED',
             reason: 'QUANTITY_UNRESOLVED',
@@ -150,6 +153,7 @@ export class UsaCostPreflightService {
           redirector: input.redirector,
           taxTreatment: taxTreatment.taxTreatment,
           logisticClassification,
+          quantity,
           shippingWeightLbs: null,
         };
       }
@@ -231,6 +235,7 @@ function toWeightPreflightResult(
       taxTreatment,
       logisticClassification:
         logisticClassification === 'UNRESOLVED' ? null : logisticClassification,
+      quantity: null,
       shippingWeightLbs: resolution.shippingWeightLbs,
     };
   }
@@ -279,9 +284,9 @@ function isSupportedRedirector(value: UsaRedirectorSelection): value is UsaRedir
   return value?.redirector === 'REI_DO_IMPORTADO' || value?.redirector === 'RED_DELAWARE';
 }
 
-function isPositiveInteger(value: string | null) {
+function parsePositiveInteger(value: string | null) {
   const parsed = Number(value);
-  return Boolean(value) && Number.isInteger(parsed) && parsed >= 1;
+  return Boolean(value) && Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
 }
 
 function validateRedSettings(settings: { firstLbUsd: number; additionalLbUsd: number }) {

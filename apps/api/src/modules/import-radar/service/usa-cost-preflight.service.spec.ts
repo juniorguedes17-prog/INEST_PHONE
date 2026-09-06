@@ -102,7 +102,7 @@ const readyDecision = {
 
 describe('UsaCostPreflightService', () => {
   it('returns READY_FOR_COST for Red Delaware without requiring logistics classification', async () => {
-    const { service } = createService(readyDecision, createContext('UNRESOLVED'));
+    const { service } = createService(readyDecision, createContext('UNRESOLVED', null));
 
     await expect(
       service.preflight({
@@ -114,6 +114,7 @@ describe('UsaCostPreflightService', () => {
       status: 'READY_FOR_COST',
       taxTreatment: 'EXEMPT',
       logisticClassification: null,
+      quantity: null,
       shippingWeightLbs: 2,
     });
   });
@@ -127,7 +128,23 @@ describe('UsaCostPreflightService', () => {
       composition: { kind: 'SINGLE_ITEM' },
     });
 
-    expect(result.status).toBe('READY_FOR_COST');
+    expect(result).toMatchObject({ status: 'READY_FOR_COST', quantity: 1 });
+  });
+
+  it('transports validated cellular quantity 2 for Rei', async () => {
+    const { service } = createService(readyDecision, createContext('CELULAR', '2'));
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY_FOR_COST',
+      logisticClassification: 'CELULAR',
+      quantity: 2,
+    });
   });
 
   it('allows a resolved Non-Apple item without a catalog Product', async () => {
@@ -242,6 +259,7 @@ describe('UsaCostPreflightService', () => {
     expect(result).toMatchObject({
       status: 'READY_FOR_COST',
       logisticClassification: 'CELULAR',
+      quantity: 2,
       shippingWeightLbs: null,
     });
     expect(shippingWeights.resolve).not.toHaveBeenCalled();
@@ -262,6 +280,38 @@ describe('UsaCostPreflightService', () => {
       expect(result.reason).toBe('MISSING_WEIGHT');
     }
     expect(shippingWeights.resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['0', '-1', '1.5'])('rejects invalid cellular quantity %s', async (quantity) => {
+    const { service } = createService(readyDecision, createContext('CELULAR', quantity));
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'BLOCKED',
+      reason: 'QUANTITY_UNRESOLVED',
+    });
+  });
+
+  it('does not add quantity as a gate for Rei OTHER', async () => {
+    const { service } = createService(readyDecision, createContext('OTHER', null));
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY_FOR_COST',
+      logisticClassification: 'OTHER',
+      quantity: null,
+      shippingWeightLbs: 2,
+    });
   });
 
   it('blocks unresolved retailer and never uses the PY quote as fallback', async () => {
