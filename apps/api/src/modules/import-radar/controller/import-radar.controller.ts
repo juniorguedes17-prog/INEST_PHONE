@@ -26,6 +26,7 @@ import {
   UsaEnrichmentDecisionDto,
   UsaManufacturerConfirmationDto,
 } from '../dto/usa-enrichment.dto';
+import { UsaCostPreflightDto } from '../dto/usa-cost-preflight.dto';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
 import {
   RegisterShippingWeightDto,
@@ -34,6 +35,7 @@ import {
 import { ShippingWeightRegistrationService } from '../shipping-weights/shipping-weight-registration.service';
 import { ImportRadarService } from '../service/import-radar.service';
 import { UsaEnrichmentInputDecisionService } from '../service/usa-enrichment-input-decision.service';
+import { UsaCostPreflightService } from '../service/usa-cost-preflight.service';
 
 @ApiTags('Import Radar')
 @ApiBearerAuth()
@@ -47,6 +49,9 @@ export class ImportRadarController {
     @Optional()
     @Inject(UsaEnrichmentInputDecisionService)
     private readonly usaEnrichmentInputDecisionService?: UsaEnrichmentInputDecisionService,
+    @Optional()
+    @Inject(UsaCostPreflightService)
+    private readonly usaCostPreflightService?: UsaCostPreflightService,
   ) {}
 
   @Get('search')
@@ -105,6 +110,25 @@ export class ImportRadarController {
       { canonicalName: dto.canonicalName, alias: dto.alias },
       user,
     );
+  }
+
+  @Post('usa-cost-preflight')
+  @ApiOperation({ summary: 'Verifica se um produto USA esta pronto para custo.' })
+  preflightUsaCost(@Body() dto: UsaCostPreflightDto) {
+    if (!this.usaCostPreflightService) {
+      throw new Error('Servico de preflight USA indisponivel.');
+    }
+    return this.usaCostPreflightService.preflight({
+      sourceProduct: dto.sourceProduct as UsaSourceProduct,
+      redirector:
+        dto.redirector.redirector === 'RED_DELAWARE'
+          ? {
+              redirector: 'RED_DELAWARE',
+              shippingMode: dto.redirector.shippingMode as 'EXPRESS',
+            }
+          : { redirector: 'REI_DO_IMPORTADO' },
+      composition: dto.composition,
+    });
   }
 
   @Post('shipping-weights')
