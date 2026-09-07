@@ -807,7 +807,7 @@ export function SettingsPageContent() {
           </div>
 
           <div className="mt-6 overflow-hidden rounded-xl border border-inest-line">
-            <div className="grid grid-cols-[1.4fr_1.2fr_160px_110px_96px] gap-3 bg-inest-soft px-4 py-3 text-sm font-black text-inest-muted">
+            <div className="hidden gap-3 bg-inest-soft px-4 py-3 text-sm font-black text-inest-muted lg:grid lg:grid-cols-[1.4fr_1.2fr_160px_110px_96px]">
               <span>Categoria</span>
               <span>Termos</span>
               <span>Custo</span>
