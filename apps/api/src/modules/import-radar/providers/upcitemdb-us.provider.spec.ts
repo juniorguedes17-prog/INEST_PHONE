@@ -11,6 +11,10 @@ afterEach(() => {
 });
 
 describe('parseUpcItemDbOffers', () => {
+  it('preserves the offer title and raw condition as compact evidence', () => {
+    const [candidate] = parseUpcItemDbOffers(payload({}), NOW);
+    expect(candidate?.product.sourceEvidence).toBe('Example Camera offer New');
+  });
   it.each([
     ['Best Buy', 'bestbuy.com', 'Best Buy'],
     ['B&H Photo Video', 'bhphotovideo.com', 'B&H Photo Video'],

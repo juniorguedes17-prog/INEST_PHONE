@@ -12,6 +12,7 @@ export type UsaEnrichmentDecisionStatus = 'READY' | 'NEEDS_INPUT' | 'BLOCKED';
 export type UsaEnrichmentInputType = 'MANUFACTURER';
 
 export type UsaEnrichmentDecisionReason =
+  | 'SOURCE_CONFIGURATION_REQUIRED'
   | 'MANUFACTURER_MISSING'
   | 'MANUFACTURER_AMBIGUOUS'
   | 'ENRICHMENT_CONFLICT'
@@ -74,6 +75,13 @@ export class UsaEnrichmentInputDecisionService {
 
   decide(context: UsaNormalizedProductContext): UsaEnrichmentDecision {
     const decisionContext = toDecisionContext(context);
+    if (context.sourceProduct.offerKind === 'FAMILY_STARTING_AT') {
+      return {
+        status: 'BLOCKED',
+        reason: 'SOURCE_CONFIGURATION_REQUIRED',
+        context: decisionContext,
+      };
+    }
     const manufacturer = context.fields.manufacturer;
     const candidateManufacturer = context.candidateValues.manufacturer;
 

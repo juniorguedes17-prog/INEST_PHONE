@@ -22,6 +22,7 @@ export type UsaCostPreflightStatus = 'READY_FOR_COST' | 'NEEDS_INPUT' | 'BLOCKED
 
 export type UsaCostPreflightReason =
   | 'SOURCE_PRODUCT_INVALID'
+  | 'SOURCE_CONFIGURATION_REQUIRED'
   | 'MANUFACTURER_MISSING'
   | 'ENRICHMENT_CONFLICT'
   | 'RETAILER_UNRESOLVED'
@@ -79,6 +80,13 @@ export class UsaCostPreflightService {
     redirector: UsaRedirectorSelection;
     composition: ShippingWeightComposition;
   }): Promise<UsaCostPreflightResult> {
+    if (input.sourceProduct.offerKind === 'FAMILY_STARTING_AT') {
+      return {
+        status: 'BLOCKED',
+        reason: 'SOURCE_CONFIGURATION_REQUIRED',
+        redirector: input.redirector,
+      };
+    }
     if (!isValidSourceProduct(input.sourceProduct)) {
       return { status: 'BLOCKED', reason: 'SOURCE_PRODUCT_INVALID', redirector: null };
     }
@@ -264,6 +272,8 @@ function toWeightPreflightResult(
 
 function mapSemanticReason(reason: Exclude<UsaEnrichmentDecision['reason'], null>) {
   switch (reason) {
+    case 'SOURCE_CONFIGURATION_REQUIRED':
+      return 'SOURCE_CONFIGURATION_REQUIRED' as const;
     case 'MANUFACTURER_AMBIGUOUS':
       return 'ENRICHMENT_CONFLICT' as const;
     case 'ENRICHMENT_CONFLICT':

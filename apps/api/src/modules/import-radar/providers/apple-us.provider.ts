@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
 import { ImportProvider, ImportProviderProduct } from '../interfaces/import-provider.interface';
 import { adaptUsaSourceProduct, type UsaSourceProduct } from '../usa-source-product.adapter';
+import { compactSourceEvidence } from '../usa-source-evidence';
 
 const APPLE_STORE_US_BASE_URL = 'https://www.apple.com';
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -55,9 +56,13 @@ export class AppleUsProvider implements ImportProvider {
 
     const products = catalogProducts.filter((product) => {
       const productSearch = normalizeText(
-        `${product.name} ${product.category} ${product.sourceManufacturer ?? ''}`,
+        `${product.name} ${product.sourceEvidence ?? ''} ${product.category} ${product.sourceManufacturer ?? ''}`,
       );
-      if (search && !productSearch.includes(search)) return false;
+      if (
+        search &&
+        !search.split(' ').every((token) => productSearch.split(/[^a-z0-9]+/).includes(token))
+      )
+        return false;
       return !category || normalizeText(product.category) === category;
     });
 
@@ -127,6 +132,10 @@ export function parseAppleUsCatalogHtml(
       retailer: 'Apple Store USA',
       category,
       priceUsd,
+      offerKind: 'FAMILY_STARTING_AT',
+      sourceEvidence: compactSourceEvidence(
+        (content ?? '').replace(/<img\b[^>]*\balt="([^"]*)"[^>]*>/gi, ' $1 '),
+      ),
       productUrl,
       sourceManufacturer: 'Apple',
       sourceManufacturerProvenance: 'EXPLICIT_SOURCE',

@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import {
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 export class UsaEnrichmentSourceProductDto {
   @ApiProperty()
@@ -79,6 +87,17 @@ export class UsaEnrichmentSourceProductDto {
   @IsNumber({ allowInfinity: false, allowNaN: false })
   @Min(0)
   priceUsd!: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  sourceEvidence?: string;
+
+  @ApiPropertyOptional({ enum: ['FAMILY_STARTING_AT', 'CONFIGURED_PRODUCT'] })
+  @IsOptional()
+  @IsIn(['FAMILY_STARTING_AT', 'CONFIGURED_PRODUCT'])
+  offerKind?: 'FAMILY_STARTING_AT' | 'CONFIGURED_PRODUCT';
 }
 
 export class UsaEnrichmentDecisionDto {

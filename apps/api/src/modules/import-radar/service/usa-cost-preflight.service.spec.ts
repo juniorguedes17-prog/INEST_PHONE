@@ -101,6 +101,23 @@ const readyDecision = {
 };
 
 describe('UsaCostPreflightService', () => {
+  it.each(['RED_DELAWARE', 'REI_DO_IMPORTADO'] as const)(
+    'blocks family starting prices before any operational processing for %s',
+    async (selection) => {
+      const { service, enrichmentDecisions, shippingWeights } = createService(
+        readyDecision,
+        createContext('CELULAR'),
+      );
+      const result = await service.preflight({
+        sourceProduct: { ...product, offerKind: 'FAMILY_STARTING_AT' },
+        composition: { kind: 'SINGLE_ITEM' },
+        redirector: redirector(selection),
+      });
+      expect(result).toMatchObject({ status: 'BLOCKED', reason: 'SOURCE_CONFIGURATION_REQUIRED' });
+      expect(enrichmentDecisions.resolve).not.toHaveBeenCalled();
+      expect(shippingWeights.resolve).not.toHaveBeenCalled();
+    },
+  );
   it('returns READY_FOR_COST for Red Delaware without requiring logistics classification', async () => {
     const { service } = createService(readyDecision, createContext('UNRESOLVED', null));
 

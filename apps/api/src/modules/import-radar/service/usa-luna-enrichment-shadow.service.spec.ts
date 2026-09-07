@@ -73,6 +73,30 @@ function createService() {
 }
 
 describe('UsaLunaEnrichmentShadowService', () => {
+  it('never sends family discovery or catalog counts to Luna', async () => {
+    const { productNormalization, service } = createService();
+    await service.observe([product({ offerKind: 'FAMILY_STARTING_AT', capacity: undefined })]);
+    expect(productNormalization.enrichUsaProduct).not.toHaveBeenCalled();
+    const response = {
+      total: 3278,
+      items: [
+        product({
+          category: '',
+          model: undefined,
+          capacity: undefined,
+          sourceName: 'Canon EOS R50 Kit White New',
+          sourceEvidence: 'RF-S18-45mm lens kit',
+          providerName: 'upcitemdb_us',
+        }),
+      ],
+    };
+    await service.observe(response.items);
+    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(1);
+    expect(productNormalization.enrichUsaProduct.mock.calls[0]?.[0]).not.toHaveProperty('total');
+    expect(productNormalization.enrichUsaProduct.mock.calls[0]?.[0]).toMatchObject({
+      sourceEvidence: 'RF-S18-45mm lens kit',
+    });
+  });
   it('hands Apple, Amazon, and UPCitemdb source products to NORMALIZE_PRICING_US without mutating them', async () => {
     const { productNormalization, service } = createService();
     const apple = product({ capacity: undefined });
@@ -98,7 +122,8 @@ describe('UsaLunaEnrichmentShadowService', () => {
     const observations = await service.observe([apple, amazon, upc]);
 
     expect(observations).toHaveLength(3);
-    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(3);
+    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(1);
+    expect(observations.slice(0, 2).every((entry) => !entry.lunaCalled)).toBe(true);
     expect(productNormalization.enrichUsaProduct).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'US',
@@ -116,7 +141,7 @@ describe('UsaLunaEnrichmentShadowService', () => {
 
   it('does not call Luna twice for the same provider source product in one execution', async () => {
     const { productNormalization, service } = createService();
-    const source = product({ capacity: undefined });
+    const source = product({ capacity: undefined, sourceName: 'Apple iPhone 17 Pro' });
 
     const observations = await service.observe([source, { ...source }]);
 
@@ -143,7 +168,9 @@ describe('UsaLunaEnrichmentShadowService', () => {
     const { productNormalization, service } = createService();
     productNormalization.enrichUsaProduct.mockRejectedValue(new Error('network unavailable'));
 
-    const [observation] = await service.observe([product({ capacity: undefined })]);
+    const [observation] = await service.observe([
+      product({ capacity: undefined, sourceName: 'Apple iPhone 17 Pro' }),
+    ]);
 
     expect(observation).toMatchObject({
       lunaCalled: true,

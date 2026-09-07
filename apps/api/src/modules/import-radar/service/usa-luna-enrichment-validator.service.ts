@@ -10,6 +10,7 @@ import { normalizeProductCondition } from '../condition-normalizer';
 import { resolveLogisticProductClassification } from '../logistic-product-classification';
 import type { UsaProductEnrichmentCandidate } from '../../evolution-webhook/product-normalization.service';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
+import { sourceSemanticText } from '../usa-source-evidence';
 import { UsaLunaEnrichmentShadowService } from './usa-luna-enrichment-shadow.service';
 
 export type UsaCandidateValidationStatus = 'VALIDATED' | 'INSUFFICIENT' | 'CONFLICT';
@@ -97,6 +98,15 @@ export class UsaLunaEnrichmentValidatorService {
         sourceIdentity,
         candidateIdentity,
       );
+      if (
+        fields[field].candidateStatus !== 'CONFLICT' &&
+        !candidateIsSourceAnchored(field, candidateValue, product, sourceIdentity)
+      ) {
+        fields[field] = {
+          ...baseFields(product, sourceIdentity)[field],
+          candidateStatus: 'INSUFFICIENT',
+        };
+      }
     }
 
     const enrichedIdentity = identityFromFields(product, fields);
@@ -110,7 +120,10 @@ export class UsaLunaEnrichmentValidatorService {
       candidateValues: Object.fromEntries(
         enrichmentFields
           .map((field) => [field, candidateValueFor(field, candidate)])
-          .filter((entry): entry is [UsaEnrichmentField, string] => entry[1] !== null),
+          .filter((entry): entry is [UsaEnrichmentField, string] => entry[1] !== null)
+          .filter(([field, value]) =>
+            candidateIsSourceAnchored(field, value, product, sourceIdentity),
+          ),
       ),
       candidateFields: enrichmentFields.filter(
         (field) => candidateValueFor(field, candidate) !== null,
@@ -244,7 +257,7 @@ function deterministicField(value: string | null | undefined): UsaNormalizedProd
 
 function identityFromSource(product: UsaSourceProduct) {
   return deriveExtendedProductIdentity({
-    productName: product.sourceName,
+    productName: sourceSemanticText(product),
     category: product.category,
     model: product.model,
     capacity: product.capacity,
@@ -461,4 +474,41 @@ function candidateValueFor(
     length: candidate.lengthCandidate,
   };
   return values[field];
+}
+
+function candidateIsSourceAnchored(
+  field: UsaEnrichmentField,
+  value: string,
+  product: UsaSourceProduct,
+  sourceIdentity: ExtendedProductIdentity,
+): boolean {
+  if (field === 'quantity') return false;
+  const text = [
+    sourceSemanticText(product),
+    product.sourceManufacturer,
+    product.category,
+    product.model,
+    product.capacity,
+    product.color,
+    product.condition,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  if (field === 'condition') {
+    const source = normalizeProductCondition(product.condition ?? text);
+    const proposed = normalizeProductCondition(value);
+    return (
+      source.status === 'RESOLVED' &&
+      proposed.status === 'RESOLVED' &&
+      source.condition === proposed.condition
+    );
+  }
+  if (field !== 'manufacturer') {
+    const sourceValue = identityValue(field, sourceIdentity);
+    if (sourceValue && normalizeCanonicalText(sourceValue) === normalizeCanonicalText(value))
+      return true;
+  }
+  const normalized = normalizeCanonicalText(text);
+  const proposed = normalizeCanonicalText(value);
+  return Boolean(proposed && ` ${normalized} `.includes(` ${proposed} `));
 }

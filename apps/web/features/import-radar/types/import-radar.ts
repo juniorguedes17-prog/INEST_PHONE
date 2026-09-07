@@ -107,6 +107,8 @@ export interface ImportRadarFilters {
 }
 
 export interface UsaSourceProduct {
+  sourceEvidence?: string;
+  offerKind?: 'FAMILY_STARTING_AT' | 'CONFIGURED_PRODUCT';
   providerName: string;
   sourceProductId: string;
   sourceName: string;

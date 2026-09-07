@@ -18,6 +18,27 @@ afterEach(() => {
 });
 
 describe('AppleUsProvider', () => {
+  it('finds Pro Max in family evidence but never promotes the starting price to a configuration', async () => {
+    const familyHtml = `<a href="/shop/buy-iphone/iphone-17-pro" data-display-name="iPhone 17 Pro Main" data-part-number="IPHONE17PRO_MAIN"><h2>iPhone 17 Pro and iPhone 17 Pro Max</h2><div class="rf-hcard-scrim-price">Buy from $1,099</div></a>`;
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(response(familyHtml))
+        .mockResolvedValueOnce(response(macCatalogHtml)),
+    );
+    const [family] = await new AppleUsProvider().searchUsaSourceProducts({
+      search: 'IPHONE 17 PRO MAX',
+    });
+    expect(family).toMatchObject({
+      sourceProductId: 'apple-us:IPHONE17PRO_MAIN',
+      offerKind: 'FAMILY_STARTING_AT',
+      priceUsd: 1099,
+    });
+    expect(family?.sourceEvidence).toContain('iPhone 17 Pro Max');
+    expect(family?.sourceEvidence).not.toContain('<');
+    expect(family).not.toHaveProperty('capacity');
+  });
   it('parses only public cards with an associated source ID, name, USD price, and product URL', () => {
     const first = parseAppleUsCatalogHtml(iphoneCatalogHtml, 'iPhone');
     const second = parseAppleUsCatalogHtml(iphoneCatalogHtml, 'iPhone');

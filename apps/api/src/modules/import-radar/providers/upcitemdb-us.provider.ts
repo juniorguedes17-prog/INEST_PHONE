@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
 import { ImportProvider, ImportProviderProduct } from '../interfaces/import-provider.interface';
 import { adaptUsaSourceProduct, type UsaSourceProduct } from '../usa-source-product.adapter';
+import { compactSourceEvidence } from '../usa-source-evidence';
 
 const UPCITEMDB_US_SEARCH_URL = 'https://api.upcitemdb.com/prod/trial/search';
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -221,6 +222,9 @@ function parseOffer(
     id: sourceProductId,
     externalId: context.itemIdentity,
     name: sourceName,
+    sourceEvidence: compactSourceEvidence(
+      [text(offer.title), text(offer.condition)].filter(Boolean).join(' '),
+    ),
     store: merchant,
     retailer,
     category: context.itemCategory,

@@ -36,6 +36,8 @@ export interface ImportProviderProduct {
   storeCount?: number;
   offerCount?: number;
   condition?: ImportProductCondition;
+  sourceEvidence?: string;
+  offerKind?: 'FAMILY_STARTING_AT' | 'CONFIGURED_PRODUCT';
 }
 
 export interface ImportProvider {

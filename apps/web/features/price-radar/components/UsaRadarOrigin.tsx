@@ -817,6 +817,8 @@ function humanizeUsaBlockedReason(reason: string) {
     SETTINGS_UNAVAILABLE: 'As configurações USA não estão disponíveis.',
     USD_BRL_QUOTE_NOT_CONFIGURED: 'A cotação USD/BRL não está configurada.',
     QUANTITY_UNRESOLVED: 'Não foi possível confirmar a quantidade de unidades desta compra.',
+    SOURCE_CONFIGURATION_REQUIRED:
+      'Selecione uma configuração comprável na fonte; este resultado representa uma família de produtos.',
     FLUXO_BLOQUEADO: 'O produto não pode continuar neste momento.',
   };
   return messages[reason] ?? 'O produto não pode continuar com segurança.';
@@ -870,7 +872,9 @@ function UsaProductCard({
       </div>
       <div className="border-t border-inest-line/70 pt-3 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0 lg:text-right">
         <span className="text-[10px] font-semibold uppercase tracking-wide text-inest-muted">
-          Preço da fonte
+          {product.offerKind === 'FAMILY_STARTING_AT'
+            ? 'Família — preço a partir de'
+            : 'Preço da fonte'}
         </span>
         <strong className="mt-1 block font-display text-2xl font-black text-inest-text">
           {formatUsd(product.priceUsd)}

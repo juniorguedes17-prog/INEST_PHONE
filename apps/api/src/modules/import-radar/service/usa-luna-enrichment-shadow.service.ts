@@ -5,6 +5,7 @@ import {
   type UsaProductEnrichmentResult,
 } from '../../evolution-webhook/product-normalization.service';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
+import { sourceSemanticText, compactSourceEvidence } from '../usa-source-evidence';
 
 export type UsaDeterministicIdentityState = 'RESOLVED' | 'INSUFFICIENT' | 'AMBIGUOUS';
 
@@ -14,7 +15,7 @@ export interface UsaProductEnrichmentShadowObservation {
   deterministicState: UsaDeterministicIdentityState;
   lunaCalled: boolean;
   result: UsaProductEnrichmentResult | null;
-  skipReason?: 'DETERMINISTICALLY_COMPLETE';
+  skipReason?: 'DETERMINISTICALLY_COMPLETE' | 'DISCOVERY_ONLY';
 }
 
 /**
@@ -53,7 +54,10 @@ export class UsaLunaEnrichmentShadowService {
         deterministicState,
         lunaCalled: false,
         result: null,
-        skipReason: 'DETERMINISTICALLY_COMPLETE',
+        skipReason:
+          product.offerKind === 'FAMILY_STARTING_AT'
+            ? 'DISCOVERY_ONLY'
+            : 'DETERMINISTICALLY_COMPLETE',
       };
       this.log(observation);
       return observation;
@@ -65,6 +69,7 @@ export class UsaLunaEnrichmentShadowService {
         provider: product.providerName,
         sourceProductId: product.sourceProductId,
         sourceName: product.sourceName,
+        sourceEvidence: compactSourceEvidence(product.sourceEvidence ?? ''),
         retailer: product.retailer,
         sourceManufacturer: product.sourceManufacturer,
         category: product.category,
@@ -119,7 +124,7 @@ export function deriveDeterministicIdentityState(
   product: UsaSourceProduct,
 ): UsaDeterministicIdentityState {
   const identity = deriveExtendedProductIdentity({
-    productName: product.sourceName,
+    productName: sourceSemanticText(product),
     category: product.category,
     model: product.model,
     capacity: product.capacity,
@@ -135,15 +140,11 @@ export function shouldCallUsaLuna(
   product: UsaSourceProduct,
   deterministicState: UsaDeterministicIdentityState,
 ) {
-  if (deterministicState !== 'RESOLVED') return true;
-  return [
-    product.sourceManufacturer,
-    product.category,
-    product.model,
-    product.capacity,
-    product.color,
-    product.condition,
-  ].some((value) => !value?.trim());
+  return (
+    product.offerKind !== 'FAMILY_STARTING_AT' &&
+    deterministicState !== 'RESOLVED' &&
+    Boolean(sourceSemanticText(product).trim())
+  );
 }
 
 function unavailableResult(error: unknown): UsaProductEnrichmentResult {

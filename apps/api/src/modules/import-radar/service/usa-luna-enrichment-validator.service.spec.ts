@@ -82,6 +82,46 @@ function createService(
 }
 
 describe('UsaLunaEnrichmentValidatorService', () => {
+  it.each([
+    ['Canon', 'EOS R50 Mirrorless Camera RF-S18-45mm Kit White New'],
+    ['Sony', 'Alpha a7 IV Camera Black New'],
+    ['Garmin', 'Fenix 8 Watch Black New'],
+    ['Samsung', 'Galaxy S25 Ultra 512GB Black New'],
+  ])(
+    'structures explicit %s evidence without Product.id or inventing missing fields',
+    async (brand, description) => {
+      const { service } = createService(
+        candidate({
+          manufacturerCandidate: brand,
+          modelCandidate: description,
+          ramCandidate: '64GB',
+          quantityCandidate: '2',
+        }),
+        { status: 'FOUND', canonicalName: brand },
+      );
+      const source = product({
+        sourceName: 'Source product',
+        sourceEvidence: `${brand} ${description}`,
+        sourceManufacturer: null,
+        category: '',
+        providerName: 'upcitemdb_us',
+      });
+      const result = await service.enrich(source);
+      expect(result.fields.manufacturer).toMatchObject({
+        value: brand,
+        candidateStatus: 'VALIDATED',
+        provenance: 'LUNA_VALIDATED',
+      });
+      expect(result.candidateValues.model).toBe(description);
+      expect(result.fields.ram).toMatchObject({ value: null, candidateStatus: 'INSUFFICIENT' });
+      expect(result.fields.quantity).toMatchObject({
+        value: null,
+        candidateStatus: 'INSUFFICIENT',
+      });
+      expect(result.sourceProduct).toBe(source);
+      expect(source).not.toHaveProperty('productId');
+    },
+  );
   it('validates a MacBook candidate through existing Product Identity without mutating its source product', async () => {
     const source = product({ category: 'MacBook' });
     const before = structuredClone(source);
@@ -115,9 +155,9 @@ describe('UsaLunaEnrichmentValidatorService', () => {
     );
     expect(result.fields.model).toMatchObject({ value: 'MacBook Air M5 13"' });
     expect(result.fields.condition).toMatchObject({
-      value: 'NOVO',
-      provenance: 'LUNA_VALIDATED',
-      candidateStatus: 'VALIDATED',
+      value: null,
+      provenance: null,
+      candidateStatus: 'INSUFFICIENT',
     });
     expect(source).toEqual(before);
     expect(result.logisticClassification.classification).toBe('OTHER');
@@ -146,13 +186,13 @@ describe('UsaLunaEnrichmentValidatorService', () => {
     );
 
     expect(result.fields.model).toMatchObject({
-      value: 'iPhone 17 Pro Max',
-      provenance: 'LUNA_VALIDATED',
-      candidateStatus: 'VALIDATED',
+      value: null,
+      provenance: null,
+      candidateStatus: 'INSUFFICIENT',
     });
-    expect(result.fields.storage).toMatchObject({ provenance: 'LUNA_VALIDATED' });
+    expect(result.fields.storage).toMatchObject({ candidateStatus: 'INSUFFICIENT' });
     expect(result.fields.ram).toMatchObject({ value: null, candidateStatus: null });
-    expect(result.logisticClassification.classification).toBe('CELULAR');
+    expect(result.logisticClassification.classification).toBe('UNRESOLVED');
   });
 
   it('validates a registered non-Apple manufacturer but leaves unsupported Canon model fields insufficient', async () => {

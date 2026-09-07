@@ -49,6 +49,14 @@ afterEach(() => {
 });
 
 describe('AmazonUsProvider', () => {
+  it('preserves the entire commercial title as semantic evidence without changing seller or price safety', () => {
+    const title = 'Apple iPhone 17 Pro 1TB eSIM Cosmic Orange Renewed Premium';
+    const result = parseAmazonUsDetailHtml(amazonDetailHtml.replace('Example&nbsp;Phone', title), {
+      asin: 'B0G45F93BH',
+      category: 'CELL_PHONES',
+    });
+    expect(result).toMatchObject({ name: title, retailer: 'Amazon', priceUsd: 999.5 });
+  });
   it('discovers only source-owned non-ad ASINs with one structured category', () => {
     expect(parseAmazonUsSearchHtml(searchHtml)).toEqual([
       { asin: 'AMAZON0001', category: 'CELL_PHONES' },

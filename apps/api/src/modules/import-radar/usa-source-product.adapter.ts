@@ -1,4 +1,5 @@
 import { formatSourceDisplayName } from './source-display-name';
+import { compactSourceEvidence } from './usa-source-evidence';
 import type { ImportProviderProduct } from './interfaces/import-provider.interface';
 import type { SourceCommercialIdentity } from './interfaces/source-commercial-identity.interface';
 
@@ -31,6 +32,8 @@ export interface UsaSourceProduct extends SourceCommercialIdentity<'US'> {
   condition?: ImportProviderProduct['condition'];
   imageUrl?: string;
   priceUsd: number;
+  sourceEvidence?: string;
+  offerKind?: ImportProviderProduct['offerKind'];
 }
 
 /**
@@ -94,6 +97,10 @@ export function adaptUsaSourceProduct(input: UsaSourceProductAdapterInput): UsaS
     condition: product.condition,
     ...(imageUrl ? { imageUrl } : {}),
     priceUsd: product.priceUsd,
+    ...(product.sourceEvidence
+      ? { sourceEvidence: compactSourceEvidence(product.sourceEvidence) }
+      : {}),
+    ...(product.offerKind ? { offerKind: product.offerKind } : {}),
   };
 }
 
