@@ -14,11 +14,16 @@ interface CacheEntry {
 }
 
 interface ParsedOffer {
+  id: string;
+  externalId: string;
+  name: string;
   store: string;
   storeUrl?: string;
   city?: string;
   priceUsd: number;
+  productUrl: string;
   availability?: string;
+  condition?: ImportProviderProduct['condition'];
 }
 
 @Injectable()
@@ -87,14 +92,24 @@ export class ComprasParaguaiProvider implements ImportProvider {
       }
       const prices = ordered.map((offer) => offer.priceUsd);
       const stores = new Set(ordered.map((offer) => normalizeText(offer.store)).filter(Boolean));
+      const offerAttributes = inferProductAttributes(cheapest.name);
 
       return {
         ...product,
+        id: cheapest.id,
+        externalId: cheapest.externalId,
+        name: cheapest.name,
+        sourceEvidence: cheapest.name,
         store: cheapest.store,
         storeUrl: cheapest.storeUrl,
         city: cheapest.city,
         availability: cheapest.availability,
         priceUsd: cheapest.priceUsd,
+        productUrl: cheapest.productUrl,
+        condition: cheapest.condition,
+        model: offerAttributes.model ?? product.model,
+        capacity: offerAttributes.capacity ?? product.capacity,
+        color: offerAttributes.color ?? product.color,
         minimumPriceUsd: cheapest.priceUsd,
         averagePriceUsd: roundMoney(
           prices.reduce((total, price) => total + price, 0) / prices.length,
@@ -214,6 +229,20 @@ export function parseProductOffers(html: string): ParsedOffer[] {
   for (const card of cards) {
     const cardHtml = card.full;
     const text = cleanText(stripHtml(cardHtml));
+    const offerLink =
+      findElementByClass(cardHtml, 'promocao-item-nome', 'a') ??
+      findElementByClass(cardHtml, 'truncate', 'a') ??
+      findAnchor(cardHtml, (href) => /__\d+\/?(?:\?|$)/.test(href));
+    const offerHref = extractAttribute(offerLink?.openingTag ?? '', 'href');
+    const name = cleanText(offerLink?.content ?? '');
+    if (!offerHref || !name) {
+      continue;
+    }
+    const productUrl = new URL(offerHref, BASE_URL).toString();
+    const externalId = extractExternalId(productUrl);
+    if (!externalId) {
+      continue;
+    }
     const priceText = stripHtml(
       findElementByClass(cardHtml, 'price-model')?.content ??
         findElementByClass(cardHtml, 'promocao-item-preco')?.content ??
@@ -236,12 +265,18 @@ export function parseProductOffers(html: string): ParsedOffer[] {
     }
 
     const href = extractAttribute(storeElement?.openingTag ?? '', 'href');
+    const condition = normalizeProductCondition(name);
     offers.push({
+      id: `py-${externalId}`,
+      externalId,
+      name,
       store,
       storeUrl: href ? new URL(href, BASE_URL).toString() : undefined,
       city: extractCity(text),
       priceUsd,
+      productUrl,
       availability: extractAvailability(text),
+      condition: condition.status === 'RESOLVED' ? condition.condition : undefined,
     });
   }
 
