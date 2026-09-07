@@ -18,6 +18,16 @@ afterEach(() => {
 });
 
 describe('AppleUsProvider', () => {
+  it('returns a legitimate EMPTY for CAMERA within the supported family catalog', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(response(iphoneCatalogHtml))
+        .mockResolvedValueOnce(response(macCatalogHtml)),
+    );
+    expect(await new AppleUsProvider().searchUsaSourceProducts({ search: 'CAMERA' })).toEqual([]);
+  });
   it('finds Pro Max in family evidence but never promotes the starting price to a configuration', async () => {
     const familyHtml = `<a href="/shop/buy-iphone/iphone-17-pro" data-display-name="iPhone 17 Pro Main" data-part-number="IPHONE17PRO_MAIN"><h2>iPhone 17 Pro and iPhone 17 Pro Max</h2><div class="rf-hcard-scrim-price">Buy from $1,099</div></a>`;
     vi.stubGlobal(

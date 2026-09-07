@@ -25,7 +25,15 @@ const componentCode = ts.transpileModule(readFileSync(`${__dirname}/UsaRadarOrig
 // No DOM runner, provider network calls, or persistence are needed for this handoff regression.
 function setup(response: object) {
   const services = {
-    searchUsaSourceProducts: mock.fn(async () => [product]),
+    searchUsaWithDiagnostics: mock.fn(
+      async (): Promise<{
+        products: (typeof product)[];
+        providers: { provider: string; status: string; returnedCount: number }[];
+      }> => ({
+        products: [product],
+        providers: [{ provider: 'amazon_us', status: 'OK', returnedCount: 1 }],
+      }),
+    ),
     resolveUsaEnrichment: mock.fn(async () => ({ decision: { status: 'READY', reason: null } })),
     preflightUsaCost: mock.fn(async (...args: unknown[]) => (void args, response)),
     resolveUsaShippingWeight: mock.fn(
@@ -140,6 +148,53 @@ test('Rei CELULAR: READY_FOR_COST without weight enables execution for an extern
   const [source, redirector] = h.services.executeUsaPricedOffer.mock.calls[0]!.arguments;
   assert.equal(source, product);
   assert.equal((redirector as Props).redirector, 'REI_DO_IMPORTADO');
+});
+
+test('real empty search shows the empty state rather than a provider warning', async () => {
+  const h = setup(ready);
+  h.services.searchUsaWithDiagnostics.mock.mockImplementation(async () => ({
+    products: [],
+    providers: [{ provider: 'apple_us', status: 'EMPTY', returnedCount: 0 }],
+  }));
+  await h.call('SearchInput', 'onChange', { target: { value: 'CAMERA' } });
+  await h.call('form', 'onSubmit', { preventDefault() {} });
+  assert.equal(h.nodes('EmptyState').length, 1);
+  assert.equal(h.nodes('ErrorState').length, 0);
+});
+
+for (const hasProducts of [true, false]) {
+  test(`partial search has a warning, not absolute empty (${hasProducts})`, async () => {
+    const h = setup(ready);
+    h.services.searchUsaWithDiagnostics.mock.mockImplementation(async () => ({
+      products: hasProducts ? [product] : [],
+      providers: [{ provider: 'amazon_us', status: 'UNAVAILABLE', returnedCount: 0 }],
+    }));
+    await h.call('SearchInput', 'onChange', { target: { value: 'CAMERA' } });
+    await h.call('form', 'onSubmit', { preventDefault() {} });
+    assert.equal(h.nodes('EmptyState').length, 0);
+    assert.equal(h.nodes('ErrorState').length, 0);
+    assert.ok(
+      h
+        .nodes('p')
+        .some((node) => String(node.props.children).includes('Algumas fontes não responderam')),
+    );
+    assert.equal(h.nodes('UsaProductCard').length, hasProducts ? 1 : 0);
+    if (hasProducts) await h.call('UsaProductCard', 'onSelect', product);
+  });
+}
+
+test('total failure shows a safe technical message with retry, not raw HTTP details', async () => {
+  const h = setup(ready);
+  h.services.searchUsaWithDiagnostics.mock.mockImplementation(async () => {
+    throw new Error('HTTP 503 stack');
+  });
+  await h.call('SearchInput', 'onChange', { target: { value: 'CAMERA' } });
+  await h.call('form', 'onSubmit', { preventDefault() {} });
+  assert.equal(
+    h.nodes('ErrorState')[0]?.props.description,
+    'Não foi possível consultar as fontes agora.',
+  );
+  assert.equal(h.nodes('EmptyState').length, 0);
 });
 
 for (const [label, redirector] of [

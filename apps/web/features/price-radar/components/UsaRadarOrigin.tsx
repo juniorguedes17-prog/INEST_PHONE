@@ -21,13 +21,14 @@ import {
   UsaPricedOfferResponse,
   UsaRedirectorSelection,
   UsaShippingWeightResolution,
-  searchUsaSourceProducts,
+  searchUsaWithDiagnostics,
 } from '@/features/import-radar/services/import-radar-service';
 import { UsaSourceProduct } from '@/features/import-radar/types/import-radar';
 
 export function UsaRadarOrigin() {
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<UsaSourceProduct[]>([]);
+  const [partialSearch, setPartialSearch] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<UsaSourceProduct | null>(null);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -372,6 +373,7 @@ export function UsaRadarOrigin() {
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       const normalizedQuery = query.trim();
+      setPartialSearch(false);
       if (normalizedQuery.length < 2) {
         setProducts([]);
         setSelectedProduct(null);
@@ -388,16 +390,18 @@ export function UsaRadarOrigin() {
       resetOperationalState();
       resetWeightState();
       try {
-        setProducts(await searchUsaSourceProducts(normalizedQuery));
+        const result = await searchUsaWithDiagnostics(normalizedQuery);
+        setProducts(result.products);
+        setPartialSearch(
+          result.providers.some(
+            (report) => report.status === 'UNAVAILABLE' || report.status === 'RATE_LIMITED',
+          ),
+        );
         setSearched(true);
-      } catch (searchError) {
+      } catch {
         setProducts([]);
         setSearched(true);
-        setError(
-          searchError instanceof Error
-            ? searchError.message
-            : 'Não foi possível consultar os providers USA.',
-        );
+        setError('Não foi possível consultar as fontes agora.');
       } finally {
         setLoading(false);
       }
@@ -444,7 +448,14 @@ export function UsaRadarOrigin() {
         />
       ) : null}
       {loading ? <LoadingState /> : null}
-      {!loading && searched && !error && !products.length ? (
+      {!loading && searched && !error && partialSearch ? (
+        <p role="status" className="text-sm text-inest-muted">
+          {products.length
+            ? 'Algumas fontes não responderam. Exibindo os resultados disponíveis.'
+            : 'Algumas fontes não responderam. Nenhum resultado disponível nas fontes consultadas.'}
+        </p>
+      ) : null}
+      {!loading && searched && !error && !partialSearch && !products.length ? (
         <EmptyState title="Nenhum produto encontrado." description="Tente outro termo de busca." />
       ) : null}
 

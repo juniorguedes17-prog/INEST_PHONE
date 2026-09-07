@@ -8,6 +8,7 @@ const UPC = '0012345678905';
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe('parseUpcItemDbOffers', () => {
@@ -105,6 +106,146 @@ describe('parseUpcItemDbOffers', () => {
 });
 
 describe('UpcItemDbUsProvider', () => {
+  it('honors the server reset after 429 without making a retry request', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ...response('', 429),
+      headers: new Headers({
+        'x-ratelimit-reset': String((NOW + 3600_000) / 1000),
+        'retry-after': '60',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new UpcItemDbUsProvider();
+    await expect(provider.search({ search: 'camera' })).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+    await vi.advanceTimersByTimeAsync(120_000);
+    await expect(provider.search({ search: 'phone' })).rejects.toBeInstanceOf(
+      ServiceUnavailableException,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+  it.each(['CAMERA', 'IPHONE 17 PRO MAX'])(
+    'finds a fresh offer beyond an ineligible first page for %s',
+    async (search) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(NOW);
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          response(
+            JSON.stringify({
+              ...payload({ updated_t: (NOW - 25 * 3600_000) / 1000 }),
+              total: 3278,
+              offset: 5,
+            }),
+          ),
+        )
+        .mockResolvedValueOnce(response(JSON.stringify(payload({}))));
+      vi.stubGlobal('fetch', fetchMock);
+      const resultPromise = new UpcItemDbUsProvider().searchUsaWithDiagnostics({ search });
+      await vi.advanceTimersByTimeAsync(10_000);
+      const result = await resultPromise;
+      expect(result.products).toHaveLength(1);
+      expect(result.report.diagnostics).toMatchObject({
+        pages: 2,
+        emitted: 1,
+        stopReason: 'NO_NEXT_PAGE',
+        discarded: { stale: 1 },
+      });
+    },
+  );
+  it('CAMERA follows the documented next offset, dedupes across pages and stops at two pages rather than total 3278', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const first = { ...payload({}), total: 3278, offset: 5 };
+    const second = { ...payload({}), total: 3278, offset: 10 };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(JSON.stringify(first)))
+      .mockResolvedValueOnce(response(JSON.stringify(second)));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new UpcItemDbUsProvider();
+    const pending = provider.searchUsaWithDiagnostics({ search: 'CAMERA' });
+    const repeated = provider.searchUsaWithDiagnostics({ search: 'CAMERA' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    const result = await pending;
+    expect((await repeated).products).toEqual(result.products);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('offset=5');
+    expect(result.products).toHaveLength(1);
+    expect(result.report.diagnostics).toMatchObject({
+      totalDeclared: 3278,
+      pages: 2,
+      itemsReceived: 2,
+      offersEvaluated: 2,
+      emitted: 1,
+      stopReason: 'PAGE_BUDGET',
+    });
+    await provider.searchUsaWithDiagnostics({ search: 'camera' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([429, 503])('preserves page one when page two returns %s', async (status) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response(JSON.stringify({ ...payload({}), total: 3278, offset: 5 })))
+      .mockResolvedValueOnce(response('', status));
+    vi.stubGlobal('fetch', fetchMock);
+    const resultPromise = new UpcItemDbUsProvider().searchUsaWithDiagnostics({ search: 'camera' });
+    await vi.advanceTimersByTimeAsync(10_000);
+    const result = await resultPromise;
+    expect(result.products).toHaveLength(1);
+    expect(result.report.status).toBe(status === 429 ? 'RATE_LIMITED' : 'UNAVAILABLE');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops after enough eligible offers; keeps unknown retailer and records each discard reason', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const base = payload({ merchant: 'Unknown Shop', domain: 'unknown.example' });
+    const offer = base.items[0]!.offers[0]!;
+    base.items[0]!.offers = [
+      ...Array.from({ length: 10 }, (_, index) => ({
+        ...offer,
+        link: `https://unknown.example/${index}`,
+      })),
+      { ...offer, updated_t: (NOW - 25 * 3600_000) / 1000 },
+      { ...offer, currency: 'CAD' },
+      { ...offer, price: 0 },
+      { ...offer, link: 'bad-url' },
+      { ...offer, merchant: '' },
+    ];
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(response(JSON.stringify({ ...base, offset: 5, total: 3278 })));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await new UpcItemDbUsProvider().searchUsaWithDiagnostics({ search: 'camera' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(result.products).toHaveLength(10);
+    expect(result.products.every((item) => item.retailer === null)).toBe(true);
+    expect(result.report.diagnostics).toMatchObject({
+      stopReason: 'ENOUGH_CANDIDATES',
+      discarded: { stale: 1, currency: 1, price: 1, url: 1, malformed: 1 },
+    });
+  });
+
+  it('protects the FREE burst budget across different searches without another network call', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const fetchMock = vi.fn().mockResolvedValue(response(JSON.stringify(payload({}))));
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new UpcItemDbUsProvider();
+    await provider.search({ search: 'camera' });
+    await expect(provider.search({ search: 'phone' })).rejects.toMatchObject({
+      report: { status: 'RATE_LIMITED' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   it('uses the official free search endpoint, caches successful results, and adapts to UsaSourceProduct', async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(JSON.stringify(payload({}))));
     vi.stubGlobal('fetch', fetchMock);

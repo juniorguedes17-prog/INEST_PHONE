@@ -129,6 +129,31 @@ describe('AmazonUsProvider', () => {
     expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('/s?k=phone');
   });
 
+  it('does not label failed PDP access as an empty successful provider', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(response(searchHtml))
+        .mockResolvedValueOnce(response('<title>Robot Check</title>'))
+        .mockResolvedValueOnce(response(amazonDetailHtml)),
+    );
+    const result = await new AmazonUsProvider().searchUsaWithDiagnostics({ search: 'camera' });
+    expect(result.products).toHaveLength(1);
+    expect(result.report).toMatchObject({
+      status: 'UNAVAILABLE',
+      returnedCount: 1,
+      diagnostics: { failedDetails: 1 },
+    });
+  });
+
+  it('surfaces HTTP 503 as unavailable instead of EMPTY', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response('', 503)));
+    await expect(
+      new AmazonUsProvider().searchUsaWithDiagnostics({ search: 'camera' }),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
   it('adapts a verified offer into the P6A USA source product contract without Product.id', async () => {
     vi.stubGlobal(
       'fetch',

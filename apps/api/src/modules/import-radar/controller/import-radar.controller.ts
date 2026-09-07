@@ -8,6 +8,7 @@ import {
   Post,
   Query,
   Optional,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -70,6 +71,14 @@ export class ImportRadarController {
   @ApiOperation({ summary: 'Pesquisa produtos internacionais por provider.' })
   search(@Query() query: ImportSearchQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.importRadarService.search(query, user);
+  }
+
+  @Get('usa/search/diagnostics')
+  @ApiOperation({ summary: 'Pesquisa USA com diagnóstico parcial das fontes.' })
+  searchUsaWithDiagnostics(@Query() query: ImportSearchQueryDto) {
+    if (!this.usaProvidersOrchestrator)
+      throw new ServiceUnavailableException('USA discovery unavailable.');
+    return this.usaProvidersOrchestrator.searchWithDiagnostics(query);
   }
 
   @Get('usa/search')

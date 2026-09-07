@@ -48,7 +48,14 @@ describe('ImportRadarController manufacturer confirmation permissions', () => {
         priceUsd: 999,
       },
     ];
-    const orchestrator = { search: async () => products };
+    const discovery = {
+      products,
+      providers: [{ provider: 'apple_us', status: 'OK', returnedCount: 1 }],
+    };
+    const orchestrator = {
+      search: async () => products,
+      searchWithDiagnostics: vi.fn(async () => discovery),
+    };
     const controller = new ImportRadarController(
       {} as ImportRadarService,
       {} as never,
@@ -59,6 +66,11 @@ describe('ImportRadarController manufacturer confirmation permissions', () => {
     );
 
     await expect(controller.searchUsa({ search: 'iPhone' })).resolves.toEqual(products);
+    await expect(controller.searchUsaWithDiagnostics({ search: 'iPhone' })).resolves.toEqual(
+      discovery,
+    );
+    expect(orchestrator.searchWithDiagnostics).toHaveBeenCalledTimes(1);
+    expect(orchestrator.searchWithDiagnostics).toHaveBeenCalledWith({ search: 'iPhone' });
   });
 
   it('requires products:edit to register an operational shipping weight', () => {

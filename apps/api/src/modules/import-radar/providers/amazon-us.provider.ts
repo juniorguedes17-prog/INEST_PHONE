@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
 import { ImportProvider, ImportProviderProduct } from '../interfaces/import-provider.interface';
 import { adaptUsaSourceProduct, type UsaSourceProduct } from '../usa-source-product.adapter';
+import type { UsaProviderReport, UsaProviderSearchResult } from '../usa-search-result';
 
 const AMAZON_US_BASE_URL = 'https://www.amazon.com';
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -15,6 +16,7 @@ interface AmazonSearchCandidate {
 interface CacheEntry {
   expiresAt: number;
   products: ImportProviderProduct[];
+  report: UsaProviderReport;
 }
 
 /**
@@ -37,12 +39,14 @@ export class AmazonUsProvider implements ImportProvider {
     try {
       const searchHtml = await this.fetchPublicPage(`/s?k=${encodeURIComponent(search)}`);
       const candidates = parseAmazonUsSearchHtml(searchHtml);
+      let failedDetails = 0;
       const detailed = await Promise.all(
         candidates.map(async (candidate) => {
           try {
             const detailHtml = await this.fetchPublicPage(`/dp/${candidate.asin}`);
             return parseAmazonUsDetailHtml(detailHtml, candidate);
           } catch {
+            failedDetails++;
             // A source item that cannot be verified must not make another
             // independently verifiable item eligible by association.
             return null;
@@ -53,7 +57,21 @@ export class AmazonUsProvider implements ImportProvider {
       const products = detailed.filter(
         (product): product is ImportProviderProduct => product !== null,
       );
-      this.cache.set(search, { expiresAt: Date.now() + CACHE_TTL_MS, products });
+      this.cache.set(search, {
+        expiresAt: Date.now() + CACHE_TTL_MS,
+        products,
+        report: {
+          provider: this.name,
+          status: failedDetails ? 'UNAVAILABLE' : products.length ? 'OK' : 'EMPTY',
+          returnedCount: products.length,
+          diagnostics: {
+            scope: 'PUBLIC_FIRST_PAGE_VERIFIED_PDP',
+            candidates: candidates.length,
+            failedDetails,
+            rejectedOffers: candidates.length - failedDetails - products.length,
+          },
+        },
+      });
       return products;
     } catch (error) {
       throw new ServiceUnavailableException(
@@ -63,6 +81,18 @@ export class AmazonUsProvider implements ImportProvider {
   }
 
   /** Explicit P6A handoff; it does not route the existing BR/PY Radar. */
+  async searchUsaWithDiagnostics(query: ImportSearchQueryDto): Promise<UsaProviderSearchResult> {
+    const products = await this.searchUsaSourceProducts(query);
+    return {
+      products,
+      report: this.cache.get(normalizeText(query.search ?? ''))?.report ?? {
+        provider: this.name,
+        status: products.length ? 'OK' : 'EMPTY',
+        returnedCount: products.length,
+      },
+    };
+  }
+
   async searchUsaSourceProducts(query: ImportSearchQueryDto): Promise<UsaSourceProduct[]> {
     return (await this.search(query)).map((product) =>
       adaptUsaSourceProduct({ providerName: this.name, product }),
@@ -85,6 +115,11 @@ export class AmazonUsProvider implements ImportProvider {
 
       const html = await response.text();
       if (!html.trim()) throw new Error('Empty public Amazon response');
+      if (
+        /validateCaptcha|\/errors\/validateCaptcha|Robot Check|<title>\s*Robot or human/i.test(html)
+      ) {
+        throw new Error('Public Amazon challenge');
+      }
       return html;
     } finally {
       clearTimeout(timeout);

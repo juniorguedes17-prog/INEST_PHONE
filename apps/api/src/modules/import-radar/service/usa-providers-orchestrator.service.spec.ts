@@ -10,6 +10,22 @@ type UsaProviderStub = {
 };
 
 describe('UsaProvidersOrchestrator', () => {
+  it.each([true, false])(
+    'exposes provider failures with or without available products (%s)',
+    async (withProducts) => {
+      const result = await createOrchestrator(
+        provider('apple_us', []),
+        provider('amazon_us', [], new Error('HTTP 503')),
+        provider('upcitemdb_us', withProducts ? [source('upcitemdb_us')] : []),
+      ).searchWithDiagnostics({ search: 'CAMERA' });
+      expect(result.products).toHaveLength(withProducts ? 1 : 0);
+      expect(result.providers.map((report) => report.status)).toEqual([
+        'EMPTY',
+        'UNAVAILABLE',
+        withProducts ? 'OK' : 'EMPTY',
+      ]);
+    },
+  );
   it('queries Apple, Amazon, and UPCitemdb together while preserving each source provenance', async () => {
     const apple = provider('apple_us', [source('apple_us', { retailer: 'Apple Store USA' })]);
     const amazon = provider('amazon_us', [source('amazon_us', { retailer: 'Amazon' })]);

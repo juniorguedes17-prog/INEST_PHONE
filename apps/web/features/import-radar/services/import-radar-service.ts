@@ -93,6 +93,34 @@ export async function searchUsaSourceProducts(query: string): Promise<UsaSourceP
   return parseResponse<UsaSourceProduct[]>(response);
 }
 
+export interface UsaDiscoveryResponse {
+  products: UsaSourceProduct[];
+  providers: {
+    provider: string;
+    status: 'OK' | 'EMPTY' | 'UNAVAILABLE' | 'RATE_LIMITED';
+    returnedCount: number;
+  }[];
+}
+
+export async function searchUsaWithDiagnostics(query: string): Promise<UsaDiscoveryResponse> {
+  const params = new URLSearchParams({ search: query });
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/import-radar/usa/search/diagnostics?${params}`,
+  );
+  const result = await parseResponse<UsaDiscoveryResponse>(response);
+  if (
+    !Array.isArray(result?.products) ||
+    !Array.isArray(result?.providers) ||
+    result.providers.some(
+      (report) =>
+        !report || !['OK', 'EMPTY', 'UNAVAILABLE', 'RATE_LIMITED'].includes(report.status),
+    )
+  ) {
+    throw new Error('Resposta de busca USA inválida.');
+  }
+  return result;
+}
+
 export type UsaEnrichmentDecision =
   | { status: 'READY'; reason: null }
   | {
