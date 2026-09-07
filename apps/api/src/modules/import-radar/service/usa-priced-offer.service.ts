@@ -79,6 +79,7 @@ export class UsaPricedOfferService {
       sourceProduct: input.sourceProduct,
       finalCost: costExecution.calculation.finalCost,
       condition: costExecution.preflight.condition,
+      normalizedPricing: costExecution.preflight.normalizedPricing,
       catalogProductId: input.catalogProductId,
       manufacturerResolution: input.manufacturerResolution,
     });

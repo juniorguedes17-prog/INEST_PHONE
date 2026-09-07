@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { SettingsService } from '../../settings/service/settings.service';
+import type { UsaNormalizedPricingContext } from '../../pricing/usa-final-cost-pricing.contract';
 import { normalizeProductCondition, type ImportProductCondition } from '../condition-normalizer';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
 import {
@@ -46,6 +47,8 @@ export type UsaCostPreflightResult =
       quantity: number | null;
       /** Existing P6F condition resolution, carried forward without re-derivation. */
       condition: ImportProductCondition | null;
+      /** P6F-approved fields for the later shared Financial Identity lookup. */
+      normalizedPricing: UsaNormalizedPricingContext;
       shippingWeightLbs: number | null;
     }
   | {
@@ -134,6 +137,7 @@ export class UsaCostPreflightService {
 
     const semanticContext = semantic.context;
     const condition = resolveNormalizedCondition(semanticContext.fields.condition?.value);
+    const normalizedPricing = toNormalizedPricingContext(semanticContext, input.sourceProduct);
     const logisticClassification = semanticContext.logisticClassification.classification;
     if (
       input.redirector.redirector === 'REI_DO_IMPORTADO' &&
@@ -167,6 +171,7 @@ export class UsaCostPreflightService {
           logisticClassification,
           quantity,
           condition,
+          normalizedPricing,
           shippingWeightLbs: null,
         };
       }
@@ -191,6 +196,7 @@ export class UsaCostPreflightService {
       taxTreatment.taxTreatment,
       logisticClassification,
       condition,
+      normalizedPricing,
     );
   }
 
@@ -242,6 +248,7 @@ function toWeightPreflightResult(
   taxTreatment: Exclude<UsaTaxTreatment, 'UNRESOLVED'>,
   logisticClassification: 'CELULAR' | 'OTHER' | 'UNRESOLVED',
   condition: ImportProductCondition | null,
+  normalizedPricing: UsaNormalizedPricingContext,
 ): UsaCostPreflightResult {
   if (resolution.status === 'WEIGHT_FOUND') {
     return {
@@ -252,6 +259,7 @@ function toWeightPreflightResult(
         logisticClassification === 'UNRESOLVED' ? null : logisticClassification,
       quantity: null,
       condition,
+      normalizedPricing,
       shippingWeightLbs: resolution.shippingWeightLbs,
     };
   }
@@ -313,6 +321,18 @@ function resolveNormalizedCondition(
 ): ImportProductCondition | null {
   const resolution = normalizeProductCondition(value);
   return resolution.status === 'RESOLVED' ? resolution.condition : null;
+}
+
+function toNormalizedPricingContext(
+  context: Awaited<ReturnType<UsaEnrichmentInputDecisionService['resolve']>>['context'],
+  sourceProduct: UsaSourceProduct,
+): UsaNormalizedPricingContext {
+  return {
+    category: context.fields.category.value ?? sourceProduct.category ?? null,
+    model: context.fields.model.value,
+    capacity: context.fields.storage.value,
+    color: context.fields.color.value,
+  };
 }
 
 function validateRedSettings(settings: { firstLbUsd: number; additionalLbUsd: number }) {

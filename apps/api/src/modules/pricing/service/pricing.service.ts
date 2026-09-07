@@ -85,6 +85,19 @@ function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResoluti
   }
 }
 
+function getUsaProfitProductDescription(
+  context: NonNullable<UsaFinalCostPricingRequest['normalizedPricing']>,
+  source: UsaFinalCostPricingRequest['sourceProduct'],
+) {
+  const base = context.model?.trim() || source.model?.trim() || source.sourceName.trim();
+  const capacity = context.capacity?.trim();
+  if (!capacity) return base;
+
+  const normalizedBase = normalizeProfitProductDescription(base);
+  const normalizedCapacity = normalizeProfitProductDescription(capacity);
+  return normalizedBase.includes(normalizedCapacity) ? base : `${base} ${capacity}`;
+}
+
 function getDirectProductProfitCalculationState(lookup: ProfitLookupResult) {
   if (lookup.status === 'found') {
     return { calculationStatus: 'ready' as const, calculationError: null };
@@ -341,6 +354,12 @@ export class PricingService {
     }
 
     const source = input.sourceProduct;
+    const normalizedPricing = input.normalizedPricing ?? {
+      category: source.category ?? null,
+      model: source.model ?? null,
+      capacity: source.capacity ?? null,
+      color: source.color ?? null,
+    };
     const condition = input.condition;
     const manufacturerResolution =
       input.manufacturerResolution ??
@@ -351,10 +370,10 @@ export class PricingService {
     const financialClassification = resolveFinancialClassification({
       canonicalProduct: catalogProduct,
       productName: source.sourceName,
-      category: source.category,
-      model: source.model,
-      capacity: source.capacity,
-      color: source.color,
+      category: normalizedPricing.category,
+      model: normalizedPricing.model,
+      capacity: normalizedPricing.capacity,
+      color: normalizedPricing.color,
       condition,
       sourceManufacturer: source.sourceManufacturer,
       sourceManufacturerProvenance: source.sourceManufacturerProvenance,
@@ -362,8 +381,7 @@ export class PricingService {
     });
     const productDescription =
       catalogProduct?.productDescription?.trim() ||
-      source.displayName?.trim() ||
-      source.sourceName.trim();
+      getUsaProfitProductDescription(normalizedPricing, source);
 
     if (financialClassification.classification === 'UNRESOLVED') {
       return this.buildUsaPricingResult({
@@ -664,6 +682,15 @@ export class PricingService {
       financialClassification: financialClassification.classification,
       financialClassificationReason: financialClassification.reason,
       manufacturerKey: financialClassification.manufacturerKey ?? null,
+      financialIdentity: {
+        ...(input.normalizedPricing ?? {
+          category: input.sourceProduct.category ?? null,
+          model: input.sourceProduct.model ?? null,
+          capacity: input.sourceProduct.capacity ?? null,
+          color: input.sourceProduct.color ?? null,
+        }),
+        condition: input.condition,
+      },
       calculationStatus,
       calculationError,
       salePrice: effectiveCalculation?.salePrice ?? null,

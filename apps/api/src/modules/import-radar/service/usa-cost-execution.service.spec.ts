@@ -51,6 +51,12 @@ function ready(
     logisticClassification: redirector.redirector === 'REI_DO_IMPORTADO' ? 'OTHER' : null,
     quantity: null,
     condition: 'NOVO',
+    normalizedPricing: {
+      category: sourceProduct.category,
+      model: sourceProduct.model ?? null,
+      capacity: sourceProduct.capacity ?? null,
+      color: sourceProduct.color ?? null,
+    },
     shippingWeightLbs: 2,
     ...overrides,
   };

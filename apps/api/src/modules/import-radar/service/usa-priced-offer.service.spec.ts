@@ -36,6 +36,12 @@ function readyCost(
       logisticClassification: null,
       quantity: null,
       condition: 'NOVO',
+      normalizedPricing: {
+        category: sourceProduct.category,
+        model: sourceProduct.model ?? null,
+        capacity: sourceProduct.capacity ?? null,
+        color: sourceProduct.color ?? null,
+      },
       shippingWeightLbs: 1,
     },
     calculation: {
@@ -60,6 +66,13 @@ function pricingResult(
     financialClassification: 'APPLE',
     financialClassificationReason: 'canonical_product',
     manufacturerKey: null,
+    financialIdentity: {
+      category: sourceProduct.category,
+      model: sourceProduct.model ?? null,
+      capacity: sourceProduct.capacity ?? null,
+      color: sourceProduct.color ?? null,
+      condition: 'NOVO',
+    },
     calculationStatus: 'ready',
     calculationError: null,
     salePrice: 3999.9,
@@ -260,6 +273,45 @@ describe('UsaPricedOfferService', () => {
 
     expect(pricingService.calculateUsaFinalCost).toHaveBeenCalledWith(
       expect.objectContaining({ condition: 'SEMINOVO' }),
+    );
+  });
+
+  it('passes P6F-approved financial fields to Pricing instead of Amazon title text', async () => {
+    const cost = readyCost();
+    if (cost.preflight.status !== 'READY_FOR_COST') {
+      throw new Error('Expected a ready cost fixture.');
+    }
+    const preflight: Extract<UsaCostExecutionResult['preflight'], { status: 'READY_FOR_COST' }> = {
+      ...cost.preflight,
+      normalizedPricing: {
+        category: 'iPhone',
+        model: 'iPhone 17 Pro',
+        capacity: '512GB',
+        color: 'Cosmic Orange',
+      },
+    };
+    const { service, pricingService } = setup({ ...cost, preflight } as UsaCostExecutionResult);
+
+    await service.execute(
+      input({
+        sourceProduct: {
+          ...sourceProduct,
+          sourceName: 'Apple iPhone 17 Pro, 512GB - Unlocked (Renewed Premium)',
+          model: undefined,
+          capacity: undefined,
+        },
+      }),
+    );
+
+    expect(pricingService.calculateUsaFinalCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        normalizedPricing: {
+          category: 'iPhone',
+          model: 'iPhone 17 Pro',
+          capacity: '512GB',
+          color: 'Cosmic Orange',
+        },
+      }),
     );
   });
 });

@@ -10,7 +10,20 @@ import type {
   ProfitRegistrationModelPayload,
   ProfitRegistrationProductPayload,
 } from '../../products/types/products';
-import type { BrazilRadarQuotePricing } from '../types/pricing';
+
+export interface ProfitRegistrationItem {
+  product: {
+    name: string;
+    category: string;
+    model: string;
+    capacity: string;
+    color: string;
+    condition: 'NOVO' | 'SEMINOVO' | 'CPO';
+  };
+  profit: {
+    productDescription: string;
+  };
+}
 
 export const emptyProductFilters = {
   search: '',
@@ -67,7 +80,7 @@ export function resolveProfitRegistration({
   references,
   catalogProduct,
 }: {
-  item: BrazilRadarQuotePricing;
+  item: ProfitRegistrationItem;
   netProfit: string;
   products: ProductItem[];
   references: ProductReferences;
@@ -273,7 +286,7 @@ function toExistingProductPayload(product: ProductItem, netProfit: string): Prod
   };
 }
 
-function toCanonicalSource(item: BrazilRadarQuotePricing) {
+function toCanonicalSource(item: ProfitRegistrationItem) {
   return {
     productDescription: item.profit.productDescription,
     productName: item.product.name,
@@ -287,7 +300,7 @@ function toCanonicalSource(item: BrazilRadarQuotePricing) {
 
 function matchesCatalogProduct(
   product: ProductItem,
-  item: BrazilRadarQuotePricing,
+  item: ProfitRegistrationItem,
   sourceIdentity: ReturnType<typeof normalizeCanonicalProductIdentity>,
 ) {
   if (product.active === false || product.profitCondition !== item.product.condition) return false;

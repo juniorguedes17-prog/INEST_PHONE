@@ -17,6 +17,13 @@ const profitCatalog = {
       normalizedDescription: 'iphone 17 pro max 256gb',
       netProfit: 1200,
     },
+    {
+      productId: 'profit-iphone-17p-512-seminovo',
+      condition: 'SEMINOVO' as const,
+      productDescription: 'iPhone 17 Pro 512GB',
+      normalizedDescription: 'iphone 17 pro 512gb',
+      netProfit: 890,
+    },
   ],
 };
 
@@ -81,6 +88,48 @@ describe('PricingService USA FinalCost entrypoint', () => {
     expect(result.salePrice).not.toBeNull();
     expect(result).not.toHaveProperty('offerDraft');
     expect(manufacturers.resolve).not.toHaveBeenCalled();
+  });
+
+  it('uses P6F-normalized financial fields for the existing Amazon Apple profit record', async () => {
+    const { service } = setup();
+
+    const result = await service.calculateUsaFinalCost({
+      sourceProduct: usaSource({
+        providerName: 'AMAZON_US',
+        sourceProductId: 'amazon-us:B0G45F93BH-512',
+        sourceName:
+          'Apple iPhone 17 Pro, US Version, 512GB, eSIM, Cosmic Orange - Unlocked (Renewed Premium)',
+        displayName:
+          'Apple iPhone 17 Pro, US Version, 512GB, eSIM, Cosmic Orange - Unlocked (Renewed Premium)',
+        model: undefined,
+        capacity: undefined,
+        color: undefined,
+        condition: undefined,
+      }),
+      finalCost: { currency: 'BRL', amountBrl: 2677.09 },
+      condition: 'SEMINOVO',
+      normalizedPricing: {
+        category: 'iPhone',
+        model: 'iPhone 17 Pro',
+        capacity: '512GB',
+        color: 'Cosmic Orange',
+      },
+    });
+
+    expect(result).toMatchObject({
+      financialClassification: 'APPLE',
+      calculationStatus: 'ready',
+      desiredNetProfit: 890,
+      financialIdentity: {
+        model: 'iPhone 17 Pro',
+        capacity: '512GB',
+        condition: 'SEMINOVO',
+      },
+      profit: {
+        recordId: 'profit-iphone-17p-512-seminovo',
+        productDescription: 'iPhone 17 Pro 512GB',
+      },
+    });
   });
 
   it('routes a Non-Apple external source without Product.id through the existing P4 engine', async () => {

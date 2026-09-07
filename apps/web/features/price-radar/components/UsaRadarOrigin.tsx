@@ -24,6 +24,18 @@ import {
   searchUsaWithDiagnostics,
 } from '@/features/import-radar/services/import-radar-service';
 import { UsaSourceProduct } from '@/features/import-radar/types/import-radar';
+import {
+  createProfitRegistration,
+  createProduct,
+  getProductReferences,
+  listProducts,
+  updateProduct,
+} from '@/features/products/services/products-service';
+import {
+  emptyProductFilters,
+  resolveProfitRegistration,
+  type ProfitRegistrationItem,
+} from '@/features/pricing/utils/profit-registration';
 
 export function UsaRadarOrigin() {
   const [query, setQuery] = useState('');
@@ -55,6 +67,9 @@ export function UsaRadarOrigin() {
   const [executionLoading, setExecutionLoading] = useState(false);
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [executionResult, setExecutionResult] = useState<UsaPricedOfferResponse | null>(null);
+  const [profitInput, setProfitInput] = useState('');
+  const [profitLoading, setProfitLoading] = useState(false);
+  const [profitError, setProfitError] = useState<string | null>(null);
   const weightRequestRef = useRef(0);
   const flowRequestRef = useRef(0);
   const preflightRequestRef = useRef(0);
@@ -75,6 +90,9 @@ export function UsaRadarOrigin() {
     setExecutionLoading(false);
     setExecutionError(null);
     setExecutionResult(null);
+    setProfitInput('');
+    setProfitLoading(false);
+    setProfitError(null);
   }, []);
 
   const resetWeightState = useCallback(() => {
@@ -315,6 +333,94 @@ export function UsaRadarOrigin() {
     }
   }, [preflight, executionLoading, redirector, resolvePreflight, selectedProduct]);
 
+  const registerMissingProfit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      const pricing = executionResult?.pricing;
+      if (
+        !selectedProduct ||
+        !redirector ||
+        executionResult?.status !== 'BLOCKED' ||
+        executionResult.reason !== 'missing_profit' ||
+        pricing?.calculationStatus !== 'missing_profit' ||
+        pricing.financialClassification !== 'APPLE' ||
+        !pricing.profit.condition ||
+        !pricing.financialIdentity.model ||
+        !pricing.financialIdentity.capacity ||
+        profitLoading
+      ) {
+        return;
+      }
+
+      const registrationItem: ProfitRegistrationItem = {
+        product: {
+          name: selectedProduct.sourceName,
+          category: pricing.financialIdentity.category ?? selectedProduct.category,
+          model: pricing.financialIdentity.model,
+          capacity: pricing.financialIdentity.capacity,
+          color: pricing.financialIdentity.color ?? '',
+          condition: pricing.profit.condition,
+        },
+        profit: { productDescription: pricing.profit.productDescription },
+      };
+
+      setProfitLoading(true);
+      setProfitError(null);
+      try {
+        const [products, references] = await Promise.all([
+          listProducts(emptyProductFilters),
+          getProductReferences(),
+        ]);
+        const registration = resolveProfitRegistration({
+          item: registrationItem,
+          netProfit: profitInput,
+          products,
+          references,
+        });
+        if (registration.action === 'incomplete') {
+          throw new Error(registration.message);
+        }
+        if (registration.action === 'update') {
+          await persistProfitRegistration(registration);
+        } else {
+          await persistProfitRegistration(registration).catch(async (createError) => {
+            if (
+              !(createError instanceof Error) ||
+              !/ja existe|conflit|duplicad|unique constraint/i.test(createError.message)
+            ) {
+              throw createError;
+            }
+
+            const [productsAfterConflict, referencesAfterConflict] = await Promise.all([
+              listProducts(emptyProductFilters),
+              getProductReferences(),
+            ]);
+            const retry = resolveProfitRegistration({
+              item: registrationItem,
+              netProfit: profitInput,
+              products: productsAfterConflict,
+              references: referencesAfterConflict,
+            });
+            if (retry.action === 'incomplete') throw createError;
+
+            await persistProfitRegistration(retry);
+          });
+        }
+
+        await executePricedOffer();
+      } catch (registrationError) {
+        setProfitError(
+          registrationError instanceof Error
+            ? registrationError.message
+            : 'Não foi possível cadastrar o lucro.',
+        );
+      } finally {
+        setProfitLoading(false);
+      }
+    },
+    [executePricedOffer, executionResult, profitInput, profitLoading, redirector, selectedProduct],
+  );
+
   const registerWeight = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -412,6 +518,15 @@ export function UsaRadarOrigin() {
   const retrySearch = useCallback(() => {
     void search({ preventDefault() {} } as FormEvent<HTMLFormElement>);
   }, [search]);
+
+  const canRegisterMissingProfit =
+    executionResult?.status === 'BLOCKED' &&
+    executionResult.reason === 'missing_profit' &&
+    executionResult.pricing?.calculationStatus === 'missing_profit' &&
+    executionResult.pricing.financialClassification === 'APPLE' &&
+    Boolean(executionResult.pricing.profit.condition) &&
+    Boolean(executionResult.pricing.financialIdentity.model) &&
+    Boolean(executionResult.pricing.financialIdentity.capacity);
 
   return (
     <div className="grid gap-4">
@@ -623,10 +738,54 @@ export function UsaRadarOrigin() {
             </p>
           ) : null}
           {executionResult ? <UsaExecutionResult result={executionResult} /> : null}
+          {canRegisterMissingProfit ? (
+            <form
+              aria-label="Cadastrar lucro USA"
+              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+              onSubmit={registerMissingProfit}
+            >
+              <label className="grid gap-1 text-sm font-bold text-inest-text">
+                Lucro líquido
+                <input
+                  className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
+                  value={profitInput}
+                  onChange={(event) => setProfitInput(event.target.value)}
+                  disabled={profitLoading}
+                  inputMode="decimal"
+                  placeholder="0,00"
+                />
+                <span className="text-xs font-semibold text-inest-muted">
+                  A identidade financeira foi confirmada; cadastre o lucro para continuar.
+                </span>
+              </label>
+              <ActionButton type="submit" className="min-h-11 self-end" disabled={profitLoading}>
+                {profitLoading ? 'Cadastrando...' : 'Cadastrar lucro'}
+              </ActionButton>
+            </form>
+          ) : null}
+          {profitError ? <ErrorState title="Lucro" description={profitError} /> : null}
         </section>
       ) : null}
     </div>
   );
+}
+
+async function persistProfitRegistration(
+  registration: ReturnType<typeof resolveProfitRegistration>,
+) {
+  if (registration.action === 'update') {
+    await updateProduct(registration.productId, registration.payload);
+    return;
+  }
+  if (registration.action === 'create-model-and-product') {
+    await createProfitRegistration({ product: registration.payload, model: registration.model });
+    return;
+  }
+  if (registration.action === 'create') {
+    await createProduct(registration.payload);
+    return;
+  }
+  throw new Error(registration.message);
 }
 
 function UsaShippingWeightPanel({

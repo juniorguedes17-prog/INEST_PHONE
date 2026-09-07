@@ -47,14 +47,54 @@ function setup(response: object) {
     ),
     registerUsaShippingWeight: mock.fn(async (...args: unknown[]) => (void args, {})),
     executeUsaPricedOffer: mock.fn(
-      async (...args: unknown[]) => (
+      async (...args: unknown[]): Promise<unknown> => (
         void args,
         {
           status: 'BLOCKED',
           reason: 'missing_profit',
+          pricing: {
+            financialClassification: 'APPLE',
+            calculationStatus: 'missing_profit',
+            financialIdentity: {
+              category: 'iPhone',
+              model: 'iPhone 17 Pro',
+              capacity: '512GB',
+              color: 'Cosmic Orange',
+              condition: 'SEMINOVO',
+            },
+            profit: { condition: 'SEMINOVO', productDescription: 'iPhone 17 Pro 512GB' },
+          },
         }
       ),
     ),
+  };
+  const productServices = {
+    listProducts: mock.fn(async () => [
+      {
+        id: 'product-17-pro-512-seminovo',
+        active: true,
+        productType: 'IPHONE_USED',
+        status: 'ACTIVE',
+        profitCondition: 'SEMINOVO',
+      },
+    ]),
+    getProductReferences: mock.fn(async () => ({
+      categories: [],
+      models: [],
+      colors: [],
+      storages: [],
+    })),
+    updateProduct: mock.fn(async () => ({})),
+    createProduct: mock.fn(async () => ({})),
+    createProfitRegistration: mock.fn(async () => ({})),
+  };
+  const profitRegistration = {
+    emptyProductFilters: {},
+    resolveProfitRegistration: mock.fn(() => ({
+      action: 'update',
+      productId: 'product-17-pro-512-seminovo',
+      payload: { netProfit: '890' },
+    })),
   };
   const state: unknown[] = [];
   let cursor = 0;
@@ -96,6 +136,8 @@ function setup(response: object) {
           ].map((key) => [key, key]),
         );
       if (name.endsWith('/import-radar-service')) return services;
+      if (name.endsWith('/products-service')) return productServices;
+      if (name.endsWith('/profit-registration')) return profitRegistration;
       throw new Error(`Unexpected dependency: ${name}`);
     },
   });
@@ -134,7 +176,7 @@ function setup(response: object) {
     assert.equal(nodes('UsaRedirectorPanel').length, 1);
     assert.equal(nodes('UsaShippingWeightPanel').length, 0);
   };
-  return { services, nodes, call, select };
+  return { services, productServices, profitRegistration, nodes, call, select };
 }
 
 test('Rei CELULAR: READY_FOR_COST without weight enables execution for an external product', async () => {
@@ -148,6 +190,119 @@ test('Rei CELULAR: READY_FOR_COST without weight enables execution for an extern
   const [source, redirector] = h.services.executeUsaPricedOffer.mock.calls[0]!.arguments;
   assert.equal(source, product);
   assert.equal((redirector as Props).redirector, 'REI_DO_IMPORTADO');
+});
+
+test('missing_profit with a resolved USA financial identity reuses the profit registration flow and reprocesses the same product', async () => {
+  const h = setup(ready);
+  h.services.executeUsaPricedOffer.mock.mockImplementationOnce(async () => ({
+    status: 'BLOCKED',
+    reason: 'missing_profit',
+    pricing: {
+      financialClassification: 'APPLE',
+      calculationStatus: 'missing_profit',
+      financialIdentity: {
+        category: 'iPhone',
+        model: 'iPhone 17 Pro',
+        capacity: '512GB',
+        color: 'Cosmic Orange',
+        condition: 'SEMINOVO',
+      },
+      profit: { condition: 'SEMINOVO', productDescription: 'iPhone 17 Pro 512GB' },
+    },
+  }));
+  await h.select();
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  assert.equal(h.services.executeUsaPricedOffer.mock.callCount(), 1);
+  assert.equal(h.nodes('UsaExecutionResult').length, 1);
+  const profitForm = h
+    .nodes('form')
+    .find((node) => node.props['aria-label'] === 'Cadastrar lucro USA');
+  assert.ok(profitForm);
+  const input = (profitForm.props.children as Element[])[0]!.props.children as Element[];
+  const profitInput = input[1]!;
+  await (profitInput.props.onChange as (event: unknown) => void)({ target: { value: '890' } });
+  h.services.executeUsaPricedOffer.mock.mockImplementation(async () => ({
+    status: 'READY',
+    reason: null,
+    pricing: { calculationStatus: 'ready' },
+  }));
+  await (profitForm.props.onSubmit as (event: unknown) => Promise<void>)({ preventDefault() {} });
+  await setImmediate();
+
+  assert.equal(h.profitRegistration.resolveProfitRegistration.mock.callCount(), 1);
+  assert.equal(h.productServices.updateProduct.mock.callCount(), 1);
+  assert.equal(h.services.executeUsaPricedOffer.mock.callCount(), 2);
+  assert.equal(h.services.executeUsaPricedOffer.mock.calls[1]!.arguments[0], product);
+});
+
+test('does not offer profit registration when the financial identity is incomplete', async () => {
+  const h = setup(ready);
+  h.services.executeUsaPricedOffer.mock.mockImplementation(async () => ({
+    status: 'BLOCKED',
+    reason: 'insufficient_identity',
+    pricing: {
+      financialClassification: 'APPLE',
+      calculationStatus: 'insufficient_identity',
+      financialIdentity: {
+        category: 'iPhone',
+        model: null,
+        capacity: null,
+        color: null,
+        condition: 'SEMINOVO',
+      },
+      profit: { condition: 'SEMINOVO', productDescription: 'iPhone 17 Pro' },
+    },
+  }));
+
+  await h.select();
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+
+  assert.equal(
+    h.nodes('form').filter((node) => node.props['aria-label'] === 'Cadastrar lucro USA').length,
+    0,
+  );
+});
+
+test('re-reads the existing profit authority after a concurrent profit registration conflict', async () => {
+  const h = setup(ready);
+  let resolveCount = 0;
+  h.profitRegistration.resolveProfitRegistration.mock.mockImplementation(() => {
+    resolveCount += 1;
+    return resolveCount === 1
+      ? { action: 'create', productId: '', payload: { netProfit: '890' } }
+      : {
+          action: 'update',
+          productId: 'product-17-pro-512-seminovo',
+          payload: { netProfit: '890' },
+        };
+  });
+  h.productServices.createProduct.mock.mockImplementationOnce(async () => {
+    throw new Error('Produto ja existe');
+  });
+
+  await h.select();
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  const profitForm = h
+    .nodes('form')
+    .find((node) => node.props['aria-label'] === 'Cadastrar lucro USA');
+  assert.ok(profitForm);
+  const input = (profitForm.props.children as Element[])[0]!.props.children as Element[];
+  await (input[1]!.props.onChange as (event: unknown) => void)({ target: { value: '890' } });
+  h.services.executeUsaPricedOffer.mock.mockImplementation(async () => ({
+    status: 'READY',
+    reason: null,
+    pricing: { calculationStatus: 'ready' },
+  }));
+  await (profitForm.props.onSubmit as (event: unknown) => Promise<void>)({ preventDefault() {} });
+  await setImmediate();
+
+  assert.equal(h.productServices.createProduct.mock.callCount(), 1);
+  assert.equal(h.productServices.updateProduct.mock.callCount(), 1);
+  assert.equal(h.productServices.listProducts.mock.callCount(), 2);
+  assert.equal(h.services.executeUsaPricedOffer.mock.callCount(), 2);
 });
 
 test('real empty search shows the empty state rather than a provider warning', async () => {

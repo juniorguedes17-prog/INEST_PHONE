@@ -197,9 +197,21 @@ export interface UsaPricedOfferResponse {
   };
   pricing: {
     acquisitionCost: number;
+    financialClassification: 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
     calculationStatus: string;
     salePrice: number | null;
     offerPrice: number | null;
+    financialIdentity: {
+      category: string | null;
+      model: string | null;
+      capacity: string | null;
+      color: string | null;
+      condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
+    };
+    profit: {
+      condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
+      productDescription: string;
+    };
   } | null;
   offerDraft: unknown | null;
   offer: { id: string } | null;

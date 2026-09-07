@@ -55,7 +55,24 @@ function createContext(
       classification === 'UNRESOLVED'
         ? { classification, reason: 'INSUFFICIENT_EVIDENCE', sources: [] }
         : { classification, sources: ['PRODUCT_IDENTITY_FAMILY'] },
-    fields: { quantity: { value: null }, condition: { value: condition } },
+    fields: {
+      manufacturer: { value: 'Apple' },
+      category: { value: product.category },
+      family: { value: null },
+      model: { value: product.model },
+      storage: { value: product.capacity },
+      ram: { value: null },
+      chip: { value: null },
+      screen: { value: null },
+      color: { value: product.color ?? null },
+      connectivity: { value: null },
+      condition: { value: condition },
+      quantity: { value: null },
+      feature: { value: null },
+      connector: { value: null },
+      power: { value: null },
+      length: { value: null },
+    },
   };
 }
 
@@ -175,6 +192,33 @@ describe('UsaCostPreflightService', () => {
         composition: { kind: 'SINGLE_ITEM' },
       }),
     ).resolves.toMatchObject({ status: 'READY_FOR_COST', condition: 'SEMINOVO' });
+  });
+
+  it('carries P6F-approved model and storage to the Pricing handoff', async () => {
+    const context = createContext('CELULAR', 'SEMINOVO');
+    context.fields.model.value = 'iPhone 17 Pro';
+    context.fields.storage.value = '512GB';
+    const { service } = createService(readyDecision, context);
+
+    await expect(
+      service.preflight({
+        sourceProduct: {
+          ...product,
+          sourceName: 'Amazon title with renewed and marketing descriptors',
+          model: undefined,
+          capacity: undefined,
+        },
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY_FOR_COST',
+      normalizedPricing: {
+        category: 'iPhone',
+        model: 'iPhone 17 Pro',
+        capacity: '512GB',
+      },
+    });
   });
 
   it('readies the B0G45F93BH-equivalent single iPhone purchase without a Product Identity quantity', async () => {
