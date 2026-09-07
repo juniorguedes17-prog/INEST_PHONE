@@ -470,6 +470,7 @@ export class PricingService {
   }
 
   async calculateTemporaryImport(dto: TemporaryImportPricingDto) {
+    const origin = dto.origin ?? 'PY';
     const [settings, pricingConfigurations, profitCatalog, catalogProduct] = await Promise.all([
       this.settingsService.getSettings(),
       this.pricingRepository.listPricingConfigurations(),
@@ -481,15 +482,25 @@ export class PricingService {
     if (dto.catalogProductId && !catalogProduct) {
       throw new BadRequestException('Produto canonico ativo nao encontrado para esta importacao.');
     }
+    if (origin === 'US' && !catalogProduct && !dto.provider?.trim()) {
+      throw new BadRequestException('Provider e obrigatorio para uma oferta externa USA.');
+    }
 
     const profitCondition = this.resolveTemporaryProfitCondition(
       dto,
       catalogProduct?.profitCondition,
     );
+    const sourceProfitDescription =
+      origin === 'US' && dto.model?.trim()
+        ? dto.capacity?.trim() &&
+          !normalizeProfitProductDescription(dto.model).includes(
+            normalizeProfitProductDescription(dto.capacity),
+          )
+          ? `${dto.model.trim()} ${dto.capacity.trim()}`
+          : dto.model.trim()
+        : dto.displayName?.trim() || dto.productName.trim();
     const profitProductDescription =
-      catalogProduct?.productDescription?.trim() ||
-      dto.displayName?.trim() ||
-      dto.productName.trim();
+      catalogProduct?.productDescription?.trim() || sourceProfitDescription;
     const manufacturerResolution = await this.resolveExplicitSourceManufacturer(
       dto.sourceManufacturer,
       dto.sourceManufacturerProvenance,
@@ -755,6 +766,7 @@ export class PricingService {
     nonApple?: ReturnType<PricingService['calculateNonApplePricing']>;
     profitRecordId?: string | null;
   }) {
+    const origin = dto.origin ?? 'PY';
     const calculation =
       nonApple ??
       this.calculateExternalPricing(
@@ -772,7 +784,7 @@ export class PricingService {
 
     return {
       temporary: true,
-      origin: 'PY' as const,
+      origin,
       ...(nonApple ? { engineMetadata: nonApple.engineMetadata } : {}),
       financialClassification: financialClassification.classification,
       financialClassificationReason: financialClassification.reason,
@@ -790,22 +802,23 @@ export class PricingService {
         model: dto.model ?? '',
         capacity: dto.capacity ?? '',
         color: dto.color ?? '',
-        supplier: dto.supplier,
-        store: dto.store,
+        supplier: dto.supplier ?? dto.retailer ?? dto.provider ?? '',
+        store: dto.store ?? dto.retailer ?? dto.provider ?? '',
         city: dto.city ?? '',
-        productUrl: dto.productUrl,
+        productUrl: dto.productUrl ?? '',
         priceUsd: dto.priceUsd,
         isAppleOriginal: catalogProduct?.isAppleOriginal ?? null,
       },
       importCosts: {
-        dollarQuote: dto.dollarQuote,
-        convertedPrice: dto.convertedPrice,
-        cdeExit: dto.cdeExit,
-        redirectCost: dto.redirectCost,
-        brazilDispatch: dto.brazilDispatch,
-        invoiceTax: dto.invoiceTax,
-        correiosLabel: dto.correiosLabel,
+        dollarQuote: dto.dollarQuote ?? null,
+        convertedPrice: dto.convertedPrice ?? null,
+        cdeExit: dto.cdeExit ?? null,
+        redirectCost: dto.redirectCost ?? null,
+        brazilDispatch: dto.brazilDispatch ?? null,
+        invoiceTax: dto.invoiceTax ?? null,
+        correiosLabel: dto.correiosLabel ?? null,
         totalCost: dto.totalCost,
+        ...(origin === 'US' ? { usaCostBreakdown: dto.usaCostBreakdown ?? null } : {}),
       },
       pricingCosts: {
         fixedCost: calculation.fixedCost,
@@ -840,7 +853,20 @@ export class PricingService {
               createdAt: new Date().toISOString(),
               payload: {
                 productId: catalogProduct?.id ?? null,
-                sourceQuoteId: `temporary-py-${dto.sourceProductId}`,
+                ...(origin === 'PY'
+                  ? { sourceQuoteId: `temporary-py-${dto.sourceProductId}` }
+                  : !catalogProduct
+                    ? {
+                        externalIdentity: {
+                          origin: 'US' as const,
+                          provider: dto.provider ?? '',
+                          sourceProductId: dto.sourceProductId,
+                          sourceName: dto.displayName?.trim() || dto.productName,
+                          sourceUrl: dto.productUrl,
+                          retailer: dto.retailer,
+                        },
+                      }
+                    : {}),
                 productName,
                 color: dto.color ?? '',
                 capacity: dto.capacity ?? '',

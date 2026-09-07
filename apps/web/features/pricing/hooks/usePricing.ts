@@ -81,8 +81,13 @@ export function usePricing({
 
     window.sessionStorage.removeItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY);
     try {
-      setTemporaryImportPricing(JSON.parse(stored) as TemporaryImportPricing);
-      setSuccess('Precificacao temporaria do Radar Paraguai carregada.');
+      const pricing = JSON.parse(stored) as TemporaryImportPricing;
+      setTemporaryImportPricing(pricing);
+      setSuccess(
+        pricing.origin === 'US'
+          ? 'Precificacao temporaria do Radar USA carregada.'
+          : 'Precificacao temporaria do Radar Paraguai carregada.',
+      );
     } catch {
       setError('Nao foi possivel carregar a precificacao temporaria do Radar Paraguai.');
     }

@@ -18,6 +18,7 @@ import {
   calculateImportCost,
   confirmImportManufacturer,
   searchImportProducts,
+  type UsaCostExecutionResponse,
 } from '@/features/import-radar/services/import-radar-service';
 import { ImportCalculation, ImportProduct } from '@/features/import-radar/types/import-radar';
 import { calculateTemporaryImportPricing } from '@/features/pricing/services/pricing-service';
@@ -633,25 +634,96 @@ function getPriceBounds(values: number[]) {
   };
 }
 
-function CalculationModal({
+export function CalculationModal({
   calculation,
+  usaCostExecution = null,
   sending,
   onClose,
   onSendToPricing,
   onConfirmManufacturer,
 }: {
   calculation: ImportCalculation | null;
+  usaCostExecution?: UsaCostExecutionResponse | null;
   sending: boolean;
   onClose: () => void;
   onSendToPricing: () => void;
   onConfirmManufacturer: (canonicalName: string) => void;
 }) {
+  const usaCalculation = usaCostExecution?.calculation ?? null;
   const canSendToPricing = calculation?.pricingEligibility.status === 'ELIGIBLE';
   const needsManufacturer = calculation?.pricingEligibility.status === 'NEEDS_INPUT';
 
   return (
-    <Modal open={Boolean(calculation)} title="Custo estimado - Paraguai" onClose={onClose}>
-      {calculation ? (
+    <Modal
+      open={Boolean(calculation || usaCalculation)}
+      title={usaCalculation ? 'Custo estimado - Estados Unidos' : 'Custo estimado - Paraguai'}
+      onClose={onClose}
+    >
+      {usaCalculation ? (
+        <div className="grid gap-4">
+          <div>
+            <strong className="block text-inest-text">
+              {usaCalculation.sourceCommercialIdentity.sourceName}
+            </strong>
+            <span className="text-sm text-inest-muted">
+              {usaCalculation.redirector.redirector === 'RED_DELAWARE'
+                ? 'Red Delaware'
+                : 'Rei do Importado'}
+            </span>
+          </div>
+          <dl className="grid grid-cols-2 gap-3 text-sm">
+            {Object.entries(usaCalculation.breakdown).flatMap(([key, value]) =>
+              typeof value !== 'number'
+                ? []
+                : [
+                    <div key={key} className="rounded-lg border border-inest-line p-3">
+                      <dt className="text-inest-muted">
+                        {key === 'productPriceUsd'
+                          ? 'Preço do produto (USD)'
+                          : key === 'usdBrlQuote'
+                            ? 'Cotação USD/BRL'
+                            : key === 'shippingUsd'
+                              ? 'Frete (USD)'
+                              : key === 'taxUsd'
+                                ? 'Imposto (USD)'
+                                : key === 'insuranceBrl'
+                                  ? 'Seguro'
+                                  : key === 'taxBrl'
+                                    ? 'Imposto'
+                                    : key === 'productValueBrl'
+                                      ? 'Produto'
+                                      : key === 'shippingBrl'
+                                        ? 'Frete'
+                                        : key}
+                      </dt>
+                      <dd className="font-extrabold text-inest-text">
+                        {key.endsWith('Brl') ? formatBrl(value) : value}
+                      </dd>
+                    </div>,
+                  ],
+            )}
+          </dl>
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <span className="block text-xs font-bold uppercase text-blue-700">Total estimado</span>
+            <strong className="text-2xl font-black text-blue-950">
+              {formatBrl(usaCalculation.finalCost.amountBrl)}
+            </strong>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <ActionButton
+              variant="secondary"
+              className="min-h-11"
+              onClick={onClose}
+              disabled={sending}
+            >
+              Fechar
+            </ActionButton>
+            <ActionButton className="min-h-11" onClick={onSendToPricing} disabled={sending}>
+              {sending ? 'Preparando...' : 'Enviar para Precificação'}
+            </ActionButton>
+          </div>
+        </div>
+      ) : calculation ? (
         <div className="grid gap-4">
           <div>
             <strong className="block text-inest-text">{calculation.product.name}</strong>

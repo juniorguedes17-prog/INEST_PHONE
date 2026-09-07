@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ActionButton,
   EmptyState,
@@ -11,37 +12,33 @@ import {
 } from '@/components/shared';
 import {
   confirmUsaManufacturer,
-  executeUsaPricedOffer,
+  executeUsaCost,
   preflightUsaCost,
   registerUsaShippingWeight,
   resolveUsaEnrichment,
   resolveUsaShippingWeight,
   UsaEnrichmentDecision,
+  UsaCostExecutionResponse,
   UsaCostPreflightResponse,
-  UsaPricedOfferResponse,
   UsaRedirectorSelection,
   UsaShippingWeightResolution,
   searchUsaWithDiagnostics,
 } from '@/features/import-radar/services/import-radar-service';
 import { UsaSourceProduct } from '@/features/import-radar/types/import-radar';
+import { CalculationModal } from './ParaguayRadarOrigin';
+import { calculateTemporaryImportPricing } from '@/features/pricing/services/pricing-service';
 import {
-  createProfitRegistration,
-  createProduct,
-  getProductReferences,
-  listProducts,
-  updateProduct,
-} from '@/features/products/services/products-service';
-import {
-  emptyProductFilters,
-  resolveProfitRegistration,
-  type ProfitRegistrationItem,
-} from '@/features/pricing/utils/profit-registration';
+  TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
+  TemporaryImportPricingRequest,
+} from '@/features/pricing/types/pricing';
 
 export function UsaRadarOrigin() {
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<UsaSourceProduct[]>([]);
   const [partialSearch, setPartialSearch] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<UsaSourceProduct | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,12 +61,10 @@ export function UsaRadarOrigin() {
   const [preflight, setPreflight] = useState<UsaCostPreflightResponse | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [preflightError, setPreflightError] = useState<string | null>(null);
-  const [executionLoading, setExecutionLoading] = useState(false);
-  const [executionError, setExecutionError] = useState<string | null>(null);
-  const [executionResult, setExecutionResult] = useState<UsaPricedOfferResponse | null>(null);
-  const [profitInput, setProfitInput] = useState('');
-  const [profitLoading, setProfitLoading] = useState(false);
-  const [profitError, setProfitError] = useState<string | null>(null);
+  const [costExecution, setCostExecution] = useState<UsaCostExecutionResponse | null>(null);
+  const [costLoading, setCostLoading] = useState(false);
+  const [costError, setCostError] = useState<string | null>(null);
+  const [sendingToPricing, setSendingToPricing] = useState(false);
   const weightRequestRef = useRef(0);
   const flowRequestRef = useRef(0);
   const preflightRequestRef = useRef(0);
@@ -87,12 +82,10 @@ export function UsaRadarOrigin() {
     setManufacturerLoading(false);
     setManufacturerError(null);
     setRedirector('');
-    setExecutionLoading(false);
-    setExecutionError(null);
-    setExecutionResult(null);
-    setProfitInput('');
-    setProfitLoading(false);
-    setProfitError(null);
+    setCostExecution(null);
+    setCostLoading(false);
+    setCostError(null);
+    setSendingToPricing(false);
   }, []);
 
   const resetWeightState = useCallback(() => {
@@ -142,8 +135,8 @@ export function UsaRadarOrigin() {
       setPreflight(null);
       setPreflightLoading(true);
       setPreflightError(null);
-      setExecutionResult(null);
-      setExecutionError(null);
+      setCostExecution(null);
+      setCostError(null);
       resetWeightState();
       try {
         const response = await preflightUsaCost(
@@ -191,8 +184,8 @@ export function UsaRadarOrigin() {
       preflightRequestRef.current += 1;
       setPreflight(null);
       setPreflightError(null);
-      setExecutionResult(null);
-      setExecutionError(null);
+      setCostExecution(null);
+      setCostError(null);
       resetWeightState();
       if (selectedProduct && choice) void resolvePreflight(selectedProduct, choice);
     },
@@ -204,8 +197,8 @@ export function UsaRadarOrigin() {
     setDecisionLoading(true);
     setDecisionError(null);
     setManufacturerError(null);
-    setExecutionError(null);
-    setExecutionResult(null);
+    setCostError(null);
+    setCostExecution(null);
     try {
       const response = await resolveUsaEnrichment(product);
       if (requestId !== flowRequestRef.current) return;
@@ -228,13 +221,25 @@ export function UsaRadarOrigin() {
   }, []);
 
   const selectProduct = useCallback(
-    (product: UsaSourceProduct) => {
+    (product: UsaSourceProduct, checked: boolean) => {
+      const productId = `${product.providerName}:${product.sourceProductId}`;
+      const nextSelectedIds = new Set(selectedIds);
+      if (checked) nextSelectedIds.add(productId);
+      else nextSelectedIds.delete(productId);
+      setSelectedIds(nextSelectedIds);
       resetOperationalState();
       resetWeightState();
-      setSelectedProduct(product);
-      void resolveProductDecision(product);
+      if (nextSelectedIds.size !== 1) {
+        setSelectedProduct(null);
+        return;
+      }
+      const nextProduct = products.find((candidate) =>
+        nextSelectedIds.has(`${candidate.providerName}:${candidate.sourceProductId}`),
+      );
+      setSelectedProduct(nextProduct ?? null);
+      if (nextProduct) void resolveProductDecision(nextProduct);
     },
-    [resetOperationalState, resetWeightState, resolveProductDecision],
+    [products, resetOperationalState, resetWeightState, resolveProductDecision, selectedIds],
   );
 
   const confirmManufacturer = useCallback(
@@ -295,131 +300,89 @@ export function UsaRadarOrigin() {
     ],
   );
 
-  const executePricedOffer = useCallback(async () => {
-    if (
-      !selectedProduct ||
-      preflight?.status !== 'READY_FOR_COST' ||
-      !redirector ||
-      executionLoading
-    ) {
+  const executeCost = useCallback(async () => {
+    if (!selectedProduct || preflight?.status !== 'READY_FOR_COST' || !redirector || costLoading) {
       return;
     }
 
     const redirectorSelection: UsaRedirectorSelection =
       redirector === 'RED_DELAWARE' ? { redirector, shippingMode: 'EXPRESS' } : { redirector };
     const requestId = flowRequestRef.current;
-    setExecutionLoading(true);
-    setExecutionError(null);
-    setExecutionResult(null);
+    setCostLoading(true);
+    setCostError(null);
+    setCostExecution(null);
     try {
-      const response = await executeUsaPricedOffer(selectedProduct, redirectorSelection, {
+      const response = await executeUsaCost(selectedProduct, redirectorSelection, {
         kind: 'SINGLE_ITEM',
       });
       if (requestId !== flowRequestRef.current) return;
-      setExecutionResult(response);
-      if (response.status === 'NEEDS_INPUT') {
-        setExecutionResult(null);
+      setCostExecution(response);
+      if (response.preflight.status !== 'READY_FOR_COST') {
+        setCostExecution(null);
         void resolvePreflight(selectedProduct, redirector);
       }
     } catch (executeError) {
       if (requestId !== flowRequestRef.current) return;
-      setExecutionError(
+      setCostError(
         executeError instanceof Error
           ? executeError.message
-          : 'Não foi possível concluir o fluxo USA.',
+          : 'Não foi possível calcular o custo USA.',
       );
     } finally {
-      if (requestId === flowRequestRef.current) setExecutionLoading(false);
+      if (requestId === flowRequestRef.current) setCostLoading(false);
     }
-  }, [preflight, executionLoading, redirector, resolvePreflight, selectedProduct]);
+  }, [costLoading, preflight, redirector, resolvePreflight, selectedProduct]);
 
-  const registerMissingProfit = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      const pricing = executionResult?.pricing;
-      if (
-        !selectedProduct ||
-        !redirector ||
-        executionResult?.status !== 'BLOCKED' ||
-        executionResult.reason !== 'missing_profit' ||
-        pricing?.calculationStatus !== 'missing_profit' ||
-        pricing.financialClassification !== 'APPLE' ||
-        !pricing.profit.condition ||
-        !pricing.financialIdentity.model ||
-        !pricing.financialIdentity.capacity ||
-        profitLoading
-      ) {
-        return;
-      }
+  const sendToPricing = useCallback(async () => {
+    if (
+      !selectedProduct ||
+      !costExecution ||
+      costExecution.preflight.status !== 'READY_FOR_COST' ||
+      !costExecution.calculation ||
+      sendingToPricing
+    ) {
+      return;
+    }
+    const calculation = costExecution.calculation;
 
-      const registrationItem: ProfitRegistrationItem = {
-        product: {
-          name: selectedProduct.sourceName,
-          category: pricing.financialIdentity.category ?? selectedProduct.category,
-          model: pricing.financialIdentity.model,
-          capacity: pricing.financialIdentity.capacity,
-          color: pricing.financialIdentity.color ?? '',
-          condition: pricing.profit.condition,
-        },
-        profit: { productDescription: pricing.profit.productDescription },
-      };
-
-      setProfitLoading(true);
-      setProfitError(null);
-      try {
-        const [products, references] = await Promise.all([
-          listProducts(emptyProductFilters),
-          getProductReferences(),
-        ]);
-        const registration = resolveProfitRegistration({
-          item: registrationItem,
-          netProfit: profitInput,
-          products,
-          references,
-        });
-        if (registration.action === 'incomplete') {
-          throw new Error(registration.message);
-        }
-        if (registration.action === 'update') {
-          await persistProfitRegistration(registration);
-        } else {
-          await persistProfitRegistration(registration).catch(async (createError) => {
-            if (
-              !(createError instanceof Error) ||
-              !/ja existe|conflit|duplicad|unique constraint/i.test(createError.message)
-            ) {
-              throw createError;
-            }
-
-            const [productsAfterConflict, referencesAfterConflict] = await Promise.all([
-              listProducts(emptyProductFilters),
-              getProductReferences(),
-            ]);
-            const retry = resolveProfitRegistration({
-              item: registrationItem,
-              netProfit: profitInput,
-              products: productsAfterConflict,
-              references: referencesAfterConflict,
-            });
-            if (retry.action === 'incomplete') throw createError;
-
-            await persistProfitRegistration(retry);
-          });
-        }
-
-        await executePricedOffer();
-      } catch (registrationError) {
-        setProfitError(
-          registrationError instanceof Error
-            ? registrationError.message
-            : 'Não foi possível cadastrar o lucro.',
-        );
-      } finally {
-        setProfitLoading(false);
-      }
-    },
-    [executePricedOffer, executionResult, profitInput, profitLoading, redirector, selectedProduct],
-  );
+    setSendingToPricing(true);
+    setCostError(null);
+    try {
+      const normalized = costExecution.preflight.normalizedPricing;
+      const result = await calculateTemporaryImportPricing({
+        origin: 'US',
+        sourceProductId: selectedProduct.sourceProductId,
+        productName: selectedProduct.sourceName,
+        displayName: selectedProduct.displayName ?? selectedProduct.sourceName,
+        category: normalized?.category ?? selectedProduct.category ?? 'Sem categoria',
+        supplier: selectedProduct.supplier,
+        store: selectedProduct.retailer ?? selectedProduct.supplier,
+        productUrl: selectedProduct.sourceUrl || undefined,
+        priceUsd: calculation.productPriceUsd,
+        totalCost: calculation.finalCost.amountBrl,
+        brand: selectedProduct.sourceManufacturer ?? undefined,
+        sourceManufacturer: selectedProduct.sourceManufacturer ?? null,
+        sourceManufacturerProvenance: selectedProduct.sourceManufacturerProvenance ?? undefined,
+        model: normalized?.model ?? selectedProduct.model ?? selectedProduct.sourceName,
+        capacity: normalized?.capacity ?? selectedProduct.capacity ?? undefined,
+        color: normalized?.color ?? selectedProduct.color ?? undefined,
+        condition: costExecution.preflight.condition ?? selectedProduct.condition ?? undefined,
+        provider: selectedProduct.providerName,
+        retailer: selectedProduct.retailer ?? undefined,
+        usaCostBreakdown: calculation.breakdown,
+      } satisfies TemporaryImportPricingRequest);
+      window.sessionStorage.setItem(TEMPORARY_IMPORT_PRICING_STORAGE_KEY, JSON.stringify(result));
+      router.push('/pricing?temporaryImport=usa');
+    } catch (sendError) {
+      setCostError(
+        sendError instanceof Error
+          ? sendError.message
+          : 'Não foi possível enviar o custo para Precificação.',
+      );
+    } finally {
+      setSendingToPricing(false);
+    }
+  }, [costExecution, router, selectedProduct, sendingToPricing]);
 
   const registerWeight = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -483,6 +446,7 @@ export function UsaRadarOrigin() {
       if (normalizedQuery.length < 2) {
         setProducts([]);
         setSelectedProduct(null);
+        setSelectedIds(new Set());
         resetOperationalState();
         resetWeightState();
         setSearched(false);
@@ -493,6 +457,7 @@ export function UsaRadarOrigin() {
       setLoading(true);
       setError(null);
       setSelectedProduct(null);
+      setSelectedIds(new Set());
       resetOperationalState();
       resetWeightState();
       try {
@@ -518,15 +483,6 @@ export function UsaRadarOrigin() {
   const retrySearch = useCallback(() => {
     void search({ preventDefault() {} } as FormEvent<HTMLFormElement>);
   }, [search]);
-
-  const canRegisterMissingProfit =
-    executionResult?.status === 'BLOCKED' &&
-    executionResult.reason === 'missing_profit' &&
-    executionResult.pricing?.calculationStatus === 'missing_profit' &&
-    executionResult.pricing.financialClassification === 'APPLE' &&
-    Boolean(executionResult.pricing.profit.condition) &&
-    Boolean(executionResult.pricing.financialIdentity.model) &&
-    Boolean(executionResult.pricing.financialIdentity.capacity);
 
   return (
     <div className="grid gap-4">
@@ -576,19 +532,56 @@ export function UsaRadarOrigin() {
 
       {!loading && products.length ? (
         <section className="grid gap-3" aria-label="Resultados da busca USA">
-          <div className="flex items-center justify-between rounded-2xl border border-inest-line/70 bg-inest-surface px-4 py-3">
-            <span className="text-sm font-bold text-inest-text">{products.length} resultados</span>
-            <span className="text-xs text-inest-muted">Selecione um produto para continuar</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-inest-line/70 bg-inest-surface px-4 py-3">
+            <label className="flex items-center gap-2 text-sm font-bold text-inest-text">
+              <input
+                type="checkbox"
+                checked={products.length > 0 && selectedIds.size === products.length}
+                onChange={(event) => {
+                  if (event.target.checked) {
+                    setSelectedIds(
+                      new Set(
+                        products.map(
+                          (product) => `${product.providerName}:${product.sourceProductId}`,
+                        ),
+                      ),
+                    );
+                    resetOperationalState();
+                    resetWeightState();
+                    setSelectedProduct(null);
+                  } else {
+                    setSelectedIds(new Set());
+                    resetOperationalState();
+                    resetWeightState();
+                    setSelectedProduct(null);
+                  }
+                }}
+              />
+              {selectedIds.size} selecionado{selectedIds.size === 1 ? '' : 's'}
+            </label>
+            <ActionButton
+              className="min-h-11"
+              disabled={
+                selectedIds.size !== 1 || preflight?.status !== 'READY_FOR_COST' || costLoading
+              }
+              onClick={() => void executeCost()}
+            >
+              {costLoading ? 'Calculando...' : 'Calcular Custo'}
+            </ActionButton>
           </div>
           {products.map((product) => (
             <UsaProductCard
               key={`${product.providerName}:${product.sourceProductId}`}
               product={product}
-              selected={
-                selectedProduct?.sourceProductId === product.sourceProductId &&
-                selectedProduct.providerName === product.providerName
+              selected={selectedIds.has(`${product.providerName}:${product.sourceProductId}`)}
+              calculateEnabled={
+                selectedIds.size === 1 &&
+                selectedIds.has(`${product.providerName}:${product.sourceProductId}`) &&
+                preflight?.status === 'READY_FOR_COST' &&
+                !costLoading
               }
-              onSelect={selectProduct}
+              onSelect={(checked) => selectProduct(product, checked)}
+              onCalculate={() => void executeCost()}
             />
           ))}
         </section>
@@ -673,7 +666,7 @@ export function UsaRadarOrigin() {
           <UsaRedirectorPanel
             value={redirector}
             loading={
-              executionLoading ||
+              costLoading ||
               preflightLoading ||
               decisionLoading ||
               manufacturerLoading ||
@@ -681,7 +674,7 @@ export function UsaRadarOrigin() {
             }
             ready={preflight?.status === 'READY_FOR_COST'}
             onChange={selectRedirector}
-            onSubmit={() => void executePricedOffer()}
+            onSubmit={() => void executeCost()}
           />
           {preflightLoading ? (
             <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
@@ -721,71 +714,34 @@ export function UsaRadarOrigin() {
               }
             />
           ) : null}
-          {executionError ? (
+          {costError ? (
             <ErrorState
-              title="Fluxo USA"
-              description={executionError}
+              title="Custo USA"
+              description={costError}
               action={
-                <ActionButton variant="secondary" onClick={() => void executePricedOffer()}>
+                <ActionButton variant="secondary" onClick={() => void executeCost()}>
                   Tentar novamente
                 </ActionButton>
               }
             />
           ) : null}
-          {executionLoading ? (
+          {costLoading ? (
             <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
-              Calculando custo, precificando e gerando oferta...
+              Calculando custo estimado...
             </p>
           ) : null}
-          {executionResult ? <UsaExecutionResult result={executionResult} /> : null}
-          {canRegisterMissingProfit ? (
-            <form
-              aria-label="Cadastrar lucro USA"
-              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
-              onSubmit={registerMissingProfit}
-            >
-              <label className="grid gap-1 text-sm font-bold text-inest-text">
-                Lucro líquido
-                <input
-                  className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
-                  value={profitInput}
-                  onChange={(event) => setProfitInput(event.target.value)}
-                  disabled={profitLoading}
-                  inputMode="decimal"
-                  placeholder="0,00"
-                />
-                <span className="text-xs font-semibold text-inest-muted">
-                  A identidade financeira foi confirmada; cadastre o lucro para continuar.
-                </span>
-              </label>
-              <ActionButton type="submit" className="min-h-11 self-end" disabled={profitLoading}>
-                {profitLoading ? 'Cadastrando...' : 'Cadastrar lucro'}
-              </ActionButton>
-            </form>
-          ) : null}
-          {profitError ? <ErrorState title="Lucro" description={profitError} /> : null}
         </section>
       ) : null}
+      <CalculationModal
+        calculation={null}
+        usaCostExecution={costExecution}
+        sending={sendingToPricing}
+        onClose={() => setCostExecution(null)}
+        onSendToPricing={() => void sendToPricing()}
+        onConfirmManufacturer={() => undefined}
+      />
     </div>
   );
-}
-
-async function persistProfitRegistration(
-  registration: ReturnType<typeof resolveProfitRegistration>,
-) {
-  if (registration.action === 'update') {
-    await updateProduct(registration.productId, registration.payload);
-    return;
-  }
-  if (registration.action === 'create-model-and-product') {
-    await createProfitRegistration({ product: registration.payload, model: registration.model });
-    return;
-  }
-  if (registration.action === 'create') {
-    await createProduct(registration.payload);
-    return;
-  }
-  throw new Error(registration.message);
 }
 
 function UsaShippingWeightPanel({
@@ -928,32 +884,8 @@ function UsaRedirectorPanel({
         disabled={!value || loading || !ready}
         onClick={onSubmit}
       >
-        {loading ? 'Processando...' : 'Calcular e gerar oferta'}
+        {loading ? 'Processando...' : 'Calcular Custo'}
       </ActionButton>
-    </div>
-  );
-}
-
-function UsaExecutionResult({ result }: { result: UsaPricedOfferResponse }) {
-  if (result.status !== 'READY' || !result.pricing || !result.costExecution.calculation) {
-    return <BlockedState reason={result.reason ?? 'FLUXO_BLOQUEADO'} />;
-  }
-
-  return (
-    <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4" role="status">
-      <p className="text-xs font-black uppercase tracking-wide text-emerald-700">
-        Oferta USA concluída
-      </p>
-      <div className="mt-2 grid gap-1 text-sm font-semibold text-inest-text sm:grid-cols-3">
-        <span>FinalCost: {formatBrl(result.costExecution.calculation.finalCost.amountBrl)}</span>
-        <span>Preço: {formatBrl(result.pricing.salePrice)}</span>
-        <span>Oferta: {formatBrl(result.pricing.offerPrice)}</span>
-      </div>
-      {result.offer?.id ? (
-        <p className="mt-2 text-xs font-semibold text-emerald-700">
-          Oferta registrada: {result.offer.id}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -997,11 +929,15 @@ function humanizeUsaBlockedReason(reason: string) {
 function UsaProductCard({
   product,
   selected,
+  calculateEnabled,
   onSelect,
+  onCalculate,
 }: {
   product: UsaSourceProduct;
   selected: boolean;
-  onSelect: (product: UsaSourceProduct) => void;
+  calculateEnabled: boolean;
+  onSelect: (checked: boolean) => void;
+  onCalculate: () => void;
 }) {
   const attributes = [product.model, product.capacity, product.color, product.condition].filter(
     Boolean,
@@ -1051,6 +987,14 @@ function UsaProductCard({
         </strong>
       </div>
       <div className="flex flex-wrap gap-2 lg:justify-end">
+        <label className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-inest-line px-3 text-sm font-bold text-inest-text">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(event) => onSelect(event.target.checked)}
+          />
+          Selecionar
+        </label>
         {product.sourceUrl ? (
           <a
             className="inline-flex min-h-11 items-center rounded-xl border border-inest-line px-3 text-sm font-bold text-inest-text"
@@ -1062,11 +1006,12 @@ function UsaProductCard({
           </a>
         ) : null}
         <ActionButton
-          variant={selected ? 'secondary' : 'success'}
+          variant="success"
           className="min-h-11"
-          onClick={() => onSelect(product)}
+          disabled={!calculateEnabled}
+          onClick={onCalculate}
         >
-          {selected ? 'Selecionado' : 'Selecionar'}
+          Calcular
         </ActionButton>
       </div>
     </article>
@@ -1079,10 +1024,4 @@ function formatUsd(value: number) {
 
 function formatWeightLbs(value: number) {
   return value.toFixed(3);
-}
-
-function formatBrl(value: number | null) {
-  return value === null
-    ? '—'
-    : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }

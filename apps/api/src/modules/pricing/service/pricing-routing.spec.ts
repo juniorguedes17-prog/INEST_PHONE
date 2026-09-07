@@ -382,6 +382,62 @@ describe('Pricing canonical originality routing', () => {
     });
   });
 
+  it('routes a USA FinalCost through the existing temporary pricing contract without PY components', async () => {
+    const fixture = setup(false, 2677.07);
+    fixture.dto = {
+      origin: 'US',
+      sourceProductId: 'amazon-us:camera-1',
+      productName: 'Canon EOS R50',
+      displayName: 'Canon EOS R50',
+      category: 'Outros',
+      supplier: 'Amazon',
+      store: 'Amazon',
+      productUrl: 'https://example.com/camera',
+      priceUsd: 499,
+      totalCost: 2677.07,
+      sourceManufacturer: 'Canon',
+      sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      provider: 'amazon_us',
+      retailer: 'Amazon',
+      model: 'Canon EOS R50',
+      condition: 'NOVO',
+      usaCostBreakdown: { productValueBrl: 2500, shippingBrl: 177.07 },
+    };
+    fixture.repository.findActiveCatalogProductById.mockResolvedValue(null);
+    fixture.manufacturers.resolve.mockResolvedValue({
+      status: 'FOUND',
+      manufacturerId: 'manufacturer-canon',
+      manufacturerKey: 'canon',
+      canonicalName: 'Canon',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
+      normalizedEvidence: 'canon',
+      matchedAlias: 'Canon',
+      normalizedAlias: 'canon',
+    });
+
+    const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+    expect(result).toMatchObject({
+      origin: 'US',
+      financialClassification: 'NON_APPLE',
+      importCosts: {
+        totalCost: 2677.07,
+        dollarQuote: null,
+        usaCostBreakdown: { productValueBrl: 2500, shippingBrl: 177.07 },
+      },
+      offerDraft: {
+        payload: {
+          productId: null,
+          externalIdentity: {
+            origin: 'US',
+            provider: 'amazon_us',
+            sourceProductId: 'amazon-us:camera-1',
+          },
+        },
+      },
+    });
+  });
+
   it('keeps BR manufacturer resolution as a fallback and routes a confirmed alias through P4', async () => {
     const fixture = setup(null, 1690);
     fixture.quote.productId = '';

@@ -166,13 +166,29 @@ export type UsaRedirectorSelection =
   { redirector: 'RED_DELAWARE'; shippingMode: 'EXPRESS' } | { redirector: 'REI_DO_IMPORTADO' };
 
 export type UsaCostPreflightResponse =
-  | { status: 'READY_FOR_COST'; shippingWeightLbs: number | null }
+  | {
+      status: 'READY_FOR_COST';
+      redirector: UsaRedirectorSelection;
+      shippingWeightLbs: number | null;
+      condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
+      normalizedPricing: {
+        category: string | null;
+        model: string | null;
+        capacity: string | null;
+        color: string | null;
+      };
+    }
   | {
       status: 'NEEDS_INPUT';
       reason: 'MANUFACTURER_MISSING' | 'MISSING_WEIGHT';
-      input: { type: 'MANUFACTURER' | 'WEIGHT'; suggestedValue?: string };
+      input: {
+        type: 'MANUFACTURER' | 'WEIGHT';
+        field: 'manufacturer' | 'shippingWeightLbs';
+        suggestedValue?: string;
+      };
+      redirector: UsaRedirectorSelection;
     }
-  | { status: 'BLOCKED'; reason: string };
+  | { status: 'BLOCKED'; reason: string; redirector: UsaRedirectorSelection | null };
 
 export async function preflightUsaCost(
   sourceProduct: UsaSourceProduct,
@@ -184,6 +200,41 @@ export async function preflightUsaCost(
     body: JSON.stringify({ sourceProduct, redirector, composition: { kind: 'SINGLE_ITEM' } }),
   });
   return parseResponse<UsaCostPreflightResponse>(response);
+}
+
+export type UsaCostExecutionResponse =
+  | {
+      preflight: Extract<UsaCostPreflightResponse, { status: 'READY_FOR_COST' }>;
+      calculation: {
+        sourceProductId: string;
+        sourceCommercialIdentity: {
+          sourceName: string;
+          sourceUrl: string;
+          retailer: string | null;
+          provider: string;
+        };
+        redirector: UsaRedirectorSelection;
+        productPriceUsd: number;
+        finalCost: { currency: 'BRL'; amountBrl: number };
+        breakdown: Record<string, string | number | null>;
+      };
+    }
+  | {
+      preflight: Exclude<UsaCostPreflightResponse, { status: 'READY_FOR_COST' }>;
+      calculation: null;
+    };
+
+export async function executeUsaCost(
+  sourceProduct: UsaSourceProduct,
+  redirector: UsaRedirectorSelection,
+  composition: UsaShippingWeightComposition,
+): Promise<UsaCostExecutionResponse> {
+  const response = await authenticatedFetch(`${env.apiUrl}/import-radar/usa-cost`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sourceProduct, redirector, composition }),
+  });
+  return parseResponse<UsaCostExecutionResponse>(response);
 }
 
 export interface UsaPricedOfferResponse {

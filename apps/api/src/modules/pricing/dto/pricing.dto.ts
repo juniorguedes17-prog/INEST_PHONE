@@ -5,11 +5,13 @@ import {
   IsArray,
   IsIn,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
   IsUrl,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class PricingQueryDto {
@@ -117,6 +119,11 @@ export class ReplaceBrazilRadarWorkSnapshotDto {
 }
 
 export class TemporaryImportPricingDto {
+  @ApiPropertyOptional({ enum: ['PY', 'US'], default: 'PY' })
+  @IsOptional()
+  @IsIn(['PY', 'US'])
+  origin?: 'PY' | 'US';
+
   @ApiProperty()
   @IsString()
   sourceProductId!: string;
@@ -149,15 +156,18 @@ export class TemporaryImportPricingDto {
   @IsString()
   category!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   @IsString()
+  @IsOptional()
   supplier!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   @IsString()
+  @IsOptional()
   store!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsUrl()
   productUrl!: string;
 
@@ -167,47 +177,54 @@ export class TemporaryImportPricingDto {
   @Min(0)
   priceUsd!: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((dto: TemporaryImportPricingDto) => (dto.origin ?? 'PY') === 'PY')
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  dollarQuote!: number;
+  dollarQuote?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((dto: TemporaryImportPricingDto) => (dto.origin ?? 'PY') === 'PY')
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  convertedPrice!: number;
+  convertedPrice?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((dto: TemporaryImportPricingDto) => (dto.origin ?? 'PY') === 'PY')
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  cdeExit!: number;
+  cdeExit?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((dto: TemporaryImportPricingDto) => (dto.origin ?? 'PY') === 'PY')
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  redirectCost!: number;
+  redirectCost?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((dto: TemporaryImportPricingDto) => (dto.origin ?? 'PY') === 'PY')
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  brazilDispatch!: number;
+  brazilDispatch?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((dto: TemporaryImportPricingDto) => (dto.origin ?? 'PY') === 'PY')
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  invoiceTax!: number;
+  invoiceTax?: number;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
+  @ValidateIf((dto: TemporaryImportPricingDto) => (dto.origin ?? 'PY') === 'PY')
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  correiosLabel!: number;
+  correiosLabel?: number;
 
   @ApiProperty()
   @Type(() => Number)
@@ -249,4 +266,19 @@ export class TemporaryImportPricingDto {
   @IsOptional()
   @IsString()
   matchedProductType?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  provider?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  retailer?: string;
+
+  @ApiPropertyOptional({ type: Object })
+  @IsOptional()
+  @IsObject()
+  usaCostBreakdown?: Record<string, string | number | null>;
 }

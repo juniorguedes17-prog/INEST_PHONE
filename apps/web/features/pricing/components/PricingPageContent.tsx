@@ -823,7 +823,9 @@ function TemporaryImportPricingCard({
           <h3 className="line-clamp-2 text-base font-black leading-tight text-inest-text">
             {presentation.title}
           </h3>
-          <StatusBadge tone="blue">Paraguai</StatusBadge>
+          <StatusBadge tone="blue">
+            {item.origin === 'US' ? 'Estados Unidos' : 'Paraguai'}
+          </StatusBadge>
         </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           {presentation.attributes.map((tag) => (

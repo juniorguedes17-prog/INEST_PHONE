@@ -156,22 +156,23 @@ export type PricingOfferTarget =
   | { id: string; kind: 'brazil-radar'; item: BrazilRadarQuotePricing };
 
 export interface TemporaryImportPricingRequest {
+  origin?: 'PY' | 'US';
   sourceProductId: string;
   catalogProductId?: string | null;
   productName: string;
   displayName?: string;
   category: string;
-  supplier: string;
-  store: string;
-  productUrl: string;
+  supplier?: string;
+  store?: string;
+  productUrl?: string;
   priceUsd: number;
-  dollarQuote: number;
-  convertedPrice: number;
-  cdeExit: number;
-  redirectCost: number;
-  brazilDispatch: number;
-  invoiceTax: number;
-  correiosLabel: number;
+  dollarQuote?: number;
+  convertedPrice?: number;
+  cdeExit?: number;
+  redirectCost?: number;
+  brazilDispatch?: number;
+  invoiceTax?: number;
+  correiosLabel?: number;
   totalCost: number;
   brand?: string;
   sourceManufacturer?: string | null;
@@ -182,11 +183,14 @@ export interface TemporaryImportPricingRequest {
   city?: string;
   condition?: 'NOVO' | 'SEMINOVO' | 'CPO';
   matchedProductType?: string;
+  provider?: string;
+  retailer?: string;
+  usaCostBreakdown?: Record<string, string | number | null>;
 }
 
 export interface TemporaryImportPricing {
   temporary: true;
-  origin: 'PY';
+  origin: 'PY' | 'US';
   financialClassification: 'APPLE' | 'NON_APPLE';
   financialClassificationReason: string;
   manufacturerKey: string | null;
@@ -217,14 +221,15 @@ export interface TemporaryImportPricing {
     isAppleOriginal: boolean | null;
   };
   importCosts: {
-    dollarQuote: number;
-    convertedPrice: number;
-    cdeExit: number;
-    redirectCost: number;
-    brazilDispatch: number;
-    invoiceTax: number;
-    correiosLabel: number;
+    dollarQuote: number | null;
+    convertedPrice: number | null;
+    cdeExit: number | null;
+    redirectCost: number | null;
+    brazilDispatch: number | null;
+    invoiceTax: number | null;
+    correiosLabel: number | null;
     totalCost: number;
+    usaCostBreakdown?: Record<string, string | number | null> | null;
   };
   pricingCosts: {
     fixedCost: number;
