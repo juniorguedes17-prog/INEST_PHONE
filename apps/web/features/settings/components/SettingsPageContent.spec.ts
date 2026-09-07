@@ -14,7 +14,7 @@ const componentCode = ts.transpileModule(source, {
 }).outputText;
 
 // This exercises the real JSX callback and controlled UsdInput, without adding a React DOM runner.
-test('Red Delaware quote stays textual while editing and saves the parsed USD/BRL value', () => {
+test('settings keep editing behavior and omit the obsolete offer settings card', () => {
   const settingsRef = { current: settings(520) };
   let saved: Record<string, unknown> | null = null;
   const states: unknown[] = [];
@@ -163,6 +163,29 @@ test('Red Delaware quote stays textual while editing and saves the parsed USD/BR
   );
   render(); // confirmed settings hydration
   assert.equal(usaInput().props.value, '5,35');
+
+  const offersTab = find(
+    render(),
+    (node) => node.type === 'button' && node.props.id === 'settings-tab-offers',
+  );
+  assert.ok(offersTab);
+  (offersTab.props.onClick as () => void)();
+
+  const offersView = render();
+  assert.equal(
+    find(
+      offersView,
+      (node) => node.type === 'SettingsCard' && node.props.title === 'Configurações de oferta',
+    ),
+    undefined,
+  );
+  assert.ok(find(offersView, (node) => node.type === 'OfferTemplatesSettingsCard'));
+  assert.ok(
+    find(
+      offersView,
+      (node) => node.type === 'SettingsCard' && node.props.title === 'Mensagem de parcelamento',
+    ),
+  );
 });
 
 function settings(quote: number) {

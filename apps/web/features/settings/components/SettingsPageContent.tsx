@@ -993,67 +993,6 @@ export function SettingsPageContent() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <div className={activeSection === 'offers' ? '' : 'hidden'}>
-          <SettingsCard
-            eyebrow="Ofertas"
-            title="Configurações de oferta"
-            description="Textos padrão consumidos futuramente pelo Gerador de Ofertas."
-          >
-            <div className="grid gap-4">
-              <TextInput
-                label="Garantia padrão"
-                value={settings.offers.defaultWarranty}
-                onChange={(value) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    offers: { ...current.offers, defaultWarranty: value },
-                  }))
-                }
-              />
-              <TextInput
-                label="Prazo padrão"
-                value={settings.offers.defaultDeadline}
-                onChange={(value) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    offers: { ...current.offers, defaultDeadline: value },
-                  }))
-                }
-              />
-              <TextArea
-                label="Texto padrão da oferta"
-                value={settings.offers.defaultOfferText}
-                onChange={(value) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    offers: { ...current.offers, defaultOfferText: value },
-                  }))
-                }
-              />
-              <TextArea
-                label="Rodapé padrão"
-                value={settings.offers.defaultFooter}
-                onChange={(value) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    offers: { ...current.offers, defaultFooter: value },
-                  }))
-                }
-              />
-              <TextArea
-                label="Mensagem do WhatsApp"
-                value={settings.offers.whatsappMessage}
-                onChange={(value) =>
-                  updateSettings((current) => ({
-                    ...current,
-                    offers: { ...current.offers, whatsappMessage: value },
-                  }))
-                }
-              />
-            </div>
-          </SettingsCard>
-        </div>
-
         <div className={activeSection === 'general' ? '' : 'hidden'}>
           <SettingsCard
             eyebrow="Usuário"
