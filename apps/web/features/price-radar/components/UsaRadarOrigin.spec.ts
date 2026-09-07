@@ -49,27 +49,25 @@ function setup(preflightResponse: object = ready, searchProducts = [product]) {
     })),
     resolveUsaEnrichment: mock.fn(async () => ({ decision: { status: 'READY', reason: null } })),
     preflightUsaCost: mock.fn(async () => preflightResponse),
-    executeUsaCost: mock.fn(
-      async (..._args: unknown[]) => (
-        void _args,
-        {
-          preflight: ready,
-          calculation: {
-            sourceProductId: product.sourceProductId,
-            sourceCommercialIdentity: {
-              sourceName: product.sourceName,
-              sourceUrl: product.sourceUrl,
-              retailer: product.retailer,
-              provider: product.providerName,
-            },
-            redirector: ready.redirector,
-            productPriceUsd: product.priceUsd,
-            finalCost: { currency: 'BRL', amountBrl: 5500 },
-            breakdown: { productValueBrl: 5000, shippingBrl: 500 },
+    executeUsaCost: mock.fn(async (...args: unknown[]) => {
+      const redirector = args[1] as Props;
+      return {
+        preflight: ready,
+        calculation: {
+          sourceProductId: product.sourceProductId,
+          sourceCommercialIdentity: {
+            sourceName: product.sourceName,
+            sourceUrl: product.sourceUrl,
+            retailer: product.retailer,
+            provider: product.providerName,
           },
-        }
-      ),
-    ),
+          redirector,
+          productPriceUsd: product.priceUsd,
+          finalCost: { currency: 'BRL', amountBrl: 5500 },
+          breakdown: { productValueBrl: 5000, shippingBrl: 500 },
+        },
+      };
+    }),
     resolveUsaShippingWeight: mock.fn(),
     registerUsaShippingWeight: mock.fn(),
     confirmUsaManufacturer: mock.fn(),
@@ -138,7 +136,7 @@ function setup(preflightResponse: object = ready, searchProducts = [product]) {
       const element = value as Element;
       if ((typeof element.type === 'string' ? element.type : element.type.name) === name)
         found.push(element);
-      visit(element.props.children);
+      Object.values(element.props).forEach(visit);
     };
     visit(render());
     return found;
@@ -173,9 +171,13 @@ test('keeps the shared unit-cost rule disabled for zero or multiple selections',
   assert.equal(costButton()?.props.disabled, true);
 });
 
-test('uses usa-cost once for the selected Rei CELULAR product and opens the shared cost modal', async () => {
+test('opens the shared USA cost modal before calculating and uses usa-cost for Rei CELULAR', async () => {
   const h = setup();
   await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  const initialModal = h.nodes('CalculationModal')[0]!;
+  assert.equal(initialModal.props.usaCostExecution, null);
+  assert.ok(initialModal.props.usaBeforeCost);
   await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
   await h.call('UsaRedirectorPanel', 'onSubmit');
   assert.equal(h.services.executeUsaCost.mock.callCount(), 1);
@@ -195,6 +197,7 @@ test('does not calculate cost when the backend requires a shipping weight', asyn
     redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
   });
   await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
   await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
   assert.equal(h.nodes('UsaShippingWeightPanel').length, 1);
   assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
@@ -204,6 +207,7 @@ test('does not calculate cost when the backend requires a shipping weight', asyn
 test('sends only the FinalCost through the existing temporary pricing handoff', async () => {
   const h = setup();
   await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
   await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
   await h.call('UsaRedirectorPanel', 'onSubmit');
   await h.call('CalculationModal', 'onSendToPricing');
@@ -214,6 +218,34 @@ test('sends only the FinalCost through the existing temporary pricing handoff', 
   assert.equal(payload.provider, 'amazon_us');
   assert.equal(h.router.push.mock.calls[0]!.arguments[0], '/pricing?temporaryImport=usa');
   assert.ok(h.storage.has('inest.temporary-import-pricing'));
+});
+
+test('invalidates a Red calculation before allowing the same modal to calculate Rei', async () => {
+  const h = setup();
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  assert.equal(
+    (
+      ((h.nodes('CalculationModal')[0]!.props.usaCostExecution as Props).calculation as Props)
+        .redirector as Props
+    ).redirector,
+    'RED_DELAWARE',
+  );
+
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+  const reconfiguringModal = h.nodes('CalculationModal')[0]!;
+  assert.equal(reconfiguringModal.props.usaCostExecution, null);
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 2);
+  assert.equal(
+    (
+      ((h.nodes('CalculationModal')[0]!.props.usaCostExecution as Props).calculation as Props)
+        .redirector as Props
+    ).redirector,
+    'REI_DO_IMPORTADO',
+  );
 });
 
 test('the Radar USA source no longer invokes usa-priced-offer', () => {

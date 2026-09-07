@@ -61,7 +61,9 @@ export function UsaRadarOrigin() {
   const [preflight, setPreflight] = useState<UsaCostPreflightResponse | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [preflightError, setPreflightError] = useState<string | null>(null);
-  const [costExecution, setCostExecution] = useState<UsaCostExecutionResponse | null>(null);
+  const [costExecution, setCostExecution] = useState<
+    UsaCostExecutionResponse | 'CONFIGURING' | null
+  >(null);
   const [costLoading, setCostLoading] = useState(false);
   const [costError, setCostError] = useState<string | null>(null);
   const [sendingToPricing, setSendingToPricing] = useState(false);
@@ -135,7 +137,7 @@ export function UsaRadarOrigin() {
       setPreflight(null);
       setPreflightLoading(true);
       setPreflightError(null);
-      setCostExecution(null);
+      setCostExecution('CONFIGURING');
       setCostError(null);
       resetWeightState();
       try {
@@ -184,7 +186,7 @@ export function UsaRadarOrigin() {
       preflightRequestRef.current += 1;
       setPreflight(null);
       setPreflightError(null);
-      setCostExecution(null);
+      setCostExecution('CONFIGURING');
       setCostError(null);
       resetWeightState();
       if (selectedProduct && choice) void resolvePreflight(selectedProduct, choice);
@@ -310,7 +312,7 @@ export function UsaRadarOrigin() {
     const requestId = flowRequestRef.current;
     setCostLoading(true);
     setCostError(null);
-    setCostExecution(null);
+    setCostExecution('CONFIGURING');
     try {
       const response = await executeUsaCost(selectedProduct, redirectorSelection, {
         kind: 'SINGLE_ITEM',
@@ -318,7 +320,7 @@ export function UsaRadarOrigin() {
       if (requestId !== flowRequestRef.current) return;
       setCostExecution(response);
       if (response.preflight.status !== 'READY_FOR_COST') {
-        setCostExecution(null);
+        setCostExecution('CONFIGURING');
         void resolvePreflight(selectedProduct, redirector);
       }
     } catch (executeError) {
@@ -337,6 +339,7 @@ export function UsaRadarOrigin() {
     if (
       !selectedProduct ||
       !costExecution ||
+      costExecution === 'CONFIGURING' ||
       costExecution.preflight.status !== 'READY_FOR_COST' ||
       !costExecution.calculation ||
       sendingToPricing
@@ -561,10 +564,8 @@ export function UsaRadarOrigin() {
             </label>
             <ActionButton
               className="min-h-11"
-              disabled={
-                selectedIds.size !== 1 || preflight?.status !== 'READY_FOR_COST' || costLoading
-              }
-              onClick={() => void executeCost()}
+              disabled={selectedIds.size !== 1 || costLoading}
+              onClick={() => setCostExecution('CONFIGURING')}
             >
               {costLoading ? 'Calculando...' : 'Calcular Custo'}
             </ActionButton>
@@ -577,164 +578,166 @@ export function UsaRadarOrigin() {
               calculateEnabled={
                 selectedIds.size === 1 &&
                 selectedIds.has(`${product.providerName}:${product.sourceProductId}`) &&
-                preflight?.status === 'READY_FOR_COST' &&
                 !costLoading
               }
               onSelect={(checked) => selectProduct(product, checked)}
-              onCalculate={() => void executeCost()}
+              onCalculate={() => setCostExecution('CONFIGURING')}
             />
           ))}
         </section>
       ) : null}
 
-      {selectedProduct ? (
-        <section
-          className="rounded-2xl border border-inest-blue/30 bg-blue-50/50 p-4"
-          aria-live="polite"
-        >
-          <p className="text-xs font-black uppercase tracking-wide text-inest-blue">
-            Produto selecionado
-          </p>
-          <h3 className="mt-1 text-lg font-black text-inest-text">{selectedProduct.sourceName}</h3>
-          <p className="mt-1 text-sm text-inest-muted">
-            {selectedProduct.providerName} · {selectedProduct.retailer ?? 'Loja não informada'} ·{' '}
-            {selectedProduct.sourceProductId}
-          </p>
-          {decisionLoading ? (
-            <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
-              Resolvendo produto...
-            </p>
-          ) : null}
-          {decisionError ? (
-            <ErrorState
-              title="Decisão USA"
-              description={decisionError}
-              action={
-                <ActionButton
-                  variant="secondary"
-                  onClick={() => void resolveProductDecision(selectedProduct)}
-                >
-                  Tentar novamente
-                </ActionButton>
-              }
-            />
-          ) : null}
-          {decision?.status === 'NEEDS_INPUT' ? (
-            <form
-              className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
-              onSubmit={confirmManufacturer}
-            >
-              <label className="grid gap-1 text-sm font-bold text-inest-text">
-                Fabricante
-                <input
-                  className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
-                  value={manufacturerInput}
-                  onChange={(event) => setManufacturerInput(event.target.value)}
-                  disabled={manufacturerLoading}
-                  placeholder="Fabricante"
-                />
-                <span className="text-xs font-semibold text-inest-muted">
-                  Precisamos confirmar o fabricante para continuar.
-                  {decision.input.suggestedValue
-                    ? ` Sugestão: ${decision.input.suggestedValue}.`
-                    : ''}
-                </span>
-              </label>
-              <ActionButton
-                type="submit"
-                className="min-h-11 self-end"
-                disabled={manufacturerLoading}
-              >
-                {manufacturerLoading ? 'Confirmando...' : 'Confirmar fabricante'}
-              </ActionButton>
-            </form>
-          ) : null}
-          {manufacturerError ? (
-            <ErrorState
-              title="Fabricante"
-              description={manufacturerError}
-              action={
-                <ActionButton variant="secondary" onClick={() => void confirmManufacturer()}>
-                  Tentar novamente
-                </ActionButton>
-              }
-            />
-          ) : null}
-          {!redirector && decision?.status === 'BLOCKED' ? (
-            <BlockedState reason={decision.reason} />
-          ) : null}
-          <UsaRedirectorPanel
-            value={redirector}
-            loading={
-              costLoading ||
-              preflightLoading ||
-              decisionLoading ||
-              manufacturerLoading ||
-              weightLoading
-            }
-            ready={preflight?.status === 'READY_FOR_COST'}
-            onChange={selectRedirector}
-            onSubmit={() => void executeCost()}
-          />
-          {preflightLoading ? (
-            <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
-              Verificando requisitos do redirecionador...
-            </p>
-          ) : null}
-          {preflightError ? (
-            <ErrorState
-              title="Verificação USA"
-              description={preflightError}
-              action={
-                <ActionButton
-                  variant="secondary"
-                  disabled={preflightLoading}
-                  onClick={() => redirector && void resolvePreflight(selectedProduct, redirector)}
-                >
-                  Tentar novamente
-                </ActionButton>
-              }
-            />
-          ) : null}
-          {preflight?.status === 'BLOCKED' ? <BlockedState reason={preflight.reason} /> : null}
-          {preflight?.status === 'READY_FOR_COST' ||
-          (preflight?.status === 'NEEDS_INPUT' && preflight.reason === 'MISSING_WEIGHT') ? (
-            <UsaShippingWeightPanel
-              resolution={weightResolution}
-              input={weightInput}
-              loading={weightLoading}
-              operation={weightOperation}
-              error={weightError}
-              onInputChange={setWeightInput}
-              onSubmit={registerWeight}
-              onRetry={
-                !weightResolution && redirector
-                  ? () => void resolvePreflight(selectedProduct, redirector)
-                  : undefined
-              }
-            />
-          ) : null}
-          {costError ? (
-            <ErrorState
-              title="Custo USA"
-              description={costError}
-              action={
-                <ActionButton variant="secondary" onClick={() => void executeCost()}>
-                  Tentar novamente
-                </ActionButton>
-              }
-            />
-          ) : null}
-          {costLoading ? (
-            <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
-              Calculando custo estimado...
-            </p>
-          ) : null}
-        </section>
-      ) : null}
       <CalculationModal
         calculation={null}
-        usaCostExecution={costExecution}
+        usaCostExecution={costExecution === 'CONFIGURING' ? null : costExecution}
+        usaBeforeCost={
+          costExecution && selectedProduct ? (
+            <div className="grid gap-4" aria-live="polite">
+              <p className="text-xs font-black uppercase tracking-wide text-inest-blue">
+                Produto selecionado
+              </p>
+              <h3 className="mt-1 text-lg font-black text-inest-text">
+                {selectedProduct.sourceName}
+              </h3>
+              <p className="mt-1 text-sm text-inest-muted">
+                {selectedProduct.providerName} · {selectedProduct.retailer ?? 'Loja não informada'}{' '}
+                · {selectedProduct.sourceProductId}
+              </p>
+              {decisionLoading ? (
+                <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
+                  Resolvendo produto...
+                </p>
+              ) : null}
+              {decisionError ? (
+                <ErrorState
+                  title="Decisão USA"
+                  description={decisionError}
+                  action={
+                    <ActionButton
+                      variant="secondary"
+                      onClick={() => void resolveProductDecision(selectedProduct)}
+                    >
+                      Tentar novamente
+                    </ActionButton>
+                  }
+                />
+              ) : null}
+              {decision?.status === 'NEEDS_INPUT' ? (
+                <form
+                  className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  onSubmit={confirmManufacturer}
+                >
+                  <label className="grid gap-1 text-sm font-bold text-inest-text">
+                    Fabricante
+                    <input
+                      className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
+                      value={manufacturerInput}
+                      onChange={(event) => setManufacturerInput(event.target.value)}
+                      disabled={manufacturerLoading}
+                      placeholder="Fabricante"
+                    />
+                    <span className="text-xs font-semibold text-inest-muted">
+                      Precisamos confirmar o fabricante para continuar.
+                      {decision.input.suggestedValue
+                        ? ` Sugestão: ${decision.input.suggestedValue}.`
+                        : ''}
+                    </span>
+                  </label>
+                  <ActionButton
+                    type="submit"
+                    className="min-h-11 self-end"
+                    disabled={manufacturerLoading}
+                  >
+                    {manufacturerLoading ? 'Confirmando...' : 'Confirmar fabricante'}
+                  </ActionButton>
+                </form>
+              ) : null}
+              {manufacturerError ? (
+                <ErrorState
+                  title="Fabricante"
+                  description={manufacturerError}
+                  action={
+                    <ActionButton variant="secondary" onClick={() => void confirmManufacturer()}>
+                      Tentar novamente
+                    </ActionButton>
+                  }
+                />
+              ) : null}
+              {!redirector && decision?.status === 'BLOCKED' ? (
+                <BlockedState reason={decision.reason} />
+              ) : null}
+              <UsaRedirectorPanel
+                value={redirector}
+                loading={
+                  costLoading ||
+                  preflightLoading ||
+                  decisionLoading ||
+                  manufacturerLoading ||
+                  weightLoading
+                }
+                ready={preflight?.status === 'READY_FOR_COST'}
+                onChange={selectRedirector}
+                onSubmit={() => void executeCost()}
+              />
+              {preflightLoading ? (
+                <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
+                  Verificando requisitos do redirecionador...
+                </p>
+              ) : null}
+              {preflightError ? (
+                <ErrorState
+                  title="Verificação USA"
+                  description={preflightError}
+                  action={
+                    <ActionButton
+                      variant="secondary"
+                      disabled={preflightLoading}
+                      onClick={() =>
+                        redirector && void resolvePreflight(selectedProduct, redirector)
+                      }
+                    >
+                      Tentar novamente
+                    </ActionButton>
+                  }
+                />
+              ) : null}
+              {preflight?.status === 'BLOCKED' ? <BlockedState reason={preflight.reason} /> : null}
+              {preflight?.status === 'READY_FOR_COST' ||
+              (preflight?.status === 'NEEDS_INPUT' && preflight.reason === 'MISSING_WEIGHT') ? (
+                <UsaShippingWeightPanel
+                  resolution={weightResolution}
+                  input={weightInput}
+                  loading={weightLoading}
+                  operation={weightOperation}
+                  error={weightError}
+                  onInputChange={setWeightInput}
+                  onSubmit={registerWeight}
+                  onRetry={
+                    !weightResolution && redirector
+                      ? () => void resolvePreflight(selectedProduct, redirector)
+                      : undefined
+                  }
+                />
+              ) : null}
+              {costError ? (
+                <ErrorState
+                  title="Custo USA"
+                  description={costError}
+                  action={
+                    <ActionButton variant="secondary" onClick={() => void executeCost()}>
+                      Tentar novamente
+                    </ActionButton>
+                  }
+                />
+              ) : null}
+              {costLoading ? (
+                <p className="mt-4 text-sm font-bold text-inest-muted" role="status">
+                  Calculando custo estimado...
+                </p>
+              ) : null}
+            </div>
+          ) : null
+        }
         sending={sendingToPricing}
         onClose={() => setCostExecution(null)}
         onSendToPricing={() => void sendToPricing()}
