@@ -21,6 +21,7 @@ export interface DashboardData {
     revenueByCity: DashboardPoint[];
     customersByOrigin: DashboardPoint[];
   };
+  sheetChartPeriods?: string[];
   kpis: {
     monthRevenue: number;
     monthProfit: number;

@@ -11,7 +11,9 @@ import { DashboardRepository } from '../repository/dashboard.repository';
 import {
   buildSheetCharts,
   DashboardSheetCharts,
+  filterSheetRecordsByDate,
   isToday,
+  listSheetChartPeriods,
   monthKey,
   toNumber,
 } from '../validators/dashboard.validators';
@@ -33,6 +35,7 @@ export interface DashboardOverview {
   suppliers: unknown;
   sheet: GoogleSheetsMetrics;
   sheetCharts: DashboardSheetCharts;
+  sheetChartPeriods: string[];
 }
 
 @Injectable()
@@ -54,10 +57,16 @@ export class DashboardService {
 
     const snapshot = await this.dashboardRepository.snapshot(query);
     const sheetSnapshot = await this.getSheetSnapshot();
+    const chartRecords = filterSheetRecordsByDate(
+      sheetSnapshot.records,
+      query.startDate,
+      query.endDate,
+    );
     const value = {
       ...this.buildDashboard(snapshot),
       sheet: sheetSnapshot.metrics,
-      sheetCharts: buildSheetCharts(sheetSnapshot.records, sheetSnapshot.customers),
+      sheetCharts: buildSheetCharts(chartRecords, sheetSnapshot.customers),
+      sheetChartPeriods: listSheetChartPeriods(sheetSnapshot.records),
     };
 
     this.cache.set(cacheKey, { value, expiresAt: Date.now() + 30_000 });
@@ -217,6 +226,7 @@ export class DashboardService {
         revenueByCity: [],
         customersByOrigin: [],
       },
+      sheetChartPeriods: [],
     };
   }
 

@@ -16,6 +16,29 @@ export interface DashboardSheetCharts {
   customersByOrigin: DashboardChartPoint[];
 }
 
+export function filterSheetRecordsByDate(
+  records: GoogleSheetsSaleRecord[],
+  startDate?: string,
+  endDate?: string,
+) {
+  if (!startDate && !endDate) return records;
+
+  const start = startDate?.slice(0, 10);
+  const end = endDate?.slice(0, 10);
+  return records.filter((record) => {
+    const date = sheetDateKey(record.data_venda);
+    return Boolean(date && (!start || date >= start) && (!end || date <= end));
+  });
+}
+
+export function listSheetChartPeriods(records: GoogleSheetsSaleRecord[]) {
+  const periods = records
+    .map((record) => sheetMonthKey(record.data_venda))
+    .filter((period): period is string => Boolean(period));
+
+  return Array.from(new Set(periods)).sort((left, right) => right.localeCompare(left));
+}
+
 export function toNumber(value: number | string | null | undefined) {
   return Number(value ?? 0);
 }
@@ -78,13 +101,17 @@ function sheetNumber(value: string) {
 }
 
 function sheetMonthKey(value: string) {
+  return sheetDateKey(value)?.slice(0, 7) ?? null;
+}
+
+function sheetDateKey(value: string) {
   if (!value) return null;
   const brazilianDate = value.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
-  if (brazilianDate) return `${brazilianDate[3]}-${brazilianDate[2]}`;
+  if (brazilianDate) return `${brazilianDate[3]}-${brazilianDate[2]}-${brazilianDate[1]}`;
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+  return date.toISOString().slice(0, 10);
 }
 
 function addToGroup(group: Map<string, number>, key: string, value: number) {

@@ -3,7 +3,11 @@ import {
   GoogleSheetsCustomer,
   GoogleSheetsSaleRecord,
 } from '../../integrations/interfaces/google-sheets-data.interface';
-import { buildSheetCharts } from './dashboard.validators';
+import {
+  buildSheetCharts,
+  filterSheetRecordsByDate,
+  listSheetChartPeriods,
+} from './dashboard.validators';
 
 const emptyRecord = (): GoogleSheetsSaleRecord =>
   new Proxy({} as GoogleSheetsSaleRecord, {
@@ -66,5 +70,37 @@ describe('buildSheetCharts', () => {
       { label: 'Indicacao', value: 1 },
       { label: 'Nao informado', value: 1 },
     ]);
+  });
+
+  it('aplica o período aos records sem alterar a origem dos clientes', () => {
+    const january = emptyRecord();
+    Object.assign(january, {
+      data_venda: '15/01/2026',
+      quantidade_vendida: '2',
+      receita_venda_real: '3500',
+      lucro_real: '700',
+      cliente_cidade: 'Sao Paulo',
+    });
+    const february = emptyRecord();
+    Object.assign(february, {
+      data_venda: '10/02/2026',
+      quantidade_vendida: '1',
+      receita_venda_real: '1000',
+      lucro_real: '200',
+      cliente_cidade: 'Campinas',
+    });
+    const customers = [{ origin: 'Instagram' }, { origin: 'Indicacao' }] as GoogleSheetsCustomer[];
+
+    const records = [january, february];
+    const filteredRecords = filterSheetRecordsByDate(records, '2026-02-01', '2026-02-28');
+    const result = buildSheetCharts(filteredRecords, customers);
+    const unfiltered = buildSheetCharts(records, customers);
+
+    expect(listSheetChartPeriods(records)).toEqual(['2026-02', '2026-01']);
+    expect(result.monthlyUnits).toEqual([{ label: '2026-02', value: 1 }]);
+    expect(result.monthlyRevenue).toEqual([{ label: '2026-02', value: 1000 }]);
+    expect(result.monthlyProfit).toEqual([{ label: '2026-02', value: 200 }]);
+    expect(result.revenueByCity).toEqual([{ label: 'Campinas', value: 1000 }]);
+    expect(result.customersByOrigin).toEqual(unfiltered.customersByOrigin);
   });
 });
