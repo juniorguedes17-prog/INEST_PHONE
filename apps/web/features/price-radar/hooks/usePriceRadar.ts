@@ -1,12 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import {
-  hidePriceQuote,
-  importPriceRadarCsv,
-  updatePriceQuote,
-} from '../services/price-radar-service';
-import { CsvImportResult, PriceQuoteFormPayload } from '../types/price-radar';
+import { hidePriceQuote, importPriceRadarCsv } from '../services/price-radar-service';
+import { CsvImportResult } from '../types/price-radar';
 import {
   BRAZIL_RADAR_REVALIDATE_INTERVAL_MS,
   getBrazilRadarSnapshotCache,
@@ -65,25 +61,6 @@ export function usePriceRadar() {
     };
   }, [hasSnapshot, load, snapshot.filters]);
 
-  async function save(payload: PriceQuoteFormPayload, id: string) {
-    setSaving(true);
-    setActionError(null);
-    setSuccess(null);
-    try {
-      await updatePriceQuote(id, payload);
-      setSuccess('Cotação atualizada com sucesso.');
-      await load();
-    } catch (priceRadarError) {
-      setActionError(
-        priceRadarError instanceof Error
-          ? priceRadarError.message
-          : 'Não foi possível salvar a cotação.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function hide(id: string) {
     setSaving(true);
     setActionError(null);
@@ -141,7 +118,6 @@ export function usePriceRadar() {
     success,
     lastImport,
     reload: load,
-    save,
     hide,
     importCsv,
   };

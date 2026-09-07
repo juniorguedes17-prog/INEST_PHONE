@@ -21,7 +21,6 @@ interface BrazilRadarProductCardProps {
   product: BrazilRadarProduct;
   selected: boolean;
   onSelect: (id: string, selected: boolean) => void;
-  onView: (quote: PriceQuoteItem) => void;
   onSupplier: (quote: PriceQuoteItem) => void;
   onSendToPricing: (quote: PriceQuoteItem) => void;
 }
@@ -30,7 +29,6 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
   product,
   selected,
   onSelect,
-  onView,
   onSupplier,
   onSendToPricing,
 }: BrazilRadarProductCardProps) {
@@ -108,13 +106,6 @@ export const BrazilRadarProductCard = memo(function BrazilRadarProductCard({
           Atualizado {formatDateTime(product.updatedAt)}
         </span>
         <div className="mt-2 grid grid-cols-2 gap-2 lg:flex lg:justify-end">
-          <ActionButton
-            variant="secondary"
-            className="min-h-11 px-3"
-            onClick={() => onView(product.referenceQuote)}
-          >
-            Visualizar
-          </ActionButton>
           <ActionButton
             variant="success"
             className="min-h-11 px-3"

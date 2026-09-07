@@ -2,7 +2,6 @@ import { env } from '@/lib/env';
 import { authenticatedFetch } from '@/services/authenticated-fetch';
 import {
   CsvImportResult,
-  PriceQuoteFormPayload,
   PriceQuoteItem,
   PriceRadarFilters,
   PriceRadarKpis,
@@ -46,18 +45,6 @@ export async function getPriceRadarKpis(filters: PriceRadarFilters): Promise<Pri
     `${env.apiUrl}/price-radar/kpis${query ? `?${query}` : ''}`,
   );
   return parseResponse<PriceRadarKpis>(response);
-}
-
-export async function updatePriceQuote(
-  id: string,
-  payload: PriceQuoteFormPayload,
-): Promise<PriceQuoteItem> {
-  const response = await authenticatedFetch(`${env.apiUrl}/price-radar/quotes/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return parseResponse<PriceQuoteItem>(response);
 }
 
 export async function hidePriceQuote(id: string): Promise<PriceQuoteItem> {

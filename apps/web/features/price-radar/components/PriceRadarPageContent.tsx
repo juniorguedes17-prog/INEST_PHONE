@@ -13,13 +13,9 @@ import {
   PageHeader,
   StatusBadge,
 } from '@/components/shared';
-import { listProducts } from '@/features/products/services/products-service';
-import { ProductItem } from '@/features/products/types/products';
 import { replaceBrazilRadarPricingWorkSnapshot } from '@/features/pricing/services/pricing-service';
-import { listSuppliers } from '@/features/suppliers/services/suppliers-service';
-import { SupplierItem } from '@/features/suppliers/types/suppliers';
 import { usePriceRadar } from '../hooks/usePriceRadar';
-import { PriceQuoteFormPayload, PriceQuoteItem } from '../types/price-radar';
+import { PriceQuoteItem } from '../types/price-radar';
 import { BrazilRadarProduct, BrazilRadarProductCard } from './BrazilRadarProductCard';
 import { UsaRadarOrigin } from './UsaRadarOrigin';
 import { ParaguayRadarOrigin } from './ParaguayRadarOrigin';
@@ -55,11 +51,7 @@ export function PriceRadarPageContent() {
   const radar = usePriceRadar();
   const [origin, setOrigin] = useState<RadarOrigin>('brasil');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [products, setProducts] = useState<ProductItem[]>([]);
-  const [suppliers, setSuppliers] = useState<SupplierItem[]>([]);
-  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [editingQuote, setEditingQuote] = useState<PriceQuoteItem | null>(null);
   const [facetFilters, setFacetFilters] = useState<BrazilRadarFacetState>(
     () => getBrazilRadarSnapshotCache().ui.facetFilters ?? createEmptyFacetFilters(),
   );
@@ -82,42 +74,6 @@ export function PriceRadarPageContent() {
     setPageSize(nextPageSize);
     updateBrazilRadarUiState({ pageSize: nextPageSize });
   }, []);
-
-  useEffect(() => {
-    async function loadReferences() {
-      const [nextProducts, nextSuppliers] = await Promise.all([
-        listProducts({
-          search: '',
-          categoryId: '',
-          modelId: '',
-          status: '',
-          productType: '',
-          colorId: '',
-          storageId: '',
-        }),
-        listSuppliers({ search: '', source: '', status: 'ACTIVE' }),
-      ]);
-      setProducts(nextProducts);
-      setSuppliers(nextSuppliers);
-    }
-
-    void loadReferences();
-  }, []);
-
-  const initialForm = useMemo<PriceQuoteFormPayload>(
-    () => ({
-      productId: editingQuote?.productId ?? products[0]?.id ?? '',
-      supplierId: editingQuote?.supplierId ?? suppliers[0]?.id ?? '',
-      costProduct: editingQuote?.costProduct ?? 0,
-      deliveryTime: editingQuote?.deliveryTime ?? '',
-      city: editingQuote?.city ?? '',
-      contact: editingQuote?.contact ?? '',
-      quality: editingQuote?.quality ?? '',
-      notes: editingQuote?.notes ?? '',
-      quoteDate: editingQuote?.quoteDate?.slice(0, 10) ?? '',
-    }),
-    [editingQuote, products, suppliers],
-  );
 
   const visibleRadarQuotes = radar.visibleQuotes;
   const facetIndex = radar.facetIndex;
@@ -464,10 +420,6 @@ export function PriceRadarPageContent() {
                         product={product}
                         selected={selectedIds.has(product.id)}
                         onSelect={toggleSelected}
-                        onView={(selectedQuote) => {
-                          setEditingQuote(selectedQuote);
-                          setQuoteModalOpen(true);
-                        }}
                         onSupplier={openWhatsapp}
                         onSendToPricing={(quote) => void sendToPricing(quote)}
                       />
@@ -503,20 +455,6 @@ export function PriceRadarPageContent() {
         </>
       ) : null}
 
-      <QuoteFormModal
-        open={quoteModalOpen}
-        initialForm={initialForm}
-        products={products}
-        suppliers={suppliers}
-        saving={radar.saving}
-        onClose={() => setQuoteModalOpen(false)}
-        onSave={async (payload) => {
-          if (!editingQuote) return;
-          await radar.save(payload, editingQuote.id);
-          setQuoteModalOpen(false);
-        }}
-      />
-
       <CsvImportModal
         open={importModalOpen}
         saving={radar.saving}
@@ -543,101 +481,6 @@ function getChangedFacetDimension(
 
 function arraysEqual(left: string[], right: string[]) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function QuoteFormModal({
-  open,
-  initialForm,
-  products,
-  suppliers,
-  saving,
-  onClose,
-  onSave,
-}: {
-  open: boolean;
-  initialForm: PriceQuoteFormPayload;
-  products: ProductItem[];
-  suppliers: SupplierItem[];
-  saving: boolean;
-  onClose: () => void;
-  onSave: (payload: PriceQuoteFormPayload) => Promise<void>;
-}) {
-  const [form, setForm] = useState(initialForm);
-
-  useEffect(() => {
-    setForm(initialForm);
-  }, [initialForm]);
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void onSave({
-      ...form,
-      costProduct: Number(form.costProduct),
-      quoteDate: form.quoteDate || undefined,
-    });
-  }
-
-  return (
-    <Modal open={open} title="Editar cotação" onClose={onClose}>
-      <form className="grid gap-4" onSubmit={handleSubmit}>
-        <SelectInput
-          label="Produto"
-          value={form.productId}
-          options={products.map((product) => [product.id, getProductTitle(product)])}
-          onChange={(value) => setForm((current) => ({ ...current, productId: value }))}
-        />
-        <SelectInput
-          label="Fornecedor"
-          value={form.supplierId}
-          options={suppliers.map((supplier) => [supplier.id, supplier.name])}
-          onChange={(value) => setForm((current) => ({ ...current, supplierId: value }))}
-        />
-        <div className="grid gap-4 md:grid-cols-2">
-          <NumberInput
-            label="Preço de custo"
-            value={form.costProduct}
-            onChange={(value) => setForm((current) => ({ ...current, costProduct: value }))}
-          />
-          <TextInput
-            label="Prazo de entrega"
-            value={form.deliveryTime ?? ''}
-            onChange={(value) => setForm((current) => ({ ...current, deliveryTime: value }))}
-          />
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Cidade"
-            value={form.city ?? ''}
-            onChange={(value) => setForm((current) => ({ ...current, city: value }))}
-          />
-          <TextInput
-            label="Qualidade"
-            value={form.quality ?? ''}
-            onChange={(value) => setForm((current) => ({ ...current, quality: value }))}
-          />
-        </div>
-        <TextInput
-          label="Data da cotação"
-          type="date"
-          value={form.quoteDate ?? ''}
-          onChange={(value) => setForm((current) => ({ ...current, quoteDate: value }))}
-        />
-        <TextArea
-          label="Observações"
-          value={form.notes ?? ''}
-          onChange={(value) => setForm((current) => ({ ...current, notes: value }))}
-        />
-        <div className="flex justify-end gap-3">
-          <ActionButton variant="secondary" onClick={onClose}>
-            Cancelar
-          </ActionButton>
-          <ActionButton type="submit" disabled={saving || !form.productId || !form.supplierId}>
-            {saving ? 'Salvando...' : 'Salvar'}
-          </ActionButton>
-        </div>
-      </form>
-    </Modal>
-  );
 }
 
 function CsvImportModal({
@@ -684,17 +527,6 @@ function CsvImportModal({
       </form>
     </Modal>
   );
-}
-
-function getProductTitle(product: ProductItem) {
-  return [
-    product.category?.name,
-    product.model?.name,
-    product.storage?.displayName,
-    product.color?.name,
-  ]
-    .filter(Boolean)
-    .join(' ');
 }
 
 function createEmptyFacetFilters(): BrazilRadarFacetState {
@@ -744,54 +576,6 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function TextInput({
-  label,
-  value,
-  onChange,
-  type = 'text',
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="field-control"
-      />
-    </label>
-  );
-}
-
-function NumberInput({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
-      <input
-        type="number"
-        min="0"
-        step="0.01"
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="field-control"
-      />
-    </label>
-  );
-}
-
 function TextArea({
   label,
   value,
@@ -812,37 +596,6 @@ function TextArea({
         rows={rows}
         className="w-full rounded-xl border border-inest-line bg-white px-4 py-3 outline-none focus:border-inest-blue"
       />
-    </label>
-  );
-}
-
-function SelectInput({
-  label,
-  value,
-  options,
-  onChange,
-  compact = false,
-}: {
-  label: string;
-  value: string;
-  options: string[][];
-  onChange: (value: string) => void;
-  compact?: boolean;
-}) {
-  return (
-    <label className={compact ? 'min-w-60' : 'block'}>
-      <span className="mb-2 block text-sm font-bold text-inest-muted">{label}</span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="field-control"
-      >
-        {options.map(([valueOption, labelOption]) => (
-          <option key={valueOption} value={valueOption}>
-            {labelOption}
-          </option>
-        ))}
-      </select>
     </label>
   );
 }
