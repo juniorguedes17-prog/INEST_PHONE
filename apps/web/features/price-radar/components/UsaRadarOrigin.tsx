@@ -1,11 +1,12 @@
 'use client';
 
-import { FormEvent, useCallback, useRef, useState } from 'react';
+import { FormEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   ActionButton,
   EmptyState,
   ErrorState,
+  KpiCard,
   LoadingState,
   SearchInput,
   StatusBadge,
@@ -26,16 +27,35 @@ import {
 } from '@/features/import-radar/services/import-radar-service';
 import { UsaSourceProduct } from '@/features/import-radar/types/import-radar';
 import { CalculationModal } from './ParaguayRadarOrigin';
+import { ProductFacetsDrawer, buildFacetOptions } from './ProductFacetsDrawer';
 import { calculateTemporaryImportPricing } from '@/features/pricing/services/pricing-service';
 import {
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
   TemporaryImportPricingRequest,
 } from '@/features/pricing/types/pricing';
 
+type UsaProductFilters = {
+  category: string;
+  model: string;
+  capacity: string;
+  condition: string;
+  retailer: string;
+};
+
+const emptyUsaProductFilters: UsaProductFilters = {
+  category: '',
+  model: '',
+  capacity: '',
+  condition: '',
+  retailer: '',
+};
+
 export function UsaRadarOrigin() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<UsaSourceProduct[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filters, setFilters] = useState<UsaProductFilters>(emptyUsaProductFilters);
   const [partialSearch, setPartialSearch] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<UsaSourceProduct | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -487,19 +507,83 @@ export function UsaRadarOrigin() {
     void search({ preventDefault() {} } as FormEvent<HTMLFormElement>);
   }, [search]);
 
+  const filterOptions = useMemo(
+    () => ({
+      categories: buildFacetOptions(products.map((product) => product.category)),
+      models: buildFacetOptions(products.map((product) => product.model)),
+      capacities: buildFacetOptions(products.map((product) => product.capacity)),
+      conditions: buildFacetOptions(products.map((product) => product.condition)),
+      retailers: buildFacetOptions(products.map((product) => product.retailer)),
+    }),
+    [products],
+  );
+  const filteredProducts = useMemo(
+    () =>
+      products.filter(
+        (product) =>
+          (!filters.category || product.category === filters.category) &&
+          (!filters.model || product.model === filters.model) &&
+          (!filters.capacity || product.capacity === filters.capacity) &&
+          (!filters.condition || product.condition === filters.condition) &&
+          (!filters.retailer || product.retailer === filters.retailer),
+      ),
+    [filters, products],
+  );
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const metrics = useMemo(() => {
+    const prices = filteredProducts
+      .map((product) => product.priceUsd)
+      .filter((price) => Number.isFinite(price) && price > 0);
+    const retailers = new Set(
+      filteredProducts
+        .map((product) => product.retailer)
+        .filter((retailer): retailer is string => Boolean(retailer)),
+    );
+    return {
+      products: String(filteredProducts.length),
+      suppliers: String(retailers.size),
+      minimum: prices.length ? formatUsd(Math.min(...prices)) : '--',
+      average: prices.length
+        ? formatUsd(prices.reduce((total, price) => total + price, 0) / prices.length)
+        : '--',
+      maximum: prices.length ? formatUsd(Math.max(...prices)) : '--',
+    };
+  }, [filteredProducts]);
+
   return (
     <div className="grid gap-4">
       <section className="rounded-2xl border border-inest-line/70 bg-inest-surface p-4 shadow-[0_14px_34px_rgba(16,24,40,0.055)]">
-        <form className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={search}>
+        <form
+          className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end"
+          onSubmit={search}
+        >
           <SearchInput
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Pesquisar iPhone, MacBook, Canon..."
             aria-label="Pesquisar produtos nos EUA"
           />
-          <ActionButton type="submit" className="min-h-11" disabled={loading}>
-            {loading ? 'Buscando...' : 'Buscar nos EUA'}
-          </ActionButton>
+          <div className="grid grid-cols-2 gap-2 border-t border-inest-line/70 pt-3 sm:flex lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
+            <ActionButton
+              type="button"
+              variant="secondary"
+              className="min-h-11"
+              onClick={() => setFiltersOpen(true)}
+            >
+              {activeFilterCount ? `Filtros (${activeFilterCount})` : 'Filtros'}
+            </ActionButton>
+            <ActionButton
+              type="button"
+              variant="secondary"
+              className="min-h-11"
+              onClick={() => setFilters(emptyUsaProductFilters)}
+            >
+              Limpar
+            </ActionButton>
+            <ActionButton type="submit" className="min-h-11" disabled={loading}>
+              {loading ? 'Buscando...' : 'Buscar nos EUA'}
+            </ActionButton>
+          </div>
         </form>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <StatusBadge tone="blue">US</StatusBadge>
@@ -508,6 +592,37 @@ export function UsaRadarOrigin() {
             Resultados em USD, sem cálculo nesta etapa.
           </span>
         </div>
+      </section>
+
+      <section
+        className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5"
+        aria-label="Indicadores USA"
+      >
+        <KpiCard label="Produtos" value={metrics.products} detail="Resultados reais" tone="blue" />
+        <KpiCard
+          label="Fornecedores"
+          value={metrics.suppliers}
+          detail="Lojas identificadas"
+          tone="purple"
+        />
+        <KpiCard
+          label="Menor preço"
+          value={metrics.minimum}
+          detail="Preço publicado"
+          tone="green"
+        />
+        <KpiCard
+          label="Preço médio"
+          value={metrics.average}
+          detail="Produtos exibidos"
+          tone="blue"
+        />
+        <KpiCard
+          label="Maior preço"
+          value={metrics.maximum}
+          detail="Preço publicado"
+          tone="amber"
+        />
       </section>
 
       {error ? (
@@ -570,7 +685,7 @@ export function UsaRadarOrigin() {
               {costLoading ? 'Calculando...' : 'Calcular Custo'}
             </ActionButton>
           </div>
-          {products.map((product) => (
+          {filteredProducts.map((product) => (
             <UsaProductCard
               key={`${product.providerName}:${product.sourceProductId}`}
               product={product}
@@ -586,6 +701,65 @@ export function UsaRadarOrigin() {
           ))}
         </section>
       ) : null}
+
+      <ProductFacetsDrawer
+        open={filtersOpen}
+        ariaLabel="Filtros do Radar USA"
+        resultCount={filteredProducts.length}
+        categories={{
+          title: 'Categoria',
+          options: filterOptions.categories,
+          selected: filters.category ? [filters.category] : [],
+          onToggle: (category) =>
+            setFilters((current) => ({
+              ...current,
+              category: current.category === category ? '' : category,
+            })),
+        }}
+        models={{
+          title: 'Modelo',
+          options: filterOptions.models,
+          selected: filters.model ? [filters.model] : [],
+          onToggle: (model) =>
+            setFilters((current) => ({
+              ...current,
+              model: current.model === model ? '' : model,
+            })),
+        }}
+        condition={{
+          options: filterOptions.conditions,
+          value: filters.condition,
+          onChange: (condition) =>
+            setFilters((current) => ({
+              ...current,
+              condition: current.condition === condition ? '' : condition,
+            })),
+        }}
+        capacities={{
+          title: 'Capacidade',
+          options: filterOptions.capacities,
+          selected: filters.capacity ? [filters.capacity] : [],
+          onToggle: (capacity) =>
+            setFilters((current) => ({
+              ...current,
+              capacity: current.capacity === capacity ? '' : capacity,
+            })),
+        }}
+        additionalGroups={[
+          {
+            title: 'Retailer',
+            options: filterOptions.retailers,
+            selected: filters.retailer ? [filters.retailer] : [],
+            onToggle: (retailer) =>
+              setFilters((current) => ({
+                ...current,
+                retailer: current.retailer === retailer ? '' : retailer,
+              })),
+          },
+        ]}
+        onClear={() => setFilters(emptyUsaProductFilters)}
+        onClose={() => setFiltersOpen(false)}
+      />
 
       <CalculationModal
         calculation={null}
