@@ -818,7 +818,7 @@ export function SettingsPageContent() {
               {settings.importation.redirectRules.map((rule, index) => (
                 <div
                   key={`${rule.productType}-${index}`}
-                  className="grid grid-cols-1 gap-3 px-4 py-4 lg:grid-cols-[1.4fr_1.2fr_160px_110px_96px]"
+                  className="grid grid-cols-1 gap-3 px-0 py-4 lg:px-4 lg:grid-cols-[1.4fr_1.2fr_160px_110px_96px]"
                 >
                   <TextInput
                     label="Categoria"

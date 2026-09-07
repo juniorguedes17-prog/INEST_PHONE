@@ -15,6 +15,16 @@ const componentCode = ts.transpileModule(source, {
 
 // This exercises the real JSX callback and controlled UsdInput, without adding a React DOM runner.
 test('settings keep editing behavior and omit the obsolete offer settings card', () => {
+  assert.ok(
+    source.includes(
+      'className="grid grid-cols-1 gap-3 px-0 py-4 lg:px-4 lg:grid-cols-[1.4fr_1.2fr_160px_110px_96px]"',
+    ),
+  );
+  assert.ok(
+    source.includes(
+      'className="hidden gap-3 bg-inest-soft px-4 py-3 text-sm font-black text-inest-muted lg:grid lg:grid-cols-[1.4fr_1.2fr_160px_110px_96px]"',
+    ),
+  );
   const settingsRef = { current: settings(520) };
   let saved: Record<string, unknown> | null = null;
   const states: unknown[] = [];
