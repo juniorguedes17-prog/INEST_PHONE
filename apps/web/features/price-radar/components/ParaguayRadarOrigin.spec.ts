@@ -1,0 +1,196 @@
+import assert from 'node:assert/strict';
+import { dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { setImmediate } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
+import test, { mock } from 'node:test';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
+
+type Props = Record<string, unknown>;
+type Element = { type: string | ((props: Props) => Element); props: Props };
+const componentDirectory = dirname(fileURLToPath(import.meta.url));
+const product = {
+  id: 'py-1',
+  name: 'iPhone 17 Pro 256GB',
+  store: 'Compras Paraguai',
+  category: 'iPhone',
+  priceUsd: 999,
+  productUrl: 'https://example.com/py-1',
+  imageUrl: null,
+  brand: 'Apple',
+  sourceManufacturer: 'Apple',
+  sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+  model: 'iPhone 17 Pro',
+  capacity: '256GB',
+  color: 'Titânio',
+  city: 'Ciudad del Este',
+  priceBrlSource: null,
+  availability: 'Disponível',
+  storeUrl: 'https://example.com/store',
+  consultedAt: '2026-09-07T12:00:00.000Z',
+  origin: 'PARAGUAY',
+  externalId: 'external-py-1',
+  minimumPriceUsd: 999,
+  averagePriceUsd: 999,
+  maximumPriceUsd: 999,
+  storeCount: 1,
+  offerCount: 1,
+  condition: 'NOVO',
+};
+const componentCode = ts.transpileModule(
+  readFileSync(`${componentDirectory}/ParaguayRadarOrigin.tsx`, 'utf8'),
+  {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
+  },
+).outputText;
+
+function setup() {
+  let releaseSearch: (() => void) | undefined;
+  const services = {
+    searchImportProducts: mock.fn(
+      (filters: unknown) =>
+        new Promise<{ results: (typeof product)[]; filters: unknown }>((resolve) => {
+          releaseSearch = () => resolve({ results: [product], filters });
+        }),
+    ),
+    calculateImportCost: mock.fn(async () => ({ product })),
+    confirmImportManufacturer: mock.fn(async () => ({ product })),
+  };
+  const pricing = { calculateTemporaryImportPricing: mock.fn(async (payload: unknown) => payload) };
+  const state: unknown[] = [];
+  let cursor = 0;
+  const exports: { ParaguayRadarOrigin?: () => Element } = {};
+  const jsx = (type: Element['type'], props: Props) => ({ type, props });
+
+  runInNewContext(componentCode, {
+    exports,
+    Error,
+    window: {
+      setTimeout: () => 1,
+      clearTimeout: () => undefined,
+      sessionStorage: { setItem: () => undefined },
+    },
+    require: (name: string) => {
+      if (name === 'react') {
+        return {
+          useState: (initial: unknown) => {
+            const index = cursor++;
+            if (!(index in state)) state[index] = initial;
+            return [
+              state[index],
+              (value: unknown) => {
+                state[index] =
+                  typeof value === 'function'
+                    ? (value as (current: unknown) => unknown)(state[index])
+                    : value;
+              },
+            ];
+          },
+          useCallback: (callback: unknown) => callback,
+          useEffect: () => undefined,
+          useMemo: (factory: () => unknown) => factory(),
+        };
+      }
+      if (name === 'next/navigation') return { useRouter: () => ({ push: mock.fn() }) };
+      if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'fragment' };
+      if (name === '@/components/shared')
+        return Object.fromEntries(
+          [
+            'ActionButton',
+            'EmptyState',
+            'ErrorState',
+            'KpiCard',
+            'LoadingState',
+            'Modal',
+            'Pagination',
+            'SearchInput',
+            'StatusBadge',
+          ].map((key) => [key, key]),
+        );
+      if (name.endsWith('/ProductFacetsDrawer'))
+        return { ProductFacetsDrawer: 'ProductFacetsDrawer', buildFacetOptions: () => [] };
+      if (name.endsWith('/import-radar-service')) return services;
+      if (name.endsWith('/pricing-service')) return pricing;
+      if (name.endsWith('/pricing'))
+        return { TEMPORARY_IMPORT_PRICING_STORAGE_KEY: 'inest.temporary-import-pricing' };
+      if (name.endsWith('/brazil-radar-facets'))
+        return {
+          buildCanonicalModelFacetOptions: () => [],
+          getCanonicalCapacities: () => [],
+          getCanonicalCategory: (source: Props) => source.category ?? '',
+          getCanonicalColors: () => [],
+          getCanonicalModelKey: (source: Props) => source.model ?? '',
+          getCatalogFacetLabel: (value: string) => value,
+          normalizeCatalogFilterText: (value: string) => value,
+        };
+      if (name.endsWith('/product-card-presentation'))
+        return {
+          getProductCardPresentation: (input: Props) => ({
+            title: input.rawDescription,
+            attributes: [],
+          }),
+        };
+      throw new Error(`Unexpected dependency: ${name}`);
+    },
+  });
+
+  const render = () => {
+    cursor = 0;
+    return exports.ParaguayRadarOrigin!();
+  };
+  const nodes = (name: string): Element[] => {
+    const found: Element[] = [];
+    const visit = (value: unknown) => {
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (!value || typeof value !== 'object' || !('props' in value)) return;
+      const element = value as Element;
+      if ((typeof element.type === 'string' ? element.type : element.type.name) === name) {
+        found.push(element);
+      }
+      Object.values(element.props).forEach(visit);
+    };
+    visit(render());
+    return found;
+  };
+  const call = async (name: string, handler: string, value?: unknown) => {
+    const node = nodes(name)[0];
+    assert.ok(node, `${name} must be rendered`);
+    await (node.props[handler] as (argument?: unknown) => unknown)(value);
+    await setImmediate();
+  };
+  return { services, nodes, call, releaseSearch: () => releaseSearch?.() };
+}
+
+test('replaces only the PY toolbar cost action with the existing search flow', async () => {
+  const h = setup();
+  const actionButtons = () => h.nodes('ActionButton');
+  const button = (label: string) => actionButtons().find((node) => node.props.children === label);
+
+  assert.equal(button('Calcular Custo'), undefined);
+  assert.ok(button('Buscar'));
+  assert.ok(button('Atualizar'));
+  assert.ok(button('Limpar'));
+  assert.ok(button('Filtros'));
+  assert.equal(button('Buscar')?.props.disabled, true);
+
+  await h.call('SearchInput', 'onChange', { target: { value: 'iphone' } });
+  assert.equal(button('Buscar')?.props.disabled, false);
+  await (button('Buscar')?.props.onClick as () => void)();
+  assert.equal(button('Buscando...')?.props.disabled, true);
+  assert.equal(button('Atualizar')?.props.disabled, true);
+  assert.equal(h.services.searchImportProducts.mock.callCount(), 1);
+  h.releaseSearch();
+  await setImmediate();
+  assert.equal(
+    JSON.stringify(h.services.searchImportProducts.mock.calls[0]?.arguments[0]),
+    JSON.stringify({ search: 'iphone', category: '', provider: 'compras_paraguai' }),
+  );
+
+  assert.ok(h.nodes('ParaguayProductCard')[0]);
+  await h.call('ParaguayProductCard', 'onSelect', true);
+  assert.equal(h.nodes('ParaguayProductCard')[0]?.props.selected, true);
+  await h.call('ParaguayProductCard', 'onCalculate');
+  assert.equal(h.services.calculateImportCost.mock.callCount(), 1);
+  assert.ok(h.nodes('CalculationModal')[0]?.props.calculation);
+});

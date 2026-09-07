@@ -62,7 +62,7 @@ export function ParaguayRadarOrigin() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [calculating, setCalculating] = useState(false);
+  const [, setCalculating] = useState(false);
   const [sendingToPricing, setSendingToPricing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [calculation, setCalculation] = useState<ImportCalculation | null>(null);
@@ -282,15 +282,10 @@ export function ParaguayRadarOrigin() {
             </ActionButton>
             <ActionButton
               className="min-h-11"
-              disabled={selectedIds.size !== 1 || calculating}
-              onClick={() => void calculate()}
-              title={
-                selectedIds.size > 1
-                  ? 'Selecione apenas um produto para calcular o custo.'
-                  : undefined
-              }
+              disabled={loading || search.trim().length < 2}
+              onClick={() => void runSearch(search)}
             >
-              {calculating ? 'Calculando...' : 'Calcular Custo'}
+              {loading ? 'Buscando...' : 'Buscar'}
             </ActionButton>
           </div>
         </div>
