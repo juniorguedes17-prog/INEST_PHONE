@@ -1,6 +1,13 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  canonicalColorAliases,
+  deriveExtendedProductIdentity,
+  normalizeCanonicalText,
+} from '@inest/product-identity';
 import { ImportSearchQueryDto } from '../dto/import-radar.dto';
+import { normalizeProductCondition } from '../condition-normalizer';
 import { ImportProvider, ImportProviderProduct } from '../interfaces/import-provider.interface';
+import { compactSourceEvidence } from '../usa-source-evidence';
 import { adaptUsaSourceProduct, type UsaSourceProduct } from '../usa-source-product.adapter';
 import type { UsaProviderReport, UsaProviderSearchResult } from '../usa-search-result';
 
@@ -189,6 +196,8 @@ export function parseAmazonUsDetailHtml(
 
   if (!sourceName || !priceUsd || seller !== 'Amazon.com') return null;
 
+  const evidence = deriveAmazonSourceEvidence(sourceName, candidate.category);
+
   return {
     id: `amazon-us:${candidate.asin}`,
     externalId: candidate.asin,
@@ -199,7 +208,53 @@ export function parseAmazonUsDetailHtml(
     priceUsd,
     productUrl: new URL(`/dp/${candidate.asin}`, AMAZON_US_BASE_URL).toString(),
     origin: 'US',
+    sourceEvidence: compactSourceEvidence(sourceName),
+    ...(evidence.model ? { model: evidence.model } : {}),
+    ...(evidence.capacity ? { capacity: evidence.capacity } : {}),
+    ...(evidence.color ? { color: evidence.color } : {}),
+    ...(evidence.condition ? { condition: evidence.condition } : {}),
   };
+}
+
+/**
+ * Projects only configuration facts already present in the Amazon title. The
+ * canonical resolver returns null for missing or conflicting evidence, so this
+ * cannot turn an incomplete public offer into a guessed sellable variant.
+ */
+function deriveAmazonSourceEvidence(sourceName: string, category: string) {
+  const identity = deriveExtendedProductIdentity({ productName: sourceName, category });
+  const condition = normalizeProductCondition(sourceName);
+
+  return {
+    model: identity.canonical.canonicalModelMatched
+      ? identity.canonical.canonicalModelLabel || null
+      : null,
+    capacity: identity.canonical.canonicalStorage,
+    color: extractExplicitColor(sourceName),
+    condition: condition.status === 'RESOLVED' ? condition.condition : null,
+  };
+}
+
+function extractExplicitColor(value: string): string | null {
+  const normalized = normalizeCanonicalText(value);
+  const matchedDefinitions = canonicalColorAliases.filter((definition) =>
+    definition.terms.some((term) => containsExplicitTerm(normalized, term)),
+  );
+  const distinctColors = [...new Set(matchedDefinitions.map((definition) => definition.value))];
+  if (distinctColors.length !== 1) return null;
+
+  const terms = matchedDefinitions
+    .flatMap((definition) => definition.terms)
+    .sort((left, right) => right.length - left.length);
+  for (const term of terms) {
+    const match = value.match(new RegExp(`\\b${escapeRegExp(term)}\\b`, 'i'));
+    if (match?.[0]) return match[0].trim();
+  }
+  return null;
+}
+
+function containsExplicitTerm(value: string, term: string) {
+  return new RegExp(`\\b${escapeRegExp(normalizeCanonicalText(term))}\\b`, 'i').test(value);
 }
 
 function parseUnconditionalUsdPrice(value: string): number | null {

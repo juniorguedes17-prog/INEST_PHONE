@@ -55,7 +55,16 @@ describe('AmazonUsProvider', () => {
       asin: 'B0G45F93BH',
       category: 'CELL_PHONES',
     });
-    expect(result).toMatchObject({ name: title, retailer: 'Amazon', priceUsd: 999.5 });
+    expect(result).toMatchObject({
+      name: title,
+      sourceEvidence: title,
+      retailer: 'Amazon',
+      priceUsd: 999.5,
+      model: 'iPhone 17 Pro',
+      capacity: '1TB',
+      color: 'Cosmic Orange',
+      condition: 'SEMINOVO',
+    });
   });
   it('discovers only source-owned non-ad ASINs with one structured category', () => {
     expect(parseAmazonUsSearchHtml(searchHtml)).toEqual([
@@ -83,6 +92,51 @@ describe('AmazonUsProvider', () => {
     });
     expect(product).not.toHaveProperty('sourceManufacturer');
     expect(product).not.toHaveProperty('condition');
+  });
+
+  it('preserves explicit MacBook configuration evidence without inventing fields outside the source contract', () => {
+    const title =
+      'Apple MacBook Air M5 13-inch Laptop, 16GB/512GB SSD Storage, Midnight - Renewed Premium';
+    const product = parseAmazonUsDetailHtml(amazonDetailHtml.replace('Example&nbsp;Phone', title), {
+      asin: 'MACBOOK000',
+      category: 'LAPTOPS',
+    });
+
+    expect(product).toMatchObject({
+      name: title,
+      sourceEvidence: title,
+      model: 'MacBook Air M5 13"',
+      capacity: '512GB',
+      color: 'Midnight',
+      condition: 'SEMINOVO',
+    });
+    expect(product?.sourceEvidence).toContain('13-inch');
+    expect(product?.sourceEvidence).toContain('16GB/512GB SSD Storage');
+    expect(product?.sourceEvidence).toContain('Renewed Premium');
+    expect(product).not.toHaveProperty('screen');
+    expect(product).not.toHaveProperty('ram');
+  });
+
+  it('keeps incomplete or conflicting title evidence unset instead of choosing a configuration', () => {
+    const incomplete = parseAmazonUsDetailHtml(
+      amazonDetailHtml.replace('Example&nbsp;Phone', 'Apple iPhone 17 Pro 1TB Renewed Premium'),
+      { asin: 'INCOMPLETE', category: 'CELL_PHONES' },
+    );
+    const conflicting = parseAmazonUsDetailHtml(
+      amazonDetailHtml.replace(
+        'Example&nbsp;Phone',
+        'Apple iPhone 17 Pro 256GB 512GB Cosmic Orange New Renewed',
+      ),
+      { asin: 'CONFLICT00', category: 'CELL_PHONES' },
+    );
+
+    expect(incomplete).toMatchObject({ sourceEvidence: 'Apple iPhone 17 Pro 1TB Renewed Premium' });
+    expect(incomplete).not.toHaveProperty('color');
+    expect(conflicting).toMatchObject({
+      sourceEvidence: 'Apple iPhone 17 Pro 256GB 512GB Cosmic Orange New Renewed',
+    });
+    expect(conflicting).not.toHaveProperty('capacity');
+    expect(conflicting).not.toHaveProperty('condition');
   });
 
   it('fails closed for a marketplace seller, a missing seller, conditional pricing, or multiple prices', () => {
