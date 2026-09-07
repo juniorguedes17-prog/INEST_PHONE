@@ -892,7 +892,7 @@ export function SettingsPageContent() {
           <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <UsdInput
               label="Cotação USD/BRL"
-              value={settings.usaImport.usdBrlQuote}
+              value={usaQuoteText}
               onChange={updateUsaImportQuote}
               placeholder="Não configurada"
             />
