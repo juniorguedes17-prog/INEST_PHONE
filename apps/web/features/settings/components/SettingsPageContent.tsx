@@ -18,6 +18,7 @@ import {
 } from '@/lib/theme-preference';
 import type { ThemePreference } from '@/lib/theme-preference';
 import { useSettings } from '../hooks/useSettings';
+import { formatQuoteInput, parseQuoteInput } from '../lib/quote-input';
 import { ImportRedirectRule, InstallmentRate, SettingsPayload } from '../types/settings';
 import { OfferTemplatesSettingsCard } from './OfferTemplatesSettingsCard';
 import { UsersAccessSettingsCard } from './UsersAccessSettingsCard';
@@ -47,6 +48,9 @@ const nonAppleFixedCostBandLabels = ['Custo até R$500', 'Custo acima de R$500']
 
 export function SettingsPageContent() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
+  const [usaQuoteText, setUsaQuoteText] = useState('');
+  const [pyQuoteText, setPyQuoteText] = useState('');
+  const [quoteError, setQuoteError] = useState<string | null>(null);
   const {
     settings,
     setSettings,
@@ -64,6 +68,14 @@ export function SettingsPageContent() {
       applyThemePreference(settings.userPreferences.theme);
     }
   }, [settings?.userPreferences.theme]);
+
+  useEffect(() => {
+    if (settings) {
+      setUsaQuoteText(formatQuoteInput(settings.usaImport.usdBrlQuote));
+      setPyQuoteText(formatQuoteInput(settings.importation.dollarQuote));
+      setQuoteError(null);
+    }
+  }, [settings?.usaImport.usdBrlQuote, settings?.importation.dollarQuote]);
 
   useEffect(() => {
     function handleThemeChange(event: Event) {
@@ -156,13 +168,39 @@ export function SettingsPageContent() {
   }
 
   function updateUsaImportQuote(value: string) {
-    updateSettings((current) => ({
-      ...current,
-      usaImport: {
-        ...current.usaImport,
-        usdBrlQuote: parseOptionalNumber(value),
+    setUsaQuoteText(value);
+    setQuoteError(null);
+  }
+
+  function updatePyQuote(value: string) {
+    setPyQuoteText(value);
+    setQuoteError(null);
+  }
+
+  function saveSettings() {
+    if (!settings) {
+      return;
+    }
+
+    const currentSettings = settings;
+    const usaQuote = parseQuoteInput(usaQuoteText);
+    const pyQuote = parseQuoteInput(pyQuoteText);
+    const usaInvalid = usaQuote !== null && (Number.isNaN(usaQuote) || usaQuote <= 0);
+    const pyInvalid = Number.isNaN(pyQuote) || (pyQuote !== null && pyQuote < 0);
+    if (usaInvalid || pyInvalid) {
+      setQuoteError('Informe uma cotação válida usando vírgula ou ponto decimal.');
+      return;
+    }
+
+    setQuoteError(null);
+    void save({
+      ...currentSettings,
+      importation: {
+        ...currentSettings.importation,
+        dollarQuote: pyQuote ?? 0,
       },
-    }));
+      usaImport: { ...currentSettings.usaImport, usdBrlQuote: usaQuote },
+    });
   }
 
   function updateRedDelawareRate(field: 'firstLbUsd' | 'additionalLbUsd', value: string) {
@@ -281,14 +319,16 @@ export function SettingsPageContent() {
             >
               Restaurar padrões
             </ActionButton>
-            <ActionButton onClick={() => void save(settings)} disabled={saving}>
+            <ActionButton onClick={saveSettings} disabled={saving}>
               {saving ? 'Salvando...' : 'Salvar alterações'}
             </ActionButton>
           </>
         }
       />
 
-      {error ? <ErrorState title="Atenção" description={error} /> : null}
+      {error || quoteError ? (
+        <ErrorState title="Atenção" description={error ?? quoteError ?? ''} />
+      ) : null}
 
       <div
         aria-label="Categorias de configurações"
@@ -707,16 +747,10 @@ export function SettingsPageContent() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <CurrencyInput
               label="Cotação do dólar"
-              value={settings.importation.dollarQuote}
-              onChange={(event) =>
-                updateSettings((current) => ({
-                  ...current,
-                  importation: {
-                    ...current.importation,
-                    dollarQuote: toNumber(event.target.value),
-                  },
-                }))
-              }
+              type="text"
+              inputMode="decimal"
+              value={pyQuoteText}
+              onChange={(event) => updatePyQuote(event.target.value)}
             />
             <CurrencyInput
               label="Saída de CDE"
@@ -889,7 +923,7 @@ export function SettingsPageContent() {
             </ActionButton>
             <ActionButton
               className="min-h-11 w-full sm:w-auto"
-              onClick={() => void save(settings)}
+              onClick={saveSettings}
               disabled={saving}
             >
               {saving ? 'Salvando...' : 'Salvar Red Delaware'}
@@ -949,7 +983,7 @@ export function SettingsPageContent() {
             </ActionButton>
             <ActionButton
               className="min-h-11 w-full sm:w-auto"
-              onClick={() => void save(settings)}
+              onClick={saveSettings}
               disabled={saving}
             >
               {saving ? 'Salvando...' : 'Salvar Rei do Importado'}
@@ -1121,12 +1155,6 @@ function toNumber(value: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function parseOptionalNumber(value: string): number | null {
-  if (value.trim() === '') return null;
-
-  return parseNumber(value);
-}
-
 function parseNumber(value: string): number {
   return Number(value.replace(',', '.'));
 }
@@ -1248,7 +1276,7 @@ function SelectInput({ label, value, options, onChange }: SelectInputProps) {
 
 interface UsdInputProps {
   label: string;
-  value: number | null;
+  value: number | null | string;
   placeholder?: string;
   onChange: (value: string) => void;
 }
@@ -1263,7 +1291,7 @@ function UsdInput({ label, value, placeholder, onChange }: UsdInputProps) {
           inputMode="decimal"
           min="0.0000000000000001"
           step="any"
-          value={value === null ? '' : String(value)}
+          value={value === null ? '' : value}
           placeholder={placeholder}
           onChange={(event) => onChange(event.target.value)}
           className="min-w-0 flex-1 bg-transparent outline-none"
