@@ -9,6 +9,12 @@ import ts from 'typescript';
 
 type Props = Record<string, unknown>;
 type Element = { type: string | ((props: Props) => Element); props: Props };
+type ProviderReport = {
+  provider: string;
+  status: 'OK' | 'EMPTY' | 'UNAVAILABLE' | 'RATE_LIMITED';
+  returnedCount: number;
+  diagnostics?: Record<string, unknown>;
+};
 const componentDirectory = dirname(fileURLToPath(import.meta.url));
 
 const product = {
@@ -67,7 +73,7 @@ const componentCode = ts.transpileModule(
 function setup(
   preflightResponse: object = ready,
   searchProducts: Array<Record<string, unknown>> = [product],
-  searchProviders = [{ provider: 'amazon_us', status: 'OK', returnedCount: 1 }],
+  searchProviders: ProviderReport[] = [{ provider: 'amazon_us', status: 'OK', returnedCount: 1 }],
 ) {
   const services = {
     searchUsaWithDiagnostics: mock.fn(async () => ({
@@ -296,6 +302,47 @@ test('preserves partial-search diagnostics while metrics use available products'
     h.nodes('KpiCard').find((node) => node.props.label === 'Produtos')?.props.value,
     '1',
   );
+});
+
+test('exposes each UPC status and existing counters without changing products', async () => {
+  for (const status of ['OK', 'EMPTY', 'RATE_LIMITED', 'UNAVAILABLE'] as const) {
+    const expectedProduct = status === 'OK' ? thirdProduct : product;
+    const h = setup(
+      ready,
+      [expectedProduct],
+      [
+        {
+          provider: 'upcitemdb_us',
+          status,
+          returnedCount: status === 'OK' ? 1 : 0,
+          diagnostics: {
+            itemsReceived: 8,
+            offersEvaluated: 21,
+            emitted: status === 'OK' ? 1 : 0,
+            discarded: { stale: 14, price: 2, unavailable: 4, malformed: 1 },
+          },
+        },
+      ],
+    );
+    await h.call('SearchInput', 'onChange', { target: { value: 'iphone' } });
+    await h.call('form', 'onSubmit', { preventDefault() {} });
+
+    const report = h.nodes('details')[0];
+    assert.ok(report);
+    assert.ok(JSON.stringify(h.nodes('summary')[0]?.props.children).includes(status));
+    const diagnosticText = h.nodes('span').map((node) => JSON.stringify(node.props.children));
+    assert.ok(diagnosticText.some((text) => text.includes('Itens') && text.includes('8')));
+    assert.ok(
+      diagnosticText.some((text) => text.includes('Ofertas avaliadas') && text.includes('21')),
+    );
+    assert.ok(
+      diagnosticText.some(
+        (text) => text.includes('Aceitas') && text.includes(String(status === 'OK' ? 1 : 0)),
+      ),
+    );
+    assert.equal(h.nodes('UsaProductCard').length, 1);
+    assert.equal(h.nodes('UsaProductCard')[0]?.props.product, expectedProduct);
+  }
 });
 
 test('keeps the shared unit-cost rule disabled for zero or multiple selections', async () => {

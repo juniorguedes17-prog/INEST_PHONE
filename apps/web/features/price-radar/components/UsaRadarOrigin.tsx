@@ -54,6 +54,9 @@ export function UsaRadarOrigin() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<UsaSourceProduct[]>([]);
+  const [providerReports, setProviderReports] = useState<
+    Awaited<ReturnType<typeof searchUsaWithDiagnostics>>['providers']
+  >([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<UsaProductFilters>(emptyUsaProductFilters);
   const [partialSearch, setPartialSearch] = useState(false);
@@ -468,6 +471,7 @@ export function UsaRadarOrigin() {
       setPartialSearch(false);
       if (normalizedQuery.length < 2) {
         setProducts([]);
+        setProviderReports([]);
         setSelectedProduct(null);
         setSelectedIds(new Set());
         resetOperationalState();
@@ -479,6 +483,7 @@ export function UsaRadarOrigin() {
 
       setLoading(true);
       setError(null);
+      setProviderReports([]);
       setSelectedProduct(null);
       setSelectedIds(new Set());
       resetOperationalState();
@@ -486,6 +491,7 @@ export function UsaRadarOrigin() {
       try {
         const result = await searchUsaWithDiagnostics(normalizedQuery);
         setProducts(result.products);
+        setProviderReports(result.providers);
         setPartialSearch(
           result.providers.some(
             (report) => report.status === 'UNAVAILABLE' || report.status === 'RATE_LIMITED',
@@ -494,6 +500,7 @@ export function UsaRadarOrigin() {
         setSearched(true);
       } catch {
         setProducts([]);
+        setProviderReports([]);
         setSearched(true);
         setError('Não foi possível consultar as fontes agora.');
       } finally {
@@ -530,6 +537,13 @@ export function UsaRadarOrigin() {
     [filters, products],
   );
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const upcReport = providerReports.find((report) => report.provider === 'upcitemdb_us');
+  const upcDiscarded =
+    upcReport?.diagnostics?.discarded && typeof upcReport.diagnostics.discarded === 'object'
+      ? Object.entries(upcReport.diagnostics.discarded as Record<string, unknown>).filter(
+          ([, count]) => typeof count === 'number',
+        )
+      : [];
   const metrics = useMemo(() => {
     const prices = filteredProducts
       .map((product) => product.priceUsd)
@@ -593,6 +607,26 @@ export function UsaRadarOrigin() {
           </span>
         </div>
       </section>
+
+      {upcReport ? (
+        <details className="rounded-2xl border border-inest-line/70 bg-inest-surface px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-bold text-inest-text">
+            UPCitemdb — {upcReport.status}
+          </summary>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-inest-muted">
+            <span>Itens: {String(upcReport.diagnostics?.itemsReceived ?? '—')}</span>
+            <span>Ofertas avaliadas: {String(upcReport.diagnostics?.offersEvaluated ?? '—')}</span>
+            <span>
+              Aceitas: {String(upcReport.diagnostics?.emitted ?? upcReport.returnedCount)}
+            </span>
+            {upcDiscarded.map(([reason, count]) => (
+              <span key={reason}>
+                {reason}: {String(count)}
+              </span>
+            ))}
+          </div>
+        </details>
+      ) : null}
 
       <section
         className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-5"

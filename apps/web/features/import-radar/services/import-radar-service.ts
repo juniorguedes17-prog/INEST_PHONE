@@ -99,6 +99,7 @@ export interface UsaDiscoveryResponse {
     provider: string;
     status: 'OK' | 'EMPTY' | 'UNAVAILABLE' | 'RATE_LIMITED';
     returnedCount: number;
+    diagnostics?: Record<string, unknown>;
   }[];
 }
 

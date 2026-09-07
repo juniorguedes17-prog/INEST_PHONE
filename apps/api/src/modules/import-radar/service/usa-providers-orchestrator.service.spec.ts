@@ -7,6 +7,7 @@ import { UsaProvidersOrchestrator } from './usa-providers-orchestrator.service';
 type UsaProviderStub = {
   name: string;
   searchUsaSourceProducts: ReturnType<typeof vi.fn>;
+  searchUsaWithDiagnostics?: ReturnType<typeof vi.fn>;
 };
 
 describe('UsaProvidersOrchestrator', () => {
@@ -49,6 +50,44 @@ describe('UsaProvidersOrchestrator', () => {
     expect(apple.searchUsaSourceProducts).toHaveBeenCalledTimes(1);
     expect(amazon.searchUsaSourceProducts).toHaveBeenCalledTimes(1);
     expect(upc.searchUsaSourceProducts).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves UPC diagnostics without changing its products', async () => {
+    const apple = provider('apple_us', []);
+    const amazon = provider('amazon_us', []);
+    const upcProduct = source('upcitemdb_us', { retailer: 'Best Buy' });
+    const upc = provider('upcitemdb_us', [upcProduct]);
+    upc.searchUsaWithDiagnostics = vi.fn().mockResolvedValue({
+      products: [upcProduct],
+      report: {
+        provider: 'upcitemdb_us',
+        status: 'OK',
+        returnedCount: 1,
+        diagnostics: {
+          itemsReceived: 8,
+          offersEvaluated: 21,
+          emitted: 1,
+          discarded: { stale: 14, price: 2, unavailable: 4, malformed: 1 },
+        },
+      },
+    });
+
+    const result = await createOrchestrator(apple, amazon, upc).searchWithDiagnostics({
+      search: 'camera',
+    });
+
+    expect(result.products).toEqual([upcProduct]);
+    expect(result.providers).toContainEqual({
+      provider: 'upcitemdb_us',
+      status: 'OK',
+      returnedCount: 1,
+      diagnostics: {
+        itemsReceived: 8,
+        offersEvaluated: 21,
+        emitted: 1,
+        discarded: { stale: 14, price: 2, unavailable: 4, malformed: 1 },
+      },
+    });
   });
 
   it.each([

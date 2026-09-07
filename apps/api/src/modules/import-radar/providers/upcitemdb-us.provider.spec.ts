@@ -247,6 +247,8 @@ describe('UpcItemDbUsProvider', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
   it('uses the official free search endpoint, caches successful results, and adapts to UsaSourceProduct', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     const fetchMock = vi.fn().mockResolvedValue(response(JSON.stringify(payload({}))));
     vi.stubGlobal('fetch', fetchMock);
     const provider = new UpcItemDbUsProvider();
