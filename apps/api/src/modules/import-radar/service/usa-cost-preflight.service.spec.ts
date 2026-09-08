@@ -88,7 +88,10 @@ function createService(
   const enrichmentDecisions = {
     resolve: vi.fn().mockResolvedValue({ decision, context }),
   };
-  const shippingWeights = { resolve: vi.fn().mockResolvedValue(weight) };
+  const shippingWeights = {
+    resolve: vi.fn().mockResolvedValue(weight),
+    register: vi.fn(),
+  };
   const settingsService = { getSettings: vi.fn().mockResolvedValue(settings) };
   return {
     service: new UsaCostPreflightService(
@@ -327,24 +330,120 @@ describe('UsaCostPreflightService', () => {
       input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
     });
     expect(shippingWeights.resolve).toHaveBeenCalledTimes(1);
+    expect(shippingWeights.register).not.toHaveBeenCalled();
   });
 
-  it('blocks insufficient and ambiguous weight keys', async () => {
-    for (const weight of [{ status: 'KEY_INSUFFICIENT' }, { status: 'KEY_AMBIGUOUS' }]) {
-      const { service } = createService(readyDecision, createContext('OTHER'), weight);
-      const result = await service.preflight({
+  it('keeps MISSING_WEIGHT on the persistent path even when a runtime weight is sent', async () => {
+    const { service, shippingWeights } = createService(readyDecision, createContext('OTHER'), {
+      status: 'MISSING_WEIGHT',
+    });
+
+    await expect(
+      service.preflight({
         sourceProduct: product,
         redirector: redirector('RED_DELAWARE'),
         composition: { kind: 'SINGLE_ITEM' },
+        runtimeShippingWeightLbs: 3.95,
+      }),
+    ).resolves.toMatchObject({ status: 'NEEDS_INPUT', reason: 'MISSING_WEIGHT' });
+    expect(shippingWeights.register).not.toHaveBeenCalled();
+  });
+
+  it('keeps a persisted WEIGHT_FOUND authoritative when a runtime weight is also sent', async () => {
+    const { service } = createService(readyDecision, createContext('OTHER'), {
+      status: 'WEIGHT_FOUND',
+      shippingWeightLbs: 2,
+    });
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('RED_DELAWARE'),
+        composition: { kind: 'SINGLE_ITEM' },
+        runtimeShippingWeightLbs: 3.95,
+      }),
+    ).resolves.toMatchObject({ status: 'READY_FOR_COST', shippingWeightLbs: 2 });
+  });
+
+  it('requests an explicit transient weight for an insufficient logistics key', async () => {
+    const { service, shippingWeights } = createService(readyDecision, createContext('OTHER'), {
+      status: 'KEY_INSUFFICIENT',
+      missingAttributes: ['family', 'model'],
+    });
+
+    await expect(
+      service.preflight({
+        sourceProduct: { ...product, sourceName: 'Canon EOS R6 Mark II', category: 'Camera' },
+        redirector: redirector('RED_DELAWARE'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'NEEDS_INPUT',
+      reason: 'KEY_INSUFFICIENT',
+      input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
+    });
+    expect(shippingWeights.register).not.toHaveBeenCalled();
+  });
+
+  it.each(['RED_DELAWARE', 'REI_DO_IMPORTADO'] as const)(
+    'uses a validated transient weight for KEY_INSUFFICIENT with %s without persistence',
+    async (selection) => {
+      const { service, shippingWeights } = createService(readyDecision, createContext('OTHER'), {
+        status: 'KEY_INSUFFICIENT',
+        missingAttributes: ['family', 'model'],
       });
 
-      expect(result.status).toBe('BLOCKED');
-      if (result.status === 'BLOCKED') {
-        expect(result.reason).toBe(
-          weight.status === 'KEY_INSUFFICIENT' ? 'KEY_INSUFFICIENT' : 'KEY_AMBIGUOUS',
-        );
-      }
-    }
+      await expect(
+        service.preflight({
+          sourceProduct: { ...product, sourceName: 'Canon EOS R6 Mark II', category: 'Camera' },
+          redirector: redirector(selection),
+          composition: { kind: 'SINGLE_ITEM' },
+          runtimeShippingWeightLbs: 3.95,
+        }),
+      ).resolves.toMatchObject({
+        status: 'READY_FOR_COST',
+        shippingWeightLbs: 3.95,
+        logisticClassification: 'OTHER',
+      });
+      expect(shippingWeights.resolve).toHaveBeenCalledTimes(1);
+      expect(shippingWeights.register).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, 0.0001, 100_000])(
+    'rejects invalid transient weight %s server-side',
+    async (runtimeShippingWeightLbs) => {
+      const { service } = createService(readyDecision, createContext('OTHER'), {
+        status: 'KEY_INSUFFICIENT',
+        missingAttributes: ['model'],
+      });
+
+      await expect(
+        service.preflight({
+          sourceProduct: product,
+          redirector: redirector('RED_DELAWARE'),
+          composition: { kind: 'SINGLE_ITEM' },
+          runtimeShippingWeightLbs,
+        }),
+      ).rejects.toThrow();
+    },
+  );
+
+  it('keeps KEY_AMBIGUOUS blocked even when a runtime weight is sent', async () => {
+    const { service, shippingWeights } = createService(readyDecision, createContext('OTHER'), {
+      status: 'KEY_AMBIGUOUS',
+      ambiguousSources: ['product_identity'],
+    });
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('RED_DELAWARE'),
+        composition: { kind: 'SINGLE_ITEM' },
+        runtimeShippingWeightLbs: 3.95,
+      }),
+    ).resolves.toMatchObject({ status: 'BLOCKED', reason: 'KEY_AMBIGUOUS' });
+    expect(shippingWeights.register).not.toHaveBeenCalled();
   });
 
   it('does not require weight for Rei cellular', async () => {

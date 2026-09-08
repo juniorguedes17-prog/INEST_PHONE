@@ -16,6 +16,7 @@ export interface UsaCostExecutionInput {
   sourceProduct: UsaSourceProduct;
   redirector: UsaRedirectorSelection;
   composition: ShippingWeightComposition;
+  runtimeShippingWeightLbs?: number;
 }
 
 export type UsaCostExecutionResult =

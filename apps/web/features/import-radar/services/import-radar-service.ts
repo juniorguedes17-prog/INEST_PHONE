@@ -181,7 +181,7 @@ export type UsaCostPreflightResponse =
     }
   | {
       status: 'NEEDS_INPUT';
-      reason: 'MANUFACTURER_MISSING' | 'MISSING_WEIGHT';
+      reason: 'MANUFACTURER_MISSING' | 'MISSING_WEIGHT' | 'KEY_INSUFFICIENT';
       input: {
         type: 'MANUFACTURER' | 'WEIGHT';
         field: 'manufacturer' | 'shippingWeightLbs';
@@ -194,11 +194,17 @@ export type UsaCostPreflightResponse =
 export async function preflightUsaCost(
   sourceProduct: UsaSourceProduct,
   redirector: UsaRedirectorSelection,
+  runtimeShippingWeightLbs?: number,
 ): Promise<UsaCostPreflightResponse> {
   const response = await authenticatedFetch(`${env.apiUrl}/import-radar/usa-cost-preflight`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sourceProduct, redirector, composition: { kind: 'SINGLE_ITEM' } }),
+    body: JSON.stringify({
+      sourceProduct,
+      redirector,
+      composition: { kind: 'SINGLE_ITEM' },
+      ...(runtimeShippingWeightLbs === undefined ? {} : { runtimeShippingWeightLbs }),
+    }),
   });
   return parseResponse<UsaCostPreflightResponse>(response);
 }
@@ -229,11 +235,17 @@ export async function executeUsaCost(
   sourceProduct: UsaSourceProduct,
   redirector: UsaRedirectorSelection,
   composition: UsaShippingWeightComposition,
+  runtimeShippingWeightLbs?: number,
 ): Promise<UsaCostExecutionResponse> {
   const response = await authenticatedFetch(`${env.apiUrl}/import-radar/usa-cost`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sourceProduct, redirector, composition }),
+    body: JSON.stringify({
+      sourceProduct,
+      redirector,
+      composition,
+      ...(runtimeShippingWeightLbs === undefined ? {} : { runtimeShippingWeightLbs }),
+    }),
   });
   return parseResponse<UsaCostExecutionResponse>(response);
 }

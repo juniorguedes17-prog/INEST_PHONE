@@ -74,6 +74,7 @@ export function UsaRadarOrigin() {
     'resolving' | 'saving' | 'reprocessing' | null
   >(null);
   const [weightError, setWeightError] = useState<string | null>(null);
+  const [runtimeShippingWeightLbs, setRuntimeShippingWeightLbs] = useState<number | null>(null);
   const [decision, setDecision] = useState<UsaEnrichmentDecision | null>(null);
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
@@ -120,6 +121,7 @@ export function UsaRadarOrigin() {
     setWeightLoading(false);
     setWeightOperation(null);
     setWeightError(null);
+    setRuntimeShippingWeightLbs(null);
   }, []);
 
   const resolveSelectedWeight = useCallback(
@@ -155,7 +157,11 @@ export function UsaRadarOrigin() {
   );
 
   const resolvePreflight = useCallback(
-    async (product: UsaSourceProduct, choice: 'RED_DELAWARE' | 'REI_DO_IMPORTADO') => {
+    async (
+      product: UsaSourceProduct,
+      choice: 'RED_DELAWARE' | 'REI_DO_IMPORTADO',
+      runtimeWeightLbs?: number,
+    ) => {
       const requestId = ++preflightRequestRef.current;
       setPreflight(null);
       setPreflightLoading(true);
@@ -163,12 +169,17 @@ export function UsaRadarOrigin() {
       setCostExecution('CONFIGURING');
       setCostError(null);
       resetWeightState();
+      if (runtimeWeightLbs !== undefined) {
+        setRuntimeShippingWeightLbs(runtimeWeightLbs);
+        setWeightInput(formatWeightLbs(runtimeWeightLbs));
+      }
       try {
         const response = await preflightUsaCost(
           product,
           choice === 'RED_DELAWARE'
             ? { redirector: choice, shippingMode: 'EXPRESS' }
             : { redirector: choice },
+          runtimeWeightLbs,
         );
         if (requestId !== preflightRequestRef.current) return;
         setPreflight(response);
@@ -179,6 +190,8 @@ export function UsaRadarOrigin() {
           });
         } else if (response.status === 'NEEDS_INPUT' && response.reason === 'MISSING_WEIGHT') {
           setWeightResolution({ status: 'MISSING_WEIGHT' });
+        } else if (response.status === 'NEEDS_INPUT' && response.reason === 'KEY_INSUFFICIENT') {
+          setWeightResolution({ status: 'KEY_INSUFFICIENT', missingAttributes: [] });
         } else if (response.status === 'NEEDS_INPUT' && response.input.type === 'MANUFACTURER') {
           setDecision({
             status: 'NEEDS_INPUT',
@@ -337,14 +350,19 @@ export function UsaRadarOrigin() {
     setCostError(null);
     setCostExecution('CONFIGURING');
     try {
-      const response = await executeUsaCost(selectedProduct, redirectorSelection, {
-        kind: 'SINGLE_ITEM',
-      });
+      const response = await executeUsaCost(
+        selectedProduct,
+        redirectorSelection,
+        {
+          kind: 'SINGLE_ITEM',
+        },
+        runtimeShippingWeightLbs ?? undefined,
+      );
       if (requestId !== flowRequestRef.current) return;
       setCostExecution(response);
       if (response.preflight.status !== 'READY_FOR_COST') {
         setCostExecution('CONFIGURING');
-        void resolvePreflight(selectedProduct, redirector);
+        void resolvePreflight(selectedProduct, redirector, runtimeShippingWeightLbs ?? undefined);
       }
     } catch (executeError) {
       if (requestId !== flowRequestRef.current) return;
@@ -356,7 +374,14 @@ export function UsaRadarOrigin() {
     } finally {
       if (requestId === flowRequestRef.current) setCostLoading(false);
     }
-  }, [costLoading, preflight, redirector, resolvePreflight, selectedProduct]);
+  }, [
+    costLoading,
+    preflight,
+    redirector,
+    resolvePreflight,
+    runtimeShippingWeightLbs,
+    selectedProduct,
+  ]);
 
   const sendToPricing = useCallback(async () => {
     if (
@@ -413,7 +438,12 @@ export function UsaRadarOrigin() {
   const registerWeight = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      if (!selectedProduct || weightResolution?.status !== 'MISSING_WEIGHT' || weightLoading)
+      if (
+        !selectedProduct ||
+        (weightResolution?.status !== 'MISSING_WEIGHT' &&
+          weightResolution?.status !== 'KEY_INSUFFICIENT') ||
+        weightLoading
+      )
         return;
 
       const normalizedInput = weightInput.trim();
@@ -429,9 +459,14 @@ export function UsaRadarOrigin() {
 
       const requestId = weightRequestRef.current;
       setWeightLoading(true);
-      setWeightOperation('saving');
+      setWeightOperation(weightResolution.status === 'MISSING_WEIGHT' ? 'saving' : 'reprocessing');
       setWeightError(null);
       try {
+        if (weightResolution.status === 'KEY_INSUFFICIENT') {
+          if (!redirector) return;
+          await resolvePreflight(selectedProduct, redirector, shippingWeightLbs);
+          return;
+        }
         await registerUsaShippingWeight(
           selectedProduct,
           { kind: 'SINGLE_ITEM' },
@@ -901,7 +936,12 @@ export function UsaRadarOrigin() {
                       variant="secondary"
                       disabled={preflightLoading}
                       onClick={() =>
-                        redirector && void resolvePreflight(selectedProduct, redirector)
+                        redirector &&
+                        void resolvePreflight(
+                          selectedProduct,
+                          redirector,
+                          runtimeShippingWeightLbs ?? undefined,
+                        )
                       }
                     >
                       Tentar novamente
@@ -911,7 +951,9 @@ export function UsaRadarOrigin() {
               ) : null}
               {preflight?.status === 'BLOCKED' ? <BlockedState reason={preflight.reason} /> : null}
               {preflight?.status === 'READY_FOR_COST' ||
-              (preflight?.status === 'NEEDS_INPUT' && preflight.reason === 'MISSING_WEIGHT') ? (
+              (preflight?.status === 'NEEDS_INPUT' &&
+                (preflight.reason === 'MISSING_WEIGHT' ||
+                  preflight.reason === 'KEY_INSUFFICIENT')) ? (
                 <UsaShippingWeightPanel
                   resolution={weightResolution}
                   input={weightInput}
@@ -1008,7 +1050,7 @@ function UsaShippingWeightPanel({
     );
   }
 
-  if (resolution?.status === 'MISSING_WEIGHT') {
+  if (resolution?.status === 'MISSING_WEIGHT' || resolution?.status === 'KEY_INSUFFICIENT') {
     return (
       <form className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={onSubmit}>
         <label className="grid gap-1 text-sm font-bold text-inest-text">
@@ -1026,7 +1068,9 @@ function UsaShippingWeightPanel({
             aria-describedby="usa-weight-help"
           />
           <span id="usa-weight-help" className="text-xs font-semibold text-inest-muted">
-            Precisamos confirmar o peso para continuar. Ex.: 0.500, 0.650, 3.950.
+            {resolution.status === 'MISSING_WEIGHT'
+              ? 'Precisamos confirmar o peso para continuar. Ex.: 0.500, 0.650, 3.950.'
+              : 'Informe o peso desta compra para calcular o custo. Ex.: 0.500, 0.650, 3.950.'}
           </span>
         </label>
         <ActionButton type="submit" className="min-h-11 self-end" disabled={loading}>
@@ -1037,14 +1081,6 @@ function UsaShippingWeightPanel({
             : 'Confirmar peso'}
         </ActionButton>
       </form>
-    );
-  }
-
-  if (resolution?.status === 'KEY_INSUFFICIENT') {
-    return (
-      <p className="mt-4 text-sm font-semibold text-amber-700" role="status">
-        Não foi possível determinar uma identidade logística segura para este produto.
-      </p>
     );
   }
 

@@ -86,6 +86,44 @@ describe('ImportRadarController manufacturer confirmation permissions', () => {
     expect(guard.canActivate(contextFor([], 'resolveShippingWeight'))).toBe(true);
   });
 
+  it('forwards the same transient weight to USA preflight and cost execution', async () => {
+    const preflight = { preflight: vi.fn().mockResolvedValue({ status: 'READY_FOR_COST' }) };
+    const costExecution = {
+      execute: vi.fn().mockResolvedValue({ preflight: { status: 'READY_FOR_COST' } }),
+    };
+    const controller = new ImportRadarController(
+      {} as ImportRadarService,
+      {} as never,
+      undefined,
+      preflight as never,
+      costExecution as never,
+    );
+    const dto = {
+      sourceProduct: {
+        source: 'US' as const,
+        providerName: 'amazon_us',
+        sourceProductId: 'amazon-us:canon',
+        sourceName: 'Canon EOS R6 Mark II',
+        displayName: 'Canon EOS R6 Mark II',
+        sourceUrl: 'https://example.test/canon',
+        supplier: 'Amazon',
+        retailer: 'Amazon',
+        category: 'Camera',
+        priceUsd: 1999,
+      },
+      redirector: { redirector: 'RED_DELAWARE' as const, shippingMode: 'EXPRESS' as const },
+      composition: { kind: 'SINGLE_ITEM' as const },
+      runtimeShippingWeightLbs: 3.95,
+    };
+
+    await controller.preflightUsaCost(dto);
+    await controller.executeUsaCost(dto);
+
+    const expected = expect.objectContaining({ runtimeShippingWeightLbs: 3.95 });
+    expect(preflight.preflight).toHaveBeenCalledWith(expected);
+    expect(costExecution.execute).toHaveBeenCalledWith(expected);
+  });
+
   it('exposes the existing USA priced-offer composition without adding business rules', async () => {
     const execute = vi.fn().mockResolvedValue({ status: 'BLOCKED', reason: 'MISSING_WEIGHT' });
     const pricedOffers = { execute };

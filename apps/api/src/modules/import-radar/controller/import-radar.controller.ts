@@ -158,6 +158,7 @@ export class ImportRadarController {
             }
           : { redirector: 'REI_DO_IMPORTADO' },
       composition: dto.composition,
+      runtimeShippingWeightLbs: dto.runtimeShippingWeightLbs,
     });
   }
 
@@ -177,6 +178,7 @@ export class ImportRadarController {
             }
           : { redirector: 'REI_DO_IMPORTADO' },
       composition: dto.composition,
+      runtimeShippingWeightLbs: dto.runtimeShippingWeightLbs,
     });
   }
 

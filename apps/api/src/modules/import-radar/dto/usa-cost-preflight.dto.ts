@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsIn, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { ShippingWeightCompositionDto } from '../shipping-weights/shipping-weight-registration.dto';
 import { UsaEnrichmentSourceProductDto } from './usa-enrichment.dto';
 
@@ -30,6 +30,11 @@ export class UsaCostPreflightDto {
   @ValidateNested()
   @Type(() => ShippingWeightCompositionDto)
   composition!: ShippingWeightCompositionDto;
+
+  @ApiPropertyOptional({ description: 'Peso explicito em lbs, valido somente para esta execucao.' })
+  @IsOptional()
+  @IsNumber()
+  runtimeShippingWeightLbs?: number;
 
   @ApiPropertyOptional({ description: 'Contexto apenas; nao participa da autoridade.' })
   @IsOptional()

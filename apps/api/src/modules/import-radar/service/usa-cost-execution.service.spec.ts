@@ -109,6 +109,32 @@ describe('UsaCostExecutionService', () => {
     expect(reiCalculator).not.toHaveBeenCalled();
   });
 
+  it('revalidates and forwards the same transient weight through preflight to Red', async () => {
+    const red = { redirector: 'RED_DELAWARE' as const, shippingMode: 'EXPRESS' as const };
+    const runtimeShippingWeightLbs = 3.95;
+    const canon = {
+      ...sourceProduct,
+      sourceName: 'Canon EOS R6 Mark II Mirrorless Camera',
+      sourceManufacturer: 'Canon',
+      category: 'Camera',
+    };
+    const { service, input, preflight } = setup(
+      ready(red, { shippingWeightLbs: runtimeShippingWeightLbs }),
+      canon,
+    );
+    const calculator = vi.spyOn(redDelawareCalculator, 'calculateRedDelawareExpressCost');
+
+    await service.execute({ ...input, runtimeShippingWeightLbs });
+
+    expect(preflight.preflight).toHaveBeenCalledWith({
+      ...input,
+      runtimeShippingWeightLbs,
+    });
+    expect(calculator).toHaveBeenCalledWith(
+      expect.objectContaining({ shippingWeightLbs: runtimeShippingWeightLbs }),
+    );
+  });
+
   it.each([
     [1, 'EXEMPT', 135, 0],
     [2, 'TAXABLE', 270, 449.03],
@@ -183,8 +209,9 @@ describe('UsaCostExecutionService', () => {
       redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
     },
     {
-      status: 'BLOCKED',
+      status: 'NEEDS_INPUT',
       reason: 'KEY_INSUFFICIENT',
+      input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
       redirector: { redirector: 'REI_DO_IMPORTADO' },
     },
     {

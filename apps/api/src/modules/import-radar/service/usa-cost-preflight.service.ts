@@ -14,6 +14,7 @@ import type {
 } from '../shipping-weights/shipping-weight.contract';
 import { ResolveShippingWeightDto } from '../shipping-weights/shipping-weight-registration.dto';
 import { ShippingWeightRegistrationService } from '../shipping-weights/shipping-weight-registration.service';
+import { normalizeShippingWeightLbs } from '../shipping-weights/shipping-weight.service';
 import {
   UsaEnrichmentInputDecisionService,
   type UsaEnrichmentDecision,
@@ -53,7 +54,7 @@ export type UsaCostPreflightResult =
     }
   | {
       status: 'NEEDS_INPUT';
-      reason: 'MANUFACTURER_MISSING' | 'MISSING_WEIGHT';
+      reason: 'MANUFACTURER_MISSING' | 'MISSING_WEIGHT' | 'KEY_INSUFFICIENT';
       input: {
         type: 'MANUFACTURER' | 'WEIGHT';
         field: 'manufacturer' | 'shippingWeightLbs';
@@ -63,7 +64,10 @@ export type UsaCostPreflightResult =
     }
   | {
       status: 'BLOCKED';
-      reason: Exclude<UsaCostPreflightReason, 'MANUFACTURER_MISSING' | 'MISSING_WEIGHT'>;
+      reason: Exclude<
+        UsaCostPreflightReason,
+        'MANUFACTURER_MISSING' | 'MISSING_WEIGHT' | 'KEY_INSUFFICIENT'
+      >;
       redirector: UsaRedirectorSelection | null;
     };
 
@@ -82,6 +86,7 @@ export class UsaCostPreflightService {
     sourceProduct: UsaSourceProduct;
     redirector: UsaRedirectorSelection;
     composition: ShippingWeightComposition;
+    runtimeShippingWeightLbs?: number;
   }): Promise<UsaCostPreflightResult> {
     if (input.sourceProduct.offerKind === 'FAMILY_STARTING_AT') {
       return {
@@ -197,6 +202,7 @@ export class UsaCostPreflightService {
       logisticClassification,
       condition,
       normalizedPricing,
+      input.runtimeShippingWeightLbs,
     );
   }
 
@@ -249,19 +255,10 @@ function toWeightPreflightResult(
   logisticClassification: 'CELULAR' | 'OTHER' | 'UNRESOLVED',
   condition: ImportProductCondition | null,
   normalizedPricing: UsaNormalizedPricingContext,
+  runtimeShippingWeightLbs?: number,
 ): UsaCostPreflightResult {
-  if (resolution.status === 'WEIGHT_FOUND') {
-    return {
-      status: 'READY_FOR_COST',
-      redirector,
-      taxTreatment,
-      logisticClassification:
-        logisticClassification === 'UNRESOLVED' ? null : logisticClassification,
-      quantity: null,
-      condition,
-      normalizedPricing,
-      shippingWeightLbs: resolution.shippingWeightLbs,
-    };
+  if (resolution.status === 'KEY_AMBIGUOUS') {
+    return { status: 'BLOCKED', reason: 'KEY_AMBIGUOUS', redirector };
   }
   if (resolution.status === 'MISSING_WEIGHT') {
     return {
@@ -271,10 +268,29 @@ function toWeightPreflightResult(
       redirector,
     };
   }
+  if (resolution.status === 'KEY_INSUFFICIENT' && runtimeShippingWeightLbs === undefined) {
+    return {
+      status: 'NEEDS_INPUT',
+      reason: 'KEY_INSUFFICIENT',
+      input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
+      redirector,
+    };
+  }
+
+  const shippingWeightLbs =
+    resolution.status === 'WEIGHT_FOUND'
+      ? resolution.shippingWeightLbs
+      : Number(normalizeShippingWeightLbs(runtimeShippingWeightLbs));
+
   return {
-    status: 'BLOCKED',
-    reason: resolution.status === 'KEY_INSUFFICIENT' ? 'KEY_INSUFFICIENT' : 'KEY_AMBIGUOUS',
+    status: 'READY_FOR_COST',
     redirector,
+    taxTreatment,
+    logisticClassification: logisticClassification === 'UNRESOLVED' ? null : logisticClassification,
+    quantity: null,
+    condition,
+    normalizedPricing,
+    shippingWeightLbs,
   };
 }
 

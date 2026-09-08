@@ -71,7 +71,7 @@ const componentCode = ts.transpileModule(
 ).outputText;
 
 function setup(
-  preflightResponse: object = ready,
+  preflightResponse: object | ((...args: unknown[]) => object | Promise<object>) = ready,
   searchProducts: Array<Record<string, unknown>> = [product],
   searchProviders: ProviderReport[] = [{ provider: 'amazon_us', status: 'OK', returnedCount: 1 }],
 ) {
@@ -81,7 +81,9 @@ function setup(
       providers: searchProviders,
     })),
     resolveUsaEnrichment: mock.fn(async () => ({ decision: { status: 'READY', reason: null } })),
-    preflightUsaCost: mock.fn(async () => preflightResponse),
+    preflightUsaCost: mock.fn(async (...args: unknown[]) =>
+      typeof preflightResponse === 'function' ? preflightResponse(...args) : preflightResponse,
+    ),
     executeUsaCost: mock.fn(async (...args: unknown[]) => {
       const redirector = args[1] as Props;
       return {
@@ -101,8 +103,15 @@ function setup(
         },
       };
     }),
-    resolveUsaShippingWeight: mock.fn(),
-    registerUsaShippingWeight: mock.fn(),
+    resolveUsaShippingWeight: mock.fn(async () => ({
+      status: 'WEIGHT_FOUND',
+      shippingWeightLbs: 3.95,
+    })),
+    registerUsaShippingWeight: mock.fn(async () => ({
+      status: 'WEIGHT_FOUND',
+      shippingWeightLbs: 3.95,
+      registration: 'CREATED',
+    })),
     confirmUsaManufacturer: mock.fn(),
   };
   const pricing = {
@@ -391,6 +400,141 @@ test('does not calculate cost when the backend requires a shipping weight', asyn
   await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
   assert.equal(h.nodes('UsaShippingWeightPanel').length, 1);
   assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
+});
+
+test('keeps MISSING_WEIGHT on the persistent registration and reprocessing path', async () => {
+  let persisted = false;
+  const missing = {
+    status: 'NEEDS_INPUT',
+    reason: 'MISSING_WEIGHT',
+    input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
+    redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+  };
+  const readyWithWeight = {
+    ...ready,
+    redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+    shippingWeightLbs: 3.95,
+  };
+  const h = setup(() => (persisted ? readyWithWeight : missing));
+  h.services.registerUsaShippingWeight.mock.mockImplementation(async () => {
+    persisted = true;
+    return { status: 'WEIGHT_FOUND', shippingWeightLbs: 3.95, registration: 'CREATED' };
+  });
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+  await h.call('UsaShippingWeightPanel', 'onInputChange', '3.95');
+  await h.call('UsaShippingWeightPanel', 'onSubmit', { preventDefault() {} });
+
+  assert.equal(h.services.registerUsaShippingWeight.mock.callCount(), 1);
+  assert.equal(h.services.resolveUsaShippingWeight.mock.callCount(), 1);
+  assert.equal(h.services.preflightUsaCost.mock.callCount(), 2);
+  assert.equal(h.services.preflightUsaCost.mock.calls[1]!.arguments[2], undefined);
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, true);
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
+});
+
+test('uses KEY_INSUFFICIENT weight only in preflight and usa-cost without persistence', async () => {
+  const insufficient = {
+    status: 'NEEDS_INPUT',
+    reason: 'KEY_INSUFFICIENT',
+    input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
+    redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+  };
+  const readyWithWeight = {
+    ...ready,
+    redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+    shippingWeightLbs: 3.95,
+  };
+  const h = setup((...args: unknown[]) => (args[2] === 3.95 ? readyWithWeight : insufficient));
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+  assert.equal(h.nodes('UsaShippingWeightPanel').length, 1);
+  await h.call('UsaShippingWeightPanel', 'onInputChange', '3.95');
+  await h.call('UsaShippingWeightPanel', 'onSubmit', { preventDefault() {} });
+
+  assert.equal(h.services.registerUsaShippingWeight.mock.callCount(), 0);
+  assert.equal(h.services.preflightUsaCost.mock.calls[1]!.arguments[2], 3.95);
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, true);
+
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 1);
+  assert.equal(h.services.executeUsaCost.mock.calls[0]!.arguments[3], 3.95);
+});
+
+test('invalidates a transient weight when the redirector changes', async () => {
+  const insufficient = {
+    status: 'NEEDS_INPUT',
+    reason: 'KEY_INSUFFICIENT',
+    input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
+    redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+  };
+  const readyWithWeight = { ...ready, shippingWeightLbs: 3.95 };
+  const h = setup((...args: unknown[]) => (args[2] === 3.95 ? readyWithWeight : insufficient));
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+  await h.call('UsaShippingWeightPanel', 'onInputChange', '3.95');
+  await h.call('UsaShippingWeightPanel', 'onSubmit', { preventDefault() {} });
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+
+  const lastCall = h.services.preflightUsaCost.mock.calls.at(-1)!;
+  assert.equal(lastCall.arguments[2], undefined);
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
+});
+
+test('invalidates a transient weight when the selected product changes', async () => {
+  const insufficient = {
+    status: 'NEEDS_INPUT',
+    reason: 'KEY_INSUFFICIENT',
+    input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
+    redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+  };
+  const readyWithWeight = { ...ready, shippingWeightLbs: 3.95 };
+  const h = setup(
+    (...args: unknown[]) => (args[2] === 3.95 ? readyWithWeight : insufficient),
+    [product, secondProduct],
+  );
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+  await h.call('UsaShippingWeightPanel', 'onInputChange', '3.95');
+  await h.call('UsaShippingWeightPanel', 'onSubmit', { preventDefault() {} });
+
+  const firstCard = h.nodes('UsaProductCard')[0]!;
+  await (firstCard.props.onSelect as (checked: boolean) => void)(false);
+  await setImmediate();
+  const nextCard = h.nodes('UsaProductCard')[1]!;
+  await (nextCard.props.onSelect as (checked: boolean) => void)(true);
+  await setImmediate();
+  await (h.nodes('UsaProductCard')[1]!.props.onCalculate as () => void)();
+  await setImmediate();
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+
+  const lastCall = h.services.preflightUsaCost.mock.calls.at(-1)!;
+  assert.equal(lastCall.arguments[2], undefined);
+});
+
+test('keeps KEY_AMBIGUOUS blocked without exposing a weight input', async () => {
+  const h = setup({
+    status: 'BLOCKED',
+    reason: 'KEY_AMBIGUOUS',
+    redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+  });
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+
+  assert.equal(h.nodes('UsaShippingWeightPanel').length, 0);
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
+  assert.equal(h.services.registerUsaShippingWeight.mock.callCount(), 0);
   assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
 });
 
