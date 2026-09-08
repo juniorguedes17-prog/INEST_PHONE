@@ -60,7 +60,10 @@ function setup() {
   const pricing = { calculateTemporaryImportPricing: mock.fn(async (payload: unknown) => payload) };
   const state: unknown[] = [];
   let cursor = 0;
-  const exports: { ParaguayRadarOrigin?: () => Element } = {};
+  const exports: {
+    ParaguayRadarOrigin?: () => Element;
+    CalculationModal?: (props: Props) => Element;
+  } = {};
   const jsx = (type: Element['type'], props: Props) => ({ type, props });
 
   runInNewContext(componentCode, {
@@ -159,7 +162,13 @@ function setup() {
     await (node.props[handler] as (argument?: unknown) => unknown)(value);
     await setImmediate();
   };
-  return { services, nodes, call, releaseSearch: () => releaseSearch?.() };
+  return {
+    services,
+    nodes,
+    call,
+    CalculationModal: exports.CalculationModal,
+    releaseSearch: () => releaseSearch?.(),
+  };
 }
 
 test('replaces only the PY toolbar cost action with the existing search flow', async () => {
@@ -193,4 +202,112 @@ test('replaces only the PY toolbar cost action with the existing search flow', a
   await h.call('ParaguayProductCard', 'onCalculate');
   assert.equal(h.services.calculateImportCost.mock.callCount(), 1);
   assert.ok(h.nodes('CalculationModal')[0]?.props.calculation);
+});
+
+test('renders Red Delaware breakdown labels without changing its values', () => {
+  const h = setup();
+  const rendered = JSON.stringify(
+    h.CalculationModal!({
+      calculation: null,
+      usaCostExecution: {
+        calculation: {
+          sourceCommercialIdentity: { sourceName: 'Camera', sourceUrl: 'https://example.com' },
+          redirector: { redirector: 'RED_DELAWARE' },
+          breakdown: {
+            productPriceUsd: 1000,
+            usdBrlQuote: 5,
+            shippingWeightLbs: 2,
+            chargedLbs: 2,
+            firstLbUsd: 150,
+            additionalLbUsd: 25,
+            shippingUsd: 175,
+            productValueBrl: 5000,
+            shippingBrl: 875,
+          },
+          finalCost: { amountBrl: 5875 },
+        },
+      },
+      sending: false,
+      onClose: () => undefined,
+      onSendToPricing: () => undefined,
+      onConfirmManufacturer: () => undefined,
+    }),
+  );
+
+  assert.match(rendered, /Peso do Frete \(lb\)/);
+  assert.match(rendered, /Custo do Primeiro lb \(USD\)/);
+  assert.match(rendered, /Custo por lb Adicional \(USD\)/);
+  assert.match(rendered, /Frete \(USD\)/);
+  assert.ok(rendered.includes('"children":175'));
+  assert.ok(rendered.includes('"children":"R$ 875,00"'));
+  assert.doesNotMatch(rendered, /shippingWeightLbs|firstLbUsd|additionalLbUsd/);
+});
+
+test('renders Rei do Importado commercial labels and preserves every breakdown value', () => {
+  const h = setup();
+  const rendered = JSON.stringify(
+    h.CalculationModal!({
+      calculation: null,
+      usaCostExecution: {
+        calculation: {
+          sourceCommercialIdentity: { sourceName: 'iPhone', sourceUrl: 'https://example.com' },
+          redirector: { redirector: 'REI_DO_IMPORTADO' },
+          breakdown: {
+            productPriceUsd: 1000,
+            usdBrlQuote: 5,
+            shippingWeightLbs: null,
+            classification: 'CELULAR',
+            quantity: 1,
+            weightKg: null,
+            halfKgBlocks: null,
+            baseShippingUsd: 150,
+            shippingDiscountPercent: 10,
+            shippingDiscountUsd: 15,
+            shippingUsd: 135,
+            insurancePercent: 0,
+            insuranceBrl: 0,
+            taxTreatment: 'TAXABLE',
+            taxPercent: 7,
+            taxUsd: 83.93,
+            taxBrl: 444.83,
+            productValueBrl: 5000,
+            shippingBrl: 675,
+          },
+          finalCost: { amountBrl: 6119.83 },
+        },
+      },
+      sending: false,
+      onClose: () => undefined,
+      onSendToPricing: () => undefined,
+      onConfirmManufacturer: () => undefined,
+    }),
+  );
+
+  for (const label of [
+    'Quantidade',
+    'Custo Base do Frete (USD)',
+    'Desconto no Frete (%)',
+    'Desconto no Frete (USD)',
+    'Frete (USD)',
+    'Taxa do Seguro (%)',
+    'Seguro Contratado (R$)',
+    'Imposto sobre Venda (%)',
+    'Imposto Total (USD)',
+    'Imposto Total (R$)',
+  ]) {
+    assert.ok(rendered.includes(label), `missing label: ${label}`);
+  }
+  for (const technicalLabel of [
+    'quantity',
+    'baseShippingUsd',
+    'shippingDiscountPercent',
+    'shippingDiscountUsd',
+    'insurancePercent',
+    'taxPercent',
+  ]) {
+    assert.ok(!rendered.includes(technicalLabel), `technical label rendered: ${technicalLabel}`);
+  }
+  assert.ok(rendered.includes('"children":150'));
+  assert.ok(rendered.includes('"children":135'));
+  assert.ok(rendered.includes('"children":"R$ 444,83"'));
 });
