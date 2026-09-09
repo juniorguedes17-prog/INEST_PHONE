@@ -4,6 +4,7 @@ import {
   ProductNormalizationService,
   type ProductNormalizationContext,
   type ProductNormalizationInput,
+  type ProductSemanticNormalizationInput,
 } from './product-normalization.service';
 
 function createConfig(overrides: Record<string, unknown> = {}) {
@@ -114,6 +115,23 @@ function usaEnrichmentInput() {
     color: 'Midnight',
     condition: 'NOVO',
     deterministicState: 'INSUFFICIENT' as const,
+  };
+}
+
+function semanticInput(
+  overrides: Partial<ProductSemanticNormalizationInput> = {},
+): ProductSemanticNormalizationInput {
+  return {
+    context: 'NORMALIZE_PRICING_US',
+    source: 'US',
+    sourceName: 'Sony Alpha a7 IV Camera Body Black',
+    sourceEvidence: 'Mirrorless camera body, black finish',
+    structuredFields: {
+      manufacturer: 'Sony',
+      category: 'Camera',
+      color: 'Black',
+    },
+    ...overrides,
   };
 }
 
@@ -512,5 +530,306 @@ describe('ProductNormalizationService', () => {
       lunaCalled: true,
       errorCode: 'timeout',
     });
+  });
+
+  it.each([
+    {
+      label: 'iPhone',
+      input: semanticInput({
+        sourceName: 'Apple iPhone 17 Pro 512GB Cosmic Orange',
+        structuredFields: { manufacturer: 'Apple', category: 'iPhone' },
+      }),
+      candidate: {
+        manufacturerCandidate: 'Apple',
+        categoryCandidate: 'iPhone',
+        familyCandidate: 'iphone',
+        modelCandidate: 'iPhone 17 Pro',
+        storageCandidate: '512GB',
+        screenCandidate: null,
+      },
+    },
+    {
+      label: 'MacBook',
+      input: semanticInput({
+        sourceName: 'Apple MacBook Air M5 13-inch 16GB 512GB Midnight',
+        structuredFields: { manufacturer: 'Apple', category: 'MacBook' },
+      }),
+      candidate: {
+        manufacturerCandidate: 'Apple',
+        categoryCandidate: 'MacBook',
+        familyCandidate: 'macbook',
+        modelCandidate: 'MacBook Air M5',
+        storageCandidate: '512GB',
+        ramCandidate: '16GB',
+        screenCandidate: '13"',
+      },
+    },
+    {
+      label: 'Apple Watch',
+      input: semanticInput({
+        sourceName: 'Apple Watch Series 11 46mm GPS',
+        structuredFields: { manufacturer: 'Apple', category: 'Smartwatch' },
+      }),
+      candidate: {
+        manufacturerCandidate: 'Apple',
+        categoryCandidate: 'Smartwatch',
+        familyCandidate: 'apple-watch',
+        modelCandidate: 'Apple Watch Series 11',
+        storageCandidate: null,
+        screenCandidate: '46mm',
+        connectivityCandidate: 'GPS',
+      },
+    },
+    {
+      label: 'Samsung',
+      input: semanticInput({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceName: 'Samsung Galaxy A36 5G Dual 256GB Awesome Lavender',
+        structuredFields: { manufacturer: 'Samsung', category: 'Smartphone' },
+      }),
+      candidate: {
+        manufacturerCandidate: 'Samsung',
+        categoryCandidate: 'Smartphone',
+        familyCandidate: 'Galaxy A',
+        modelCandidate: 'Galaxy A36',
+        storageCandidate: '256GB',
+        connectivityCandidate: '5G',
+        colorCandidate: 'Awesome Lavender',
+      },
+    },
+    {
+      label: 'camera',
+      input: semanticInput(),
+      candidate: {
+        manufacturerCandidate: 'Sony',
+        categoryCandidate: 'Camera',
+        familyCandidate: 'Alpha',
+        modelCandidate: 'a7 IV',
+        storageCandidate: null,
+        screenCandidate: null,
+        connectivityCandidate: null,
+        colorCandidate: 'Black',
+      },
+    },
+  ])(
+    'expoe a fundacao semantica compartilhada para $label sem consultar registries',
+    async (testCase) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue(
+          usaEnrichmentResponse({
+            ramCandidate: null,
+            chipCandidate: null,
+            screenCandidate: null,
+            colorCandidate: null,
+            connectivityCandidate: null,
+            conditionCandidate: null,
+            ...testCase.candidate,
+          }),
+        ),
+      );
+      const service = new ProductNormalizationService(
+        createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+      );
+
+      const result = await service.normalizeSemanticProduct(testCase.input);
+
+      expect(result).toMatchObject({
+        context: testCase.input.context,
+        source: testCase.input.source,
+        normalizationStatus: 'CANDIDATE',
+        schemaValid: true,
+        candidate: testCase.candidate,
+      });
+    },
+  );
+
+  it('aceita todos os atributos semanticos como null', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        usaEnrichmentResponse({
+          manufacturerCandidate: null,
+          categoryCandidate: null,
+          familyCandidate: null,
+          modelCandidate: null,
+          storageCandidate: null,
+          ramCandidate: null,
+          chipCandidate: null,
+          screenCandidate: null,
+          colorCandidate: null,
+          connectivityCandidate: null,
+          conditionCandidate: null,
+          quantityCandidate: null,
+          featureCandidates: [],
+          connectorCandidate: null,
+          powerCandidate: null,
+          lengthCandidate: null,
+        }),
+      ),
+    );
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const result = await service.normalizeSemanticProduct(semanticInput());
+
+    expect(result).toMatchObject({ normalizationStatus: 'CANDIDATE', schemaValid: true });
+    expect(result.candidate).toEqual({
+      manufacturerCandidate: null,
+      categoryCandidate: null,
+      familyCandidate: null,
+      modelCandidate: null,
+      storageCandidate: null,
+      ramCandidate: null,
+      chipCandidate: null,
+      screenCandidate: null,
+      colorCandidate: null,
+      connectivityCandidate: null,
+      conditionCandidate: null,
+      quantityCandidate: null,
+      featureCandidates: [],
+      connectorCandidate: null,
+      powerCandidate: null,
+      lengthCandidate: null,
+    });
+  });
+
+  it.each([
+    ['campo inesperado', { profit: 500 }],
+    ['tipo invalido', { storageCandidate: 512 }],
+  ])('rejeita output semantico com %s', async (_label, invalidCandidate) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(usaEnrichmentResponse(invalidCandidate)));
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const result = await service.normalizeSemanticProduct(semanticInput());
+
+    expect(result).toMatchObject({
+      normalizationStatus: 'INVALID_STRUCTURED_OUTPUT',
+      schemaValid: false,
+      candidate: null,
+    });
+  });
+
+  it('rejeita JSON semantico invalido', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: vi.fn().mockResolvedValue({ output_text: '{invalid', usage: {} }),
+      }),
+    );
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const result = await service.normalizeSemanticProduct(semanticInput());
+
+    expect(result.normalizationStatus).toBe('INVALID_STRUCTURED_OUTPUT');
+  });
+
+  it('envia somente evidencia de produto e proibe conhecimento externo e campos financeiros', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+    const source = {
+      ...semanticInput(),
+      priceUsd: 999,
+      retailer: 'Forbidden retailer context',
+      structuredFields: {
+        ...semanticInput().structuredFields,
+        profit: 500,
+        shippingWeight: 2,
+      },
+    } as ProductSemanticNormalizationInput;
+
+    await service.normalizeSemanticProduct(source);
+
+    const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(options.body));
+    const systemPrompt = body.input[0].content[0].text as string;
+    const requestText = body.input[1].content[0].text as string;
+    expect(body.text.format).toMatchObject({
+      type: 'json_schema',
+      name: 'product_semantic_normalization_candidate',
+      strict: true,
+      schema: { additionalProperties: false },
+    });
+    expect(systemPrompt).toContain('Never complete missing facts from world knowledge');
+    expect(systemPrompt).toContain('Missing or non-applicable evidence means null');
+    expect(systemPrompt).toContain('Do not validate whether a model');
+    expect(systemPrompt).toContain('Do not return or infer price');
+    expect(requestText).toContain('Sony Alpha a7 IV Camera Body Black');
+    expect(requestText).toContain('Mirrorless camera body, black finish');
+    expect(requestText).not.toContain('999');
+    expect(requestText).not.toContain('Forbidden retailer context');
+    expect(requestText).not.toContain('profit');
+    expect(requestText).not.toContain('shippingWeight');
+  });
+
+  it.each([
+    ['TIMEOUT', Object.assign(new Error('aborted'), { name: 'AbortError' }), 'timeout'],
+    ['MODEL_ERROR', new Error('network failure'), 'model_error'],
+  ])('preserva falha semantica compartilhada como %s', async (status, error, errorCode) => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(error));
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const result = await service.normalizeSemanticProduct(semanticInput());
+
+    expect(result).toMatchObject({
+      normalizationStatus: status,
+      schemaValid: false,
+      candidate: null,
+      lunaCalled: true,
+      errorCode,
+    });
+  });
+
+  it('compartilha o circuit breaker existente', async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error('network failure'));
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const results = [];
+    for (let index = 0; index < 6; index += 1) {
+      results.push(await service.normalizeSemanticProduct(semanticInput()));
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(results[5]).toMatchObject({
+      normalizationStatus: 'MODEL_ERROR',
+      lunaCalled: false,
+      errorCode: 'circuit_open',
+    });
+  });
+
+  it('compartilha o budget existente', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({
+        'app.aiPricingNormalizationEnabled': true,
+        'app.aiRecoveryDailyBudgetUsd': 0,
+      }) as never,
+    );
+
+    const result = await service.normalizeSemanticProduct(semanticInput());
+
+    expect(result).toMatchObject({
+      normalizationStatus: 'BUDGET_EXHAUSTED',
+      lunaCalled: false,
+      errorCode: 'budget_exhausted',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
