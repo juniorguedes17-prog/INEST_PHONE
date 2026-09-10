@@ -15,6 +15,7 @@ export interface ImportProduct {
   model?: string;
   capacity?: string;
   color?: string;
+  sourceEvidence?: string;
   city?: string;
   priceBrlSource?: number;
   availability?: string;

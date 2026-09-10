@@ -19,7 +19,8 @@ import { MockImportProvider } from '../providers/mock-import.provider';
 import { processParsedSupplierItemsShadow } from '../../evolution-webhook/product-identity-shadow';
 import {
   ProductNormalizationService,
-  type ProductNormalizationInput,
+  type ProductSemanticNormalizationCandidate,
+  type ProductSemanticNormalizationStatus,
 } from '../../evolution-webhook/product-normalization.service';
 import { normalizeProductCondition, type ImportProductCondition } from '../condition-normalizer';
 import {
@@ -93,6 +94,8 @@ export class ImportRadarService {
   }
 
   async calculate(dto: CalculateImportCostDto, user: AuthenticatedUser) {
+    const semanticNormalization = await this.normalizeParaguayProduct(dto);
+    const semanticDto = semanticNormalization.product;
     const settings = await this.settingsService.getSettings();
     const importSettings = settings.importation;
     const convertedPriceRaw = dto.priceUsd * importSettings.dollarQuote;
@@ -110,50 +113,55 @@ export class ImportRadarService {
     );
 
     const catalog = await this.repository.listActiveCatalogProducts();
-    const { productResolution, hasRecoverableIdentityGap } = this.analyzeCatalogProduct(
-      dto,
-      catalog,
-    );
+    const { productResolution } = semanticNormalization.accepted
+      ? this.analyzeCatalogProduct(semanticDto, catalog, semanticNormalization.identityText)
+      : {
+          productResolution: {
+            status: 'MISSING' as const,
+            reason: 'catalog_no_match' as const,
+            candidateCount: 0,
+          },
+        };
     const catalogProduct =
       productResolution.status === 'FOUND'
         ? (catalog.find((product) => product.id === productResolution.productId) ?? null)
         : null;
-    const sourceCondition = normalizeProductCondition(dto.condition ?? dto.name);
+    const sourceCondition = normalizeProductCondition(semanticDto.condition ?? '');
     const condition =
       this.toStructuredCondition(catalogProduct?.profitCondition) ??
       (sourceCondition.status === 'RESOLVED' ? sourceCondition.condition : null);
     const manufacturerResolution = await this.resolveExplicitSourceManufacturer(
-      dto.sourceManufacturer,
-      dto.sourceManufacturerProvenance,
+      semanticDto.sourceManufacturer,
+      semanticDto.sourceManufacturerProvenance,
     );
     const financialClassification = resolveFinancialClassification({
       canonicalProduct: catalogProduct,
-      productName: dto.name,
-      category: dto.category,
-      model: dto.model,
-      capacity: dto.capacity,
-      color: dto.color,
+      productName: semanticNormalization.identityText,
+      category: semanticDto.category,
+      model: semanticDto.model,
+      capacity: semanticDto.capacity,
+      color: semanticDto.color,
       condition,
-      sourceManufacturer: dto.sourceManufacturer,
-      sourceManufacturerProvenance: dto.sourceManufacturerProvenance,
+      sourceManufacturer: semanticDto.sourceManufacturer,
+      sourceManufacturerProvenance: semanticDto.sourceManufacturerProvenance,
       manufacturerResolution,
     });
     const result = {
-      product: dto,
+      product: semanticDto,
       sourceCommercialIdentity: {
         sourceProductId: dto.id,
         sourceName: dto.name,
         displayName: formatSourceDisplayName({
           sourceName: dto.name,
-          sourceManufacturer: dto.sourceManufacturer,
-          model: dto.model,
-          capacity: dto.capacity,
+          sourceManufacturer: semanticDto.sourceManufacturer,
+          model: semanticDto.model,
+          capacity: semanticDto.capacity,
         }),
         source: dto.origin ?? 'PY',
         sourceUrl: dto.productUrl,
         supplier: dto.store,
-        sourceManufacturer: dto.sourceManufacturer ?? null,
-        sourceManufacturerProvenance: dto.sourceManufacturerProvenance ?? null,
+        sourceManufacturer: semanticDto.sourceManufacturer ?? null,
+        sourceManufacturerProvenance: semanticDto.sourceManufacturerProvenance ?? null,
       },
       productResolution,
       catalogProductId:
@@ -163,12 +171,15 @@ export class ImportRadarService {
       financialClassificationReason: financialClassification.reason,
       manufacturerKey: financialClassification.manufacturerKey ?? null,
       manufacturerProvenance: financialClassification.provenance ?? null,
-      pricingEligibility: this.resolvePricingEligibility({
-        dto,
-        catalogProduct,
-        condition,
-        financialClassification,
-      }),
+      pricingEligibility: semanticNormalization.accepted
+        ? this.resolvePricingEligibility({
+            dto: semanticDto,
+            identityText: semanticNormalization.identityText,
+            catalogProduct,
+            condition,
+            financialClassification,
+          })
+        : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const),
       matchedProductType: redirectRule?.productType ?? 'Nao identificado',
       dollarQuote: importSettings.dollarQuote,
       breakdown: {
@@ -193,12 +204,11 @@ export class ImportRadarService {
         dollarQuote: importSettings.dollarQuote,
         productResolutionStatus: productResolution.status,
         productResolutionReason: productResolution.reason ?? null,
+        semanticNormalizationStatus: semanticNormalization.status,
+        semanticNormalizationAccepted: semanticNormalization.accepted,
+        semanticNormalizationErrorCode: semanticNormalization.errorCode,
       },
     });
-
-    if (hasRecoverableIdentityGap) {
-      this.observeParaguayPricingNormalization(dto, catalog);
-    }
 
     return result;
   }
@@ -286,8 +296,9 @@ export class ImportRadarService {
   private analyzeCatalogProduct(
     dto: CalculateImportCostDto,
     catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
+    identityText = dto.name,
   ) {
-    const conditionResolution = normalizeProductCondition(dto.condition ?? dto.name);
+    const conditionResolution = normalizeProductCondition(dto.condition ?? identityText);
     if (conditionResolution.status !== 'RESOLVED') {
       return {
         productResolution: {
@@ -303,6 +314,7 @@ export class ImportRadarService {
       dto,
       catalog,
       conditionResolution.condition,
+      identityText,
     );
     if (resolution.reason === 'identity_insufficient') {
       return {
@@ -324,12 +336,13 @@ export class ImportRadarService {
     dto: CalculateImportCostDto,
     catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
     condition: ImportProductCondition,
+    identityText = dto.name,
   ) {
     return processParsedSupplierItemsShadow(
       [
         {
-          productName: dto.name,
-          normalizedName: dto.name.toLowerCase(),
+          productName: identityText,
+          normalizedName: identityText.toLowerCase(),
           category: dto.category || null,
           model: dto.model ?? null,
           capacity: dto.capacity ?? null,
@@ -375,11 +388,13 @@ export class ImportRadarService {
 
   private resolvePricingEligibility({
     dto,
+    identityText,
     catalogProduct,
     condition,
     financialClassification,
   }: {
     dto: CalculateImportCostDto;
+    identityText: string;
     catalogProduct:
       Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>[number] | null;
     condition: ImportProductCondition | null;
@@ -405,7 +420,7 @@ export class ImportRadarService {
     }
 
     const identity = deriveProfitLookupIdentity({
-      productName: dto.name,
+      productName: identityText,
       category: dto.category,
       model: dto.model,
       capacity: dto.capacity,
@@ -421,48 +436,219 @@ export class ImportRadarService {
     return { status: 'ELIGIBLE' as const, reason: null };
   }
 
-  private observeParaguayPricingNormalization(
+  private async normalizeParaguayProduct(
     dto: CalculateImportCostDto,
-    catalog: Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>,
-  ) {
-    if (!this.productNormalization?.isPricingNormalizationEnabled()) return;
+  ): Promise<ParaguaySemanticNormalization> {
+    if (!this.productNormalization) {
+      return failedParaguayNormalization(dto, 'MODEL_ERROR', 'normalizer_unavailable');
+    }
 
-    void this.productNormalization
-      .normalize(this.buildParaguayPricingNormalizationInput(dto), catalog)
-      .catch((error) => {
-        this.logger.warn({
-          event: 'pricing.ai_normalization.shadow',
-          context: 'NORMALIZE_PRICING_PY',
-          source: 'PY',
-          sourceProductId: dto.id,
-          normalizationStatus: 'MODEL_ERROR',
-          errorCode: error instanceof Error ? error.name : 'unknown_error',
-        });
+    try {
+      const result = await this.productNormalization.normalizeSemanticProduct({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceName: dto.name,
+        sourceEvidence: dto.sourceEvidence ?? dto.name,
+        structuredFields: {
+          manufacturer: dto.sourceManufacturer ?? dto.brand ?? null,
+          category: dto.category,
+          model: dto.model ?? null,
+          storage: dto.capacity ?? null,
+          color: dto.color ?? null,
+          condition: dto.condition ?? null,
+        },
       });
+      return adaptParaguaySemanticCandidate(
+        dto,
+        result.normalizationStatus,
+        result.candidate,
+        result.errorCode ?? null,
+      );
+    } catch (error) {
+      this.logger.warn({
+        event: 'pricing.ai_normalization.primary',
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceProductId: dto.id,
+        normalizationStatus: 'MODEL_ERROR',
+        errorCode: error instanceof Error ? error.name : 'unknown_error',
+      });
+      return failedParaguayNormalization(
+        dto,
+        'MODEL_ERROR',
+        error instanceof Error ? error.name : 'unknown_error',
+      );
+    }
+  }
+}
+
+type ParaguaySemanticNormalization = {
+  product: CalculateImportCostDto;
+  identityText: string;
+  status: ProductSemanticNormalizationStatus;
+  accepted: boolean;
+  errorCode: string | null;
+};
+
+function adaptParaguaySemanticCandidate(
+  dto: CalculateImportCostDto,
+  status: ProductSemanticNormalizationStatus,
+  candidate: ProductSemanticNormalizationCandidate | null,
+  normalizationErrorCode: string | null,
+): ParaguaySemanticNormalization {
+  if (status !== 'CANDIDATE' || !candidate) {
+    return failedParaguayNormalization(
+      dto,
+      status,
+      normalizationErrorCode ?? 'semantic_candidate_unavailable',
+    );
   }
 
-  private buildParaguayPricingNormalizationInput(
-    dto: CalculateImportCostDto,
-  ): ProductNormalizationInput {
-    return {
-      context: 'NORMALIZE_PRICING_PY',
-      source: 'PY',
-      originalReason: 'identity_insufficient',
-      sourceText: dto.name,
-      productName: dto.name,
-      category: dto.category,
-      model: dto.model ?? null,
-      capacity: dto.capacity ?? null,
-      color: dto.color ?? null,
-      condition: null,
-      rawLine: dto.name,
-      previousLines: [],
-      nextLines: [],
-      activeProductHeading: dto.name,
-      activeCategory: dto.category,
-      activeCondition: null,
-      qualityGrade: null,
-      detectedPrice: dto.priceUsd,
-    };
+  const evidence = [
+    dto.name,
+    dto.sourceEvidence,
+    dto.sourceManufacturer,
+    dto.brand,
+    dto.category,
+    dto.model,
+    dto.capacity,
+    dto.color,
+    dto.condition,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(' ');
+  const grounded = (value: string | null) =>
+    value && candidateIsSourceGrounded(value, evidence) ? value.trim() : null;
+
+  const manufacturer = grounded(candidate.manufacturerCandidate);
+  const condition = grounded(candidate.conditionCandidate);
+  const explicitManufacturerConflict = Boolean(
+    dto.sourceManufacturerProvenance === 'EXPLICIT_SOURCE' &&
+    dto.sourceManufacturer?.trim() &&
+    candidate.manufacturerCandidate?.trim() &&
+    !sameMechanicalValue(dto.sourceManufacturer, candidate.manufacturerCandidate),
+  );
+  const explicitConditionConflict = Boolean(
+    dto.condition && candidate.conditionCandidate && dto.condition !== candidate.conditionCandidate,
+  );
+  if (explicitManufacturerConflict || explicitConditionConflict) {
+    return failedParaguayNormalization(dto, status, 'explicit_source_conflict');
   }
+
+  const category = grounded(candidate.categoryCandidate);
+  const model = composeStructuredModel(
+    grounded(candidate.modelCandidate),
+    grounded(candidate.chipCandidate),
+    grounded(candidate.screenCandidate),
+    grounded(candidate.ramCandidate),
+  );
+  const candidateHasIdentity = Boolean(
+    candidate.manufacturerCandidate ||
+    candidate.categoryCandidate ||
+    candidate.familyCandidate ||
+    candidate.modelCandidate,
+  );
+  if (candidateHasIdentity && !manufacturer && !category && !model) {
+    return failedParaguayNormalization(dto, status, 'grounding_insufficient');
+  }
+  const product: CalculateImportCostDto = {
+    ...dto,
+    brand: manufacturer ?? undefined,
+    category: category ?? '',
+    model: model ?? undefined,
+    capacity: grounded(candidate.storageCandidate) ?? undefined,
+    color: grounded(candidate.colorCandidate) ?? undefined,
+    condition: (condition ?? dto.condition) as ImportProductCondition | undefined,
+  };
+  const identityText = [
+    product.model,
+    product.capacity,
+    product.color,
+    product.condition,
+    product.brand,
+    product.category,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(' ');
+
+  return { product, identityText, status, accepted: true, errorCode: null };
+}
+
+function failedParaguayNormalization(
+  dto: CalculateImportCostDto,
+  status: ProductSemanticNormalizationStatus,
+  errorCode: string,
+): ParaguaySemanticNormalization {
+  return {
+    product: {
+      ...dto,
+      brand: undefined,
+      category: '',
+      model: undefined,
+      capacity: undefined,
+      color: undefined,
+      condition: dto.condition,
+    },
+    identityText: '',
+    status,
+    accepted: false,
+    errorCode,
+  };
+}
+
+function composeStructuredModel(
+  model: string | null,
+  chip: string | null,
+  screen: string | null,
+  ram: string | null,
+) {
+  if (!model) return null;
+  return [model, chip, screen, ram]
+    .filter((value): value is string => Boolean(value))
+    .reduce<string[]>((parts, value) => {
+      if (!candidateIsSourceGrounded(value, parts.join(' '))) parts.push(value);
+      return parts;
+    }, [])
+    .join(' ');
+}
+
+function candidateIsSourceGrounded(candidate: string, evidence: string) {
+  const candidateTokens = mechanicalTokens(candidate);
+  const evidenceTokens = mechanicalTokens(evidence);
+  if (!candidateTokens.length || !evidenceTokens.length) return false;
+  return candidateTokens.every((candidateToken) =>
+    evidenceTokens.some(
+      (evidenceToken) =>
+        candidateToken === evidenceToken ||
+        numericUnitEquivalent(candidateToken, evidenceToken) ||
+        (Math.min(candidateToken.length, evidenceToken.length) >= 3 &&
+          (candidateToken.startsWith(evidenceToken) || evidenceToken.startsWith(candidateToken))),
+    ),
+  );
+}
+
+function numericUnitEquivalent(left: string, right: string) {
+  const leftMatch = left.match(/^(\d+)(?:gb|tb|mm|cm)?$/);
+  const rightMatch = right.match(/^(\d+)(?:gb|tb|mm|cm)?$/);
+  return Boolean(leftMatch?.[1] && leftMatch[1] === rightMatch?.[1]);
+}
+
+function sameMechanicalValue(left: string, right: string) {
+  const leftTokens = mechanicalTokens(left);
+  const rightTokens = mechanicalTokens(right);
+  return (
+    leftTokens.join(' ') === rightTokens.join(' ') ||
+    leftTokens.every((token) => rightTokens.includes(token)) ||
+    rightTokens.every((token) => leftTokens.includes(token))
+  );
+}
+
+function mechanicalTokens(value: string): string[] {
+  return (
+    value
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .match(/[a-z]+\d*|\d+[a-z]*/g) ?? []
+  );
 }

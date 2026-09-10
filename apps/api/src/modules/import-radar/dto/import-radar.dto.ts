@@ -85,6 +85,11 @@ export class ImportProductDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  sourceEvidence?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   city?: string;
 
   @ApiPropertyOptional()

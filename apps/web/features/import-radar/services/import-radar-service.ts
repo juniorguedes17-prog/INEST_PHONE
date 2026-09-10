@@ -25,6 +25,7 @@ function toCalculateImportCostPayload(product: ImportProduct): CalculateImportCo
     model: product.model,
     capacity: product.capacity,
     color: product.color,
+    sourceEvidence: product.sourceEvidence,
     city: product.city,
     priceBrlSource: product.priceBrlSource,
     availability: product.availability,
