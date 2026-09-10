@@ -63,6 +63,7 @@ function setup() {
   const exports: {
     ParaguayRadarOrigin?: () => Element;
     CalculationModal?: (props: Props) => Element;
+    buildTemporaryPricingRequest?: (calculation: Props) => Props;
   } = {};
   const jsx = (type: Element['type'], props: Props) => ({ type, props });
 
@@ -167,6 +168,7 @@ function setup() {
     nodes,
     call,
     CalculationModal: exports.CalculationModal,
+    buildTemporaryPricingRequest: exports.buildTemporaryPricingRequest,
     releaseSearch: () => releaseSearch?.(),
   };
 }
@@ -202,6 +204,43 @@ test('replaces only the PY toolbar cost action with the existing search flow', a
   await h.call('ParaguayProductCard', 'onCalculate');
   assert.equal(h.services.calculateImportCost.mock.callCount(), 1);
   assert.ok(h.nodes('CalculationModal')[0]?.props.calculation);
+});
+
+test('does not disguise a missing PY structured model as the commercial product name', () => {
+  const buildRequest = setup().buildTemporaryPricingRequest;
+  assert.ok(buildRequest);
+  const calculation = {
+    product: { ...product, model: undefined },
+    catalogProductId: null,
+    sourceCommercialIdentity: {
+      displayName: 'Nome apenas para apresentacao',
+      sourceManufacturer: 'Apple',
+      sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+    },
+    dollarQuote: 5,
+    breakdown: {
+      convertedPrice: 4995,
+      cdeExit: 0,
+      redirectCost: 0,
+      brazilDispatch: 0,
+      invoiceTax: 0,
+      correiosLabel: 0,
+    },
+    total: 4995,
+    condition: 'NOVO',
+    matchedProductType: 'Celular',
+  };
+
+  const withoutModel = buildRequest(calculation);
+  const withModel = buildRequest({
+    ...calculation,
+    product: { ...product, model: 'iPhone 17 Pro' },
+  });
+
+  assert.equal(withoutModel.model, undefined);
+  assert.equal(withModel.model, 'iPhone 17 Pro');
+  assert.equal(withoutModel.productName, product.name);
+  assert.equal(withoutModel.displayName, 'Nome apenas para apresentacao');
 });
 
 test('renders Red Delaware breakdown labels without changing its values', () => {

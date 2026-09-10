@@ -372,6 +372,12 @@ describe('Pricing canonical originality routing', () => {
     });
 
     const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+    const structured = await fixture.service.calculateTemporaryImport({
+      ...fixture.dto,
+      productName: 'texto comercial Canon alternativo',
+      displayName: 'apresentacao Canon independente',
+      model: 'Canon EOS Rebel T7 24.1MP',
+    });
 
     expect(result).toMatchObject({
       financialClassification: 'NON_APPLE',
@@ -379,6 +385,23 @@ describe('Pricing canonical originality routing', () => {
       calculationStatus: 'ready',
       engineMetadata: { acquisitionCost: 2677.07 },
       offerDraft: { payload: { productId: null, sourceQuoteId: 'temporary-py-external-py-id' } },
+    });
+    expect({
+      financialClassification: structured.financialClassification,
+      calculationStatus: structured.calculationStatus,
+      desiredNetProfit: structured.desiredNetProfit,
+      salePrice: structured.salePrice,
+      offerPrice: structured.offerPrice,
+      importCosts: structured.importCosts,
+      engineMetadata: structured.engineMetadata,
+    }).toEqual({
+      financialClassification: result.financialClassification,
+      calculationStatus: result.calculationStatus,
+      desiredNetProfit: result.desiredNetProfit,
+      salePrice: result.salePrice,
+      offerPrice: result.offerPrice,
+      importCosts: result.importCosts,
+      engineMetadata: result.engineMetadata,
     });
   });
 

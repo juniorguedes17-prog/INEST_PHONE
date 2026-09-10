@@ -1,7 +1,9 @@
 import { Logger } from '@nestjs/common';
+import { deriveProfitLookupIdentity } from '@inest/product-identity';
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsService } from '../../settings/service/settings.service';
 import { ProductNormalizationService } from '../../evolution-webhook/product-normalization.service';
+import { TemporaryImportPricingDto } from '../dto/pricing.dto';
 import { PricingBrazilRadarQuoteRecord } from '../interfaces/pricing-prisma.interface';
 import { ProfitSheetCatalog } from '../interfaces/profit-sheet.interface';
 import { ProductProfitProvider } from '../providers/product-profit.provider';
@@ -52,6 +54,53 @@ function pricingSettings() {
       defaultPaymentFee: 100,
     },
   };
+}
+
+function temporaryPyPricingDto(
+  overrides: Partial<TemporaryImportPricingDto> = {},
+): TemporaryImportPricingDto {
+  return {
+    origin: 'PY',
+    sourceProductId: 'structured-py-item',
+    productName: 'legacy source product',
+    displayName: 'legacy display product',
+    category: 'iPhone',
+    supplier: 'Fornecedor PY',
+    store: 'Loja PY',
+    productUrl: 'https://example.com/py-product',
+    priceUsd: 1000,
+    dollarQuote: 5,
+    convertedPrice: 5000,
+    cdeExit: 0,
+    redirectCost: 0,
+    brazilDispatch: 0,
+    invoiceTax: 0,
+    correiosLabel: 0,
+    totalCost: 5000,
+    condition: 'NOVO',
+    ...overrides,
+  };
+}
+
+function createTemporaryPyPricingService(records: ProfitSheetCatalog['records']) {
+  const repository = {
+    findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+    listPricingConfigurations: vi
+      .fn()
+      .mockResolvedValue([{ key: 'pricing.offer_increment', value: '100', type: 'currency' }]),
+  };
+  const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+  const profitProvider = {
+    getCatalog: vi.fn().mockResolvedValue({
+      records,
+      fetchedAt: '2026-09-09T12:00:00.000Z',
+    }),
+  };
+  return new PricingService(
+    repository as unknown as PricingRepository,
+    settingsService as unknown as SettingsService,
+    profitProvider as unknown as ProductProfitProvider,
+  );
 }
 
 describe('PricingService native product profit integration', () => {
@@ -508,6 +557,159 @@ describe('PricingService native product profit integration', () => {
         condition: 'NOVO',
       }),
     ).rejects.toThrow('Produto canonico ativo nao encontrado');
+  });
+
+  it.each([
+    {
+      caseName: 'MacBook Air PY',
+      category: 'MacBook',
+      model: 'MacBook Air M5 13" 16GB',
+      capacity: '512GB',
+      sourceName: 'MAC AIR M5 13 16/512 MID',
+      legacyDescription: 'MacBook Air M5 13 16/512GB',
+      profitRecordId: 'macbook-air-m5',
+      netProfit: 1000,
+      salePrice: 6370,
+      offerPrice: 6470,
+    },
+    {
+      caseName: 'MacBook Pro PY',
+      category: 'MacBook',
+      model: 'MacBook Pro M5 14" 16GB',
+      capacity: '512GB',
+      sourceName: 'MAC PRO M5 14 16/512 SPACE BLACK',
+      legacyDescription: 'MacBook Pro M5 14 16/512GB',
+      profitRecordId: 'macbook-pro-m5',
+      netProfit: 1300,
+      salePrice: 6670,
+      offerPrice: 6770,
+    },
+    {
+      caseName: 'iPhone PY',
+      category: 'iPhone',
+      model: 'iPhone 17 Pro Max',
+      capacity: '256GB',
+      sourceName: 'IPH 17 PRO MAX 256 NAT',
+      legacyDescription: 'iPhone 17 Pro Max 256GB',
+      profitRecordId: 'iphone-17-pro-max',
+      netProfit: 690,
+      salePrice: 6049,
+      offerPrice: 6149,
+    },
+  ])(
+    'uses structured identity for $caseName independently of commercial text',
+    async ({
+      category,
+      model,
+      capacity,
+      sourceName,
+      legacyDescription,
+      profitRecordId,
+      netProfit,
+      salePrice,
+      offerPrice,
+    }) => {
+      const service = createTemporaryPyPricingService([
+        {
+          productId: profitRecordId,
+          condition: 'NOVO',
+          productDescription: legacyDescription,
+          normalizedDescription: legacyDescription.toLowerCase(),
+          netProfit,
+        },
+      ]);
+      const legacy = await service.calculateTemporaryImport(
+        temporaryPyPricingDto({
+          productName: legacyDescription,
+          displayName: legacyDescription,
+          category,
+          model: undefined,
+          capacity: undefined,
+        }),
+      );
+      const structuredA = await service.calculateTemporaryImport(
+        temporaryPyPricingDto({
+          productName: sourceName,
+          displayName: sourceName,
+          category,
+          model,
+          capacity,
+        }),
+      );
+      const structuredB = await service.calculateTemporaryImport(
+        temporaryPyPricingDto({
+          productName: 'texto comercial completamente diferente B',
+          displayName: 'apresentacao arbitraria B',
+          category,
+          model,
+          capacity,
+        }),
+      );
+
+      const financialProjection = (result: typeof legacy) => {
+        const profitIdentity = deriveProfitLookupIdentity({
+          productDescription: result.profit.productDescription,
+          quality: result.profit.condition,
+        });
+        return {
+          financialClassification: result.financialClassification,
+          financialClassificationReason: result.financialClassificationReason,
+          profitIdentityStatus: profitIdentity.status,
+          profitIdentityKey: profitIdentity.key,
+          calculationStatus: result.calculationStatus,
+          desiredNetProfit: result.desiredNetProfit,
+          salePrice: result.salePrice,
+          offerPrice: result.offerPrice,
+          profitRecordId: result.profit.recordId,
+        };
+      };
+
+      expect(financialProjection(structuredA)).toEqual(financialProjection(legacy));
+      expect(financialProjection(structuredB)).toEqual(financialProjection(legacy));
+      expect(structuredA).toMatchObject({
+        financialClassification: 'APPLE',
+        calculationStatus: 'ready',
+        desiredNetProfit: netProfit,
+        salePrice,
+        offerPrice,
+        profit: {
+          productDescription: `${model} ${capacity}`,
+          recordId: profitRecordId,
+        },
+      });
+      expect(structuredB.profit).toEqual(structuredA.profit);
+    },
+  );
+
+  it('preserves the legacy PY description fallback when structured model is absent', async () => {
+    const service = createTemporaryPyPricingService([
+      {
+        productId: 'legacy-iphone',
+        condition: 'NOVO',
+        productDescription: 'iPhone 17 Pro Max 256GB',
+        normalizedDescription: 'iphone 17 pro max 256gb',
+        netProfit: 690,
+      },
+    ]);
+
+    const result = await service.calculateTemporaryImport(
+      temporaryPyPricingDto({
+        productName: 'iPhone 17 Pro Max 256GB texto legado',
+        displayName: 'iPhone 17 Pro Max 256GB',
+        model: undefined,
+        capacity: undefined,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      calculationStatus: 'ready',
+      desiredNetProfit: 690,
+      salePrice: 6049,
+      profit: {
+        productDescription: 'iPhone 17 Pro Max 256GB',
+        recordId: 'legacy-iphone',
+      },
+    });
   });
 
   it.each([

@@ -490,15 +490,16 @@ export class PricingService {
       dto,
       catalogProduct?.profitCondition,
     );
+    const structuredProfitDescription = dto.model?.trim()
+      ? dto.capacity?.trim() &&
+        !normalizeProfitProductDescription(dto.model).includes(
+          normalizeProfitProductDescription(dto.capacity),
+        )
+        ? `${dto.model.trim()} ${dto.capacity.trim()}`
+        : dto.model.trim()
+      : null;
     const sourceProfitDescription =
-      origin === 'US' && dto.model?.trim()
-        ? dto.capacity?.trim() &&
-          !normalizeProfitProductDescription(dto.model).includes(
-            normalizeProfitProductDescription(dto.capacity),
-          )
-          ? `${dto.model.trim()} ${dto.capacity.trim()}`
-          : dto.model.trim()
-        : dto.displayName?.trim() || dto.productName.trim();
+      structuredProfitDescription ?? (dto.displayName?.trim() || dto.productName.trim());
     const profitProductDescription =
       catalogProduct?.productDescription?.trim() || sourceProfitDescription;
     const manufacturerResolution = await this.resolveExplicitSourceManufacturer(

@@ -833,7 +833,7 @@ export function CalculationModal({
   );
 }
 
-function buildTemporaryPricingRequest(
+export function buildTemporaryPricingRequest(
   calculation: ImportCalculation,
 ): TemporaryImportPricingRequest {
   const product = calculation.product;
@@ -860,7 +860,7 @@ function buildTemporaryPricingRequest(
     sourceManufacturer: calculation.sourceCommercialIdentity.sourceManufacturer,
     sourceManufacturerProvenance:
       calculation.sourceCommercialIdentity.sourceManufacturerProvenance ?? undefined,
-    model: product.model || product.name,
+    model: product.model,
     capacity: product.capacity,
     color: product.color,
     condition: calculation.condition ?? undefined,
