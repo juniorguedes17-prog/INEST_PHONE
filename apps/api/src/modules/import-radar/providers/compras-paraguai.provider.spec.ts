@@ -91,6 +91,57 @@ describe('ComprasParaguaiProvider parsers', () => {
     });
   });
 
+  it.each([
+    {
+      name: 'prioriza title de imagem sem texto explicito',
+      image:
+        '<img class="lozad" src="/Static/Images/Loading-Images.Svg" data-src="https://example.com/iphone.webp" alt="iPhone 15 128gb Pink Swap A+" title="iPhone 15 128gb Pink Swap A+" />',
+      expected: 'iPhone 15 128gb Pink Swap A+',
+    },
+    {
+      name: 'usa alt quando title esta ausente',
+      image: '<img class="lozad" alt="iPhone 15 128gb Pink Swap A+" />',
+      expected: 'iPhone 15 128gb Pink Swap A+',
+    },
+    {
+      name: 'usa title quando alt esta ausente',
+      image: '<img class="lozad" title="iPhone 15 128gb Pink Swap A+" />',
+      expected: 'iPhone 15 128gb Pink Swap A+',
+    },
+    {
+      name: 'decodifica entidades HTML no atributo',
+      image: '<img class="lozad" title="iPhone 15&nbsp;128gb Pink &amp; Swap A+" />',
+      expected: 'iPhone 15 128gb Pink & Swap A+',
+    },
+  ])('$name', ({ image, expected }) => {
+    const [product] = parseSearchResults(
+      `
+        <article class="promocao-produtos-item">
+          <a class="promocao-item-nome" href="/iphone-15__150/">${image}</a>
+          <div class="price-model">US$ 500,00</div>
+        </article>
+      `,
+      '2026-09-10T00:00:00.000Z',
+    );
+
+    expect(product?.name).toBe(expected);
+    expect(product?.name).not.toContain('<img');
+  });
+
+  it('prioriza texto explicito e nunca usa markup como fallback de nome', () => {
+    const [product] = parseSearchResults(
+      `
+        <article class="promocao-produtos-item">
+          <a class="promocao-item-nome" href="/iphone-15__151/">iPhone 15 128gb Pink Swap A+<img class="lozad" /></a>
+          <div class="price-model">US$ 500,00</div>
+        </article>
+      `,
+      '2026-09-10T00:00:00.000Z',
+    );
+
+    expect(product?.name).toBe('iPhone 15 128gb Pink Swap A+');
+  });
+
   it('preserva condition explicita da descricao para o calculo', () => {
     const [product] = parseSearchResults(
       searchFixture.replace('Natural', 'CPO Natural'),
@@ -110,6 +161,21 @@ describe('ComprasParaguaiProvider parsers', () => {
       productUrl:
         'https://www.comprasparaguai.com.br/apple-macbook-air-m5-16gb-512gb-silver-new__5512689/',
       condition: 'NOVO',
+    });
+  });
+
+  it('extrai title de imagem no detalhe e limpa markup auxiliar do fornecedor', () => {
+    const [offer] = parseProductOffers(`
+      <article class="promocao-produtos-item">
+        <a class="promocao-item-nome" href="/iphone-15__152/"><img class="lozad" title="iPhone 15 128gb Pink Swap A+" /></a>
+        <a class="promocao-item-loja" href="/loja/cellshop/">&nbsp;<i class="fa fa-external-link"></i> Cellshop</a>
+        <div class="promocao-item-preco">US$ 500,00</div>
+      </article>
+    `);
+
+    expect(offer).toMatchObject({
+      name: 'iPhone 15 128gb Pink Swap A+',
+      store: 'Cellshop',
     });
   });
 

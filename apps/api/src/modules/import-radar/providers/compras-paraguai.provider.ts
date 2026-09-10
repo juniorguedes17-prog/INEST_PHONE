@@ -166,12 +166,14 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
       findElementByClass(cardHtml, 'truncate', 'a') ??
       findAnchor(cardHtml, (href) => href.includes('_'));
     const href = link ? extractAttribute(link.openingTag, 'href') : undefined;
-    const name = cleanText(
-      link?.content ??
-        findElementByClass(cardHtml, 'promocao-item-nome')?.content ??
-        findElementByClass(cardHtml, 'truncate')?.content ??
-        '',
-    );
+    const nameElement =
+      link ??
+      findElementByClass(cardHtml, 'promocao-item-nome') ??
+      findElementByClass(cardHtml, 'truncate');
+    const image =
+      findFirstTag(cardHtml, 'img', (tag) => hasClass(tag, 'lozad')) ??
+      findFirstTag(cardHtml, 'img');
+    const name = extractProductName(nameElement, image);
     const priceModel = findElementByClass(cardHtml, 'price-model')?.content ?? '';
     const priceUsd = parseLocalizedMoney(stripHtml(priceModel));
     if (!href || !name || !priceUsd) {
@@ -185,10 +187,6 @@ export function parseSearchResults(html: string, consultedAt: string): ImportPro
     );
     const attributes = inferProductAttributes(name);
     const condition = normalizeProductCondition(name);
-    const image =
-      findFirstTag(cardHtml, 'img', (tag) => hasClass(tag, 'lozad')) ??
-      findFirstTag(cardHtml, 'img');
-
     products.push({
       id: externalId ? `py-${externalId}` : `py-${slugify(productUrl)}`,
       externalId,
@@ -234,7 +232,7 @@ export function parseProductOffers(html: string): ParsedOffer[] {
       findElementByClass(cardHtml, 'truncate', 'a') ??
       findAnchor(cardHtml, (href) => /__\d+\/?(?:\?|$)/.test(href));
     const offerHref = extractAttribute(offerLink?.openingTag ?? '', 'href');
-    const name = cleanText(offerLink?.content ?? '');
+    const name = extractProductName(offerLink, findFirstTag(cardHtml, 'img'));
     if (!offerHref || !name) {
       continue;
     }
@@ -259,7 +257,7 @@ export function parseProductOffers(html: string): ParsedOffer[] {
       findAnchor(cardHtml, (href) => href.includes('loja')) ??
       findElementByClass(cardHtml, 'promocao-item-loja') ??
       findElementByClass(cardHtml, 'loja-nome');
-    const store = cleanText(storeElement?.content ?? '');
+    const store = cleanText(stripHtml(storeElement?.content ?? ''));
     if (!store) {
       continue;
     }
@@ -428,6 +426,26 @@ function extractAttribute(tag: string, attribute: string): string | undefined {
   );
   const match = tag.match(pattern);
   return decodeHtmlEntities(match?.[1] ?? match?.[2] ?? match?.[3] ?? '') || undefined;
+}
+
+function extractProductName(element: HtmlElement | undefined, fallbackImage?: string): string {
+  const explicitText = cleanText(stripHtml(element?.content ?? ''));
+  if (explicitText) return explicitText;
+
+  const tags = [
+    element?.openingTag,
+    findFirstTag(element?.content ?? '', 'img'),
+    fallbackImage,
+  ].filter((tag): tag is string => Boolean(tag));
+  for (const tag of tags) {
+    const title = extractAttribute(tag, 'title');
+    if (title) return cleanText(title);
+  }
+  for (const tag of tags) {
+    const alt = extractAttribute(tag, 'alt');
+    if (alt) return cleanText(alt);
+  }
+  return '';
 }
 
 function stripHtml(value: string): string {
