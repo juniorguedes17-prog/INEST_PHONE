@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'node:crypto';
 import {
   processParsedSupplierItemsShadow,
   type ProductIdShadowCandidate,
@@ -15,6 +16,9 @@ const CIRCUIT_FAILURE_THRESHOLD = 5;
 const CIRCUIT_COOLDOWN_MS = 5 * 60 * 1_000;
 const INPUT_PRICE_PER_MILLION = 0.2;
 const OUTPUT_PRICE_PER_MILLION = 1.2;
+const SEMANTIC_NORMALIZATION_CACHE_TTL_MS = 10 * 60 * 1_000;
+const SEMANTIC_NORMALIZATION_CACHE_MAX_ENTRIES = 500;
+const SEMANTIC_NORMALIZATION_CONTRACT_VERSION = 'product-semantic-normalization-v1';
 
 const PRODUCT_NORMALIZATION_CONTEXTS = [
   'RECOVERY_BR',
@@ -224,6 +228,25 @@ type SemanticNormalizationExecutionResult = Omit<
   'context' | 'source'
 >;
 
+type SemanticNormalizationCacheEntry = {
+  expiresAt: number;
+  result: ProductSemanticNormalizationResult;
+};
+
+type SemanticNormalizationCacheTelemetry = {
+  cacheHit: boolean;
+  cacheMiss: boolean;
+  inFlightDedupHit: boolean;
+  fingerprint: string | null;
+};
+
+export interface ProductSemanticNormalizationFingerprintVersion {
+  model: string;
+  contractVersion: string;
+  promptVersion: string;
+  schemaVersion: string;
+}
+
 const NORMALIZATION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -335,6 +358,11 @@ export class ProductNormalizationService {
   private circuitOpenedAt = 0;
   private budgetDay = this.currentDay();
   private budgetSpentUsd = 0;
+  private readonly semanticNormalizationCache = new Map<string, SemanticNormalizationCacheEntry>();
+  private readonly semanticNormalizationInFlight = new Map<
+    string,
+    Promise<ProductSemanticNormalizationResult>
+  >();
 
   constructor(private readonly config: ConfigService) {}
 
@@ -409,33 +437,114 @@ export class ProductNormalizationService {
       (input.source === 'US' && input.context === 'NORMALIZE_PRICING_US') ||
       (input.source === 'PY' && input.context === 'NORMALIZE_PRICING_PY');
     if (!contextMatchesSource || !input.sourceName.trim()) {
-      return this.finishSemanticNormalization(input, {
-        context: input.context,
-        source: input.source,
-        normalizationStatus: 'SKIPPED_NOT_ELIGIBLE',
-        candidate: null,
-        schemaValid: false,
-        lunaCalled: false,
-        model: this.model(),
-        inputTokens: null,
-        outputTokens: null,
-        estimatedCostUsd: null,
-        latencyMs: null,
-        errorCode: contextMatchesSource ? 'missing_source_name' : 'source_context_mismatch',
+      return this.finishSemanticNormalization(
+        input,
+        {
+          context: input.context,
+          source: input.source,
+          normalizationStatus: 'SKIPPED_NOT_ELIGIBLE',
+          candidate: null,
+          schemaValid: false,
+          lunaCalled: false,
+          model: this.model(),
+          inputTokens: null,
+          outputTokens: null,
+          estimatedCostUsd: null,
+          latencyMs: null,
+          errorCode: contextMatchesSource ? 'missing_source_name' : 'source_context_mismatch',
+        },
+        emptySemanticCacheTelemetry(),
+      );
+    }
+
+    const model = this.model();
+    const fingerprint = buildProductSemanticNormalizationFingerprint(input, {
+      model,
+      contractVersion: SEMANTIC_NORMALIZATION_CONTRACT_VERSION,
+      promptVersion: hashStableValue(PRODUCT_SEMANTIC_NORMALIZATION_SYSTEM_PROMPT),
+      schemaVersion: hashStableValue(PRODUCT_SEMANTIC_NORMALIZATION_SCHEMA),
+    });
+    const cached = this.readSemanticNormalizationCache(fingerprint);
+    if (cached) {
+      return this.finishSemanticNormalization(input, cloneSemanticNormalizationResult(cached), {
+        cacheHit: true,
+        cacheMiss: false,
+        inFlightDedupHit: false,
+        fingerprint,
       });
     }
 
-    const execution = await this.executeSemanticNormalization({
+    const existing = this.semanticNormalizationInFlight.get(fingerprint);
+    if (existing) {
+      const result = await existing;
+      return this.finishSemanticNormalization(input, cloneSemanticNormalizationResult(result), {
+        cacheHit: false,
+        cacheMiss: false,
+        inFlightDedupHit: true,
+        fingerprint,
+      });
+    }
+
+    const execution = this.executeSemanticNormalization({
       context: input.context,
       requestText: this.semanticNormalizationRequestText(input),
       systemPrompt: PRODUCT_SEMANTIC_NORMALIZATION_SYSTEM_PROMPT,
       schemaName: 'product_semantic_normalization_candidate',
+    }).then((result) => ({ context: input.context, source: input.source, ...result }));
+    this.semanticNormalizationInFlight.set(fingerprint, execution);
+
+    try {
+      const result = await execution;
+      if (isCacheableSemanticNormalizationResult(result)) {
+        this.writeSemanticNormalizationCache(fingerprint, result);
+      }
+      return this.finishSemanticNormalization(input, cloneSemanticNormalizationResult(result), {
+        cacheHit: false,
+        cacheMiss: true,
+        inFlightDedupHit: false,
+        fingerprint,
+      });
+    } finally {
+      if (this.semanticNormalizationInFlight.get(fingerprint) === execution) {
+        this.semanticNormalizationInFlight.delete(fingerprint);
+      }
+    }
+  }
+
+  private readSemanticNormalizationCache(fingerprint: string) {
+    const entry = this.semanticNormalizationCache.get(fingerprint);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+      this.semanticNormalizationCache.delete(fingerprint);
+      return null;
+    }
+    return cloneSemanticNormalizationResult(entry.result);
+  }
+
+  private writeSemanticNormalizationCache(
+    fingerprint: string,
+    result: ProductSemanticNormalizationResult,
+  ) {
+    this.removeExpiredSemanticNormalizationCacheEntries();
+    if (
+      !this.semanticNormalizationCache.has(fingerprint) &&
+      this.semanticNormalizationCache.size >= SEMANTIC_NORMALIZATION_CACHE_MAX_ENTRIES
+    ) {
+      const oldestFingerprint = this.semanticNormalizationCache.keys().next().value as
+        string | undefined;
+      if (oldestFingerprint) this.semanticNormalizationCache.delete(oldestFingerprint);
+    }
+    this.semanticNormalizationCache.set(fingerprint, {
+      expiresAt: Date.now() + SEMANTIC_NORMALIZATION_CACHE_TTL_MS,
+      result: cloneSemanticNormalizationResult(result),
     });
-    return this.finishSemanticNormalization(input, {
-      context: input.context,
-      source: input.source,
-      ...execution,
-    });
+  }
+
+  private removeExpiredSemanticNormalizationCacheEntries() {
+    const now = Date.now();
+    for (const [fingerprint, entry] of this.semanticNormalizationCache) {
+      if (entry.expiresAt <= now) this.semanticNormalizationCache.delete(fingerprint);
+    }
   }
 
   private async executeSemanticNormalization(input: {
@@ -1126,6 +1235,7 @@ export class ProductNormalizationService {
   private finishSemanticNormalization(
     input: ProductSemanticNormalizationInput,
     result: ProductSemanticNormalizationResult,
+    cache: SemanticNormalizationCacheTelemetry = emptySemanticCacheTelemetry(),
   ) {
     this.logger.debug(
       JSON.stringify({
@@ -1142,6 +1252,11 @@ export class ProductNormalizationService {
         outputTokens: result.outputTokens,
         estimatedCostUsd: result.estimatedCostUsd,
         latencyMs: result.latencyMs,
+        cacheHit: cache.cacheHit,
+        cacheMiss: cache.cacheMiss,
+        inFlightDedupHit: cache.inFlightDedupHit,
+        cacheVersion: SEMANTIC_NORMALIZATION_CONTRACT_VERSION,
+        fingerprint: cache.fingerprint?.slice(0, 12) ?? null,
         ...(result.errorCode ? { errorCode: result.errorCode } : {}),
         sourceEvidenceProvided: Boolean(input.sourceEvidence?.trim()),
         timestamp: new Date().toISOString(),
@@ -1181,6 +1296,101 @@ export class ProductNormalizationService {
   private currentDay() {
     return new Date().toISOString().slice(0, 10);
   }
+}
+
+export function buildProductSemanticNormalizationFingerprint(
+  input: ProductSemanticNormalizationInput,
+  version: ProductSemanticNormalizationFingerprintVersion,
+) {
+  const fields = input.structuredFields ?? {};
+  return hashStableValue({
+    version: {
+      contract: version.contractVersion,
+      prompt: version.promptVersion,
+      schema: version.schemaVersion,
+      model: version.model,
+    },
+    context: input.context,
+    source: input.source,
+    sourceName: canonicalizeSemanticFingerprintText(input.sourceName),
+    sourceEvidence: canonicalizeSemanticFingerprintText(input.sourceEvidence ?? ''),
+    structuredFields: {
+      manufacturer: canonicalizeNullableSemanticFingerprintText(fields.manufacturer),
+      category: canonicalizeNullableSemanticFingerprintText(fields.category),
+      family: canonicalizeNullableSemanticFingerprintText(fields.family),
+      model: canonicalizeNullableSemanticFingerprintText(fields.model),
+      storage: canonicalizeNullableSemanticFingerprintText(fields.storage),
+      ram: canonicalizeNullableSemanticFingerprintText(fields.ram),
+      chip: canonicalizeNullableSemanticFingerprintText(fields.chip),
+      screen: canonicalizeNullableSemanticFingerprintText(fields.screen),
+      color: canonicalizeNullableSemanticFingerprintText(fields.color),
+      connectivity: canonicalizeNullableSemanticFingerprintText(fields.connectivity),
+      condition: canonicalizeNullableSemanticFingerprintText(fields.condition),
+      quantity: canonicalizeNullableSemanticFingerprintText(fields.quantity),
+      features: (fields.features ?? []).map(canonicalizeSemanticFingerprintText),
+      connector: canonicalizeNullableSemanticFingerprintText(fields.connector),
+      power: canonicalizeNullableSemanticFingerprintText(fields.power),
+      length: canonicalizeNullableSemanticFingerprintText(fields.length),
+    },
+  });
+}
+
+function canonicalizeNullableSemanticFingerprintText(value: string | null | undefined) {
+  return value === null || value === undefined ? null : canonicalizeSemanticFingerprintText(value);
+}
+
+function canonicalizeSemanticFingerprintText(value: string) {
+  return value
+    .normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim().replace(/[\t ]+/g, ' '))
+    .join('\n')
+    .trim();
+}
+
+function hashStableValue(value: unknown) {
+  return createHash('sha256').update(stableJson(value)).digest('hex');
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (isRecord(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+function cloneSemanticNormalizationResult(
+  result: ProductSemanticNormalizationResult,
+): ProductSemanticNormalizationResult {
+  return {
+    ...result,
+    candidate: result.candidate
+      ? {
+          ...result.candidate,
+          featureCandidates: [...result.candidate.featureCandidates],
+        }
+      : null,
+  };
+}
+
+function isCacheableSemanticNormalizationResult(result: ProductSemanticNormalizationResult) {
+  return (
+    result.normalizationStatus === 'CANDIDATE' && result.schemaValid && result.candidate !== null
+  );
+}
+
+function emptySemanticCacheTelemetry(): SemanticNormalizationCacheTelemetry {
+  return {
+    cacheHit: false,
+    cacheMiss: false,
+    inFlightDedupHit: false,
+    fingerprint: null,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

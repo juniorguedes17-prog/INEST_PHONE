@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildProductSemanticNormalizationFingerprint,
   ProductNormalizationService,
   type ProductNormalizationContext,
   type ProductNormalizationInput,
@@ -141,6 +142,7 @@ describe('ProductNormalizationService', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -831,5 +833,288 @@ describe('ProductNormalizationService', () => {
       errorCode: 'budget_exhausted',
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('gera fingerprint deterministico com canonicalizacao somente mecanica', () => {
+    const version = {
+      model: 'gpt-5.6-luna',
+      contractVersion: 'contract-v1',
+      promptVersion: 'prompt-v1',
+      schemaVersion: 'schema-v1',
+    };
+    const base = semanticInput({
+      sourceName: '  Sony  Alpha\r\na7 IV  ',
+      sourceEvidence: 'Câmera\tpreta',
+      structuredFields: {
+        manufacturer: ' Sony ',
+        category: 'Camera',
+        model: null,
+        features: ['Body only', 'Mirrorless'],
+      },
+    });
+    const logicallyEqual = semanticInput({
+      sourceName: 'Sony Alpha\na7 IV',
+      sourceEvidence: 'Ca\u0302mera preta',
+      structuredFields: {
+        features: ['Body only', 'Mirrorless'],
+        model: null,
+        category: 'Camera',
+        manufacturer: 'Sony',
+      },
+    });
+
+    expect(buildProductSemanticNormalizationFingerprint(base, version)).toBe(
+      buildProductSemanticNormalizationFingerprint(logicallyEqual, version),
+    );
+  });
+
+  it.each([
+    ['sourceName', semanticInput({ sourceName: 'Sony Alpha a7 V Camera Body Black' })],
+    [
+      'sourceEvidence',
+      semanticInput({ sourceEvidence: 'Mirrorless camera body with lens, black finish' }),
+    ],
+    [
+      'structured model',
+      semanticInput({
+        structuredFields: {
+          ...semanticInput().structuredFields,
+          model: 'Sony Alpha a7 V',
+        },
+      }),
+    ],
+    [
+      'structured condition',
+      semanticInput({
+        structuredFields: { ...semanticInput().structuredFields, condition: 'SEMINOVO' },
+      }),
+    ],
+    ['market', semanticInput({ context: 'NORMALIZE_PRICING_PY', source: 'PY' })],
+  ])('altera o fingerprint quando muda %s', (_label, changed) => {
+    const version = {
+      model: 'gpt-5.6-luna',
+      contractVersion: 'contract-v1',
+      promptVersion: 'prompt-v1',
+      schemaVersion: 'schema-v1',
+    };
+    expect(buildProductSemanticNormalizationFingerprint(changed, version)).not.toBe(
+      buildProductSemanticNormalizationFingerprint(semanticInput(), version),
+    );
+  });
+
+  it.each([
+    ['modelo', { model: 'gpt-6-luna' }],
+    ['contrato', { contractVersion: 'contract-v2' }],
+    ['prompt', { promptVersion: 'prompt-v2' }],
+    ['schema', { schemaVersion: 'schema-v2' }],
+  ])('invalida o fingerprint quando muda a versao de %s', (_label, override) => {
+    const version = {
+      model: 'gpt-5.6-luna',
+      contractVersion: 'contract-v1',
+      promptVersion: 'prompt-v1',
+      schemaVersion: 'schema-v1',
+    };
+    expect(
+      buildProductSemanticNormalizationFingerprint(semanticInput(), {
+        ...version,
+        ...override,
+      }),
+    ).not.toBe(buildProductSemanticNormalizationFingerprint(semanticInput(), version));
+  });
+
+  it('nao confunde o mesmo sourceName parcial com sourceEvidence diferente', () => {
+    const version = {
+      model: 'gpt-5.6-luna',
+      contractVersion: 'contract-v1',
+      promptVersion: 'prompt-v1',
+      schemaVersion: 'schema-v1',
+    };
+    const first = semanticInput({
+      sourceName: 'Apple Watch',
+      sourceEvidence: 'Series 11 42mm GPS',
+    });
+    const second = semanticInput({
+      sourceName: 'Apple Watch',
+      sourceEvidence: 'Ultra 3 49mm Cellular',
+    });
+
+    expect(buildProductSemanticNormalizationFingerprint(first, version)).not.toBe(
+      buildProductSemanticNormalizationFingerprint(second, version),
+    );
+  });
+
+  it.each([
+    ['USA', semanticInput()],
+    [
+      'PY',
+      semanticInput({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceName: 'MAC AIR M5 13 16/512 MID',
+      }),
+    ],
+  ])('reutiliza tres chamadas logicas iguais de %s com uma request Luna', async (_label, value) => {
+    const fetchMock = vi.fn().mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const first = await service.normalizeSemanticProduct(value);
+    const second = await service.normalizeSemanticProduct(value);
+    const third = await service.normalizeSemanticProduct(value);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(third).toEqual(first);
+  });
+
+  it('faz MISS quando modelo configurado muda no mesmo processo', async () => {
+    let configuredModel = 'gpt-5.6-luna';
+    const config = createConfig({ 'app.aiPricingNormalizationEnabled': true });
+    const fallbackConfig = createConfig({ 'app.aiPricingNormalizationEnabled': true });
+    config.get.mockImplementation((key: string, fallback?: unknown) =>
+      key === 'app.aiRecoveryModel' ? configuredModel : fallbackConfig.get(key, fallback),
+    );
+    const fetchMock = vi.fn().mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(config as never);
+
+    await service.normalizeSemanticProduct(semanticInput());
+    configuredModel = 'gpt-6-luna';
+    await service.normalizeSemanticProduct(semanticInput());
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('expira o cache apos dez minutos e limpa o in-flight concluido', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-10T00:00:00.000Z'));
+    const fetchMock = vi.fn().mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    await service.normalizeSemanticProduct(semanticInput());
+    vi.advanceTimersByTime(10 * 60 * 1_000 - 1);
+    await service.normalizeSemanticProduct(semanticInput());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(2);
+    await service.normalizeSemanticProduct(semanticInput());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('limita o cache a 500 entradas e remove primeiro a mais antiga', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    for (let index = 0; index <= 500; index += 1) {
+      await service.normalizeSemanticProduct(
+        semanticInput({ sourceName: `Camera source ${index}` }),
+      );
+    }
+    await service.normalizeSemanticProduct(semanticInput({ sourceName: 'Camera source 500' }));
+    await service.normalizeSemanticProduct(semanticInput({ sourceName: 'Camera source 0' }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(502);
+  });
+
+  it('deduplica dez chamadas concorrentes e entrega clones equivalentes', async () => {
+    let release!: (value: ReturnType<typeof usaEnrichmentResponse>) => void;
+    const pending = new Promise<ReturnType<typeof usaEnrichmentResponse>>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn().mockReturnValue(pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const calls = Array.from({ length: 10 }, () =>
+      service.normalizeSemanticProduct(semanticInput()),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    release(usaEnrichmentResponse());
+    const results = await Promise.all(calls);
+
+    expect(results).toHaveLength(10);
+    expect(results.every((result) => JSON.stringify(result) === JSON.stringify(results[0]))).toBe(
+      true,
+    );
+    expect(new Set(results).size).toBe(10);
+  });
+
+  it('deduplica falha concorrente, limpa in-flight e permite nova tentativa', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary failure'))
+      .mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const failures = await Promise.all(
+      Array.from({ length: 10 }, () => service.normalizeSemanticProduct(semanticInput())),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(failures.every((result) => result.normalizationStatus === 'MODEL_ERROR')).toBe(true);
+
+    const retry = await service.normalizeSemanticProduct(semanticInput());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(retry.normalizationStatus).toBe('CANDIDATE');
+  });
+
+  it('protege o resultado cacheado contra mutacao por consumidor', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(usaEnrichmentResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+
+    const first = await service.normalizeSemanticProduct(semanticInput());
+    first.candidate!.modelCandidate = 'MUTATED';
+    first.candidate!.featureCandidates.push('MUTATED');
+    const second = await service.normalizeSemanticProduct(semanticInput());
+
+    expect(second.candidate?.modelCandidate).toBe('MacBook Air M5');
+    expect(second.candidate?.featureCandidates).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('emite telemetria separada para miss, dedupe in-flight e hit', async () => {
+    let release!: (value: ReturnType<typeof usaEnrichmentResponse>) => void;
+    const pending = new Promise<ReturnType<typeof usaEnrichmentResponse>>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn().mockReturnValue(pending);
+    vi.stubGlobal('fetch', fetchMock);
+    const service = new ProductNormalizationService(
+      createConfig({ 'app.aiPricingNormalizationEnabled': true }) as never,
+    );
+    const logger = vi.mocked(Logger.prototype.debug);
+
+    const miss = service.normalizeSemanticProduct(semanticInput());
+    const dedupe = service.normalizeSemanticProduct(semanticInput());
+    release(usaEnrichmentResponse());
+    await Promise.all([miss, dedupe]);
+    await service.normalizeSemanticProduct(semanticInput());
+
+    const events = logger.mock.calls.map(([message]) => JSON.parse(String(message)));
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ cacheMiss: true, cacheHit: false }),
+        expect.objectContaining({ inFlightDedupHit: true }),
+        expect.objectContaining({ cacheHit: true, cacheMiss: false }),
+      ]),
+    );
+    expect(events.every((event) => /^([a-f0-9]{12}|null)$/.test(String(event.fingerprint)))).toBe(
+      true,
+    );
   });
 });
