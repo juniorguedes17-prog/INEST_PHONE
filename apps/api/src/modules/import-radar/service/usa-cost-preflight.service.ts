@@ -50,6 +50,8 @@ export type UsaCostPreflightResult =
       condition: ImportProductCondition | null;
       /** P6F-approved fields for the later shared Financial Identity lookup. */
       normalizedPricing: UsaNormalizedPricingContext;
+      /** Presentation-only Luna name; never forwarded into normalizedPricing. */
+      commercialName: string | null;
       shippingWeightLbs: number | null;
     }
   | {
@@ -177,6 +179,7 @@ export class UsaCostPreflightService {
           quantity,
           condition,
           normalizedPricing,
+          commercialName: semanticContext.commercialName ?? null,
           shippingWeightLbs: null,
         };
       }
@@ -202,6 +205,7 @@ export class UsaCostPreflightService {
       logisticClassification,
       condition,
       normalizedPricing,
+      semanticContext.commercialName ?? null,
       input.runtimeShippingWeightLbs,
     );
   }
@@ -255,6 +259,7 @@ function toWeightPreflightResult(
   logisticClassification: 'CELULAR' | 'OTHER' | 'UNRESOLVED',
   condition: ImportProductCondition | null,
   normalizedPricing: UsaNormalizedPricingContext,
+  commercialName: string | null,
   runtimeShippingWeightLbs?: number,
 ): UsaCostPreflightResult {
   if (resolution.status === 'KEY_AMBIGUOUS') {
@@ -290,6 +295,7 @@ function toWeightPreflightResult(
     quantity: null,
     condition,
     normalizedPricing,
+    commercialName,
     shippingWeightLbs,
   };
 }

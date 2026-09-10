@@ -76,6 +76,7 @@ function context(
     lunaLatencyMs: null,
     lunaErrorCode: null,
     ...overrides,
+    commercialName: overrides.commercialName ?? null,
   };
 }
 

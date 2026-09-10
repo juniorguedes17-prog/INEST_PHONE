@@ -151,6 +151,7 @@ export class ImportRadarService {
       sourceCommercialIdentity: {
         sourceProductId: dto.id,
         sourceName: dto.name,
+        commercialName: semanticNormalization.commercialName,
         displayName: formatSourceDisplayName({
           sourceName: dto.name,
           sourceManufacturer: semanticDto.sourceManufacturer,
@@ -485,6 +486,7 @@ export class ImportRadarService {
 type ParaguaySemanticNormalization = {
   product: CalculateImportCostDto;
   identityText: string;
+  commercialName: string | null;
   status: ProductSemanticNormalizationStatus;
   accepted: boolean;
   errorCode: string | null;
@@ -521,6 +523,14 @@ function adaptParaguaySemanticCandidate(
     value && candidateIsSourceGrounded(value, evidence) ? value.trim() : null;
 
   const manufacturer = grounded(candidate.manufacturerCandidate);
+  const family = grounded(candidate.familyCandidate);
+  const modelCandidate = grounded(candidate.modelCandidate);
+  const storage = grounded(candidate.storageCandidate);
+  const ram = grounded(candidate.ramCandidate);
+  const chip = grounded(candidate.chipCandidate);
+  const screen = grounded(candidate.screenCandidate);
+  const color = grounded(candidate.colorCandidate);
+  const connectivity = grounded(candidate.connectivityCandidate);
   const condition = grounded(candidate.conditionCandidate);
   const explicitManufacturerConflict = Boolean(
     dto.sourceManufacturerProvenance === 'EXPLICIT_SOURCE' &&
@@ -536,12 +546,7 @@ function adaptParaguaySemanticCandidate(
   }
 
   const category = grounded(candidate.categoryCandidate);
-  const model = composeStructuredModel(
-    grounded(candidate.modelCandidate),
-    grounded(candidate.chipCandidate),
-    grounded(candidate.screenCandidate),
-    grounded(candidate.ramCandidate),
-  );
+  const model = composeStructuredModel(modelCandidate, chip, screen, ram);
   const candidateHasIdentity = Boolean(
     candidate.manufacturerCandidate ||
     candidate.categoryCandidate ||
@@ -556,8 +561,8 @@ function adaptParaguaySemanticCandidate(
     brand: manufacturer ?? undefined,
     category: category ?? '',
     model: model ?? undefined,
-    capacity: grounded(candidate.storageCandidate) ?? undefined,
-    color: grounded(candidate.colorCandidate) ?? undefined,
+    capacity: storage ?? undefined,
+    color: color ?? undefined,
     condition: (condition ?? dto.condition) as ImportProductCondition | undefined,
   };
   const identityText = [
@@ -571,7 +576,31 @@ function adaptParaguaySemanticCandidate(
     .filter((value): value is string => Boolean(value?.trim()))
     .join(' ');
 
-  return { product, identityText, status, accepted: true, errorCode: null };
+  const presentationAttributes = [
+    manufacturer,
+    family,
+    modelCandidate,
+    category,
+    screen,
+    ram,
+    storage,
+    connectivity,
+    color,
+    condition,
+    grounded(candidate.quantityCandidate),
+    ...candidate.featureCandidates.map(grounded),
+    grounded(candidate.connectorCandidate),
+    grounded(candidate.powerCandidate),
+    grounded(candidate.lengthCandidate),
+  ].filter((value): value is string => Boolean(value));
+  return {
+    product,
+    identityText,
+    commercialName: validatedCommercialName(candidate.commercialName, presentationAttributes),
+    status,
+    accepted: true,
+    errorCode: null,
+  };
 }
 
 function failedParaguayNormalization(
@@ -590,10 +619,21 @@ function failedParaguayNormalization(
       condition: dto.condition,
     },
     identityText: '',
+    commercialName: null,
     status,
     accepted: false,
     errorCode,
   };
+}
+
+function validatedCommercialName(commercialName: string | null, groundedAttributes: string[]) {
+  const normalized = commercialName?.trim();
+  if (!normalized) return null;
+  const groundedTokens = new Set(groundedAttributes.flatMap(mechanicalTokens));
+  const nameTokens = mechanicalTokens(normalized);
+  return nameTokens.length > 0 && nameTokens.every((token) => groundedTokens.has(token))
+    ? normalized
+    : null;
 }
 
 function composeStructuredModel(

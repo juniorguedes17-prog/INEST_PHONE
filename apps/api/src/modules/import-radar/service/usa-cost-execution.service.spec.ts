@@ -59,6 +59,7 @@ function ready(
     },
     shippingWeightLbs: 2,
     ...overrides,
+    commercialName: overrides.commercialName ?? null,
   };
 }
 

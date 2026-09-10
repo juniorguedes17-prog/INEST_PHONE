@@ -52,6 +52,8 @@ export interface UsaNormalizedProductField {
 
 export interface UsaNormalizedProductContext {
   sourceProduct: UsaSourceProduct;
+  /** Presentation only; excluded from every identity, logistics, and financial input. */
+  commercialName: string | null;
   fields: Record<UsaEnrichmentField, UsaNormalizedProductField>;
   /** Runtime-only candidate values; never an authority or persisted memory. */
   candidateValues: Partial<Record<UsaEnrichmentField, string>>;
@@ -111,6 +113,7 @@ export class UsaLunaEnrichmentValidatorService {
     });
     const context: UsaNormalizedProductContext = {
       sourceProduct: product,
+      commercialName: validatedCommercialName(candidate?.commercialName ?? null, fields),
       fields,
       candidateValues,
       candidateFields: enrichmentFields.filter(
@@ -183,6 +186,22 @@ export class UsaLunaEnrichmentValidatorService {
       ...(context.lunaErrorCode ? { lunaErrorCode: context.lunaErrorCode } : {}),
     });
   }
+}
+
+function validatedCommercialName(
+  commercialName: string | null,
+  fields: Record<UsaEnrichmentField, UsaNormalizedProductField>,
+) {
+  const normalized = commercialName?.trim();
+  if (!normalized) return null;
+  const groundedAttributes = enrichmentFields
+    .map((field) => fields[field].value)
+    .filter((value): value is string => Boolean(value));
+  const groundedTokens = new Set(groundedAttributes.flatMap(words));
+  const nameTokens = words(normalized);
+  return nameTokens.length > 0 && nameTokens.every((token) => groundedTokens.has(token))
+    ? normalized
+    : null;
 }
 
 function baseFields(

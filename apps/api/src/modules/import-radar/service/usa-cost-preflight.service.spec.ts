@@ -51,6 +51,7 @@ function createContext(
   condition: string | null = 'NOVO',
 ) {
   return {
+    commercialName: null as string | null,
     logisticClassification:
       classification === 'UNRESOLVED'
         ? { classification, reason: 'INSUFFICIENT_EVIDENCE', sources: [] }
@@ -222,6 +223,27 @@ describe('UsaCostPreflightService', () => {
         capacity: '512GB',
       },
     });
+  });
+
+  it('does not let commercialName alter the USA operational or Pricing handoff', async () => {
+    const firstContext = createContext('CELULAR');
+    firstContext.commercialName = 'Apple iPhone 17 Pro 256GB Novo';
+    const secondContext = createContext('CELULAR');
+    secondContext.commercialName = 'Novo 256GB iPhone 17 Pro Apple';
+    const first = await createService(readyDecision, firstContext).service.preflight({
+      sourceProduct: product,
+      redirector: redirector('REI_DO_IMPORTADO'),
+      composition: { kind: 'SINGLE_ITEM' },
+    });
+    const second = await createService(readyDecision, secondContext).service.preflight({
+      sourceProduct: product,
+      redirector: redirector('REI_DO_IMPORTADO'),
+      composition: { kind: 'SINGLE_ITEM' },
+    });
+
+    expect(first).toMatchObject({ commercialName: firstContext.commercialName });
+    expect(second).toMatchObject({ commercialName: secondContext.commercialName });
+    expect({ ...second, commercialName: null }).toEqual({ ...first, commercialName: null });
   });
 
   it('readies the B0G45F93BH-equivalent single iPhone purchase without a Product Identity quantity', async () => {

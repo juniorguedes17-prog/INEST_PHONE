@@ -214,6 +214,7 @@ test('does not disguise a missing PY structured model as the commercial product 
     catalogProductId: null,
     sourceCommercialIdentity: {
       displayName: 'Nome apenas para apresentacao',
+      commercialName: 'iPhone 17 Pro 256GB Natural Novo',
       sourceManufacturer: 'Apple',
       sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
     },
@@ -241,6 +242,57 @@ test('does not disguise a missing PY structured model as the commercial product 
   assert.equal(withModel.model, 'iPhone 17 Pro');
   assert.equal(withoutModel.productName, product.name);
   assert.equal(withoutModel.displayName, 'Nome apenas para apresentacao');
+  assert.equal('commercialName' in withoutModel, false);
+});
+
+test('uses commercialName only in the USA/PY modal presentation with visual fallback', () => {
+  const h = setup();
+  const pyRendered = JSON.stringify(
+    h.CalculationModal!({
+      calculation: {
+        product,
+        sourceCommercialIdentity: {
+          commercialName: 'Apple iPhone 17 Pro 256GB Natural Novo',
+        },
+        pricingEligibility: { status: 'ELIGIBLE', reason: null },
+        breakdown: {},
+        total: 0,
+        matchedProductType: 'Celular',
+      },
+      sending: false,
+      onClose: () => undefined,
+      onSendToPricing: () => undefined,
+      onConfirmManufacturer: () => undefined,
+    }),
+  );
+  const usaRendered = JSON.stringify(
+    h.CalculationModal!({
+      calculation: null,
+      usaCostExecution: {
+        preflight: {
+          status: 'READY_FOR_COST',
+          commercialName: 'Garmin vivoactive 5 42mm GPS Ivory',
+        },
+        calculation: {
+          sourceCommercialIdentity: {
+            sourceName: 'Long raw Garmin retailer title',
+            sourceUrl: 'https://example.com',
+          },
+          redirector: { redirector: 'RED_DELAWARE' },
+          breakdown: {},
+          finalCost: { amountBrl: 0 },
+        },
+      },
+      sending: false,
+      onClose: () => undefined,
+      onSendToPricing: () => undefined,
+      onConfirmManufacturer: () => undefined,
+    }),
+  );
+
+  assert.match(pyRendered, /Apple iPhone 17 Pro 256GB Natural Novo/);
+  assert.match(usaRendered, /Garmin vivoactive 5 42mm GPS Ivory/);
+  assert.doesNotMatch(usaRendered, /Long raw Garmin retailer title/);
 });
 
 test('renders Red Delaware breakdown labels without changing its values', () => {

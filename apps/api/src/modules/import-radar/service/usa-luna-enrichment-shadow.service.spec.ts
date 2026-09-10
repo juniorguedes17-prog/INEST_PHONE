@@ -12,6 +12,7 @@ const lunaCandidate = {
   source: 'US' as const,
   normalizationStatus: 'CANDIDATE' as const,
   candidate: {
+    commercialName: 'Apple iPhone 17 Pro 256GB Orange Novo',
     manufacturerCandidate: 'Apple',
     categoryCandidate: 'iPhone',
     familyCandidate: 'iphone',

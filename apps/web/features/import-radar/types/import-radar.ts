@@ -44,6 +44,7 @@ export interface ImportCalculation {
   sourceCommercialIdentity: {
     sourceProductId: string;
     sourceName: string;
+    commercialName?: string | null;
     displayName: string;
     source: string;
     sourceUrl: string;

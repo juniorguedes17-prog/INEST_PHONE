@@ -664,7 +664,10 @@ export function CalculationModal({
             <>
               <div>
                 <strong className="block text-inest-text">
-                  {usaCalculation.sourceCommercialIdentity.sourceName}
+                  {usaCostExecution?.preflight?.status === 'READY_FOR_COST'
+                    ? (usaCostExecution.preflight.commercialName ??
+                      usaCalculation.sourceCommercialIdentity.sourceName)
+                    : usaCalculation.sourceCommercialIdentity.sourceName}
                 </strong>
                 <span className="text-sm text-inest-muted">
                   {usaCalculation.redirector.redirector === 'RED_DELAWARE'
@@ -759,7 +762,9 @@ export function CalculationModal({
       ) : calculation ? (
         <div className="grid gap-4">
           <div>
-            <strong className="block text-inest-text">{calculation.product.name}</strong>
+            <strong className="block text-inest-text">
+              {calculation.sourceCommercialIdentity.commercialName ?? calculation.product.name}
+            </strong>
             <span className="text-sm text-inest-muted">
               Configuração Financeira PY - {calculation.matchedProductType}
             </span>

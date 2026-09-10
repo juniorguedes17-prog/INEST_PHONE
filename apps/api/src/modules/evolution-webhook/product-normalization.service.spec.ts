@@ -79,6 +79,7 @@ function usaEnrichmentResponse(candidate: Record<string, unknown> = {}) {
     status: 200,
     json: vi.fn().mockResolvedValue({
       output_text: JSON.stringify({
+        commercialName: 'Apple MacBook Air M5 13" 16GB/512GB Midnight Novo',
         manufacturerCandidate: 'Apple',
         categoryCandidate: 'MacBook',
         familyCandidate: 'macbook',
@@ -542,6 +543,7 @@ describe('ProductNormalizationService', () => {
         structuredFields: { manufacturer: 'Apple', category: 'iPhone' },
       }),
       candidate: {
+        commercialName: 'Apple iPhone 17 Pro 512GB Cosmic Orange',
         manufacturerCandidate: 'Apple',
         categoryCandidate: 'iPhone',
         familyCandidate: 'iphone',
@@ -557,6 +559,7 @@ describe('ProductNormalizationService', () => {
         structuredFields: { manufacturer: 'Apple', category: 'MacBook' },
       }),
       candidate: {
+        commercialName: 'Apple MacBook Air M5 13" 16GB/512GB Midnight',
         manufacturerCandidate: 'Apple',
         categoryCandidate: 'MacBook',
         familyCandidate: 'macbook',
@@ -573,6 +576,7 @@ describe('ProductNormalizationService', () => {
         structuredFields: { manufacturer: 'Apple', category: 'Smartwatch' },
       }),
       candidate: {
+        commercialName: 'Apple Watch Series 11 46mm GPS',
         manufacturerCandidate: 'Apple',
         categoryCandidate: 'Smartwatch',
         familyCandidate: 'apple-watch',
@@ -591,6 +595,7 @@ describe('ProductNormalizationService', () => {
         structuredFields: { manufacturer: 'Samsung', category: 'Smartphone' },
       }),
       candidate: {
+        commercialName: 'Samsung Galaxy A36 256GB 5G Awesome Lavender',
         manufacturerCandidate: 'Samsung',
         categoryCandidate: 'Smartphone',
         familyCandidate: 'Galaxy A',
@@ -604,6 +609,7 @@ describe('ProductNormalizationService', () => {
       label: 'camera',
       input: semanticInput(),
       candidate: {
+        commercialName: 'Sony Alpha a7 IV Black',
         manufacturerCandidate: 'Sony',
         categoryCandidate: 'Camera',
         familyCandidate: 'Alpha',
@@ -612,6 +618,105 @@ describe('ProductNormalizationService', () => {
         screenCandidate: null,
         connectivityCandidate: null,
         colorCandidate: 'Black',
+      },
+    },
+    {
+      label: 'Garmin',
+      input: semanticInput({
+        sourceName: 'Garmin vívoactive 5 GPS Smartwatch 42mm Ivory',
+        sourceEvidence: 'Garmin vívoactive 5 GPS Smartwatch 42mm Ivory',
+        structuredFields: { manufacturer: 'Garmin', category: 'Smartwatch' },
+      }),
+      candidate: {
+        commercialName: 'Garmin vivoactive 5 42mm GPS Ivory',
+        manufacturerCandidate: 'Garmin',
+        categoryCandidate: 'Smartwatch',
+        familyCandidate: 'vivoactive',
+        modelCandidate: 'vivoactive 5',
+        storageCandidate: null,
+        screenCandidate: '42mm',
+        connectivityCandidate: 'GPS',
+        colorCandidate: 'Ivory',
+      },
+    },
+    {
+      label: 'MacBook Air PY',
+      input: semanticInput({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceName: 'MAC AIR M5 13 16/512 MID',
+        sourceEvidence: 'MAC AIR M5 13 16/512 MID',
+      }),
+      candidate: {
+        commercialName: 'Apple MacBook Air M5 13" 16GB/512GB Midnight',
+        manufacturerCandidate: 'Apple',
+        categoryCandidate: 'MacBook',
+        familyCandidate: 'MacBook Air',
+        modelCandidate: 'MacBook Air M5',
+        storageCandidate: '512GB',
+        ramCandidate: '16GB',
+        chipCandidate: 'M5',
+        screenCandidate: '13"',
+        colorCandidate: 'Midnight',
+      },
+    },
+    {
+      label: 'MacBook Pro PY',
+      input: semanticInput({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceName: 'MAC PRO M5 14 16/512 SPACE BLACK',
+        sourceEvidence: 'MAC PRO M5 14 16/512 SPACE BLACK',
+      }),
+      candidate: {
+        commercialName: 'Apple MacBook Pro M5 14" 16GB/512GB Space Black',
+        manufacturerCandidate: 'Apple',
+        categoryCandidate: 'MacBook',
+        familyCandidate: 'MacBook Pro',
+        modelCandidate: 'MacBook Pro M5',
+        storageCandidate: '512GB',
+        ramCandidate: '16GB',
+        chipCandidate: 'M5',
+        screenCandidate: '14"',
+        colorCandidate: 'Space Black',
+      },
+    },
+    {
+      label: 'iPhone PY',
+      input: semanticInput({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceName: 'IPH 17 PRO MAX 256 NAT',
+        sourceEvidence: 'IPH 17 PRO MAX 256 NAT',
+      }),
+      candidate: {
+        commercialName: 'Apple iPhone 17 Pro Max 256GB Natural',
+        manufacturerCandidate: 'Apple',
+        categoryCandidate: 'iPhone',
+        familyCandidate: 'iPhone',
+        modelCandidate: 'iPhone 17 Pro Max',
+        storageCandidate: '256GB',
+        colorCandidate: 'Natural',
+      },
+    },
+    {
+      label: 'Canon PY',
+      input: semanticInput({
+        context: 'NORMALIZE_PRICING_PY',
+        source: 'PY',
+        sourceName: 'CANON EOS REBEL T7 BODY',
+        sourceEvidence: 'CANON EOS REBEL T7 BODY',
+      }),
+      candidate: {
+        commercialName: 'Canon EOS Rebel T7',
+        manufacturerCandidate: 'Canon',
+        categoryCandidate: 'Camera',
+        familyCandidate: 'EOS Rebel',
+        modelCandidate: 'EOS Rebel T7',
+        storageCandidate: null,
+        screenCandidate: null,
+        connectivityCandidate: null,
+        colorCandidate: null,
       },
     },
   ])(
@@ -652,6 +757,7 @@ describe('ProductNormalizationService', () => {
       'fetch',
       vi.fn().mockResolvedValue(
         usaEnrichmentResponse({
+          commercialName: null,
           manufacturerCandidate: null,
           categoryCandidate: null,
           familyCandidate: null,
@@ -679,6 +785,7 @@ describe('ProductNormalizationService', () => {
 
     expect(result).toMatchObject({ normalizationStatus: 'CANDIDATE', schemaValid: true });
     expect(result.candidate).toEqual({
+      commercialName: null,
       manufacturerCandidate: null,
       categoryCandidate: null,
       familyCandidate: null,
@@ -701,6 +808,8 @@ describe('ProductNormalizationService', () => {
   it.each([
     ['campo inesperado', { profit: 500 }],
     ['tipo invalido', { storageCandidate: 512 }],
+    ['commercialName ausente', { commercialName: undefined }],
+    ['commercialName longo', { commercialName: 'x'.repeat(241) }],
   ])('rejeita output semantico com %s', async (_label, invalidCandidate) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(usaEnrichmentResponse(invalidCandidate)));
     const service = new ProductNormalizationService(
@@ -763,9 +872,14 @@ describe('ProductNormalizationService', () => {
       strict: true,
       schema: { additionalProperties: false },
     });
+    expect(body.text.format.schema.required).toContain('commercialName');
+    expect(body.text.format.schema.properties.commercialName).toEqual({
+      anyOf: [{ type: 'string', maxLength: 240 }, { type: 'null' }],
+    });
     expect(systemPrompt).toContain('Never complete missing facts from world knowledge');
     expect(systemPrompt).toContain('Missing or non-applicable evidence means null');
     expect(systemPrompt).toContain('Do not validate whether a model');
+    expect(systemPrompt).toContain('commercialName is presentation only');
     expect(systemPrompt).toContain('Do not return or infer price');
     expect(requestText).toContain('Sony Alpha a7 IV Camera Body Black');
     expect(requestText).toContain('Mirrorless camera body, black finish');

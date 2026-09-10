@@ -77,6 +77,7 @@ function semanticCandidate(
   overrides: Partial<ProductSemanticNormalizationCandidate> = {},
 ): ProductSemanticNormalizationCandidate {
   return {
+    commercialName: null,
     manufacturerCandidate: null,
     categoryCandidate: null,
     familyCandidate: null,
@@ -561,6 +562,7 @@ describe('ImportRadarService catalog product handoff', () => {
       capacity: '512GB',
       color: 'Midnight',
       candidate: semanticCandidate({
+        commercialName: 'Apple MacBook Air M5 13" 16GB/512GB Midnight Novo',
         manufacturerCandidate: 'Apple',
         categoryCandidate: 'MacBook',
         familyCandidate: 'MacBook Air',
@@ -582,6 +584,7 @@ describe('ImportRadarService catalog product handoff', () => {
       capacity: '512GB',
       color: 'Space Black',
       candidate: semanticCandidate({
+        commercialName: 'Apple MacBook Pro M5 14" 16GB/512GB Space Black Novo',
         manufacturerCandidate: 'Apple',
         categoryCandidate: 'MacBook',
         familyCandidate: 'MacBook Pro',
@@ -603,6 +606,7 @@ describe('ImportRadarService catalog product handoff', () => {
       capacity: '256GB',
       color: 'Natural',
       candidate: semanticCandidate({
+        commercialName: 'Apple iPhone 17 Pro Max 256GB Natural Novo',
         manufacturerCandidate: 'Apple',
         categoryCandidate: 'iPhone',
         familyCandidate: 'iPhone 17',
@@ -654,6 +658,7 @@ describe('ImportRadarService catalog product handoff', () => {
         color,
         condition: 'NOVO',
       });
+      expect(normalized.sourceCommercialIdentity.commercialName).toBe(candidate.commercialName);
       expect({
         productResolution: normalized.productResolution,
         financialClassification: normalized.financialClassification,
@@ -690,6 +695,7 @@ describe('ImportRadarService catalog product handoff', () => {
       normalizeSemanticProduct: vi.fn().mockResolvedValue(
         semanticResult({
           candidate: semanticCandidate({
+            commercialName: 'Samsung Galaxy A36 256GB 5G Awesome Lavender Novo',
             manufacturerCandidate: 'Samsung',
             categoryCandidate: 'Smartphone',
             familyCandidate: 'Galaxy A',
@@ -729,6 +735,9 @@ describe('ImportRadarService catalog product handoff', () => {
       financialClassification: 'NON_APPLE',
       financialClassificationReason: 'manufacturer_registry',
       pricingEligibility: { status: 'ELIGIBLE', reason: null },
+      sourceCommercialIdentity: {
+        commercialName: 'Samsung Galaxy A36 256GB 5G Awesome Lavender Novo',
+      },
     });
   });
 
@@ -749,6 +758,7 @@ describe('ImportRadarService catalog product handoff', () => {
       normalizeSemanticProduct: vi.fn().mockResolvedValue(
         semanticResult({
           candidate: semanticCandidate({
+            commercialName: 'Canon EOS Rebel T7 Black',
             manufacturerCandidate: 'Canon',
             categoryCandidate: 'Camera',
             modelCandidate: 'EOS Rebel T7',
@@ -784,7 +794,36 @@ describe('ImportRadarService catalog product handoff', () => {
       },
       financialClassification: 'NON_APPLE',
       pricingEligibility: { status: 'ELIGIBLE' },
+      sourceCommercialIdentity: { commercialName: 'Canon EOS Rebel T7 Black' },
     });
+  });
+
+  it('keeps PY financial and cost decisions independent from commercialName', async () => {
+    const normalizedFields = {
+      manufacturerCandidate: 'Apple',
+      categoryCandidate: 'iPhone',
+      familyCandidate: 'iPhone',
+      modelCandidate: 'iPhone 17 Pro Max',
+      storageCandidate: '256GB',
+      conditionCandidate: 'NOVO' as const,
+    };
+    const calculateWithName = (commercialName: string) =>
+      createService([], {
+        normalizeSemanticProduct: vi.fn().mockResolvedValue(
+          semanticResult({
+            candidate: semanticCandidate({ ...normalizedFields, commercialName }),
+          }),
+        ),
+      }).calculate(importProduct, { id: 'user-1' } as never);
+
+    const first = await calculateWithName('iPhone 17 Pro Max 256GB Novo');
+    const reordered = await calculateWithName('Novo 256GB iPhone 17 Pro Max');
+
+    expect(first.sourceCommercialIdentity.commercialName).toBe('iPhone 17 Pro Max 256GB Novo');
+    expect(reordered.sourceCommercialIdentity.commercialName).toBe('Novo 256GB iPhone 17 Pro Max');
+    expect({ ...reordered, sourceCommercialIdentity: first.sourceCommercialIdentity }).toEqual(
+      first,
+    );
   });
 
   it('nao promove atributo Luna sem grounding na fonte', async () => {

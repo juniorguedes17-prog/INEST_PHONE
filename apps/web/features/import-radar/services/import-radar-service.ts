@@ -173,6 +173,7 @@ export type UsaCostPreflightResponse =
       redirector: UsaRedirectorSelection;
       shippingWeightLbs: number | null;
       condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
+      commercialName?: string | null;
       normalizedPricing: {
         category: string | null;
         model: string | null;

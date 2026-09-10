@@ -14,6 +14,7 @@ import { UsaLunaEnrichmentValidatorService } from './usa-luna-enrichment-validat
 
 function candidate(overrides: Partial<ProductSemanticNormalizationCandidate> = {}) {
   return {
+    commercialName: null,
     manufacturerCandidate: null,
     categoryCandidate: null,
     familyCandidate: null,
@@ -486,5 +487,53 @@ describe('UsaLunaEnrichmentValidatorService', () => {
     expect(result).not.toHaveProperty('taxTreatment');
     expect(result).not.toHaveProperty('shippingWeightLbs');
     expect(result).not.toHaveProperty('finalCost');
+  });
+
+  it('keeps commercialName presentation-only and rejects attributes outside grounded fields', async () => {
+    const source = product({
+      sourceName: 'Apple MacBook Air M5 13 16GB 512GB Midnight New',
+      sourceManufacturer: 'Apple',
+      category: 'MacBook',
+      model: 'MacBook Air M5',
+      capacity: '512GB',
+      color: 'Midnight',
+      condition: 'NOVO',
+    });
+    const structured = {
+      manufacturerCandidate: 'Apple',
+      categoryCandidate: 'MacBook',
+      familyCandidate: 'MacBook Air',
+      modelCandidate: 'MacBook Air M5',
+      storageCandidate: '512GB',
+      ramCandidate: '16GB',
+      screenCandidate: '13"',
+      conditionCandidate: 'NOVO' as const,
+    };
+    const first = await createService(
+      candidate({
+        ...structured,
+        commercialName: 'Apple MacBook Air M5 13" 16GB/512GB Midnight Novo',
+      }),
+    ).service.enrich(source);
+    const reordered = await createService(
+      candidate({
+        ...structured,
+        commercialName: 'Midnight MacBook Air M5 512GB 16GB 13" Apple Novo',
+      }),
+    ).service.enrich(source);
+    const invented = await createService(
+      candidate({
+        ...structured,
+        commercialName: 'Apple MacBook Air M5 OLED 13" 16GB/512GB Midnight Novo',
+      }),
+    ).service.enrich(source);
+
+    expect(first.commercialName).toBe('Apple MacBook Air M5 13" 16GB/512GB Midnight Novo');
+    expect(reordered.commercialName).toBe('Midnight MacBook Air M5 512GB 16GB 13" Apple Novo');
+    expect(invented.commercialName).toBeNull();
+    expect({ fields: reordered.fields, logistics: reordered.logisticClassification }).toEqual({
+      fields: first.fields,
+      logistics: first.logisticClassification,
+    });
   });
 });
