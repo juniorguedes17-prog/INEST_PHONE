@@ -72,6 +72,7 @@ function context(
       classification: 'OTHER',
       sources: ['PRODUCT_IDENTITY_FAMILY'],
     },
+    semanticNormalizationStatus: 'CANDIDATE',
     lunaLatencyMs: null,
     lunaErrorCode: null,
     ...overrides,
@@ -198,6 +199,27 @@ describe('UsaEnrichmentInputDecisionService', () => {
     expect(result).toMatchObject({ status: 'BLOCKED', reason: 'MANUFACTURER_AMBIGUOUS' });
   });
 
+  it.each([
+    'TIMEOUT',
+    'MODEL_ERROR',
+    'INVALID_STRUCTURED_OUTPUT',
+    'SKIPPED_DISABLED',
+    'BUDGET_EXHAUSTED',
+  ] as const)('fails closed for semantic normalization status %s', (status) => {
+    const result = createService([]).service.decide(
+      context({
+        semanticNormalizationStatus: status,
+        fields: {
+          ...context().fields,
+          manufacturer: { value: 'Apple', provenance: 'SOURCE', candidateStatus: null },
+          model: { value: 'iPhone 17 Pro', provenance: 'SOURCE', candidateStatus: null },
+        },
+      }),
+    );
+
+    expect(result).toMatchObject({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' });
+  });
+
   it('does not ask about a source-authoritative condition conflict', () => {
     const result = createService([]).service.decide(
       context({
@@ -228,7 +250,7 @@ describe('UsaEnrichmentInputDecisionService', () => {
     expect(result).toMatchObject({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' });
   });
 
-  it('does not create generic persistence for an insufficient runtime attribute', () => {
+  it('fails closed for an ungrounded runtime attribute without creating persistence', () => {
     const { service, manufacturers } = createService([]);
     const result = service.decide(
       context({
@@ -241,7 +263,11 @@ describe('UsaEnrichmentInputDecisionService', () => {
       }),
     );
 
-    expect(result.status).toBe('READY');
+    expect(result).toMatchObject({
+      status: 'BLOCKED',
+      reason: 'ENRICHMENT_CONFLICT',
+      fields: ['model'],
+    });
     expect(manufacturers.confirm).not.toHaveBeenCalled();
   });
 

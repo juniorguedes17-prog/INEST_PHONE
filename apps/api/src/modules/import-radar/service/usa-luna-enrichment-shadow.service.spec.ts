@@ -9,7 +9,8 @@ import {
 
 const lunaCandidate = {
   context: 'NORMALIZE_PRICING_US' as const,
-  enrichmentStatus: 'CANDIDATE' as const,
+  source: 'US' as const,
+  normalizationStatus: 'CANDIDATE' as const,
   candidate: {
     manufacturerCandidate: 'Apple',
     categoryCandidate: 'iPhone',
@@ -62,7 +63,7 @@ function product(overrides: Partial<UsaSourceProduct> = {}): UsaSourceProduct {
 
 function createService() {
   const productNormalization = {
-    enrichUsaProduct: vi.fn().mockResolvedValue(lunaCandidate),
+    normalizeSemanticProduct: vi.fn().mockResolvedValue(lunaCandidate),
   };
   return {
     productNormalization,
@@ -76,7 +77,7 @@ describe('UsaLunaEnrichmentShadowService', () => {
   it('never sends family discovery or catalog counts to Luna', async () => {
     const { productNormalization, service } = createService();
     await service.observe([product({ offerKind: 'FAMILY_STARTING_AT', capacity: undefined })]);
-    expect(productNormalization.enrichUsaProduct).not.toHaveBeenCalled();
+    expect(productNormalization.normalizeSemanticProduct).not.toHaveBeenCalled();
     const response = {
       total: 3278,
       items: [
@@ -91,13 +92,15 @@ describe('UsaLunaEnrichmentShadowService', () => {
       ],
     };
     await service.observe(response.items);
-    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(1);
-    expect(productNormalization.enrichUsaProduct.mock.calls[0]?.[0]).not.toHaveProperty('total');
-    expect(productNormalization.enrichUsaProduct.mock.calls[0]?.[0]).toMatchObject({
+    expect(productNormalization.normalizeSemanticProduct).toHaveBeenCalledTimes(1);
+    expect(productNormalization.normalizeSemanticProduct.mock.calls[0]?.[0]).not.toHaveProperty(
+      'total',
+    );
+    expect(productNormalization.normalizeSemanticProduct.mock.calls[0]?.[0]).toMatchObject({
       sourceEvidence: 'RF-S18-45mm lens kit',
     });
   });
-  it('hands Apple, Amazon, and UPCitemdb source products to NORMALIZE_PRICING_US without mutating them', async () => {
+  it('hands every purchasable Apple, Amazon, and UPCitemdb product to the shared US normalizer without financial context', async () => {
     const { productNormalization, service } = createService();
     const apple = product({ capacity: undefined });
     const amazon = product({
@@ -122,17 +125,23 @@ describe('UsaLunaEnrichmentShadowService', () => {
     const observations = await service.observe([apple, amazon, upc]);
 
     expect(observations).toHaveLength(3);
-    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(1);
-    expect(observations.slice(0, 2).every((entry) => !entry.lunaCalled)).toBe(true);
-    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledWith(
+    expect(productNormalization.normalizeSemanticProduct).toHaveBeenCalledTimes(3);
+    expect(observations.every((entry) => entry.lunaCalled)).toBe(true);
+    expect(productNormalization.normalizeSemanticProduct).toHaveBeenCalledWith(
       expect.objectContaining({
+        context: 'NORMALIZE_PRICING_US',
         source: 'US',
-        provider: 'upcitemdb_us',
-        retailer: null,
-        sourceProductId: 'upcitemdb-us:000123',
+        sourceName: 'Walmart listed iPhone 17 Pro',
+        structuredFields: expect.objectContaining({ manufacturer: null }),
       }),
     );
-    expect(productNormalization.enrichUsaProduct.mock.calls.flat()).not.toContain(1099);
+    for (const [input] of productNormalization.normalizeSemanticProduct.mock.calls) {
+      expect(input).not.toHaveProperty('priceUsd');
+      expect(input).not.toHaveProperty('retailer');
+      expect(input).not.toHaveProperty('sourceProductId');
+      expect(input).not.toHaveProperty('provider');
+      expect(JSON.stringify(input)).not.toContain('1099');
+    }
     expect([apple, amazon, upc]).toEqual(before);
     expect(upc.retailer).toBeNull();
     expect(observations[2]?.result?.candidate).not.toHaveProperty('retailer');
@@ -146,27 +155,28 @@ describe('UsaLunaEnrichmentShadowService', () => {
     const observations = await service.observe([source, { ...source }]);
 
     expect(observations).toHaveLength(1);
-    expect(productNormalization.enrichUsaProduct).toHaveBeenCalledTimes(1);
+    expect(productNormalization.normalizeSemanticProduct).toHaveBeenCalledTimes(1);
   });
 
-  it('does not require Luna for a deterministically complete product', async () => {
+  it('calls Luna even when the legacy deterministic identity is RESOLVED', async () => {
     const { productNormalization, service } = createService();
     const source = product({ sourceName: 'iPhone 17 Pro 256GB Orange' });
 
     const [observation] = await service.observe([source]);
 
     expect(observation).toMatchObject({
-      deterministicState: 'RESOLVED',
-      lunaCalled: false,
-      result: null,
-      skipReason: 'DETERMINISTICALLY_COMPLETE',
+      lunaCalled: true,
+      result: { normalizationStatus: 'CANDIDATE' },
     });
-    expect(productNormalization.enrichUsaProduct).not.toHaveBeenCalled();
+    expect(deriveDeterministicIdentityState(source)).toBe('RESOLVED');
+    expect(productNormalization.normalizeSemanticProduct).toHaveBeenCalledTimes(1);
   });
 
   it('contains a Luna failure as a shadow observation', async () => {
     const { productNormalization, service } = createService();
-    productNormalization.enrichUsaProduct.mockRejectedValue(new Error('network unavailable'));
+    productNormalization.normalizeSemanticProduct.mockRejectedValue(
+      new Error('network unavailable'),
+    );
 
     const [observation] = await service.observe([
       product({ capacity: undefined, sourceName: 'Apple iPhone 17 Pro' }),
@@ -174,16 +184,16 @@ describe('UsaLunaEnrichmentShadowService', () => {
 
     expect(observation).toMatchObject({
       lunaCalled: true,
-      result: { enrichmentStatus: 'MODEL_ERROR', candidate: null },
+      result: { normalizationStatus: 'MODEL_ERROR', candidate: null },
     });
   });
 
-  it('keeps the trigger conservative and deterministic', () => {
+  it('does not use the deterministic state as a semantic gate', () => {
     const complete = product({ sourceName: 'iPhone 17 Pro 256GB Orange' });
     const incomplete = product({ capacity: undefined });
 
     expect(deriveDeterministicIdentityState(complete)).toBe('RESOLVED');
-    expect(shouldCallUsaLuna(complete, 'RESOLVED')).toBe(false);
-    expect(shouldCallUsaLuna(incomplete, 'INSUFFICIENT')).toBe(true);
+    expect(shouldCallUsaLuna(complete)).toBe(true);
+    expect(shouldCallUsaLuna(incomplete)).toBe(true);
   });
 });

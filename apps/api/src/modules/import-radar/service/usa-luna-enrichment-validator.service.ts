@@ -1,20 +1,19 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import {
-  deriveExtendedProductIdentity,
-  normalizeCanonicalText,
-  type ExtendedProductIdentity,
-} from '@inest/product-identity';
+import { deriveExtendedProductIdentity } from '@inest/product-identity';
 import { isReservedAppleManufacturerAlias } from '../../manufacturers/manufacturer-alias-normalizer';
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
+import {
+  type ProductSemanticNormalizationCandidate,
+  type ProductSemanticNormalizationStatus,
+} from '../../evolution-webhook/product-normalization.service';
 import { normalizeProductCondition } from '../condition-normalizer';
 import { resolveLogisticProductClassification } from '../logistic-product-classification';
-import type { UsaProductEnrichmentCandidate } from '../../evolution-webhook/product-normalization.service';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
 import { sourceSemanticText } from '../usa-source-evidence';
 import { UsaLunaEnrichmentShadowService } from './usa-luna-enrichment-shadow.service';
 
 export type UsaCandidateValidationStatus = 'VALIDATED' | 'INSUFFICIENT' | 'CONFLICT';
-export type UsaEnrichmentProvenance = 'SOURCE' | 'DETERMINISTIC' | 'LUNA_VALIDATED';
+export type UsaEnrichmentProvenance = 'SOURCE' | 'LUNA_VALIDATED';
 
 const enrichmentFields = [
   'manufacturer',
@@ -37,6 +36,14 @@ const enrichmentFields = [
 
 export type UsaEnrichmentField = (typeof enrichmentFields)[number];
 
+const explicitSourceConflictFields = new Set<UsaEnrichmentField>([
+  'manufacturer',
+  'model',
+  'storage',
+  'color',
+  'condition',
+]);
+
 export interface UsaNormalizedProductField {
   value: string | null;
   provenance: UsaEnrichmentProvenance | null;
@@ -53,6 +60,7 @@ export interface UsaNormalizedProductContext {
   insufficientFields: UsaEnrichmentField[];
   conflictFields: UsaEnrichmentField[];
   logisticClassification: ReturnType<typeof resolveLogisticProductClassification>;
+  semanticNormalizationStatus: ProductSemanticNormalizationStatus;
   lunaLatencyMs: number | null;
   lunaErrorCode: string | null;
 }
@@ -63,8 +71,11 @@ type CandidateValidation = {
 };
 
 /**
- * The operational USA bridge. Luna values pass through existing deterministic
- * authorities before becoming runtime-only context; source fields always win.
+ * Adapts the Luna-first semantic result to the existing USA runtime context.
+ * Post-Luna checks are limited to source grounding, explicit source conflicts,
+ * manufacturer resolution, and structural condition normalization. Product
+ * Identity is invoked only after adaptation for the unchanged downstream
+ * logistic classifier; it is not used to validate or discard Luna fields.
  */
 @Injectable()
 export class UsaLunaEnrichmentValidatorService {
@@ -79,52 +90,29 @@ export class UsaLunaEnrichmentValidatorService {
 
   async enrich(product: UsaSourceProduct): Promise<UsaNormalizedProductContext> {
     const [observation] = await this.lunaShadow.observe([product]);
-    const candidate = observation?.result?.candidate ?? null;
-    const sourceIdentity = identityFromSource(product);
-    const candidateIdentity = candidate ? identityFromCandidate(candidate) : null;
-    const fields = baseFields(product, sourceIdentity);
-    const candidateValidations = await this.validateCandidates(candidate, candidateIdentity);
+    const result = observation?.result ?? null;
+    const candidate = result?.candidate ?? null;
+    const fields = baseFields(product);
+    const candidateValues: Partial<Record<UsaEnrichmentField, string>> = {};
 
     for (const field of enrichmentFields) {
       const candidateValue = candidateValueFor(field, candidate);
       if (candidateValue === null) continue;
-      const validation = candidateValidations[field];
-      fields[field] = mergeCandidateField(
-        field,
-        fields[field],
-        candidateValue,
-        validation,
-        product,
-        sourceIdentity,
-        candidateIdentity,
-      );
-      if (
-        fields[field].candidateStatus !== 'CONFLICT' &&
-        !candidateIsSourceAnchored(field, candidateValue, product, sourceIdentity)
-      ) {
-        fields[field] = {
-          ...baseFields(product, sourceIdentity)[field],
-          candidateStatus: 'INSUFFICIENT',
-        };
-      }
+      const grounded = candidateIsSourceGrounded(field, candidateValue, product);
+      if (grounded) candidateValues[field] = candidateValue;
+      const validation = await this.validateCandidate(field, candidateValue, grounded);
+      fields[field] = mergeCandidateField(field, fields[field], validation);
     }
 
-    const enrichedIdentity = identityFromFields(product, fields);
+    const downstreamIdentity = identityFromFields(product, fields);
     const logisticClassification = resolveLogisticProductClassification({
-      productIdentity: enrichedIdentity,
+      productIdentity: downstreamIdentity,
       canonicalCategory: fields.category.value,
     });
     const context: UsaNormalizedProductContext = {
       sourceProduct: product,
       fields,
-      candidateValues: Object.fromEntries(
-        enrichmentFields
-          .map((field) => [field, candidateValueFor(field, candidate)])
-          .filter((entry): entry is [UsaEnrichmentField, string] => entry[1] !== null)
-          .filter(([field, value]) =>
-            candidateIsSourceAnchored(field, value, product, sourceIdentity),
-          ),
-      ),
+      candidateValues,
       candidateFields: enrichmentFields.filter(
         (field) => candidateValueFor(field, candidate) !== null,
       ),
@@ -138,34 +126,28 @@ export class UsaLunaEnrichmentValidatorService {
         (field) => fields[field].candidateStatus === 'CONFLICT',
       ),
       logisticClassification,
-      lunaLatencyMs: observation?.result?.latencyMs ?? null,
-      lunaErrorCode: observation?.result?.errorCode ?? null,
+      semanticNormalizationStatus:
+        result?.normalizationStatus ??
+        (product.offerKind === 'FAMILY_STARTING_AT' ? 'SKIPPED_NOT_ELIGIBLE' : 'MODEL_ERROR'),
+      lunaLatencyMs: result?.latencyMs ?? null,
+      lunaErrorCode: result?.errorCode ?? null,
     };
     this.log(context);
     return context;
   }
 
-  private async validateCandidates(
-    candidate: UsaProductEnrichmentCandidate | null,
-    identity: ExtendedProductIdentity | null,
-  ): Promise<Record<UsaEnrichmentField, CandidateValidation>> {
-    const result = Object.fromEntries(
-      enrichmentFields.map((field) => [field, { status: 'INSUFFICIENT', value: null }]),
-    ) as Record<UsaEnrichmentField, CandidateValidation>;
-    if (!candidate || !identity) return result;
-
-    result.manufacturer = await this.validateManufacturer(candidate.manufacturerCandidate);
-    result.condition = validateCondition(candidate.conditionCandidate);
-    for (const field of enrichmentFields.filter(
-      (field) => field !== 'manufacturer' && field !== 'condition',
-    )) {
-      result[field] = validateIdentityField(field, candidateValueFor(field, candidate), identity);
-    }
-    return result;
+  private async validateCandidate(
+    field: UsaEnrichmentField,
+    value: string,
+    grounded: boolean,
+  ): Promise<CandidateValidation> {
+    if (!grounded) return { status: 'INSUFFICIENT', value: null };
+    if (field === 'manufacturer') return this.validateManufacturer(value);
+    if (field === 'condition') return validateCondition(value);
+    return { status: 'VALIDATED', value };
   }
 
-  private async validateManufacturer(value: string | null): Promise<CandidateValidation> {
-    if (!value) return { status: 'INSUFFICIENT', value: null };
+  private async validateManufacturer(value: string): Promise<CandidateValidation> {
     if (isReservedAppleManufacturerAlias(value)) {
       return { status: 'VALIDATED', value: 'Apple' };
     }
@@ -185,10 +167,11 @@ export class UsaLunaEnrichmentValidatorService {
 
   private log(context: UsaNormalizedProductContext) {
     this.logger.debug({
-      event: 'import_radar.usa_luna_enrichment.validation',
+      event: 'import_radar.usa_semantic_normalization.validation',
       source: 'US',
       provider: context.sourceProduct.providerName,
       sourceProductId: context.sourceProduct.sourceProductId,
+      semanticNormalizationStatus: context.semanticNormalizationStatus,
       candidateFields: context.candidateFields,
       validatedFields: context.validatedFields,
       insufficientFields: context.insufficientFields,
@@ -204,91 +187,38 @@ export class UsaLunaEnrichmentValidatorService {
 
 function baseFields(
   product: UsaSourceProduct,
-  identity: ExtendedProductIdentity,
 ): Record<UsaEnrichmentField, UsaNormalizedProductField> {
-  const attributes = identity.variant.attributes;
   return {
     manufacturer: sourceField(product.sourceManufacturer),
     category: sourceField(product.category),
-    family: deterministicField(
-      identity.variant.family === 'unknown' ? null : identity.variant.family,
-    ),
-    model: product.model
-      ? sourceField(product.model)
-      : deterministicField(
-          identity.canonical.canonicalModelMatched ? identity.canonical.canonicalModelLabel : null,
-        ),
-    storage: product.capacity
-      ? sourceField(product.capacity)
-      : deterministicField(identity.canonical.canonicalStorage),
-    ram: deterministicField(identity.canonical.canonicalRam),
-    chip: deterministicField(identity.canonical.canonicalChip),
-    screen: deterministicField(identity.canonical.canonicalScreen),
-    color: product.color
-      ? sourceField(product.color)
-      : deterministicField(identity.canonical.canonicalColor),
-    connectivity: deterministicField(identity.canonical.canonicalConnectivity),
-    condition: product.condition
-      ? sourceField(product.condition)
-      : deterministicField(identity.canonical.canonicalCondition),
-    quantity: deterministicField(attributes.quantity ?? null),
-    feature: deterministicField(attributes.feature ?? null),
-    connector: deterministicField(attributes.connector ?? null),
-    power: deterministicField(attributes.power ?? null),
-    length: deterministicField(attributes.length ?? null),
+    family: emptyField(),
+    model: sourceField(product.model),
+    storage: sourceField(product.capacity),
+    ram: emptyField(),
+    chip: emptyField(),
+    screen: emptyField(),
+    color: sourceField(product.color),
+    connectivity: emptyField(),
+    condition: sourceField(product.condition),
+    quantity: emptyField(),
+    feature: emptyField(),
+    connector: emptyField(),
+    power: emptyField(),
+    length: emptyField(),
   };
 }
 
 function sourceField(value: string | null | undefined): UsaNormalizedProductField {
+  const normalized = value?.trim() || null;
   return {
-    value: value?.trim() || null,
-    provenance: value?.trim() ? 'SOURCE' : null,
+    value: normalized,
+    provenance: normalized ? 'SOURCE' : null,
     candidateStatus: null,
   };
 }
 
-function deterministicField(value: string | null | undefined): UsaNormalizedProductField {
-  return {
-    value: value?.trim() || null,
-    provenance: value?.trim() ? 'DETERMINISTIC' : null,
-    candidateStatus: null,
-  };
-}
-
-function identityFromSource(product: UsaSourceProduct) {
-  return deriveExtendedProductIdentity({
-    productName: sourceSemanticText(product),
-    category: product.category,
-    model: product.model,
-    capacity: product.capacity,
-    color: product.color,
-    quality: product.condition,
-  });
-}
-
-function identityFromCandidate(candidate: UsaProductEnrichmentCandidate) {
-  return deriveExtendedProductIdentity({
-    productName:
-      candidate.modelCandidate ?? candidate.familyCandidate ?? candidate.categoryCandidate ?? '',
-    category: candidate.categoryCandidate,
-    model: candidate.modelCandidate,
-    capacity: candidate.storageCandidate,
-    color: candidate.colorCandidate,
-    quality: candidate.conditionCandidate,
-    notes: [
-      candidate.ramCandidate,
-      candidate.chipCandidate,
-      candidate.screenCandidate,
-      candidate.connectivityCandidate,
-      candidate.quantityCandidate,
-      ...candidate.featureCandidates,
-      candidate.connectorCandidate,
-      candidate.powerCandidate,
-      candidate.lengthCandidate,
-    ]
-      .filter(Boolean)
-      .join(' '),
-  });
+function emptyField(): UsaNormalizedProductField {
+  return { value: null, provenance: null, candidateStatus: null };
 }
 
 function identityFromFields(
@@ -318,36 +248,17 @@ function identityFromFields(
   });
 }
 
-function validateCondition(value: string | null): CandidateValidation {
-  if (!value) return { status: 'INSUFFICIENT', value: null };
+function validateCondition(value: string): CandidateValidation {
   const normalized = normalizeProductCondition(value);
   return normalized.status === 'RESOLVED'
     ? { status: 'VALIDATED', value: normalized.condition }
     : { status: 'INSUFFICIENT', value: null };
 }
 
-function validateIdentityField(
-  field: Exclude<UsaEnrichmentField, 'manufacturer' | 'condition'>,
-  candidateValue: string | null,
-  identity: ExtendedProductIdentity,
-): CandidateValidation {
-  if (!candidateValue) return { status: 'INSUFFICIENT', value: null };
-  const value = identityValue(field, identity);
-  if (!value) return { status: 'INSUFFICIENT', value: null };
-  if (field === 'family' && normalizeCanonicalText(candidateValue) !== value) {
-    return { status: 'INSUFFICIENT', value: null };
-  }
-  return { status: 'VALIDATED', value };
-}
-
 function mergeCandidateField(
   field: UsaEnrichmentField,
   current: UsaNormalizedProductField,
-  candidateValue: string,
   validation: CandidateValidation,
-  product: UsaSourceProduct,
-  sourceIdentity: ExtendedProductIdentity,
-  candidateIdentity: ExtendedProductIdentity | null,
 ): UsaNormalizedProductField {
   if (validation.status !== 'VALIDATED' || validation.value === null) {
     return { ...current, candidateStatus: validation.status };
@@ -359,44 +270,20 @@ function mergeCandidateField(
       candidateStatus: 'VALIDATED',
     };
   }
-  if (
-    sameFieldValue(
-      field,
-      current.value,
-      validation.value,
-      product,
-      sourceIdentity,
-      candidateIdentity,
-    )
-  ) {
+  if (sameMechanicalValue(field, current.value, validation.value)) {
     return { ...current, candidateStatus: 'VALIDATED' };
+  }
+  if (!explicitSourceConflictFields.has(field)) {
+    return {
+      value: validation.value,
+      provenance: 'LUNA_VALIDATED',
+      candidateStatus: 'VALIDATED',
+    };
   }
   return { ...current, candidateStatus: 'CONFLICT' };
 }
 
-function sameFieldValue(
-  field: UsaEnrichmentField,
-  current: string,
-  candidate: string,
-  product: UsaSourceProduct,
-  sourceIdentity: ExtendedProductIdentity,
-  candidateIdentity: ExtendedProductIdentity | null,
-) {
-  if (!candidateIdentity) return false;
-  if (field === 'model') {
-    return Boolean(
-      sourceIdentity.canonical.canonicalModelMatched &&
-      sourceIdentity.canonical.canonicalModelKey === candidateIdentity.canonical.canonicalModelKey,
-    );
-  }
-  if (field === 'color') {
-    return sourceIdentity.canonical.canonicalColor === candidateIdentity.canonical.canonicalColor;
-  }
-  if (field === 'storage') {
-    return (
-      sourceIdentity.canonical.canonicalStorage === candidateIdentity.canonical.canonicalStorage
-    );
-  }
+function sameMechanicalValue(field: UsaEnrichmentField, current: string, candidate: string) {
   if (field === 'condition') {
     const currentCondition = normalizeProductCondition(current);
     const candidateCondition = normalizeProductCondition(candidate);
@@ -406,51 +293,12 @@ function sameFieldValue(
       currentCondition.condition === candidateCondition.condition
     );
   }
-  return normalizeCanonicalText(current) === normalizeCanonicalText(candidate);
-}
-
-function identityValue(
-  field: Exclude<UsaEnrichmentField, 'manufacturer' | 'condition'>,
-  identity: ExtendedProductIdentity,
-) {
-  const attributes = identity.variant.attributes;
-  switch (field) {
-    case 'category':
-      return identity.canonical.canonicalCategory || null;
-    case 'family':
-      return identity.variant.family === 'unknown' ? null : identity.variant.family;
-    case 'model':
-      return identity.canonical.canonicalModelMatched
-        ? identity.canonical.canonicalModelLabel
-        : null;
-    case 'storage':
-      return identity.canonical.canonicalStorage;
-    case 'ram':
-      return identity.canonical.canonicalRam;
-    case 'chip':
-      return identity.canonical.canonicalChip;
-    case 'screen':
-      return identity.canonical.canonicalScreen;
-    case 'color':
-      return identity.canonical.canonicalColor;
-    case 'connectivity':
-      return identity.canonical.canonicalConnectivity;
-    case 'quantity':
-      return attributes.quantity ?? null;
-    case 'feature':
-      return attributes.feature ?? null;
-    case 'connector':
-      return attributes.connector ?? null;
-    case 'power':
-      return attributes.power ?? null;
-    case 'length':
-      return attributes.length ?? null;
-  }
+  return mechanicallyNormalize(current) === mechanicallyNormalize(candidate);
 }
 
 function candidateValueFor(
   field: UsaEnrichmentField,
-  candidate: UsaProductEnrichmentCandidate | null,
+  candidate: ProductSemanticNormalizationCandidate | null,
 ): string | null {
   if (!candidate) return null;
   if (field === 'feature') {
@@ -476,14 +324,41 @@ function candidateValueFor(
   return values[field];
 }
 
-function candidateIsSourceAnchored(
+function candidateIsSourceGrounded(
   field: UsaEnrichmentField,
   value: string,
   product: UsaSourceProduct,
-  sourceIdentity: ExtendedProductIdentity,
 ): boolean {
-  if (field === 'quantity') return false;
-  const text = [
+  const text = sourceGroundingText(product);
+  if (field === 'condition') {
+    const source = normalizeProductCondition(product.condition ?? text);
+    const proposed = normalizeProductCondition(value);
+    return (
+      source.status === 'RESOLVED' &&
+      proposed.status === 'RESOLVED' &&
+      source.condition === proposed.condition
+    );
+  }
+
+  const proposedTokens = words(value);
+  const sourceTokens = words(text);
+  if (proposedTokens.length === 0 || sourceTokens.length === 0) return false;
+  if (proposedTokens.every((token) => sourceTokens.includes(token))) return true;
+
+  const proposedNumbers = numericParts(value);
+  const sourceNumbers = numericParts(text);
+  if (
+    proposedNumbers.length > 0 &&
+    proposedNumbers.every((number) => sourceNumbers.includes(number)) &&
+    abbreviationSignals(value).some((signal) => sourceAbbreviationTokens(text).includes(signal))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function sourceGroundingText(product: UsaSourceProduct) {
+  return [
     sourceSemanticText(product),
     product.sourceManufacturer,
     product.category,
@@ -494,21 +369,46 @@ function candidateIsSourceAnchored(
   ]
     .filter(Boolean)
     .join(' ');
-  if (field === 'condition') {
-    const source = normalizeProductCondition(product.condition ?? text);
-    const proposed = normalizeProductCondition(value);
-    return (
-      source.status === 'RESOLVED' &&
-      proposed.status === 'RESOLVED' &&
-      source.condition === proposed.condition
-    );
+}
+
+function words(value: string) {
+  return mechanicallyNormalize(value).split(' ').filter(Boolean);
+}
+
+function numericParts(value: string): string[] {
+  return mechanicallyCompact(value).match(/\d+/g) ?? [];
+}
+
+function abbreviationSignals(value: string) {
+  const textTokens = words(value).filter((token) => /[a-z]/.test(token));
+  const signals = new Set<string>();
+  for (let start = 0; start < textTokens.length; start += 1) {
+    for (let end = start + 2; end <= textTokens.length; end += 1) {
+      signals.add(
+        textTokens
+          .slice(start, end)
+          .map((token) => token[0])
+          .join(''),
+      );
+    }
   }
-  if (field !== 'manufacturer') {
-    const sourceValue = identityValue(field, sourceIdentity);
-    if (sourceValue && normalizeCanonicalText(sourceValue) === normalizeCanonicalText(value))
-      return true;
-  }
-  const normalized = normalizeCanonicalText(text);
-  const proposed = normalizeCanonicalText(value);
-  return Boolean(proposed && ` ${normalized} `.includes(` ${proposed} `));
+  return [...signals].filter((signal) => signal.length >= 2);
+}
+
+function sourceAbbreviationTokens(value: string) {
+  return words(value).flatMap((token) => token.match(/[a-z]+/g) ?? []);
+}
+
+function mechanicallyNormalize(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/(\d)\s*(gb|tb|mm|cm)\b/g, '$1$2')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function mechanicallyCompact(value: string) {
+  return mechanicallyNormalize(value).replace(/\s+/g, '');
 }

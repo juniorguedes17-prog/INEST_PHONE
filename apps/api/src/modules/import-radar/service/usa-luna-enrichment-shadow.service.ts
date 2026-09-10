@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { deriveExtendedProductIdentity } from '@inest/product-identity';
 import {
   ProductNormalizationService,
-  type UsaProductEnrichmentResult,
+  type ProductSemanticNormalizationResult,
 } from '../../evolution-webhook/product-normalization.service';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
 import { sourceSemanticText, compactSourceEvidence } from '../usa-source-evidence';
@@ -12,16 +12,15 @@ export type UsaDeterministicIdentityState = 'RESOLVED' | 'INSUFFICIENT' | 'AMBIG
 export interface UsaProductEnrichmentShadowObservation {
   sourceProductId: string;
   provider: string;
-  deterministicState: UsaDeterministicIdentityState;
   lunaCalled: boolean;
-  result: UsaProductEnrichmentResult | null;
-  skipReason?: 'DETERMINISTICALLY_COMPLETE' | 'DISCOVERY_ONLY';
+  result: ProductSemanticNormalizationResult | null;
+  skipReason?: 'DISCOVERY_ONLY';
 }
 
 /**
- * Runtime-only Luna handoff for USA source products. It consumes the shared
- * NORMALIZE_PRICING_US infrastructure but deliberately has no authority to
- * alter source, identity, retailer, TAX, logistics, or pricing state.
+ * Primary semantic Luna handoff for purchasable USA source products. It
+ * deliberately forwards no identifier, retailer, price, TAX, logistics, or
+ * pricing state to the semantic normalization boundary.
  */
 @Injectable()
 export class UsaLunaEnrichmentShadowService {
@@ -46,43 +45,36 @@ export class UsaLunaEnrichmentShadowService {
   private async observeOne(
     product: UsaSourceProduct,
   ): Promise<UsaProductEnrichmentShadowObservation> {
-    const deterministicState = deriveDeterministicIdentityState(product);
-    if (!shouldCallUsaLuna(product, deterministicState)) {
+    if (!shouldCallUsaLuna(product)) {
       const observation: UsaProductEnrichmentShadowObservation = {
         sourceProductId: product.sourceProductId,
         provider: product.providerName,
-        deterministicState,
         lunaCalled: false,
         result: null,
-        skipReason:
-          product.offerKind === 'FAMILY_STARTING_AT'
-            ? 'DISCOVERY_ONLY'
-            : 'DETERMINISTICALLY_COMPLETE',
+        skipReason: 'DISCOVERY_ONLY',
       };
       this.log(observation);
       return observation;
     }
 
     try {
-      const result = await this.productNormalization.enrichUsaProduct({
+      const result = await this.productNormalization.normalizeSemanticProduct({
+        context: 'NORMALIZE_PRICING_US',
         source: 'US',
-        provider: product.providerName,
-        sourceProductId: product.sourceProductId,
         sourceName: product.sourceName,
         sourceEvidence: compactSourceEvidence(product.sourceEvidence ?? ''),
-        retailer: product.retailer,
-        sourceManufacturer: product.sourceManufacturer,
-        category: product.category,
-        model: product.model ?? null,
-        capacity: product.capacity ?? null,
-        color: product.color ?? null,
-        condition: product.condition ?? null,
-        deterministicState,
+        structuredFields: {
+          manufacturer: product.sourceManufacturer,
+          category: product.category,
+          model: product.model ?? null,
+          storage: product.capacity ?? null,
+          color: product.color ?? null,
+          condition: product.condition ?? null,
+        },
       });
       const observation = {
         sourceProductId: product.sourceProductId,
         provider: product.providerName,
-        deterministicState,
         lunaCalled: result.lunaCalled,
         result,
       } satisfies UsaProductEnrichmentShadowObservation;
@@ -93,7 +85,6 @@ export class UsaLunaEnrichmentShadowService {
       const observation = {
         sourceProductId: product.sourceProductId,
         provider: product.providerName,
-        deterministicState,
         lunaCalled: true,
         result,
       } satisfies UsaProductEnrichmentShadowObservation;
@@ -105,11 +96,10 @@ export class UsaLunaEnrichmentShadowService {
   private log(observation: UsaProductEnrichmentShadowObservation) {
     const result = observation.result;
     this.logger.debug({
-      event: 'import_radar.usa_luna_enrichment.shadow_handoff',
+      event: 'import_radar.usa_semantic_normalization.handoff',
       source: 'US',
       provider: observation.provider,
       sourceProductId: observation.sourceProductId,
-      deterministicState: observation.deterministicState,
       lunaCalled: observation.lunaCalled,
       candidateFieldsProduced: candidateFieldNames(result?.candidate ?? null),
       latencyMs: result?.latencyMs ?? null,
@@ -136,21 +126,15 @@ export function deriveDeterministicIdentityState(
   return identity.profit.status === 'ambiguous_identity' ? 'AMBIGUOUS' : 'INSUFFICIENT';
 }
 
-export function shouldCallUsaLuna(
-  product: UsaSourceProduct,
-  deterministicState: UsaDeterministicIdentityState,
-) {
-  return (
-    product.offerKind !== 'FAMILY_STARTING_AT' &&
-    deterministicState !== 'RESOLVED' &&
-    Boolean(sourceSemanticText(product).trim())
-  );
+export function shouldCallUsaLuna(product: UsaSourceProduct) {
+  return product.offerKind !== 'FAMILY_STARTING_AT' && Boolean(sourceSemanticText(product).trim());
 }
 
-function unavailableResult(error: unknown): UsaProductEnrichmentResult {
+function unavailableResult(error: unknown): ProductSemanticNormalizationResult {
   return {
     context: 'NORMALIZE_PRICING_US',
-    enrichmentStatus: 'MODEL_ERROR',
+    source: 'US',
+    normalizationStatus: 'MODEL_ERROR',
     candidate: null,
     schemaValid: false,
     lunaCalled: true,
@@ -163,7 +147,7 @@ function unavailableResult(error: unknown): UsaProductEnrichmentResult {
   };
 }
 
-function candidateFieldNames(candidate: UsaProductEnrichmentResult['candidate']) {
+function candidateFieldNames(candidate: ProductSemanticNormalizationResult['candidate']) {
   if (!candidate) return [];
   return Object.entries(candidate)
     .filter(([, value]) => (Array.isArray(value) ? value.length > 0 : value !== null))

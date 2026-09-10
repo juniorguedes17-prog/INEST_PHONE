@@ -82,6 +82,13 @@ export class UsaEnrichmentInputDecisionService {
         context: decisionContext,
       };
     }
+    if (context.semanticNormalizationStatus !== 'CANDIDATE') {
+      return {
+        status: 'BLOCKED',
+        reason: 'ENRICHMENT_CONFLICT',
+        context: decisionContext,
+      };
+    }
     const manufacturer = context.fields.manufacturer;
     const candidateManufacturer = context.candidateValues.manufacturer;
 
@@ -171,6 +178,16 @@ export class UsaEnrichmentInputDecisionService {
         status: 'BLOCKED',
         reason: 'ENRICHMENT_CONFLICT',
         fields: nonSourceConflicts,
+        context: decisionContext,
+      };
+    }
+
+    const ungroundedFields = context.insufficientFields.filter((field) => field !== 'manufacturer');
+    if (ungroundedFields.length > 0) {
+      return {
+        status: 'BLOCKED',
+        reason: 'ENRICHMENT_CONFLICT',
+        fields: ungroundedFields,
         context: decisionContext,
       };
     }

@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { UsaProductEnrichmentCandidate } from '../../evolution-webhook/product-normalization.service';
+import { deriveExtendedProductIdentity } from '@inest/product-identity';
+import type {
+  ProductSemanticNormalizationCandidate,
+  ProductSemanticNormalizationStatus,
+} from '../../evolution-webhook/product-normalization.service';
 import type { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
+import { sourceSemanticText } from '../usa-source-evidence';
+import { resolveLogisticProductClassification } from '../logistic-product-classification';
+import { UsaEnrichmentInputDecisionService } from './usa-enrichment-input-decision.service';
 import type { UsaLunaEnrichmentShadowService } from './usa-luna-enrichment-shadow.service';
 import { UsaLunaEnrichmentValidatorService } from './usa-luna-enrichment-validator.service';
 
-function candidate(overrides: Partial<UsaProductEnrichmentCandidate> = {}) {
+function candidate(overrides: Partial<ProductSemanticNormalizationCandidate> = {}) {
   return {
     manufacturerCandidate: null,
     categoryCandidate: null,
@@ -24,7 +31,7 @@ function candidate(overrides: Partial<UsaProductEnrichmentCandidate> = {}) {
     powerCandidate: null,
     lengthCandidate: null,
     ...overrides,
-  } satisfies UsaProductEnrichmentCandidate;
+  } satisfies ProductSemanticNormalizationCandidate;
 }
 
 function product(overrides: Partial<UsaSourceProduct> = {}): UsaSourceProduct {
@@ -47,8 +54,9 @@ function product(overrides: Partial<UsaSourceProduct> = {}): UsaSourceProduct {
 }
 
 function createService(
-  lunaCandidate: UsaProductEnrichmentCandidate | null,
+  lunaCandidate: ProductSemanticNormalizationCandidate | null,
   manufacturerResolution: unknown = { status: 'MISSING', normalizedEvidence: '' },
+  status: ProductSemanticNormalizationStatus = lunaCandidate ? 'CANDIDATE' : 'MODEL_ERROR',
   lunaErrorCode?: string,
 ) {
   const shadow = {
@@ -56,17 +64,21 @@ function createService(
       {
         sourceProductId: 'source-id',
         provider: 'provider',
-        deterministicState: 'INSUFFICIENT',
-        lunaCalled: Boolean(lunaCandidate),
-        result: lunaCandidate
-          ? {
-              candidate: lunaCandidate,
-              latencyMs: 12,
-              errorCode: lunaErrorCode,
-            }
-          : lunaErrorCode
-            ? { candidate: null, latencyMs: null, errorCode: lunaErrorCode }
-            : null,
+        lunaCalled: status !== 'SKIPPED_NOT_ELIGIBLE',
+        result: {
+          context: 'NORMALIZE_PRICING_US',
+          source: 'US',
+          normalizationStatus: status,
+          candidate: lunaCandidate,
+          schemaValid: status === 'CANDIDATE',
+          lunaCalled: status !== 'SKIPPED_NOT_ELIGIBLE',
+          model: 'gpt-5.6-luna',
+          inputTokens: null,
+          outputTokens: null,
+          estimatedCostUsd: null,
+          latencyMs: lunaCandidate ? 12 : null,
+          errorCode: lunaErrorCode,
+        },
       },
     ]),
   };
@@ -83,157 +95,299 @@ function createService(
 
 describe('UsaLunaEnrichmentValidatorService', () => {
   it.each([
-    ['Canon', 'EOS R50 Mirrorless Camera RF-S18-45mm Kit White New'],
-    ['Sony', 'Alpha a7 IV Camera Black New'],
-    ['Garmin', 'Fenix 8 Watch Black New'],
-    ['Samsung', 'Galaxy S25 Ultra 512GB Black New'],
+    [
+      'Samsung',
+      'Galaxy S25 Ultra',
+      'Samsung Galaxy S25 Ultra 512GB Black Smartphone New',
+      'Smartphone',
+    ],
+    ['Sony', 'Alpha A7 IV', 'Sony Alpha A7 IV Mirrorless Camera Black New', 'Camera'],
+    ['Canon', 'EOS Rebel T7', 'Canon EOS Rebel T7 DSLR Camera Black New', 'Camera'],
   ])(
-    'structures explicit %s evidence without Product.id or inventing missing fields',
-    async (brand, description) => {
+    'accepts source-grounded %s semantics without requiring an Apple/canonical model',
+    async (brand, model, sourceName, category) => {
       const { service } = createService(
         candidate({
           manufacturerCandidate: brand,
-          modelCandidate: description,
-          ramCandidate: '64GB',
-          quantityCandidate: '2',
+          categoryCandidate: category,
+          modelCandidate: model,
+          storageCandidate: null,
         }),
         { status: 'FOUND', canonicalName: brand },
       );
-      const source = product({
-        sourceName: 'Source product',
-        sourceEvidence: `${brand} ${description}`,
-        sourceManufacturer: null,
-        category: '',
-        providerName: 'upcitemdb_us',
-      });
-      const result = await service.enrich(source);
+
+      const result = await service.enrich(
+        product({
+          sourceName,
+          sourceEvidence: sourceName,
+          sourceManufacturer: null,
+          category: '',
+          model: undefined,
+          capacity: undefined,
+          providerName: 'amazon_us',
+          retailer: 'Amazon',
+        }),
+      );
+
       expect(result.fields.manufacturer).toMatchObject({
         value: brand,
-        candidateStatus: 'VALIDATED',
         provenance: 'LUNA_VALIDATED',
+        candidateStatus: 'VALIDATED',
       });
-      expect(result.candidateValues.model).toBe(description);
-      expect(result.fields.ram).toMatchObject({ value: null, candidateStatus: 'INSUFFICIENT' });
-      expect(result.fields.quantity).toMatchObject({
+      expect(result.fields.model).toMatchObject({
+        value: model,
+        provenance: 'LUNA_VALIDATED',
+        candidateStatus: 'VALIDATED',
+      });
+      expect(result.fields.storage).toEqual({
         value: null,
-        candidateStatus: 'INSUFFICIENT',
+        provenance: null,
+        candidateStatus: null,
       });
-      expect(result.sourceProduct).toBe(source);
-      expect(source).not.toHaveProperty('productId');
     },
   );
-  it('validates a MacBook candidate through existing Product Identity without mutating its source product', async () => {
-    const source = product({ category: 'MacBook' });
+
+  it('normalizes the Garmin B0CG6NBJ61 evidence without an Apple model registry', async () => {
+    const title = 'Garmin vívoactive 5 Health & Fitness GPS Smartwatch 42mm Ivory';
+    const { service, manufacturers } = createService(
+      candidate({
+        manufacturerCandidate: 'Garmin',
+        categoryCandidate: 'Smartwatch',
+        familyCandidate: 'vivoactive',
+        modelCandidate: 'vivoactive 5',
+        screenCandidate: '42mm',
+        colorCandidate: 'Ivory',
+        connectivityCandidate: 'GPS',
+        storageCandidate: null,
+      }),
+      { status: 'FOUND', canonicalName: 'Garmin' },
+    );
+
+    const result = await service.enrich(
+      product({
+        providerName: 'amazon_us',
+        sourceProductId: 'amazon-us:B0CG6NBJ61',
+        sourceName: title,
+        displayName: title,
+        sourceEvidence: `ASIN B0CG6NBJ61 ${title}`,
+        sourceManufacturer: null,
+        retailer: 'Amazon',
+        category: 'Electronics',
+        model: undefined,
+        capacity: undefined,
+        color: undefined,
+      }),
+    );
+
+    expect(result.semanticNormalizationStatus).toBe('CANDIDATE');
+    expect(result.fields).toMatchObject({
+      manufacturer: { value: 'Garmin', candidateStatus: 'VALIDATED' },
+      category: {
+        value: 'Smartwatch',
+        provenance: 'LUNA_VALIDATED',
+        candidateStatus: 'VALIDATED',
+      },
+      family: { value: 'vivoactive', candidateStatus: 'VALIDATED' },
+      model: { value: 'vivoactive 5', candidateStatus: 'VALIDATED' },
+      screen: { value: '42mm', candidateStatus: 'VALIDATED' },
+      color: { value: 'Ivory', candidateStatus: 'VALIDATED' },
+      connectivity: { value: 'GPS', candidateStatus: 'VALIDATED' },
+      storage: { value: null, candidateStatus: null },
+    });
+    expect(result.logisticClassification.classification).toBe('OTHER');
+    expect(
+      new UsaEnrichmentInputDecisionService(
+        service,
+        manufacturers as unknown as ManufacturersService,
+      ).decide(result),
+    ).toMatchObject({ status: 'READY', reason: null });
+  });
+
+  it.each([
+    {
+      name: 'iPhone new',
+      sourceName: 'Apple iPhone 17 Pro 256GB Black New',
+      category: 'iPhone',
+      model: 'iPhone 17 Pro',
+      storage: '256GB',
+      color: 'Black',
+      condition: 'NOVO' as const,
+    },
+    {
+      name: 'iPhone renewed',
+      sourceName: 'Apple iPhone 16 Pro 512GB Natural Titanium Renewed',
+      category: 'iPhone',
+      model: 'iPhone 16 Pro',
+      storage: '512GB',
+      color: 'Natural Titanium',
+      condition: 'SEMINOVO' as const,
+    },
+    {
+      name: 'MacBook Air',
+      sourceName: 'Apple MacBook Air M5 13 16GB 512GB Midnight New',
+      category: 'MacBook',
+      model: 'MacBook Air M5',
+      storage: '512GB',
+      color: 'Midnight',
+      condition: 'NOVO' as const,
+    },
+    {
+      name: 'MacBook Pro',
+      sourceName: 'Apple MacBook Pro M5 14 24GB 1TB Silver New',
+      category: 'MacBook',
+      model: 'MacBook Pro M5',
+      storage: '1TB',
+      color: 'Silver',
+      condition: 'NOVO' as const,
+    },
+    {
+      name: 'Apple Watch GPS',
+      sourceName: 'Apple Watch Series 11 42mm GPS Black New',
+      category: 'Apple Watch',
+      model: 'Apple Watch Series 11',
+      storage: null,
+      color: 'Black',
+      condition: 'NOVO' as const,
+    },
+    {
+      name: 'Apple Watch Cellular',
+      sourceName: 'Apple Watch Ultra 3 49mm GPS Cellular Natural New',
+      category: 'Apple Watch',
+      model: 'Apple Watch Ultra 3',
+      storage: null,
+      color: 'Natural',
+      condition: 'NOVO' as const,
+    },
+    {
+      name: 'iPad',
+      sourceName: 'Apple iPad Air M4 11 256GB Blue WiFi New',
+      category: 'iPad',
+      model: 'iPad Air M4',
+      storage: '256GB',
+      color: 'Blue',
+      condition: 'NOVO' as const,
+    },
+  ])('preserves official structured Apple fields for $name', async (testCase) => {
+    const source = product({
+      sourceName: testCase.sourceName,
+      sourceManufacturer: 'Apple',
+      category: testCase.category,
+      model: testCase.model,
+      capacity: testCase.storage ?? undefined,
+      color: testCase.color,
+      condition: testCase.condition,
+    });
     const before = structuredClone(source);
     const { service } = createService(
       candidate({
         manufacturerCandidate: 'Apple',
-        categoryCandidate: 'MacBook',
-        familyCandidate: 'macbook',
-        modelCandidate: 'MacBook Air M5 13"',
-        storageCandidate: '512GB',
-        ramCandidate: '16GB',
-        chipCandidate: 'M5',
-        screenCandidate: '13"',
-        colorCandidate: 'Midnight',
-        conditionCandidate: 'NOVO',
+        categoryCandidate: testCase.category,
+        modelCandidate: testCase.model,
+        storageCandidate: testCase.storage,
+        colorCandidate: testCase.color,
+        conditionCandidate: testCase.condition,
       }),
     );
 
     const result = await service.enrich(source);
 
-    expect(result.validatedFields).toEqual(
-      expect.arrayContaining([
-        'manufacturer',
-        'model',
-        'storage',
-        'ram',
-        'chip',
-        'screen',
-        'color',
-      ]),
-    );
-    expect(result.fields.model).toMatchObject({ value: 'MacBook Air M5 13"' });
-    expect(result.fields.condition).toMatchObject({
-      value: null,
-      provenance: null,
-      candidateStatus: 'INSUFFICIENT',
-    });
+    expect(result.fields.manufacturer.value).toBe('Apple');
+    expect(result.fields.model.value).toBe(testCase.model);
+    expect(result.fields.storage.value).toBe(testCase.storage);
+    expect(result.fields.color.value).toBe(testCase.color);
+    expect(result.fields.condition.value).toBe(testCase.condition);
+    expect(result.conflictFields).toEqual([]);
     expect(source).toEqual(before);
-    expect(result.logisticClassification.classification).toBe('OTHER');
+
+    const financialHandoffA = {
+      category: source.category,
+      model: source.model ?? null,
+      capacity: source.capacity ?? null,
+      color: source.color ?? null,
+      condition: source.condition ?? null,
+    };
+    const financialHandoffB = {
+      category: result.fields.category.value,
+      model: result.fields.model.value,
+      capacity: result.fields.storage.value,
+      color: result.fields.color.value,
+      condition: result.fields.condition.value,
+    };
+    expect(financialHandoffB).toEqual(financialHandoffA);
+
+    const identityA = deriveExtendedProductIdentity({
+      productName: sourceSemanticText(source),
+      category: source.category,
+      model: source.model,
+      capacity: source.capacity,
+      color: source.color,
+      quality: source.condition,
+    });
+    expect(result.logisticClassification).toEqual(
+      resolveLogisticProductClassification({
+        productIdentity: identityA,
+        canonicalCategory: source.category,
+      }),
+    );
   });
 
-  it('allows partial validation for an abbreviated iPhone without inventing unavailable fields', async () => {
+  it('uses mechanical evidence binding for Unicode, reordered words, units, and model abbreviations', async () => {
     const { service } = createService(
       candidate({
-        categoryCandidate: 'iPhone',
-        familyCandidate: 'iphone',
         modelCandidate: 'iPhone 17 Pro Max',
         storageCandidate: '256GB',
-        colorCandidate: 'Orange',
-        conditionCandidate: 'NOVO',
+        screenCandidate: '42mm',
       }),
     );
 
     const result = await service.enrich(
       product({
-        sourceName: 'APL 17PM 256 ORG US',
-        sourceProductId: 'amazon-us:abbreviated',
-        providerName: 'amazon_us',
+        sourceName: 'APL 17PM 256 GB Ivory 42 mm',
+        sourceEvidence: 'vívoactive Ivory Garmin',
         category: '',
-        retailer: 'Amazon',
+        model: undefined,
+        capacity: undefined,
       }),
     );
 
     expect(result.fields.model).toMatchObject({
-      value: null,
-      provenance: null,
-      candidateStatus: 'INSUFFICIENT',
+      value: 'iPhone 17 Pro Max',
+      candidateStatus: 'VALIDATED',
     });
-    expect(result.fields.storage).toMatchObject({ candidateStatus: 'INSUFFICIENT' });
-    expect(result.fields.ram).toMatchObject({ value: null, candidateStatus: null });
-    expect(result.logisticClassification.classification).toBe('UNRESOLVED');
+    expect(result.fields.storage).toMatchObject({ value: '256GB', candidateStatus: 'VALIDATED' });
+    expect(result.fields.screen).toMatchObject({ value: '42mm', candidateStatus: 'VALIDATED' });
   });
 
-  it('validates a registered non-Apple manufacturer but leaves unsupported Canon model fields insufficient', async () => {
-    const { service, manufacturers } = createService(
+  it('keeps absent and unsupported attributes null instead of inventing them', async () => {
+    const { service } = createService(
       candidate({
         manufacturerCandidate: 'Canon',
-        categoryCandidate: 'Camera',
-        modelCandidate: 'EOS Rebel T7',
+        modelCandidate: 'EOS R50',
+        storageCandidate: '512GB',
+        ramCandidate: '64GB',
       }),
-      {
-        status: 'FOUND',
-        manufacturerId: 'canon-id',
-        manufacturerKey: 'canon',
-        canonicalName: 'Canon',
-        provenance: 'AI_CANDIDATE_VALIDATED',
-        normalizedEvidence: 'canon',
-        matchedAlias: 'Canon',
-        normalizedAlias: 'canon',
-      },
+      { status: 'FOUND', canonicalName: 'Canon' },
     );
 
     const result = await service.enrich(
       product({
-        sourceName: 'Canon EOS Rebel T7 DSLR Camera',
+        sourceName: 'Canon EOS R50 Mirrorless Camera Black',
         category: '',
-        retailer: 'B&H Photo Video',
-        sourceManufacturer: null,
+        model: undefined,
+        capacity: undefined,
       }),
     );
 
-    expect(manufacturers.resolve).toHaveBeenCalledWith({
-      evidence: 'Canon',
-      matchMode: 'EXACT_ALIAS',
-      provenance: 'AI_CANDIDATE_VALIDATED',
+    expect(result.fields.storage).toEqual({
+      value: null,
+      provenance: null,
+      candidateStatus: 'INSUFFICIENT',
     });
-    expect(result.fields.manufacturer).toMatchObject({
-      value: 'Canon',
-      provenance: 'LUNA_VALIDATED',
-      candidateStatus: 'VALIDATED',
+    expect(result.fields.ram).toEqual({
+      value: null,
+      provenance: null,
+      candidateStatus: 'INSUFFICIENT',
     });
-    expect(result.fields.model).toMatchObject({ value: null, candidateStatus: 'INSUFFICIENT' });
   });
 
   it.each([
@@ -247,96 +401,70 @@ describe('UsaLunaEnrichmentValidatorService', () => {
       },
       'CONFLICT',
     ],
-  ])('maps Manufacturer %s without creating an identity', async (_name, resolution, status) => {
-    const { service } = createService(candidate({ manufacturerCandidate: 'Canon' }), resolution);
+  ])(
+    'preserves the existing Manufacturer resolution result %s',
+    async (_name, resolution, status) => {
+      const { service } = createService(candidate({ manufacturerCandidate: 'Canon' }), resolution);
 
-    const result = await service.enrich(product({ sourceManufacturer: null }));
+      const result = await service.enrich(
+        product({ sourceName: 'Canon Camera', sourceManufacturer: null }),
+      );
 
-    expect(result.fields.manufacturer).toMatchObject({ value: null, candidateStatus: status });
-  });
+      expect(result.fields.manufacturer).toMatchObject({ value: null, candidateStatus: status });
+      expect(result.candidateValues.manufacturer).toBe('Canon');
+    },
+  );
 
-  it('preserves authoritative source condition on Luna conflict', async () => {
-    const { service } = createService(candidate({ conditionCandidate: 'SEMINOVO' }));
-
-    const result = await service.enrich(product({ condition: 'NOVO' }));
-
-    expect(result.fields.condition).toEqual({
-      value: 'NOVO',
-      provenance: 'SOURCE',
-      candidateStatus: 'CONFLICT',
-    });
-  });
-
-  it('does not conflict when deterministic Renewed condition equals the Luna candidate', async () => {
-    const { service } = createService(candidate({ conditionCandidate: 'SEMINOVO' }));
+  it('does not promote a Luna value that contradicts an explicit source field', async () => {
+    const { service } = createService(candidate({ modelCandidate: 'MacBook Air M5 13' }));
 
     const result = await service.enrich(
       product({
-        sourceName: 'Apple iPhone 17 Pro 1TB eSIM Cosmic Orange Renewed Premium',
-        category: 'iPhone',
-        condition: undefined,
+        sourceName: 'Listing text MacBook Air M5 13 but structured model MacBook Pro M5 14',
+        model: 'MacBook Pro M5 14',
       }),
     );
 
-    expect(result.fields.condition).toEqual({
-      value: 'Seminovo',
-      provenance: 'DETERMINISTIC',
-      candidateStatus: 'VALIDATED',
-    });
-  });
-
-  it('preserves authoritative source manufacturer on Luna conflict', async () => {
-    const { service } = createService(candidate({ manufacturerCandidate: 'Nikon' }), {
-      status: 'FOUND',
-      manufacturerId: 'nikon-id',
-      manufacturerKey: 'nikon',
-      canonicalName: 'Nikon',
-      provenance: 'AI_CANDIDATE_VALIDATED',
-      normalizedEvidence: 'nikon',
-      matchedAlias: 'Nikon',
-      normalizedAlias: 'nikon',
-    });
-
-    const result = await service.enrich(product({ sourceManufacturer: 'Canon' }));
-
-    expect(result.fields.manufacturer).toEqual({
-      value: 'Canon',
+    expect(result.fields.model).toEqual({
+      value: 'MacBook Pro M5 14',
       provenance: 'SOURCE',
       candidateStatus: 'CONFLICT',
     });
   });
 
-  it('preserves an authoritative source model on Luna conflict', async () => {
-    const { service } = createService(candidate({ modelCandidate: 'MacBook Air M5 13"' }));
+  it.each([
+    ['TIMEOUT', 'timeout'],
+    ['MODEL_ERROR', 'model_unavailable'],
+    ['INVALID_STRUCTURED_OUTPUT', 'invalid_structured_output'],
+    ['SKIPPED_DISABLED', 'circuit_open'],
+    ['BUDGET_EXHAUSTED', 'daily_budget_exhausted'],
+  ] as const)(
+    'does not reactivate deterministic semantic parsing after %s',
+    async (status, errorCode) => {
+      const { service, shadow } = createService(null, undefined, status, errorCode);
+      const source = product({
+        sourceName: 'iPhone 17 Pro 256GB Black',
+        category: '',
+        model: undefined,
+        capacity: undefined,
+        color: undefined,
+      });
 
-    const result = await service.enrich(
-      product({ sourceName: 'MacBook Pro M5 14 16GB 512GB', model: 'MacBook Pro M5 14"' }),
-    );
+      const result = await service.enrich(source);
 
-    expect(result.fields.model).toMatchObject({
-      value: 'MacBook Pro M5 14"',
-      provenance: 'SOURCE',
-      candidateStatus: 'CONFLICT',
-    });
-  });
+      expect(shadow.observe).toHaveBeenCalledWith([source]);
+      expect(result.semanticNormalizationStatus).toBe(status);
+      expect(result.lunaErrorCode).toBe(errorCode);
+      expect(result.fields.model).toEqual({
+        value: null,
+        provenance: null,
+        candidateStatus: null,
+      });
+      expect(result.fields.storage.value).toBeNull();
+    },
+  );
 
-  it('continues with deterministic context when Luna has no valid candidate', async () => {
-    const { service, shadow } = createService(null, undefined, 'timeout');
-    const source = product({ sourceName: 'iPhone 17 Pro 256GB', category: 'iPhone' });
-
-    const result = await service.enrich(source);
-
-    expect(shadow.observe).toHaveBeenCalledWith([source]);
-    expect(result.lunaErrorCode).toBe('timeout');
-    expect(result.fields.model).toMatchObject({
-      value: 'iPhone 17 Pro',
-      provenance: 'DETERMINISTIC',
-    });
-    expect(result.fields).not.toHaveProperty('retailer');
-    expect(result.sourceProduct).toBe(source);
-  });
-
-  it('does not alter commercial, fiscal, weight, or cost fields', async () => {
+  it('does not alter or derive commercial, fiscal, weight, or cost fields', async () => {
     const source = product({
       providerName: 'upcitemdb_us',
       sourceProductId: 'upc:123',
@@ -344,7 +472,7 @@ describe('UsaLunaEnrichmentValidatorService', () => {
       sourceUrl: 'https://example.test/original',
       priceUsd: 777,
     });
-    const { service } = createService(candidate({ modelCandidate: 'iPhone 17 Pro' }));
+    const { service } = createService(candidate({ modelCandidate: 'MacBook Air' }));
 
     const result = await service.enrich(source);
 
