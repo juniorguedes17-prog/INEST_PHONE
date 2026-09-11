@@ -633,6 +633,7 @@ export function CalculationModal({
   calculation,
   usaCostExecution = null,
   usaBeforeCost = null,
+  usaCanSendToPricing = true,
   sending,
   onClose,
   onSendToPricing,
@@ -641,6 +642,7 @@ export function CalculationModal({
   calculation: ImportCalculation | null;
   usaCostExecution?: UsaCostExecutionResponse | null;
   usaBeforeCost?: ReactNode;
+  usaCanSendToPricing?: boolean;
   sending: boolean;
   onClose: () => void;
   onSendToPricing: () => void;
@@ -753,7 +755,7 @@ export function CalculationModal({
             <ActionButton
               className="min-h-11"
               onClick={onSendToPricing}
-              disabled={sending || !usaCalculation}
+              disabled={sending || !usaCalculation || !usaCanSendToPricing}
             >
               {sending ? 'Preparando...' : 'Enviar para Precificação'}
             </ActionButton>

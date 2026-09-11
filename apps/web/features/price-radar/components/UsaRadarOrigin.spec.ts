@@ -56,8 +56,37 @@ const thirdProduct = {
   retailer: null,
   priceUsd: 500,
 };
+const appleIphone = {
+  ...product,
+  providerName: 'apple_us',
+  sourceProductId: 'apple-us:MJQ64LL/A',
+  sourceName: 'iPhone 18 Pro 256GB Glacier',
+  displayName: 'iPhone 18 Pro 256GB Glacier',
+  retailer: 'Apple Store USA',
+  supplier: 'Apple Store USA',
+  model: 'iPhone 18 Pro',
+  capacity: '256GB',
+  color: 'Glacier',
+  condition: 'NOVO' as const,
+};
+const canon = {
+  ...product,
+  sourceName: 'Canon EOS Rebel T7 DSLR Camera',
+  category: 'Camera',
+  model: 'EOS Rebel T7',
+  sourceManufacturer: 'Canon',
+};
+const garmin = {
+  ...product,
+  providerName: 'upcitemdb_us',
+  sourceName: 'Garmin vivoactive 5 42mm GPS Ivory',
+  category: 'Wearable',
+  model: 'vivoactive 5',
+  sourceManufacturer: 'Garmin',
+};
 const ready = {
   status: 'READY_FOR_COST',
+  semanticDecision: { status: 'READY', reason: null },
   redirector: { redirector: 'REI_DO_IMPORTADO' },
   shippingWeightLbs: null,
   condition: 'SEMINOVO',
@@ -75,20 +104,28 @@ function setup(
   preflightResponse: object | ((...args: unknown[]) => object | Promise<object>) = ready,
   searchProducts: Array<Record<string, unknown>> = [product],
   searchProviders: ProviderReport[] = [{ provider: 'amazon_us', status: 'OK', returnedCount: 1 }],
+  options: {
+    enrichmentDecision?: object;
+    executionPreflight?: object;
+  } = {},
 ) {
   const services = {
     searchUsaWithDiagnostics: mock.fn(async () => ({
       products: searchProducts,
       providers: searchProviders,
     })),
-    resolveUsaEnrichment: mock.fn(async () => ({ decision: { status: 'READY', reason: null } })),
+    resolveUsaEnrichment: mock.fn(async () => ({
+      decision: options.enrichmentDecision ?? { status: 'READY', reason: null },
+    })),
     preflightUsaCost: mock.fn(async (...args: unknown[]) =>
       typeof preflightResponse === 'function' ? preflightResponse(...args) : preflightResponse,
     ),
     executeUsaCost: mock.fn(async (...args: unknown[]) => {
       const redirector = args[1] as Props;
       return {
-        preflight: ready,
+        preflight:
+          options.executionPreflight ??
+          (typeof preflightResponse === 'function' ? ready : preflightResponse),
         calculation: {
           sourceProductId: product.sourceProductId,
           sourceCommercialIdentity: {
@@ -422,13 +459,212 @@ test('opens the shared USA cost modal before calculating and uses usa-cost for R
   );
 });
 
-test('does not calculate cost when the backend requires a shipping weight', async () => {
-  const h = setup({
+for (const reason of [
+  'NORMALIZATION_TIMEOUT',
+  'NORMALIZATION_MODEL_ERROR',
+  'NORMALIZATION_INVALID_OUTPUT',
+] as const) {
+  test(`uses backend cost readiness for Rei despite ${reason} and keeps Pricing fail-closed`, async () => {
+    const semanticDecision = { status: 'BLOCKED' as const, reason };
+    const costReady = {
+      ...ready,
+      semanticDecision,
+      redirector: { redirector: 'REI_DO_IMPORTADO' as const },
+      shippingWeightLbs: null,
+    };
+    const h = setup(
+      costReady,
+      [appleIphone],
+      [{ provider: 'apple_us', status: 'OK', returnedCount: 1 }],
+      {
+        enrichmentDecision: semanticDecision,
+      },
+    );
+
+    await h.select();
+    await h.call('UsaProductCard', 'onCalculate');
+    await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+
+    assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, true);
+    await h.call('UsaRedirectorPanel', 'onSubmit');
+
+    const modal = h.nodes('CalculationModal')[0]!;
+    assert.equal(h.services.executeUsaCost.mock.callCount(), 1);
+    assert.equal((modal.props.usaCostExecution as Props).calculation !== null, true);
+    assert.equal(modal.props.usaCanSendToPricing, false);
+    await h.call('CalculationModal', 'onSendToPricing');
+    assert.equal(h.pricing.calculateTemporaryImportPricing.mock.callCount(), 0);
+  });
+}
+
+test('uses the backend preflight result for Red after timeout, including its weight requirement', async () => {
+  const semanticDecision = { status: 'BLOCKED' as const, reason: 'NORMALIZATION_TIMEOUT' as const };
+  const missingWeight = {
     status: 'NEEDS_INPUT',
     reason: 'MISSING_WEIGHT',
     input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
     redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+  };
+  const h = setup(
+    missingWeight,
+    [appleIphone],
+    [{ provider: 'apple_us', status: 'OK', returnedCount: 1 }],
+    {
+      enrichmentDecision: semanticDecision,
+    },
+  );
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+
+  assert.equal(h.nodes('UsaShippingWeightPanel').length, 1);
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
+});
+
+test('calculates through Red when its backend preflight becomes ready after timeout', async () => {
+  const semanticDecision = { status: 'BLOCKED' as const, reason: 'NORMALIZATION_TIMEOUT' as const };
+  const costReady = {
+    ...ready,
+    semanticDecision,
+    redirector: { redirector: 'RED_DELAWARE' as const, shippingMode: 'EXPRESS' as const },
+    shippingWeightLbs: 3.95,
+  };
+  const h = setup(
+    costReady,
+    [appleIphone],
+    [{ provider: 'apple_us', status: 'OK', returnedCount: 1 }],
+    {
+      enrichmentDecision: semanticDecision,
+    },
+  );
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, true);
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 1);
+  assert.equal(h.nodes('CalculationModal')[0]!.props.usaCanSendToPricing, false);
+});
+
+for (const [name, sourceProduct] of [
+  ['Canon', canon],
+  ['Garmin', garmin],
+] as const) {
+  test(`calculates OTHER only when the backend returns ready for ${name}`, async () => {
+    const semanticDecision = {
+      status: 'BLOCKED' as const,
+      reason: 'NORMALIZATION_TIMEOUT' as const,
+    };
+    const costReady = {
+      ...ready,
+      semanticDecision,
+      redirector: { redirector: 'RED_DELAWARE' as const, shippingMode: 'EXPRESS' as const },
+      shippingWeightLbs: 3.95,
+    };
+    const h = setup(
+      costReady,
+      [sourceProduct],
+      [{ provider: sourceProduct.providerName, status: 'OK', returnedCount: 1 }],
+      {
+        enrichmentDecision: semanticDecision,
+      },
+    );
+
+    await h.select();
+    await h.call('UsaProductCard', 'onCalculate');
+    await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
+    await h.call('UsaRedirectorPanel', 'onSubmit');
+
+    assert.equal(h.services.executeUsaCost.mock.callCount(), 1);
   });
+}
+
+test('preserves a real enrichment conflict as blocked by the backend', async () => {
+  const semanticDecision = { status: 'BLOCKED' as const, reason: 'ENRICHMENT_CONFLICT' as const };
+  const h = setup(
+    {
+      status: 'BLOCKED',
+      reason: 'ENRICHMENT_CONFLICT',
+      redirector: { redirector: 'REI_DO_IMPORTADO' },
+    },
+    [appleIphone],
+    [{ provider: 'apple_us', status: 'OK', returnedCount: 1 }],
+    { enrichmentDecision: semanticDecision },
+  );
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
+});
+
+test('preserves the existing manufacturer confirmation interaction for NEEDS_INPUT', async () => {
+  const manufacturerDecision = {
+    status: 'NEEDS_INPUT' as const,
+    reason: 'MANUFACTURER_MISSING' as const,
+    input: {
+      type: 'MANUFACTURER' as const,
+      field: 'manufacturer' as const,
+      suggestedValue: 'Canon',
+    },
+  };
+  const h = setup(
+    {
+      status: 'NEEDS_INPUT',
+      reason: 'MANUFACTURER_MISSING',
+      input: manufacturerDecision.input,
+      redirector: { redirector: 'REI_DO_IMPORTADO' },
+    },
+    [canon],
+    [{ provider: 'amazon_us', status: 'OK', returnedCount: 1 }],
+    { enrichmentDecision: manufacturerDecision },
+  );
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+
+  assert.ok(h.nodes('input').some((node) => node.props.placeholder === 'Fabricante'));
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
+});
+
+test('preserves FAMILY_STARTING_AT as blocked by the backend', async () => {
+  const h = setup(
+    {
+      status: 'BLOCKED',
+      reason: 'SOURCE_CONFIGURATION_REQUIRED',
+      redirector: { redirector: 'REI_DO_IMPORTADO' },
+    },
+    [secondProduct],
+    [{ provider: 'apple_us', status: 'OK', returnedCount: 1 }],
+  );
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
+  assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
+});
+
+test('does not calculate Canon OTHER when the backend requires a shipping weight', async () => {
+  const semanticDecision = { status: 'BLOCKED' as const, reason: 'NORMALIZATION_TIMEOUT' as const };
+  const h = setup(
+    {
+      status: 'NEEDS_INPUT',
+      reason: 'MISSING_WEIGHT',
+      input: { type: 'WEIGHT', field: 'shippingWeightLbs' },
+      redirector: { redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' },
+    },
+    [canon],
+    [{ provider: 'amazon_us', status: 'OK', returnedCount: 1 }],
+    { enrichmentDecision: semanticDecision },
+  );
   await h.select();
   await h.call('UsaProductCard', 'onCalculate');
   await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');

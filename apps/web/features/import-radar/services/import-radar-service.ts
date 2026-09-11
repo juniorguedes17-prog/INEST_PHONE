@@ -170,6 +170,7 @@ export type UsaRedirectorSelection =
 export type UsaCostPreflightResponse =
   | {
       status: 'READY_FOR_COST';
+      semanticDecision: UsaEnrichmentDecision;
       redirector: UsaRedirectorSelection;
       shippingWeightLbs: number | null;
       condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;

@@ -389,6 +389,7 @@ export function UsaRadarOrigin() {
       !costExecution ||
       costExecution === 'CONFIGURING' ||
       costExecution.preflight.status !== 'READY_FOR_COST' ||
+      costExecution.preflight.semanticDecision.status !== 'READY' ||
       !costExecution.calculation ||
       sendingToPricing
     ) {
@@ -434,6 +435,13 @@ export function UsaRadarOrigin() {
       setSendingToPricing(false);
     }
   }, [costExecution, router, selectedProduct, sendingToPricing]);
+
+  const canSendUsaCostToPricing =
+    costExecution !== null &&
+    costExecution !== 'CONFIGURING' &&
+    costExecution.preflight.status === 'READY_FOR_COST' &&
+    costExecution.preflight.semanticDecision.status === 'READY' &&
+    costExecution.calculation !== null;
 
   const registerWeight = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -989,6 +997,7 @@ export function UsaRadarOrigin() {
           ) : null
         }
         sending={sendingToPricing}
+        usaCanSendToPricing={canSendUsaCostToPricing}
         onClose={() => setCostExecution(null)}
         onSendToPricing={() => void sendToPricing()}
         onConfirmManufacturer={() => undefined}
