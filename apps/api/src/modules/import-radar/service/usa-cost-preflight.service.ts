@@ -44,6 +44,12 @@ export type UsaCostPreflightReason =
 export type UsaCostPreflightResult =
   | {
       status: 'READY_FOR_COST';
+      /**
+       * Semantic/financial readiness remains independent from operational
+       * authorization. A technical normalization failure can coexist with a
+       * valid cost calculation when every redirector input is objective.
+       */
+      semanticDecision: UsaEnrichmentDecision;
       redirector: UsaRedirectorSelection;
       taxTreatment: Exclude<UsaTaxTreatment, 'UNRESOLVED'>;
       logisticClassification: 'CELULAR' | 'OTHER' | null;
@@ -176,6 +182,7 @@ export class UsaCostPreflightService {
         }
         return {
           status: 'READY_FOR_COST',
+          semanticDecision: semantic.decision,
           redirector: input.redirector,
           taxTreatment: taxTreatment.taxTreatment,
           logisticClassification,
@@ -209,6 +216,7 @@ export class UsaCostPreflightService {
       condition,
       normalizedPricing,
       semanticContext.commercialName ?? null,
+      semantic.decision,
       input.runtimeShippingWeightLbs,
     );
   }
@@ -241,6 +249,7 @@ export class UsaCostPreflightService {
       };
     }
     if (decision.status === 'READY') return null;
+    if (isTechnicalNormalizationFailure(decision.reason)) return null;
     if (
       decision.reason === 'LOGISTIC_CLASSIFICATION_UNRESOLVED' &&
       redirector.redirector === 'RED_DELAWARE'
@@ -263,6 +272,7 @@ function toWeightPreflightResult(
   condition: ImportProductCondition | null,
   normalizedPricing: UsaNormalizedPricingContext,
   commercialName: string | null,
+  semanticDecision: UsaEnrichmentDecision,
   runtimeShippingWeightLbs?: number,
 ): UsaCostPreflightResult {
   if (resolution.status === 'KEY_AMBIGUOUS') {
@@ -292,6 +302,7 @@ function toWeightPreflightResult(
 
   return {
     status: 'READY_FOR_COST',
+    semanticDecision,
     redirector,
     taxTreatment,
     logisticClassification: logisticClassification === 'UNRESOLVED' ? null : logisticClassification,
@@ -301,6 +312,14 @@ function toWeightPreflightResult(
     commercialName,
     shippingWeightLbs,
   };
+}
+
+function isTechnicalNormalizationFailure(reason: Exclude<UsaEnrichmentDecision['reason'], null>) {
+  return (
+    reason === 'NORMALIZATION_TIMEOUT' ||
+    reason === 'NORMALIZATION_MODEL_ERROR' ||
+    reason === 'NORMALIZATION_INVALID_OUTPUT'
+  );
 }
 
 function mapSemanticReason(reason: Exclude<UsaEnrichmentDecision['reason'], null>) {

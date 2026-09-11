@@ -328,7 +328,7 @@ describe('UsaCostPreflightService', () => {
     'NORMALIZATION_MODEL_ERROR',
     'NORMALIZATION_INVALID_OUTPUT',
   ] as const)(
-    'preserves the normalization failure reason while remaining blocked: %s',
+    'allows operational Red Delaware preflight after technical normalization failure: %s',
     async (reason) => {
       const decision = { status: 'BLOCKED', reason };
       const { service, shippingWeights } = createService(decision, createContext('OTHER'));
@@ -339,10 +339,76 @@ describe('UsaCostPreflightService', () => {
           redirector: redirector('RED_DELAWARE'),
           composition: { kind: 'SINGLE_ITEM' },
         }),
-      ).resolves.toMatchObject({ status: 'BLOCKED', reason });
-      expect(shippingWeights.resolve).not.toHaveBeenCalled();
+      ).resolves.toMatchObject({
+        status: 'READY_FOR_COST',
+        semanticDecision: decision,
+        shippingWeightLbs: 2,
+      });
+      expect(shippingWeights.resolve).toHaveBeenCalledTimes(1);
     },
   );
+
+  it('keeps technical normalization failure separate from Apple Rei cellular cost readiness', async () => {
+    const decision = { status: 'BLOCKED', reason: 'NORMALIZATION_TIMEOUT' as const };
+    const { service, shippingWeights } = createService(decision, createContext('CELULAR'));
+
+    await expect(
+      service.preflight({
+        sourceProduct: {
+          ...product,
+          providerName: 'apple_us',
+          sourceProductId: 'apple-us:MJQ64LL/A',
+          sourceName: 'iPhone 18 Pro 256GB Glacier',
+          displayName: 'iPhone 18 Pro 256GB Glacier',
+          retailer: 'Apple Store USA',
+          supplier: 'Apple Store USA',
+          category: 'iPhone',
+          model: 'iPhone 18 Pro',
+          capacity: '256GB',
+          color: 'Glacier',
+          condition: 'NOVO',
+        },
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY_FOR_COST',
+      semanticDecision: decision,
+      logisticClassification: 'CELULAR',
+      quantity: 1,
+      shippingWeightLbs: null,
+    });
+    expect(shippingWeights.resolve).not.toHaveBeenCalled();
+  });
+
+  it('keeps Red Delaware weight-gated after technical normalization failure', async () => {
+    const decision = { status: 'BLOCKED', reason: 'NORMALIZATION_TIMEOUT' as const };
+    const { service } = createService(decision, createContext('CELULAR'), {
+      status: 'MISSING_WEIGHT',
+    });
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('RED_DELAWARE'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({ status: 'NEEDS_INPUT', reason: 'MISSING_WEIGHT' });
+  });
+
+  it('keeps a real enrichment conflict blocked before operational cost checks', async () => {
+    const decision = { status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' as const };
+    const { service, shippingWeights } = createService(decision, createContext('OTHER'));
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('RED_DELAWARE'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' });
+    expect(shippingWeights.resolve).not.toHaveBeenCalled();
+  });
 
   it('does not block a Non-Apple flow merely because Product Identity has no catalog match', async () => {
     const { service } = createService(readyDecision, createContext('OTHER'));

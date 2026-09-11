@@ -46,6 +46,15 @@ function ready(
 ): Extract<UsaCostPreflightResult, { status: 'READY_FOR_COST' }> {
   return {
     status: 'READY_FOR_COST',
+    semanticDecision: overrides.semanticDecision ?? {
+      status: 'READY',
+      reason: null,
+      context: {
+        provider: sourceProduct.providerName,
+        sourceProductId: sourceProduct.sourceProductId,
+        source: 'US',
+      },
+    },
     redirector,
     taxTreatment: 'EXEMPT',
     logisticClassification: redirector.redirector === 'REI_DO_IMPORTADO' ? 'OTHER' : null,
@@ -134,6 +143,38 @@ describe('UsaCostExecutionService', () => {
     expect(calculator).toHaveBeenCalledWith(
       expect.objectContaining({ shippingWeightLbs: runtimeShippingWeightLbs }),
     );
+  });
+
+  it('calculates cost when preflight is operationally ready but semantic normalization timed out', async () => {
+    const rei = { redirector: 'REI_DO_IMPORTADO' as const };
+    const semanticDecision = {
+      status: 'BLOCKED' as const,
+      reason: 'NORMALIZATION_TIMEOUT' as const,
+      context: {
+        provider: sourceProduct.providerName,
+        sourceProductId: sourceProduct.sourceProductId,
+        source: 'US' as const,
+      },
+    };
+    const { service, input } = setup(
+      ready(rei, {
+        semanticDecision,
+        logisticClassification: 'CELULAR',
+        quantity: 1,
+        shippingWeightLbs: null,
+      }),
+    );
+
+    const result = await service.execute(input);
+
+    expect(result.preflight).toMatchObject({
+      status: 'READY_FOR_COST',
+      semanticDecision,
+    });
+    expect(result.calculation).toMatchObject({
+      finalCost: { currency: 'BRL' },
+      breakdown: { classification: 'CELULAR', quantity: 1 },
+    });
   });
 
   it.each([
