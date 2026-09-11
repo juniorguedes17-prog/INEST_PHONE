@@ -503,6 +503,74 @@ describe('UsaLunaEnrichmentValidatorService', () => {
     },
   );
 
+  it.each([
+    ['TIMEOUT', 'timeout'],
+    ['MODEL_ERROR', 'model_unavailable'],
+    ['INVALID_STRUCTURED_OUTPUT', 'invalid_structured_output'],
+    ['CANDIDATE', undefined],
+  ] as const)(
+    'preserves the structured USA source identity after %s without changing its provenance',
+    async (status, errorCode) => {
+      const { service } = createService(null, undefined, status, errorCode);
+
+      const result = await service.enrich(
+        product({
+          sourceProductId: 'apple-us:MG484LL/A',
+          sourceName: 'iPhone 17 256GB Mist Blue',
+          sourceManufacturer: 'Apple',
+          category: 'iPhone',
+          model: 'iPhone 17',
+          capacity: '256GB',
+          color: 'Mist Blue',
+          condition: 'NOVO',
+        }),
+      );
+
+      expect(result.semanticNormalizationStatus).toBe(status);
+      expect(result.fields).toMatchObject({
+        manufacturer: { value: 'Apple', provenance: 'SOURCE', candidateStatus: null },
+        category: { value: 'iPhone', provenance: 'SOURCE', candidateStatus: null },
+        model: { value: 'iPhone 17', provenance: 'SOURCE', candidateStatus: null },
+        storage: { value: '256GB', provenance: 'SOURCE', candidateStatus: null },
+        color: { value: 'Mist Blue', provenance: 'SOURCE', candidateStatus: null },
+        condition: { value: 'NOVO', provenance: 'SOURCE', candidateStatus: null },
+      });
+      expect(result.conflictFields).toEqual([]);
+    },
+  );
+
+  it.each([
+    ['Garmin', 'Smartwatch', 'Vivoactive 6', undefined],
+    ['Canon', 'Camera', 'EOS R50', undefined],
+    ['Samsung', 'Smartphone', 'Galaxy S25 Ultra', '512GB'],
+  ] as const)(
+    'preserves structured %s source fields on timeout without inventing storage',
+    async (manufacturer, category, model, capacity) => {
+      const { service } = createService(null, undefined, 'TIMEOUT', 'timeout');
+
+      const result = await service.enrich(
+        product({
+          sourceName: [manufacturer, model, capacity].filter(Boolean).join(' '),
+          sourceManufacturer: manufacturer,
+          category,
+          model,
+          capacity,
+        }),
+      );
+
+      expect(result.fields.manufacturer).toMatchObject({
+        value: manufacturer,
+        provenance: 'SOURCE',
+      });
+      expect(result.fields.category).toMatchObject({ value: category, provenance: 'SOURCE' });
+      expect(result.fields.model).toMatchObject({ value: model, provenance: 'SOURCE' });
+      expect(result.fields.storage).toMatchObject({
+        value: capacity ?? null,
+        provenance: capacity ? 'SOURCE' : null,
+      });
+    },
+  );
+
   it('does not alter or derive commercial, fiscal, weight, or cost fields', async () => {
     const source = product({
       providerName: 'upcitemdb_us',

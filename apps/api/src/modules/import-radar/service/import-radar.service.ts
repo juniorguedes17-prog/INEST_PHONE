@@ -550,16 +550,16 @@ function adaptParaguaySemanticCandidate(
   const grounded = (value: string | null) =>
     value && candidateIsSourceGrounded(value, evidence) ? value.trim() : null;
 
-  const manufacturer = grounded(candidate.manufacturerCandidate);
+  const manufacturerCandidate = grounded(candidate.manufacturerCandidate);
   const family = grounded(candidate.familyCandidate);
   const modelCandidate = grounded(candidate.modelCandidate);
-  const storage = grounded(candidate.storageCandidate);
+  const storageCandidate = grounded(candidate.storageCandidate);
   const ram = grounded(candidate.ramCandidate);
   const chip = grounded(candidate.chipCandidate);
   const screen = grounded(candidate.screenCandidate);
-  const color = grounded(candidate.colorCandidate);
+  const colorCandidate = grounded(candidate.colorCandidate);
   const connectivity = grounded(candidate.connectivityCandidate);
-  const condition = grounded(candidate.conditionCandidate);
+  const conditionCandidate = grounded(candidate.conditionCandidate);
   const explicitManufacturerConflict = Boolean(
     dto.sourceManufacturerProvenance === 'EXPLICIT_SOURCE' &&
     dto.sourceManufacturer?.trim() &&
@@ -573,17 +573,31 @@ function adaptParaguaySemanticCandidate(
     return failedParaguayNormalization(dto, status, 'explicit_source_conflict');
   }
 
-  const category = grounded(candidate.categoryCandidate);
-  const model = composeStructuredModel(modelCandidate, chip, screen, ram);
+  const categoryCandidate = grounded(candidate.categoryCandidate);
+  const composedModelCandidate = composeStructuredModel(modelCandidate, chip, screen, ram);
   const candidateHasIdentity = Boolean(
     candidate.manufacturerCandidate ||
     candidate.categoryCandidate ||
     candidate.familyCandidate ||
     candidate.modelCandidate,
   );
-  if (candidateHasIdentity && !manufacturer && !category && !model) {
+  if (
+    candidateHasIdentity &&
+    !manufacturerCandidate &&
+    !categoryCandidate &&
+    !composedModelCandidate
+  ) {
     return failedParaguayNormalization(dto, status, 'grounding_insufficient');
   }
+  const manufacturer = mergeStructuredSourceValue(
+    dto.sourceManufacturer ?? dto.brand,
+    manufacturerCandidate,
+  );
+  const category = mergeStructuredSourceValue(dto.category, categoryCandidate);
+  const model = mergeStructuredSourceValue(dto.model, composedModelCandidate);
+  const storage = mergeStructuredSourceValue(dto.capacity, storageCandidate);
+  const color = mergeStructuredSourceValue(dto.color, colorCandidate);
+  const condition = mergeStructuredSourceValue(dto.condition, conditionCandidate);
   const product: CalculateImportCostDto = {
     ...dto,
     brand: manufacturer ?? undefined,
@@ -591,30 +605,21 @@ function adaptParaguaySemanticCandidate(
     model: model ?? undefined,
     capacity: storage ?? undefined,
     color: color ?? undefined,
-    condition: (condition ?? dto.condition) as ImportProductCondition | undefined,
+    condition: condition as ImportProductCondition | undefined,
   };
-  const identityText = [
-    product.model,
-    product.capacity,
-    product.color,
-    product.condition,
-    product.brand,
-    product.category,
-  ]
-    .filter((value): value is string => Boolean(value?.trim()))
-    .join(' ');
+  const identityText = paraguayStructuredIdentityText(product);
 
   const presentationAttributes = [
-    manufacturer,
+    manufacturerCandidate,
     family,
     modelCandidate,
-    category,
+    categoryCandidate,
     screen,
     ram,
-    storage,
+    storageCandidate,
     connectivity,
-    color,
-    condition,
+    colorCandidate,
+    conditionCandidate,
     grounded(candidate.quantityCandidate),
     ...candidate.featureCandidates.map(grounded),
     grounded(candidate.connectorCandidate),
@@ -637,21 +642,38 @@ function failedParaguayNormalization(
   errorCode: string,
 ): ParaguaySemanticNormalization {
   return {
-    product: {
-      ...dto,
-      brand: undefined,
-      category: '',
-      model: undefined,
-      capacity: undefined,
-      color: undefined,
-      condition: dto.condition,
-    },
-    identityText: '',
+    product: { ...dto },
+    identityText: paraguayStructuredIdentityText(dto),
     commercialName: null,
     status,
     accepted: false,
     errorCode,
   };
+}
+
+function mergeStructuredSourceValue(
+  sourceValue: string | null | undefined,
+  groundedCandidate: string | null,
+) {
+  const source = sourceValue?.trim() || null;
+  const candidate = groundedCandidate?.trim() || null;
+  if (!source) return candidate;
+  if (!candidate || sameMechanicalValue(source, candidate)) return source;
+  // A differing grounded candidate keeps the pre-F1 conflict/selection policy.
+  return candidate;
+}
+
+function paraguayStructuredIdentityText(product: CalculateImportCostDto) {
+  return [
+    product.model,
+    product.capacity,
+    product.color,
+    product.condition,
+    product.brand,
+    product.category,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join(' ');
 }
 
 function validatedCommercialName(commercialName: string | null, groundedAttributes: string[]) {

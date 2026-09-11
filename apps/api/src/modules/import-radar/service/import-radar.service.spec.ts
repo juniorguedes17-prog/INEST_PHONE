@@ -874,9 +874,13 @@ describe('ImportRadarService catalog product handoff', () => {
     } as never);
 
     expect(result).toMatchObject({
-      product: { model: undefined, capacity: undefined },
+      product: {
+        model: importProduct.model,
+        capacity: importProduct.capacity,
+        category: importProduct.category,
+      },
       catalogProductId: null,
-      financialClassification: 'UNRESOLVED',
+      financialClassification: 'APPLE',
       pricingEligibility: { status: 'BLOCKED' },
     });
   });
@@ -904,7 +908,11 @@ describe('ImportRadarService catalog product handoff', () => {
     );
 
     expect(result).toMatchObject({
-      product: { model: undefined, capacity: undefined },
+      product: {
+        model: importProduct.model,
+        capacity: importProduct.capacity,
+        category: importProduct.category,
+      },
       catalogProductId: null,
       pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
     });
@@ -938,12 +946,14 @@ describe('ImportRadarService catalog product handoff', () => {
       expect(result).toMatchObject({
         product: {
           name: importProduct.name,
-          model: undefined,
-          capacity: undefined,
-          category: '',
+          model: importProduct.model,
+          capacity: importProduct.capacity,
+          category: importProduct.category,
+          condition: importProduct.condition,
         },
         catalogProductId: null,
         productResolution: { status: 'MISSING', reason: 'catalog_no_match' },
+        financialClassification: 'APPLE',
         pricingEligibility: {
           status: 'BLOCKED',
           reason: 'financial_identity_insufficient',
@@ -963,10 +973,119 @@ describe('ImportRadarService catalog product handoff', () => {
     );
 
     expect(result).toMatchObject({
+      product: {
+        model: importProduct.model,
+        capacity: importProduct.capacity,
+        category: importProduct.category,
+        condition: importProduct.condition,
+      },
       catalogProductId: null,
       productResolution: { status: 'MISSING' },
       pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
     });
+  });
+
+  it('preserves structured source values when a valid Luna candidate omits those fields', async () => {
+    const productNormalization = {
+      normalizeSemanticProduct: vi.fn().mockResolvedValue(
+        semanticResult({
+          candidate: semanticCandidate({
+            manufacturerCandidate: 'Apple',
+            categoryCandidate: 'iPhone',
+          }),
+        }),
+      ),
+    };
+
+    const result = await createService([], productNormalization).calculate(
+      { ...importProduct, sourceEvidence: `${importProduct.name} Apple` },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result.product).toMatchObject({
+      brand: 'Apple',
+      category: importProduct.category,
+      model: importProduct.model,
+      capacity: importProduct.capacity,
+      condition: importProduct.condition,
+    });
+    expect(result.pricingEligibility).toEqual({ status: 'ELIGIBLE', reason: null });
+  });
+
+  it.each([
+    ['Garmin', 'Smartwatch', 'Vivoactive 6', undefined],
+    ['Canon', 'Camera', 'EOS R50', undefined],
+    ['Samsung', 'Smartphone', 'Galaxy S25 Ultra', '512GB'],
+  ] as const)(
+    'preserves structured %s fields on timeout without inventing missing storage',
+    async (brand, category, model, capacity) => {
+      const productNormalization = {
+        normalizeSemanticProduct: vi.fn().mockResolvedValue(
+          semanticResult({
+            normalizationStatus: 'TIMEOUT',
+            candidate: null,
+            schemaValid: false,
+            errorCode: 'timeout',
+          }),
+        ),
+      };
+      const result = await createService([], productNormalization).calculate(
+        {
+          ...importProduct,
+          name: [brand, model, capacity].filter(Boolean).join(' '),
+          brand,
+          sourceManufacturer: brand,
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+          category,
+          model,
+          capacity,
+          condition: undefined,
+        },
+        { id: 'user-1' } as never,
+      );
+
+      expect(result.product).toMatchObject({ brand, category, model });
+      expect(result.product.capacity).toBe(capacity);
+      expect(result.product.condition).toBeUndefined();
+      expect(result.pricingEligibility).toEqual({
+        status: 'BLOCKED',
+        reason: 'financial_identity_insufficient',
+      });
+    },
+  );
+
+  it('keeps missing structured fields null after a Luna timeout', async () => {
+    const productNormalization = {
+      normalizeSemanticProduct: vi.fn().mockResolvedValue(
+        semanticResult({
+          normalizationStatus: 'TIMEOUT',
+          candidate: null,
+          schemaValid: false,
+          errorCode: 'timeout',
+        }),
+      ),
+    };
+    const result = await createService([], productNormalization).calculate(
+      {
+        ...importProduct,
+        name: 'Unstructured external product',
+        brand: undefined,
+        sourceManufacturer: null,
+        sourceManufacturerProvenance: undefined,
+        category: '',
+        model: undefined,
+        capacity: undefined,
+        color: undefined,
+        condition: undefined,
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result.product).toMatchObject({ category: '' });
+    expect(result.product.brand).toBeUndefined();
+    expect(result.product.model).toBeUndefined();
+    expect(result.product.capacity).toBeUndefined();
+    expect(result.product.condition).toBeUndefined();
   });
 
   it('nao escolhe Product quando a condition da fonte e desconhecida', async () => {
