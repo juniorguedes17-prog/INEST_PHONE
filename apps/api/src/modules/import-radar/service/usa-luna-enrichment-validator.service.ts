@@ -185,29 +185,7 @@ export class UsaLunaEnrichmentValidatorService {
       lunaLatencyMs: context.lunaLatencyMs,
       ...(context.lunaErrorCode ? { lunaErrorCode: context.lunaErrorCode } : {}),
     });
-    this.logger.debug({
-      event: 'USA_PRICING_TRACE_NORMALIZATION',
-      context: 'NORMALIZE_PRICING_US',
-      provider: context.sourceProduct.providerName,
-      sourceProductId: context.sourceProduct.sourceProductId,
-      semanticNormalizationStatus: context.semanticNormalizationStatus,
-      conflictFields: context.conflictFields,
-      manufacturer: traceField(context.fields.manufacturer),
-      category: traceField(context.fields.category),
-      model: traceField(context.fields.model),
-      storage: traceField(context.fields.storage),
-      color: traceField(context.fields.color),
-      condition: traceField(context.fields.condition),
-    });
   }
-}
-
-function traceField(field: UsaNormalizedProductField) {
-  return {
-    value: field.value,
-    status: field.candidateStatus,
-    provenance: field.provenance,
-  };
 }
 
 function validatedCommercialName(

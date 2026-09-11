@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Logger } from '@nestjs/common';
 import { deriveExtendedProductIdentity } from '@inest/product-identity';
 import type {
   ProductSemanticNormalizationCandidate,
@@ -96,43 +95,6 @@ function createService(
 }
 
 describe('UsaLunaEnrichmentValidatorService', () => {
-  it('emits the temporary trace without changing the normalized context', async () => {
-    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
-    const { service } = createService(
-      candidate({
-        manufacturerCandidate: 'Apple',
-        categoryCandidate: 'iPhone',
-        modelCandidate: 'iPhone 17',
-        storageCandidate: '256GB',
-        colorCandidate: 'Mist Blue',
-        conditionCandidate: 'NOVO',
-      }),
-    );
-
-    const result = await service.enrich(
-      product({
-        sourceName: 'iPhone 17 256GB Mist Blue',
-        sourceManufacturer: 'Apple',
-        category: 'iPhone',
-        model: 'iPhone 17',
-        capacity: '256GB',
-        color: 'Mist Blue',
-        condition: 'NOVO',
-      }),
-    );
-
-    expect(result.fields.model.value).toBe('iPhone 17');
-    expect(debug).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'USA_PRICING_TRACE_NORMALIZATION',
-        semanticNormalizationStatus: 'CANDIDATE',
-        model: { value: 'iPhone 17', status: 'VALIDATED', provenance: 'SOURCE' },
-        storage: { value: '256GB', status: 'VALIDATED', provenance: 'SOURCE' },
-      }),
-    );
-    debug.mockRestore();
-  });
-
   it.each([
     [
       'Samsung',

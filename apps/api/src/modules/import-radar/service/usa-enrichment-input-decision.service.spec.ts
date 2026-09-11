@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Logger } from '@nestjs/common';
 import type { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
 import { UsaEnrichmentInputDecisionService } from './usa-enrichment-input-decision.service';
@@ -100,26 +99,6 @@ function createService(
 }
 
 describe('UsaEnrichmentInputDecisionService', () => {
-  it('emits the temporary decision trace without changing the decision', async () => {
-    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
-    const { service } = createService([context({ semanticNormalizationStatus: 'TIMEOUT' })]);
-
-    const result = await service.resolve(sourceProduct);
-
-    expect(result.decision).toMatchObject({ status: 'BLOCKED', reason: 'NORMALIZATION_TIMEOUT' });
-    expect(debug).toHaveBeenCalledWith({
-      event: 'USA_PRICING_TRACE_DECISION',
-      provider: 'apple_us',
-      sourceProductId: 'apple-us:macbook-air',
-      decisionStatus: 'BLOCKED',
-      decisionReason: 'NORMALIZATION_TIMEOUT',
-      semanticNormalizationStatus: 'TIMEOUT',
-      conflictFields: [],
-      missingFields: [],
-    });
-    debug.mockRestore();
-  });
-
   it('returns READY when the current context is sufficient', async () => {
     const manufacturer = { value: 'Apple', provenance: 'SOURCE' as const, candidateStatus: null };
     const result = await createService([
