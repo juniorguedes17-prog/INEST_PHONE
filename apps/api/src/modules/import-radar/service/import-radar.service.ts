@@ -96,6 +96,16 @@ export class ImportRadarService {
   async calculate(dto: CalculateImportCostDto, user: AuthenticatedUser) {
     const semanticNormalization = await this.normalizeParaguayProduct(dto);
     const semanticDto = semanticNormalization.product;
+    this.logger.debug({
+      event: 'PY_PRICING_TRACE_NORMALIZATION',
+      sourceProductId: dto.id,
+      model: semanticDto.model ?? null,
+      capacity: semanticDto.capacity ?? null,
+      condition: semanticDto.condition ?? null,
+      category: semanticDto.category || null,
+      brand: semanticDto.brand ?? null,
+      sourceManufacturer: semanticDto.sourceManufacturer ?? null,
+    });
     const settings = await this.settingsService.getSettings();
     const importSettings = settings.importation;
     const convertedPriceRaw = dto.priceUsd * importSettings.dollarQuote;
@@ -146,6 +156,32 @@ export class ImportRadarService {
       sourceManufacturerProvenance: semanticDto.sourceManufacturerProvenance,
       manufacturerResolution,
     });
+    this.logger.debug({
+      event: 'PY_PRICING_TRACE_ELIGIBILITY_INPUT',
+      sourceProductId: dto.id,
+      model: semanticDto.model ?? null,
+      capacity: semanticDto.capacity ?? null,
+      condition,
+      category: semanticDto.category || null,
+      brand: semanticDto.brand ?? null,
+      sourceManufacturer: semanticDto.sourceManufacturer ?? null,
+      classification: financialClassification.classification,
+    });
+    const pricingEligibility = semanticNormalization.accepted
+      ? this.resolvePricingEligibility({
+          dto: semanticDto,
+          identityText: semanticNormalization.identityText,
+          catalogProduct,
+          condition,
+          financialClassification,
+        })
+      : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const);
+    this.logger.debug({
+      event: 'PY_PRICING_TRACE_ELIGIBILITY_RESULT',
+      sourceProductId: dto.id,
+      pricingEligibilityStatus: pricingEligibility.status,
+      pricingEligibilityReason: pricingEligibility.reason,
+    });
     const result = {
       product: semanticDto,
       sourceCommercialIdentity: {
@@ -172,15 +208,7 @@ export class ImportRadarService {
       financialClassificationReason: financialClassification.reason,
       manufacturerKey: financialClassification.manufacturerKey ?? null,
       manufacturerProvenance: financialClassification.provenance ?? null,
-      pricingEligibility: semanticNormalization.accepted
-        ? this.resolvePricingEligibility({
-            dto: semanticDto,
-            identityText: semanticNormalization.identityText,
-            catalogProduct,
-            condition,
-            financialClassification,
-          })
-        : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const),
+      pricingEligibility,
       matchedProductType: redirectRule?.productType ?? 'Nao identificado',
       dollarQuote: importSettings.dollarQuote,
       breakdown: {

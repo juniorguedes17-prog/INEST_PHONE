@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
@@ -60,6 +60,8 @@ export interface UsaManufacturerConfirmation {
  */
 @Injectable()
 export class UsaEnrichmentInputDecisionService {
+  private readonly logger = new Logger(UsaEnrichmentInputDecisionService.name);
+
   constructor(
     @Inject(UsaLunaEnrichmentValidatorService)
     private readonly validator: UsaLunaEnrichmentValidatorService,
@@ -70,7 +72,18 @@ export class UsaEnrichmentInputDecisionService {
   async resolve(product: UsaSourceProduct) {
     assertUsaSourceProduct(product);
     const context = await this.validator.enrich(product);
-    return { decision: this.decide(context), context };
+    const decision = this.decide(context);
+    this.logger.debug({
+      event: 'USA_PRICING_TRACE_DECISION',
+      provider: context.sourceProduct.providerName,
+      sourceProductId: context.sourceProduct.sourceProductId,
+      decisionStatus: decision.status,
+      decisionReason: decision.reason,
+      semanticNormalizationStatus: context.semanticNormalizationStatus,
+      conflictFields: context.conflictFields,
+      missingFields: context.insufficientFields,
+    });
+    return { decision, context };
   }
 
   decide(context: UsaNormalizedProductContext): UsaEnrichmentDecision {

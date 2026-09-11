@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
 import { SettingsService } from '../../settings/service/settings.service';
 import { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';
 import { ComprasParaguaiProvider } from '../providers/compras-paraguai.provider';
@@ -156,6 +157,36 @@ const importProduct = {
 };
 
 describe('ImportRadarService catalog product handoff', () => {
+  it('emits temporary PY traces without changing pricing eligibility', async () => {
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+    const result = await createService([]).calculate(importProduct, { id: 'user-1' } as never);
+
+    expect(result.pricingEligibility).toEqual({ status: 'ELIGIBLE', reason: null });
+    expect(debug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'PY_PRICING_TRACE_NORMALIZATION',
+        sourceProductId: importProduct.id,
+        model: 'iPhone 17 Pro Max',
+        capacity: '256GB',
+        condition: 'NOVO',
+      }),
+    );
+    expect(debug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'PY_PRICING_TRACE_ELIGIBILITY_INPUT',
+        sourceProductId: importProduct.id,
+        classification: 'APPLE',
+      }),
+    );
+    expect(debug).toHaveBeenCalledWith({
+      event: 'PY_PRICING_TRACE_ELIGIBILITY_RESULT',
+      sourceProductId: importProduct.id,
+      pricingEligibilityStatus: 'ELIGIBLE',
+      pricingEligibilityReason: null,
+    });
+    debug.mockRestore();
+  });
+
   it('uses only the resolved active catalog Product id and structured condition', async () => {
     const result = await createService([catalogProduct()]).calculate(importProduct, {
       id: 'user-1',
