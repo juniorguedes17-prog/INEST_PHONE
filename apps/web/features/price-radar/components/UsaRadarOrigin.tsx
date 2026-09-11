@@ -1155,6 +1155,11 @@ function humanizeUsaBlockedReason(reason: string) {
     MANUFACTURER_AMBIGUOUS: 'Não foi possível confirmar o fabricante com segurança.',
     RETAILER_UNRESOLVED: 'Não foi possível confirmar a loja desta oferta.',
     LOGISTIC_CLASSIFICATION_UNRESOLVED: 'Não foi possível classificar este produto com segurança.',
+    NORMALIZATION_TIMEOUT:
+      'Não foi possível concluir a identificação deste produto agora. Tente novamente.',
+    NORMALIZATION_MODEL_ERROR: 'Não foi possível identificar este produto agora. Tente novamente.',
+    NORMALIZATION_INVALID_OUTPUT:
+      'Não foi possível validar as informações deste produto agora. Tente novamente.',
     ENRICHMENT_CONFLICT: 'Encontramos informações conflitantes para este produto.',
     condition_unresolved: 'A condição do produto não foi resolvida com segurança.',
     insufficient_identity: 'A identidade financeira do produto é insuficiente.',

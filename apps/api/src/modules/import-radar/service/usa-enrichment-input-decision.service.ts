@@ -15,9 +15,15 @@ export type UsaEnrichmentDecisionReason =
   | 'SOURCE_CONFIGURATION_REQUIRED'
   | 'MANUFACTURER_MISSING'
   | 'MANUFACTURER_AMBIGUOUS'
+  | 'NORMALIZATION_TIMEOUT'
+  | 'NORMALIZATION_MODEL_ERROR'
+  | 'NORMALIZATION_INVALID_OUTPUT'
   | 'ENRICHMENT_CONFLICT'
   | 'LOGISTIC_CLASSIFICATION_UNRESOLVED'
   | 'RETAILER_UNRESOLVED';
+
+type UsaNormalizationFailureReason =
+  'NORMALIZATION_TIMEOUT' | 'NORMALIZATION_MODEL_ERROR' | 'NORMALIZATION_INVALID_OUTPUT';
 
 export interface UsaEnrichmentDecisionContext {
   provider: string;
@@ -98,7 +104,8 @@ export class UsaEnrichmentInputDecisionService {
     if (context.semanticNormalizationStatus !== 'CANDIDATE') {
       return {
         status: 'BLOCKED',
-        reason: 'ENRICHMENT_CONFLICT',
+        reason:
+          normalizationFailureReason(context.semanticNormalizationStatus) ?? 'ENRICHMENT_CONFLICT',
         context: decisionContext,
       };
     }
@@ -222,6 +229,21 @@ export class UsaEnrichmentInputDecisionService {
     }
 
     return { status: 'READY', reason: null, context: decisionContext };
+  }
+}
+
+function normalizationFailureReason(
+  status: UsaNormalizedProductContext['semanticNormalizationStatus'],
+): UsaNormalizationFailureReason | null {
+  switch (status) {
+    case 'TIMEOUT':
+      return 'NORMALIZATION_TIMEOUT';
+    case 'MODEL_ERROR':
+      return 'NORMALIZATION_MODEL_ERROR';
+    case 'INVALID_STRUCTURED_OUTPUT':
+      return 'NORMALIZATION_INVALID_OUTPUT';
+    default:
+      return null;
   }
 }
 

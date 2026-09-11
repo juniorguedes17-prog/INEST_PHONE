@@ -323,6 +323,27 @@ describe('UsaCostPreflightService', () => {
     ).resolves.toMatchObject({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' });
   });
 
+  it.each([
+    'NORMALIZATION_TIMEOUT',
+    'NORMALIZATION_MODEL_ERROR',
+    'NORMALIZATION_INVALID_OUTPUT',
+  ] as const)(
+    'preserves the normalization failure reason while remaining blocked: %s',
+    async (reason) => {
+      const decision = { status: 'BLOCKED', reason };
+      const { service, shippingWeights } = createService(decision, createContext('OTHER'));
+
+      await expect(
+        service.preflight({
+          sourceProduct: product,
+          redirector: redirector('RED_DELAWARE'),
+          composition: { kind: 'SINGLE_ITEM' },
+        }),
+      ).resolves.toMatchObject({ status: 'BLOCKED', reason });
+      expect(shippingWeights.resolve).not.toHaveBeenCalled();
+    },
+  );
+
   it('does not block a Non-Apple flow merely because Product Identity has no catalog match', async () => {
     const { service } = createService(readyDecision, createContext('OTHER'));
 

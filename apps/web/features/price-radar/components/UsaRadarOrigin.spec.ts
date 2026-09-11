@@ -63,8 +63,9 @@ const ready = {
   condition: 'SEMINOVO',
   normalizedPricing: { category: 'iPhone', model: 'iPhone 17 Pro', capacity: '512GB', color: null },
 };
+const componentSource = readFileSync(`${componentDirectory}/UsaRadarOrigin.tsx`, 'utf8');
 const componentCode = ts.transpileModule(
-  readFileSync(`${componentDirectory}/UsaRadarOrigin.tsx`, 'utf8'),
+  `${componentSource}\nexport { humanizeUsaBlockedReason as __testHumanizeUsaBlockedReason };`,
   {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   },
@@ -120,7 +121,10 @@ function setup(
   const state: unknown[] = [];
   const storage = new Map<string, string>();
   let cursor = 0;
-  const exports: { UsaRadarOrigin?: () => Element } = {};
+  const exports: {
+    UsaRadarOrigin?: () => Element;
+    __testHumanizeUsaBlockedReason?: (reason: string) => string;
+  } = {};
   const jsx = (type: Element['type'], props: Props) => ({ type, props });
   const router = { push: mock.fn() };
 
@@ -212,8 +216,38 @@ function setup(
     await call('form', 'onSubmit', { preventDefault() {} });
     await call('UsaProductCard', 'onSelect', true);
   };
-  return { services, pricing, router, storage, nodes, call, select };
+  return {
+    services,
+    pricing,
+    router,
+    storage,
+    nodes,
+    call,
+    select,
+    humanizeUsaBlockedReason: exports.__testHumanizeUsaBlockedReason!,
+  };
 }
+
+test('maps USA normalization failures and real conflicts to distinct user messages', () => {
+  const { humanizeUsaBlockedReason } = setup();
+
+  assert.equal(
+    humanizeUsaBlockedReason('NORMALIZATION_TIMEOUT'),
+    'Não foi possível concluir a identificação deste produto agora. Tente novamente.',
+  );
+  assert.equal(
+    humanizeUsaBlockedReason('NORMALIZATION_MODEL_ERROR'),
+    'Não foi possível identificar este produto agora. Tente novamente.',
+  );
+  assert.equal(
+    humanizeUsaBlockedReason('NORMALIZATION_INVALID_OUTPUT'),
+    'Não foi possível validar as informações deste produto agora. Tente novamente.',
+  );
+  assert.equal(
+    humanizeUsaBlockedReason('ENRICHMENT_CONFLICT'),
+    'Encontramos informações conflitantes para este produto.',
+  );
+});
 
 test('derives USA filters and metrics from the filtered product dataset', async () => {
   const h = setup(ready, [product, secondProduct, thirdProduct]);

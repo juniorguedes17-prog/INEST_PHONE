@@ -106,13 +106,13 @@ describe('UsaEnrichmentInputDecisionService', () => {
 
     const result = await service.resolve(sourceProduct);
 
-    expect(result.decision).toMatchObject({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' });
+    expect(result.decision).toMatchObject({ status: 'BLOCKED', reason: 'NORMALIZATION_TIMEOUT' });
     expect(debug).toHaveBeenCalledWith({
       event: 'USA_PRICING_TRACE_DECISION',
       provider: 'apple_us',
       sourceProductId: 'apple-us:macbook-air',
       decisionStatus: 'BLOCKED',
-      decisionReason: 'ENRICHMENT_CONFLICT',
+      decisionReason: 'NORMALIZATION_TIMEOUT',
       semanticNormalizationStatus: 'TIMEOUT',
       conflictFields: [],
       missingFields: [],
@@ -222,24 +222,69 @@ describe('UsaEnrichmentInputDecisionService', () => {
   });
 
   it.each([
-    'TIMEOUT',
-    'MODEL_ERROR',
-    'INVALID_STRUCTURED_OUTPUT',
-    'SKIPPED_DISABLED',
-    'BUDGET_EXHAUSTED',
-  ] as const)('fails closed for semantic normalization status %s', (status) => {
-    const result = createService([]).service.decide(
-      context({
-        semanticNormalizationStatus: status,
-        fields: {
-          ...context().fields,
-          manufacturer: { value: 'Apple', provenance: 'SOURCE', candidateStatus: null },
-          model: { value: 'iPhone 17 Pro', provenance: 'SOURCE', candidateStatus: null },
-        },
-      }),
-    );
+    ['TIMEOUT', 'NORMALIZATION_TIMEOUT'],
+    ['MODEL_ERROR', 'NORMALIZATION_MODEL_ERROR'],
+    ['INVALID_STRUCTURED_OUTPUT', 'NORMALIZATION_INVALID_OUTPUT'],
+  ] as const)(
+    'fails closed with a precise reason for semantic normalization status %s',
+    (status, reason) => {
+      const result = createService([]).service.decide(
+        context({
+          semanticNormalizationStatus: status,
+          fields: {
+            ...context().fields,
+            manufacturer: { value: 'Apple', provenance: 'SOURCE', candidateStatus: null },
+            model: { value: 'iPhone 17 Pro', provenance: 'SOURCE', candidateStatus: null },
+          },
+        }),
+      );
 
-    expect(result).toMatchObject({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' });
+      expect(result).toMatchObject({ status: 'BLOCKED', reason });
+    },
+  );
+
+  it.each(['SKIPPED_DISABLED', 'BUDGET_EXHAUSTED'] as const)(
+    'preserves the existing fail-closed reason for semantic normalization status %s',
+    (status) => {
+      const result = createService([]).service.decide(
+        context({
+          semanticNormalizationStatus: status,
+          fields: {
+            ...context().fields,
+            manufacturer: { value: 'Apple', provenance: 'SOURCE', candidateStatus: null },
+            model: { value: 'iPhone 17 Pro', provenance: 'SOURCE', candidateStatus: null },
+          },
+        }),
+      );
+
+      expect(result).toMatchObject({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' });
+    },
+  );
+
+  it('keeps F1 source fields intact while TIMEOUT remains blocked', async () => {
+    const timeoutContext = context({
+      semanticNormalizationStatus: 'TIMEOUT',
+      fields: {
+        ...context().fields,
+        manufacturer: { value: 'Apple', provenance: 'SOURCE', candidateStatus: null },
+        category: { value: 'iPhone', provenance: 'SOURCE', candidateStatus: null },
+        model: { value: 'iPhone 17', provenance: 'SOURCE', candidateStatus: null },
+        storage: { value: '256GB', provenance: 'SOURCE', candidateStatus: null },
+        color: { value: 'Mist Blue', provenance: 'SOURCE', candidateStatus: null },
+        condition: { value: 'NOVO', provenance: 'SOURCE', candidateStatus: null },
+      },
+    });
+    const result = await createService([timeoutContext]).service.resolve(sourceProduct);
+
+    expect(result.decision).toMatchObject({ status: 'BLOCKED', reason: 'NORMALIZATION_TIMEOUT' });
+    expect(result.context.fields).toMatchObject({
+      manufacturer: { value: 'Apple', provenance: 'SOURCE' },
+      category: { value: 'iPhone', provenance: 'SOURCE' },
+      model: { value: 'iPhone 17', provenance: 'SOURCE' },
+      storage: { value: '256GB', provenance: 'SOURCE' },
+      color: { value: 'Mist Blue', provenance: 'SOURCE' },
+      condition: { value: 'NOVO', provenance: 'SOURCE' },
+    });
   });
 
   it('does not ask about a source-authoritative condition conflict', () => {
