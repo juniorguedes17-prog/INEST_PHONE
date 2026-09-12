@@ -33,6 +33,7 @@ import {
   TEMPORARY_IMPORT_PRICING_STORAGE_KEY,
   TemporaryImportPricingRequest,
 } from '@/features/pricing/types/pricing';
+import { resolveUsaProductDisplayName } from '@/features/price-radar/utils/usa-product-display-name';
 
 type UsaProductFilters = {
   category: string;
@@ -443,6 +444,28 @@ export function UsaRadarOrigin() {
     costExecution.preflight.semanticDecision.status === 'READY' &&
     costExecution.calculation !== null;
 
+  const displayPreflight =
+    costExecution !== null &&
+    costExecution !== 'CONFIGURING' &&
+    costExecution.preflight.status === 'READY_FOR_COST'
+      ? costExecution.preflight
+      : preflight?.status === 'READY_FOR_COST'
+        ? preflight
+        : null;
+  const selectedProductDisplayName = selectedProduct
+    ? resolveUsaProductDisplayName({
+        sourceName: selectedProduct.sourceName,
+        displayName: selectedProduct.displayName,
+        commercialName: displayPreflight?.commercialName,
+        sourceManufacturer: selectedProduct.sourceManufacturer,
+        category: displayPreflight?.normalizedPricing.category ?? selectedProduct.category,
+        model: displayPreflight?.normalizedPricing.model ?? selectedProduct.model,
+        capacity: displayPreflight?.normalizedPricing.capacity ?? selectedProduct.capacity,
+        color: displayPreflight?.normalizedPricing.color ?? selectedProduct.color,
+        condition: displayPreflight?.condition ?? selectedProduct.condition,
+      })
+    : null;
+
   const registerWeight = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -841,6 +864,7 @@ export function UsaRadarOrigin() {
       <CalculationModal
         calculation={null}
         usaCostExecution={costExecution === 'CONFIGURING' ? null : costExecution}
+        usaDisplayName={selectedProductDisplayName}
         usaBeforeCost={
           costExecution && selectedProduct ? (
             <div className="grid gap-4" aria-live="polite">
@@ -848,7 +872,7 @@ export function UsaRadarOrigin() {
                 Produto selecionado
               </p>
               <h3 className="mt-1 text-lg font-black text-inest-text">
-                {selectedProduct.sourceName}
+                {selectedProductDisplayName}
               </h3>
               <p className="mt-1 text-sm text-inest-muted">
                 {selectedProduct.providerName} · {selectedProduct.retailer ?? 'Loja não informada'}{' '}
@@ -1220,7 +1244,7 @@ function UsaProductCard({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="line-clamp-2 text-base font-black text-inest-text">
-            {product.sourceName}
+            {resolveUsaProductDisplayName(product)}
           </h3>
           <StatusBadge tone="green">US</StatusBadge>
         </div>

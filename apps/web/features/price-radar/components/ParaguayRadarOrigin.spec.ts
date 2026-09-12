@@ -283,6 +283,7 @@ test('uses commercialName only in the USA/PY modal presentation with visual fall
           finalCost: { amountBrl: 0 },
         },
       },
+      usaDisplayName: 'Garmin vivoactive 5 42mm GPS Ivory',
       sending: false,
       onClose: () => undefined,
       onSendToPricing: () => undefined,

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import test, { mock } from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
+import { resolveUsaProductDisplayName } from '../utils/usa-product-display-name';
 
 type Props = Record<string, unknown>;
 type Element = { type: string | ((props: Props) => Element); props: Props };
@@ -221,6 +222,7 @@ function setup(
       if (name.endsWith('/pricing-service')) return pricing;
       if (name.endsWith('/pricing'))
         return { TEMPORARY_IMPORT_PRICING_STORAGE_KEY: 'inest.temporary-import-pricing' };
+      if (name.endsWith('/usa-product-display-name')) return { resolveUsaProductDisplayName };
       if (name.endsWith('/ParaguayRadarOrigin')) return { CalculationModal: 'CalculationModal' };
       throw new Error(`Unexpected dependency: ${name}`);
     },
@@ -448,6 +450,7 @@ test('opens the shared USA cost modal before calculating and uses usa-cost for R
   const initialModal = h.nodes('CalculationModal')[0]!;
   assert.equal(initialModal.props.usaCostExecution, null);
   assert.ok(initialModal.props.usaBeforeCost);
+  assert.equal(initialModal.props.usaDisplayName, 'iPhone 17 Pro 512GB SEMINOVO');
   await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
   await h.call('UsaRedirectorPanel', 'onSubmit');
   assert.equal(h.services.executeUsaCost.mock.callCount(), 1);

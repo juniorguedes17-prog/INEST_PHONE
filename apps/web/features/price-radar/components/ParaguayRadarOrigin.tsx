@@ -633,6 +633,7 @@ export function CalculationModal({
   calculation,
   usaCostExecution = null,
   usaBeforeCost = null,
+  usaDisplayName = null,
   usaCanSendToPricing = true,
   sending,
   onClose,
@@ -642,6 +643,7 @@ export function CalculationModal({
   calculation: ImportCalculation | null;
   usaCostExecution?: UsaCostExecutionResponse | null;
   usaBeforeCost?: ReactNode;
+  usaDisplayName?: string | null;
   usaCanSendToPricing?: boolean;
   sending: boolean;
   onClose: () => void;
@@ -666,10 +668,7 @@ export function CalculationModal({
             <>
               <div>
                 <strong className="block text-inest-text">
-                  {usaCostExecution?.preflight?.status === 'READY_FOR_COST'
-                    ? (usaCostExecution.preflight.commercialName ??
-                      usaCalculation.sourceCommercialIdentity.sourceName)
-                    : usaCalculation.sourceCommercialIdentity.sourceName}
+                  {usaDisplayName ?? usaCalculation.sourceCommercialIdentity.sourceName}
                 </strong>
                 <span className="text-sm text-inest-muted">
                   {usaCalculation.redirector.redirector === 'RED_DELAWARE'
