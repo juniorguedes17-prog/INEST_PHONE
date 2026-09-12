@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsService } from '../../settings/service/settings.service';
 import { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';
@@ -156,6 +157,129 @@ const importProduct = {
 };
 
 describe('ImportRadarService catalog product handoff', () => {
+  it('traces the real PY eligibility result without changing Garmin, Apple, or unresolved decisions', async () => {
+    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+    const timeoutNormalizer = {
+      normalizeSemanticProduct: vi.fn().mockResolvedValue(
+        semanticResult({
+          normalizationStatus: 'TIMEOUT',
+          candidate: null,
+          schemaValid: false,
+          errorCode: 'timeout',
+        }),
+      ),
+    };
+    const garminResolver = {
+      resolve: vi.fn().mockResolvedValue({
+        status: 'FOUND',
+        manufacturerId: 'manufacturer-garmin',
+        manufacturerKey: 'garmin',
+        canonicalName: 'Garmin',
+        provenance: 'EXPLICIT_SOURCE_VALIDATED',
+        normalizedEvidence: 'garmin',
+        matchedAlias: 'Garmin',
+        normalizedAlias: 'garmin',
+      }),
+    };
+
+    try {
+      const garmin = await createService([], timeoutNormalizer, garminResolver).calculate(
+        {
+          ...importProduct,
+          id: 'py-garmin-vivoactive-5',
+          name: 'Relógio Garmin Vivoactive 5',
+          category: 'Smartwatch',
+          brand: 'Garmin',
+          sourceManufacturer: 'Garmin',
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+          model: 'Vivoactive 5',
+          capacity: undefined,
+          condition: undefined,
+        },
+        { id: 'user-1' } as never,
+      );
+      const apple = await createService([]).calculate(importProduct, { id: 'user-1' } as never);
+      const unresolved = await createService([]).calculate(
+        {
+          ...importProduct,
+          id: 'py-unresolved-device',
+          name: 'Unknown device',
+          sourceEvidence: 'Unknown device',
+          category: '',
+          brand: undefined,
+          sourceManufacturer: null,
+          sourceManufacturerProvenance: undefined,
+          model: undefined,
+          capacity: undefined,
+          condition: undefined,
+        },
+        { id: 'user-1' } as never,
+      );
+
+      expect(garmin).toMatchObject({
+        product: {
+          brand: 'Garmin',
+          category: 'Smartwatch',
+          model: 'Vivoactive 5',
+          capacity: undefined,
+          condition: undefined,
+        },
+        financialClassification: 'NON_APPLE',
+        financialClassificationReason: 'manufacturer_registry',
+        pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
+      });
+      expect(apple).toMatchObject({
+        financialClassification: 'APPLE',
+        pricingEligibility: { status: 'ELIGIBLE', reason: null },
+      });
+      expect(unresolved).toMatchObject({
+        financialClassification: 'UNRESOLVED',
+        financialClassificationReason: 'classification_unresolved',
+        pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+      });
+
+      expect(debug).toHaveBeenCalledWith({
+        event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
+        sourceProductId: 'py-garmin-vivoactive-5',
+        semanticAccepted: false,
+        semanticNormalizationStatus: 'TIMEOUT',
+        semanticErrorCode: 'timeout',
+        sourceManufacturer: 'Garmin',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+        brand: 'Garmin',
+        category: 'Smartwatch',
+        model: 'Vivoactive 5',
+        capacity: null,
+        condition: null,
+        financialClassification: 'NON_APPLE',
+        financialClassificationReason: 'manufacturer_registry',
+        pricingEligibilityStatus: 'BLOCKED',
+        pricingEligibilityReason: 'financial_identity_insufficient',
+      });
+      expect(debug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
+          sourceProductId: importProduct.id,
+          financialClassification: 'APPLE',
+          pricingEligibilityStatus: 'ELIGIBLE',
+          pricingEligibilityReason: null,
+        }),
+      );
+      expect(debug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
+          sourceProductId: 'py-unresolved-device',
+          financialClassification: 'UNRESOLVED',
+          financialClassificationReason: 'classification_unresolved',
+          pricingEligibilityStatus: 'BLOCKED',
+          pricingEligibilityReason: 'classification_unresolved',
+        }),
+      );
+    } finally {
+      debug.mockRestore();
+    }
+  });
+
   it('uses only the resolved active catalog Product id and structured condition', async () => {
     const result = await createService([catalogProduct()]).calculate(importProduct, {
       id: 'user-1',
