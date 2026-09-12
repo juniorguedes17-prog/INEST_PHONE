@@ -111,13 +111,9 @@ export class UsaLunaEnrichmentValidatorService {
       productIdentity: downstreamIdentity,
       canonicalCategory: fields.category.value,
     });
-    const validatedCommercialNameValue = validatedCommercialName(
-      candidate?.commercialName ?? null,
-      fields,
-    );
     const context: UsaNormalizedProductContext = {
       sourceProduct: product,
-      commercialName: validatedCommercialNameValue,
+      commercialName: validatedCommercialName(candidate?.commercialName ?? null, fields),
       fields,
       candidateValues,
       candidateFields: enrichmentFields.filter(
@@ -139,16 +135,6 @@ export class UsaLunaEnrichmentValidatorService {
       lunaLatencyMs: result?.latencyMs ?? null,
       lunaErrorCode: result?.errorCode ?? null,
     };
-    this.logger.debug({
-      event: 'USA_COMMERCIAL_NAME_TRACE',
-      provider: product.providerName,
-      sourceProductId: product.sourceProductId,
-      semanticNormalizationStatus: context.semanticNormalizationStatus,
-      sourceName: product.sourceName,
-      displayName: product.displayName,
-      candidateCommercialName: candidate?.commercialName ?? null,
-      validatedCommercialName: validatedCommercialNameValue,
-    });
     this.log(context);
     return context;
   }

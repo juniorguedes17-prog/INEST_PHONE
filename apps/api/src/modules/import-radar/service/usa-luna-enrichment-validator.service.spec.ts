@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Logger } from '@nestjs/common';
 import { deriveExtendedProductIdentity } from '@inest/product-identity';
 import type {
   ProductSemanticNormalizationCandidate,
@@ -96,75 +95,6 @@ function createService(
 }
 
 describe('UsaLunaEnrichmentValidatorService', () => {
-  it.each([
-    {
-      name: 'CANDIDATE',
-      status: 'CANDIDATE' as const,
-      lunaCandidate: candidate({
-        commercialName: 'Apple MacBook Air M5 512GB Midnight Novo',
-      }),
-      expectedCommercialName: 'Apple MacBook Air M5 512GB Midnight Novo',
-      expectedDecision: { status: 'READY', reason: null },
-    },
-    {
-      name: 'TIMEOUT',
-      status: 'TIMEOUT' as const,
-      lunaCandidate: null,
-      expectedCommercialName: null,
-      expectedDecision: { status: 'BLOCKED', reason: 'NORMALIZATION_TIMEOUT' },
-    },
-  ])(
-    'emits commercial-name trace without changing the $name result',
-    async ({ status, lunaCandidate, expectedCommercialName, expectedDecision }) => {
-      const debugSpy = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
-      try {
-        const { service, manufacturers } = createService(
-          lunaCandidate,
-          { status: 'FOUND', canonicalName: 'Apple' },
-          status,
-        );
-        const result = await service.enrich(
-          product({
-            sourceManufacturer: 'Apple',
-            sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
-            category: 'MacBook',
-            model: 'MacBook Air M5',
-            capacity: '512GB',
-            color: 'Midnight',
-            condition: 'NOVO',
-          }),
-        );
-        const decision = new UsaEnrichmentInputDecisionService(
-          service,
-          manufacturers as unknown as ManufacturersService,
-        ).decide(result);
-        const trace = debugSpy.mock.calls
-          .map(([entry]) => entry)
-          .find(
-            (entry): entry is Record<string, unknown> =>
-              typeof entry === 'object' &&
-              entry !== null &&
-              entry.event === 'USA_COMMERCIAL_NAME_TRACE',
-          );
-
-        expect(trace).toMatchObject({
-          event: 'USA_COMMERCIAL_NAME_TRACE',
-          sourceProductId: 'apple-us:macbook-air-m5',
-          semanticNormalizationStatus: status,
-          sourceName: 'Apple MacBook Air 13 M5 16GB 512GB Midnight',
-          displayName: 'Apple MacBook Air 13 M5 16GB 512GB Midnight',
-          candidateCommercialName: expectedCommercialName,
-          validatedCommercialName: expectedCommercialName,
-        });
-        expect(result.commercialName).toBe(expectedCommercialName);
-        expect(result.semanticNormalizationStatus).toBe(status);
-        expect(decision).toMatchObject(expectedDecision);
-      } finally {
-        debugSpy.mockRestore();
-      }
-    },
-  );
-
   it.each([
     [
       'Samsung',
