@@ -172,15 +172,16 @@ export class ImportRadarService {
       financialClassificationReason: financialClassification.reason,
       manufacturerKey: financialClassification.manufacturerKey ?? null,
       manufacturerProvenance: financialClassification.provenance ?? null,
-      pricingEligibility: semanticNormalization.accepted
-        ? this.resolvePricingEligibility({
-            dto: semanticDto,
-            identityText: semanticNormalization.identityText,
-            catalogProduct,
-            condition,
-            financialClassification,
-          })
-        : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const),
+      pricingEligibility:
+        semanticNormalization.accepted || financialClassification.classification === 'NON_APPLE'
+          ? this.resolvePricingEligibility({
+              dto: semanticDto,
+              identityText: semanticNormalization.identityText,
+              catalogProduct,
+              condition,
+              financialClassification,
+            })
+          : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const),
       matchedProductType: redirectRule?.productType ?? 'Nao identificado',
       dollarQuote: importSettings.dollarQuote,
       breakdown: {

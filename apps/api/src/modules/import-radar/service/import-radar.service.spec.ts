@@ -157,7 +157,7 @@ const importProduct = {
 };
 
 describe('ImportRadarService catalog product handoff', () => {
-  it('traces the real PY eligibility result without changing Garmin, Apple, or unresolved decisions', async () => {
+  it('routes the traced real PY Non-Apple state through the existing eligibility authority', async () => {
     const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
     const timeoutNormalizer = {
       normalizeSemanticProduct: vi.fn().mockResolvedValue(
@@ -186,13 +186,13 @@ describe('ImportRadarService catalog product handoff', () => {
       const garmin = await createService([], timeoutNormalizer, garminResolver).calculate(
         {
           ...importProduct,
-          id: 'py-garmin-vivoactive-5',
+          id: 'py-50425',
           name: 'Relógio Garmin Vivoactive 5',
-          category: 'Smartwatch',
-          brand: 'Garmin',
+          category: 'Outros',
+          brand: undefined,
           sourceManufacturer: 'Garmin',
           sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
-          model: 'Vivoactive 5',
+          model: undefined,
           capacity: undefined,
           condition: undefined,
         },
@@ -218,15 +218,15 @@ describe('ImportRadarService catalog product handoff', () => {
 
       expect(garmin).toMatchObject({
         product: {
-          brand: 'Garmin',
-          category: 'Smartwatch',
-          model: 'Vivoactive 5',
+          brand: undefined,
+          category: 'Outros',
+          model: undefined,
           capacity: undefined,
           condition: undefined,
         },
         financialClassification: 'NON_APPLE',
         financialClassificationReason: 'manufacturer_registry',
-        pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
+        pricingEligibility: { status: 'ELIGIBLE', reason: null },
       });
       expect(apple).toMatchObject({
         financialClassification: 'APPLE',
@@ -240,21 +240,21 @@ describe('ImportRadarService catalog product handoff', () => {
 
       expect(debug).toHaveBeenCalledWith({
         event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
-        sourceProductId: 'py-garmin-vivoactive-5',
+        sourceProductId: 'py-50425',
         semanticAccepted: false,
         semanticNormalizationStatus: 'TIMEOUT',
         semanticErrorCode: 'timeout',
         sourceManufacturer: 'Garmin',
         sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
-        brand: 'Garmin',
-        category: 'Smartwatch',
-        model: 'Vivoactive 5',
+        brand: null,
+        category: 'Outros',
+        model: null,
         capacity: null,
         condition: null,
         financialClassification: 'NON_APPLE',
         financialClassificationReason: 'manufacturer_registry',
-        pricingEligibilityStatus: 'BLOCKED',
-        pricingEligibilityReason: 'financial_identity_insufficient',
+        pricingEligibilityStatus: 'ELIGIBLE',
+        pricingEligibilityReason: null,
       });
       expect(debug).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -279,6 +279,63 @@ describe('ImportRadarService catalog product handoff', () => {
       debug.mockRestore();
     }
   });
+
+  it.each([
+    ['TIMEOUT', 'timeout'],
+    ['MODEL_ERROR', 'model_error'],
+    ['INVALID_STRUCTURED_OUTPUT', 'invalid_structured_output'],
+  ] as const)(
+    'routes registry-classified Non-Apple through existing eligibility on semantic %s',
+    async (normalizationStatus, errorCode) => {
+      const productNormalization = {
+        normalizeSemanticProduct: vi.fn().mockResolvedValue(
+          semanticResult({
+            normalizationStatus,
+            candidate: null,
+            schemaValid: false,
+            errorCode,
+          }),
+        ),
+      };
+      const manufacturerResolver = {
+        resolve: vi.fn().mockResolvedValue({
+          status: 'FOUND',
+          manufacturerId: 'manufacturer-external-brand',
+          manufacturerKey: 'external-brand',
+          canonicalName: 'External Brand',
+          provenance: 'EXPLICIT_SOURCE_VALIDATED',
+          normalizedEvidence: 'external brand',
+          matchedAlias: 'External Brand',
+          normalizedAlias: 'external brand',
+        }),
+      };
+
+      const result = await createService([], productNormalization, manufacturerResolver).calculate(
+        {
+          ...importProduct,
+          id: `py-non-apple-${normalizationStatus.toLowerCase()}`,
+          name: 'External product',
+          category: 'Outros',
+          brand: undefined,
+          sourceManufacturer: 'External Brand',
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+          model: undefined,
+          capacity: undefined,
+          condition: undefined,
+        },
+        { id: 'user-1' } as never,
+      );
+
+      expect(result).toMatchObject({
+        financialClassification: 'NON_APPLE',
+        financialClassificationReason: 'manufacturer_registry',
+        pricingEligibility: { status: 'ELIGIBLE', reason: null },
+      });
+      expect(result.product.model).toBeUndefined();
+      expect(result.product.capacity).toBeUndefined();
+      expect(result.product.condition).toBeUndefined();
+    },
+  );
 
   it('uses only the resolved active catalog Product id and structured condition', async () => {
     const result = await createService([catalogProduct()]).calculate(importProduct, {
@@ -1179,6 +1236,10 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(result.product.model).toBeUndefined();
     expect(result.product.capacity).toBeUndefined();
     expect(result.product.condition).toBeUndefined();
+    expect(result).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
+    });
   });
 
   it('nao escolhe Product quando a condition da fonte e desconhecida', async () => {
