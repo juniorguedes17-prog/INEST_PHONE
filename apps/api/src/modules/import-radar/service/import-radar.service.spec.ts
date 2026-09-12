@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { SettingsService } from '../../settings/service/settings.service';
 import { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';
@@ -157,8 +156,7 @@ const importProduct = {
 };
 
 describe('ImportRadarService catalog product handoff', () => {
-  it('routes the traced real PY Non-Apple state through the existing eligibility authority', async () => {
-    const debug = vi.spyOn(Logger.prototype, 'debug').mockImplementation(() => undefined);
+  it('routes the real PY Non-Apple state through the existing eligibility authority', async () => {
     const timeoutNormalizer = {
       normalizeSemanticProduct: vi.fn().mockResolvedValue(
         semanticResult({
@@ -182,102 +180,60 @@ describe('ImportRadarService catalog product handoff', () => {
       }),
     };
 
-    try {
-      const garmin = await createService([], timeoutNormalizer, garminResolver).calculate(
-        {
-          ...importProduct,
-          id: 'py-50425',
-          name: 'Relógio Garmin Vivoactive 5',
-          category: 'Outros',
-          brand: undefined,
-          sourceManufacturer: 'Garmin',
-          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
-          model: undefined,
-          capacity: undefined,
-          condition: undefined,
-        },
-        { id: 'user-1' } as never,
-      );
-      const apple = await createService([]).calculate(importProduct, { id: 'user-1' } as never);
-      const unresolved = await createService([]).calculate(
-        {
-          ...importProduct,
-          id: 'py-unresolved-device',
-          name: 'Unknown device',
-          sourceEvidence: 'Unknown device',
-          category: '',
-          brand: undefined,
-          sourceManufacturer: null,
-          sourceManufacturerProvenance: undefined,
-          model: undefined,
-          capacity: undefined,
-          condition: undefined,
-        },
-        { id: 'user-1' } as never,
-      );
-
-      expect(garmin).toMatchObject({
-        product: {
-          brand: undefined,
-          category: 'Outros',
-          model: undefined,
-          capacity: undefined,
-          condition: undefined,
-        },
-        financialClassification: 'NON_APPLE',
-        financialClassificationReason: 'manufacturer_registry',
-        pricingEligibility: { status: 'ELIGIBLE', reason: null },
-      });
-      expect(apple).toMatchObject({
-        financialClassification: 'APPLE',
-        pricingEligibility: { status: 'ELIGIBLE', reason: null },
-      });
-      expect(unresolved).toMatchObject({
-        financialClassification: 'UNRESOLVED',
-        financialClassificationReason: 'classification_unresolved',
-        pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
-      });
-
-      expect(debug).toHaveBeenCalledWith({
-        event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
-        sourceProductId: 'py-50425',
-        semanticAccepted: false,
-        semanticNormalizationStatus: 'TIMEOUT',
-        semanticErrorCode: 'timeout',
+    const garmin = await createService([], timeoutNormalizer, garminResolver).calculate(
+      {
+        ...importProduct,
+        id: 'py-50425',
+        name: 'Relógio Garmin Vivoactive 5',
+        category: 'Outros',
+        brand: undefined,
         sourceManufacturer: 'Garmin',
         sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
-        brand: null,
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+      },
+      { id: 'user-1' } as never,
+    );
+    const apple = await createService([]).calculate(importProduct, { id: 'user-1' } as never);
+    const unresolved = await createService([]).calculate(
+      {
+        ...importProduct,
+        id: 'py-unresolved-device',
+        name: 'Unknown device',
+        sourceEvidence: 'Unknown device',
+        category: '',
+        brand: undefined,
+        sourceManufacturer: null,
+        sourceManufacturerProvenance: undefined,
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(garmin).toMatchObject({
+      product: {
+        brand: undefined,
         category: 'Outros',
-        model: null,
-        capacity: null,
-        condition: null,
-        financialClassification: 'NON_APPLE',
-        financialClassificationReason: 'manufacturer_registry',
-        pricingEligibilityStatus: 'ELIGIBLE',
-        pricingEligibilityReason: null,
-      });
-      expect(debug).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
-          sourceProductId: importProduct.id,
-          financialClassification: 'APPLE',
-          pricingEligibilityStatus: 'ELIGIBLE',
-          pricingEligibilityReason: null,
-        }),
-      );
-      expect(debug).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
-          sourceProductId: 'py-unresolved-device',
-          financialClassification: 'UNRESOLVED',
-          financialClassificationReason: 'classification_unresolved',
-          pricingEligibilityStatus: 'BLOCKED',
-          pricingEligibilityReason: 'classification_unresolved',
-        }),
-      );
-    } finally {
-      debug.mockRestore();
-    }
+        model: undefined,
+        capacity: undefined,
+        condition: undefined,
+      },
+      financialClassification: 'NON_APPLE',
+      financialClassificationReason: 'manufacturer_registry',
+      pricingEligibility: { status: 'ELIGIBLE', reason: null },
+    });
+    expect(apple).toMatchObject({
+      financialClassification: 'APPLE',
+      pricingEligibility: { status: 'ELIGIBLE', reason: null },
+    });
+    expect(unresolved).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      financialClassificationReason: 'classification_unresolved',
+      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+    });
   });
 
   it.each([

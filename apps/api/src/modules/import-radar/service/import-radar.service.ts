@@ -195,25 +195,6 @@ export class ImportRadarService {
       total,
     };
 
-    this.logger.debug({
-      event: 'PY_NON_APPLE_ELIGIBILITY_TRACE',
-      sourceProductId: dto.id,
-      semanticAccepted: semanticNormalization.accepted,
-      semanticNormalizationStatus: semanticNormalization.status,
-      semanticErrorCode: semanticNormalization.errorCode,
-      sourceManufacturer: semanticDto.sourceManufacturer ?? null,
-      sourceManufacturerProvenance: semanticDto.sourceManufacturerProvenance ?? null,
-      brand: semanticDto.brand ?? null,
-      category: semanticDto.category || null,
-      model: semanticDto.model ?? null,
-      capacity: semanticDto.capacity ?? null,
-      condition,
-      financialClassification: result.financialClassification,
-      financialClassificationReason: result.financialClassificationReason,
-      pricingEligibilityStatus: result.pricingEligibility.status,
-      pricingEligibilityReason: result.pricingEligibility.reason,
-    });
-
     await this.repository.createAuditLog({
       userId: user.id,
       operationType: 'CREATE',
