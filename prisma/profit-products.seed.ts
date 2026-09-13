@@ -15,6 +15,14 @@ type ProfitSeedProduct = {
   lucro_liquido: number;
 };
 
+type ProfitProductUpsertReferences = {
+  categoryId: string;
+  modelId: string;
+  storageId: string | null;
+  productType: ProductType;
+  condition: ProductCondition;
+};
+
 const profitProducts = JSON.parse(
   readFileSync(resolve(process.cwd(), 'prisma/data/profit-products.json'), 'utf8'),
 ) as ProfitSeedProduct[];
@@ -49,37 +57,39 @@ export async function seedProfitProducts(prisma: PrismaClient) {
     );
     const storage = await resolveStorage(prisma, record.produto_descricao);
 
-    await prisma.product.upsert({
-      where: { profitProductId: record.produto_id },
-      update: {
-        categoryId: category.id,
-        modelId: model.id,
-        storageId: storage?.id ?? null,
-        colorId: null,
-        productType,
-        status: ProductStatus.ACTIVE,
-        productDescription: record.produto_descricao,
-        normalizedDescription: normalizeProfitDescription(record.produto_descricao),
-        profitCondition: condition,
-        netProfit: record.lucro_liquido,
-        active: true,
-        deletedAt: null,
-      },
-      create: {
+    await prisma.product.upsert(
+      buildProfitProductUpsertArgs(record, {
         categoryId: category.id,
         modelId: model.id,
         storageId: storage?.id ?? null,
         productType,
-        status: ProductStatus.ACTIVE,
-        profitProductId: record.produto_id,
-        productDescription: record.produto_descricao,
-        normalizedDescription: normalizeProfitDescription(record.produto_descricao),
-        profitCondition: condition,
-        netProfit: record.lucro_liquido,
-        active: true,
-      },
-    });
+        condition,
+      }),
+    );
   }
+}
+
+export function buildProfitProductUpsertArgs(
+  record: ProfitSeedProduct,
+  references: ProfitProductUpsertReferences,
+) {
+  return {
+    where: { profitProductId: record.produto_id },
+    update: {},
+    create: {
+      categoryId: references.categoryId,
+      modelId: references.modelId,
+      storageId: references.storageId,
+      productType: references.productType,
+      status: ProductStatus.ACTIVE,
+      profitProductId: record.produto_id,
+      productDescription: record.produto_descricao,
+      normalizedDescription: normalizeProfitDescription(record.produto_descricao),
+      profitCondition: references.condition,
+      netProfit: record.lucro_liquido,
+      active: true,
+    },
+  };
 }
 
 async function ensureCategories(prisma: PrismaClient) {
