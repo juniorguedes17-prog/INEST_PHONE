@@ -404,6 +404,50 @@ describe('PricingService native product profit integration', () => {
     },
   );
 
+  it('preserves a canonical USA SEMINOVO condition without catalog or matched product type', async () => {
+    const service = createTemporaryPyPricingService([
+      {
+        productId: 'iphone-15-pro-used',
+        condition: 'SEMINOVO',
+        productDescription: 'iPhone 15 Pro 256GB',
+        normalizedDescription: 'iphone 15 pro 256gb',
+        netProfit: 549,
+      },
+    ]);
+
+    const result = await service.calculateTemporaryImport({
+      origin: 'US',
+      sourceProductId: 'amazon-us:iphone-15-pro-renewed',
+      productName: 'Apple iPhone 15 Pro 256GB, Renewed Premium',
+      displayName: 'Apple iPhone 15 Pro 256GB, Renewed Premium',
+      category: 'iPhone',
+      supplier: 'Amazon',
+      store: 'Amazon',
+      productUrl: 'https://example.com/iphone-15-pro-renewed',
+      priceUsd: 1000,
+      totalCost: 5000,
+      brand: 'Apple',
+      model: 'iPhone 15 Pro',
+      capacity: '256GB',
+      condition: 'SEMINOVO',
+      provider: 'amazon_us',
+      retailer: 'Amazon',
+    });
+
+    expect(result).toMatchObject({
+      origin: 'US',
+      calculationStatus: 'ready',
+      desiredNetProfit: 549,
+      salePrice: 5949,
+      offerPrice: 6049,
+      profit: {
+        source: 'native_product_catalog',
+        condition: 'SEMINOVO',
+        recordId: 'iphone-15-pro-used',
+      },
+    });
+  });
+
   it('applies commercial endings configured in the pricing scope', async () => {
     const repository = {
       findActiveCatalogProductById: vi.fn().mockResolvedValue({

@@ -1541,6 +1541,10 @@ export class PricingService {
       return catalogCondition;
     }
 
+    if (dto.condition === 'NOVO' || dto.condition === 'SEMINOVO' || dto.condition === 'CPO') {
+      return dto.condition;
+    }
+
     if (!dto.condition) return null;
 
     const productReference = `${dto.productName} ${dto.model ?? ''}`.toUpperCase();
