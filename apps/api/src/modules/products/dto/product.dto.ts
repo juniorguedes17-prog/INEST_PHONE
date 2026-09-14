@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsIn,
   IsNotEmpty,
+  MaxLength,
   IsNumber,
   IsOptional,
   IsString,
@@ -138,12 +139,14 @@ export class CreateProfitRegistrationModelDto {
   @ApiProperty()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(160)
   name!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ deprecated: true })
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  canonicalModelKey!: string;
+  canonicalModelKey?: string;
 
   @ApiProperty()
   @IsIn([
@@ -192,11 +195,13 @@ export class UpsertModelDto {
 
   @ApiProperty()
   @IsString()
+  @MaxLength(160)
   name!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ deprecated: true })
+  @IsOptional()
   @IsString()
-  normalizedName!: string;
+  normalizedName?: string;
 
   @ApiProperty()
   @IsString()

@@ -13,6 +13,7 @@ import {
 import { ProductsRepository } from '../repository/products.repository';
 import { ensureExists } from '../validators/products.validators';
 import { normalizeProfitProductDescription } from '../../pricing/providers/google-sheets-profit.provider';
+import { buildProductModelNormalizedName } from '../product-model-normalizer';
 
 @Injectable()
 export class ProductsService {
@@ -51,11 +52,31 @@ export class ProductsService {
 
     await this.validateProfitRegistrationReferences(dto.product);
     await this.ensureUniqueProfitIdentity(dto.product);
-    const product = await this.productsRepository.createProfitRegistration(
-      dto.product,
-      dto.model,
-      user?.id,
-    );
+    const usesLegacyCanonicalKey = dto.model.canonicalModelKey !== undefined;
+    const normalizedName =
+      dto.model.canonicalModelKey ??
+      buildProductModelNormalizedName({
+        categoryId: dto.product.categoryId,
+        modelName: dto.model.name,
+      });
+    let product;
+    try {
+      product = await this.productsRepository.createProfitRegistration(
+        dto.product,
+        {
+          name: dto.model.name,
+          normalizedName,
+          normalizationSource: usesLegacyCanonicalKey ? 'legacy-canonical' : 'cadastral',
+          productType: dto.model.productType,
+        },
+        user?.id,
+      );
+    } catch (error) {
+      if (!usesLegacyCanonicalKey && isUniqueConstraintError(error)) {
+        throw new ConflictException('Modelo ja existe no escopo cadastral informado.');
+      }
+      throw error;
+    }
     await this.productsRepository.createAuditLog({
       userId: user?.id,
       operationType: 'CREATE',
@@ -141,8 +162,37 @@ export class ProductsService {
     return this.productsRepository.updateCategory(id, dto);
   }
 
-  createModel(dto: UpsertModelDto) {
-    return this.productsRepository.createModel(dto);
+  async createModel(dto: UpsertModelDto) {
+    if (dto.normalizedName !== undefined) {
+      return this.productsRepository.createModel({
+        ...dto,
+        normalizedName: dto.normalizedName,
+      });
+    }
+
+    const category = await this.productsRepository.findCategory(dto.categoryId);
+    ensureExists(category, 'Categoria invalida.');
+    if (category && 'type' in category && category.type !== dto.productType) {
+      throw new NotFoundException('Categoria comercial incompativel com o tipo do produto.');
+    }
+
+    const normalizedName = buildProductModelNormalizedName({
+      categoryId: dto.categoryId,
+      modelName: dto.name,
+    });
+    const existingModel = await this.productsRepository.findModelByNormalizedName(normalizedName);
+    if (existingModel) {
+      throw new ConflictException('Modelo ja existe no escopo cadastral informado.');
+    }
+
+    try {
+      return await this.productsRepository.createModel({ ...dto, normalizedName });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException('Modelo ja existe no escopo cadastral informado.');
+      }
+      throw error;
+    }
   }
 
   updateModel(id: string, dto: UpsertModelDto) {
@@ -215,4 +265,13 @@ export class ProductsService {
       );
     }
   }
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'P2002',
+  );
 }

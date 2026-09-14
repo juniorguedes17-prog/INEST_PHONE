@@ -1,8 +1,7 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import {
   CreateProductDto,
-  CreateProfitRegistrationModelDto,
   CreateProfitRegistrationProductDto,
   ProductQueryDto,
   UpdateProductDto,
@@ -13,6 +12,17 @@ import {
 } from '../dto/product.dto';
 import { ProductRecord, ProductsPrismaClient } from '../interfaces/products-prisma.interface';
 import { normalizeProfitProductDescription } from '../../pricing/providers/google-sheets-profit.provider';
+
+type ResolvedProductModelCreation = {
+  name: string;
+  normalizedName: string;
+  normalizationSource: 'legacy-canonical' | 'cadastral';
+  productType: string;
+};
+
+type ResolvedUpsertModelDto = Omit<UpsertModelDto, 'normalizedName'> & {
+  normalizedName: string;
+};
 
 @Injectable()
 export class ProductsRepository {
@@ -55,22 +65,25 @@ export class ProductsRepository {
 
   createProfitRegistration(
     product: CreateProfitRegistrationProductDto,
-    model: CreateProfitRegistrationModelDto,
+    model: ResolvedProductModelCreation,
     userId?: string,
   ) {
     return this.prisma.$transaction(async (transaction) => {
       const existingModel = await transaction.productModel.findUnique({
-        where: { normalizedName: model.canonicalModelKey },
+        where: { normalizedName: model.normalizedName },
       });
       if (existingModel) {
-        throw new Error('Modelo canonico ja existe no catalogo.');
+        if (model.normalizationSource === 'legacy-canonical') {
+          throw new Error('Modelo canonico ja existe no catalogo.');
+        }
+        throw new ConflictException('Modelo ja existe no escopo cadastral informado.');
       }
 
       const createdModel = await transaction.productModel.create({
         data: {
           categoryId: product.categoryId,
           name: model.name,
-          normalizedName: model.canonicalModelKey,
+          normalizedName: model.normalizedName,
           productType: model.productType,
         },
       });
@@ -183,7 +196,11 @@ export class ProductsRepository {
     return this.prisma.productCategory.update({ where: { id }, data: dto });
   }
 
-  createModel(dto: UpsertModelDto) {
+  findModelByNormalizedName(normalizedName: string) {
+    return this.prisma.productModel.findUnique({ where: { normalizedName } });
+  }
+
+  createModel(dto: ResolvedUpsertModelDto) {
     return this.prisma.productModel.create({ data: dto });
   }
 
