@@ -60,14 +60,17 @@ const thirdProduct = {
 const appleIphone = {
   ...product,
   providerName: 'apple_us',
-  sourceProductId: 'apple-us:MJQ64LL/A',
-  sourceName: 'iPhone 18 Pro 256GB Glacier',
-  displayName: 'iPhone 18 Pro 256GB Glacier',
+  sourceProductId: 'apple-us:MG484LL/A',
+  sourceName: 'Apple iPhone 17 256GB Mist Blue NOVO',
+  displayName: 'Apple iPhone 17 256GB Mist Blue NOVO',
   retailer: 'Apple Store USA',
   supplier: 'Apple Store USA',
-  model: 'iPhone 18 Pro',
+  sourceManufacturer: 'Apple',
+  sourceManufacturerProvenance: 'EXPLICIT_SOURCE' as const,
+  category: 'iPhone',
+  model: 'iPhone 17',
   capacity: '256GB',
-  color: 'Glacier',
+  color: 'Mist Blue',
   condition: 'NOVO' as const,
 };
 const canon = {
@@ -95,7 +98,7 @@ const ready = {
 };
 const componentSource = readFileSync(`${componentDirectory}/UsaRadarOrigin.tsx`, 'utf8');
 const componentCode = ts.transpileModule(
-  `${componentSource}\nexport { humanizeUsaBlockedReason as __testHumanizeUsaBlockedReason };`,
+  `${componentSource}\nexport { humanizeUsaBlockedReason as __testHumanizeUsaBlockedReason, isUsaCostReadyForPricingHandoff as __testIsUsaCostReadyForPricingHandoff };`,
   {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   },
@@ -162,6 +165,7 @@ function setup(
   const exports: {
     UsaRadarOrigin?: () => Element;
     __testHumanizeUsaBlockedReason?: (reason: string) => string;
+    __testIsUsaCostReadyForPricingHandoff?: (execution: unknown) => boolean;
   } = {};
   const jsx = (type: Element['type'], props: Props) => ({ type, props });
   const router = { push: mock.fn() };
@@ -264,6 +268,7 @@ function setup(
     call,
     select,
     humanizeUsaBlockedReason: exports.__testHumanizeUsaBlockedReason!,
+    isUsaCostReadyForPricingHandoff: exports.__testIsUsaCostReadyForPricingHandoff!,
   };
 }
 
@@ -467,13 +472,20 @@ for (const reason of [
   'NORMALIZATION_MODEL_ERROR',
   'NORMALIZATION_INVALID_OUTPUT',
 ] as const) {
-  test(`uses backend cost readiness for Rei despite ${reason} and keeps Pricing fail-closed`, async () => {
+  test(`allows the Pricing handoff for Rei after ${reason}`, async () => {
     const semanticDecision = { status: 'BLOCKED' as const, reason };
     const costReady = {
       ...ready,
       semanticDecision,
       redirector: { redirector: 'REI_DO_IMPORTADO' as const },
       shippingWeightLbs: null,
+      condition: appleIphone.condition,
+      normalizedPricing: {
+        category: appleIphone.category,
+        model: appleIphone.model,
+        capacity: appleIphone.capacity,
+        color: appleIphone.color,
+      },
     };
     const h = setup(
       costReady,
@@ -494,11 +506,100 @@ for (const reason of [
     const modal = h.nodes('CalculationModal')[0]!;
     assert.equal(h.services.executeUsaCost.mock.callCount(), 1);
     assert.equal((modal.props.usaCostExecution as Props).calculation !== null, true);
-    assert.equal(modal.props.usaCanSendToPricing, false);
+    assert.equal(modal.props.usaCanSendToPricing, true);
     await h.call('CalculationModal', 'onSendToPricing');
-    assert.equal(h.pricing.calculateTemporaryImportPricing.mock.callCount(), 0);
+    assert.equal(h.pricing.calculateTemporaryImportPricing.mock.callCount(), 1);
+    const payload = h.pricing.calculateTemporaryImportPricing.mock.calls[0]!.arguments[0] as Props;
+    assert.equal(payload.sourceProductId, 'apple-us:MG484LL/A');
+    assert.equal(payload.provider, 'apple_us');
+    assert.equal(payload.sourceManufacturer, 'Apple');
+    assert.equal(payload.sourceManufacturerProvenance, 'EXPLICIT_SOURCE');
+    assert.equal(payload.model, 'iPhone 17');
+    assert.equal(payload.capacity, '256GB');
+    assert.equal(payload.condition, 'NOVO');
+    assert.equal(payload.color, 'Mist Blue');
+    assert.equal(payload.totalCost, 5500);
   });
 }
+
+test('keeps the USA Pricing handoff fail-closed outside the technical allowlist', () => {
+  const { isUsaCostReadyForPricingHandoff } = setup();
+  const calculation = {
+    sourceProductId: product.sourceProductId,
+    sourceCommercialIdentity: {
+      sourceName: product.sourceName,
+      sourceUrl: product.sourceUrl,
+      retailer: product.retailer,
+      provider: product.providerName,
+    },
+    redirector: { redirector: 'REI_DO_IMPORTADO' },
+    productPriceUsd: product.priceUsd,
+    finalCost: { currency: 'BRL', amountBrl: 5500 },
+    breakdown: {},
+  };
+  const execution = (
+    semanticDecision: object,
+    calculationOverride: object | null = calculation,
+  ) => ({
+    preflight: { ...ready, semanticDecision },
+    calculation: calculationOverride,
+  });
+
+  assert.equal(isUsaCostReadyForPricingHandoff(execution({ status: 'READY', reason: null })), true);
+  assert.equal(
+    isUsaCostReadyForPricingHandoff(
+      execution({ status: 'BLOCKED', reason: 'ENRICHMENT_CONFLICT' }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUsaCostReadyForPricingHandoff(
+      execution({ status: 'BLOCKED', reason: 'MANUFACTURER_AMBIGUOUS' }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUsaCostReadyForPricingHandoff(
+      execution({ status: 'BLOCKED', reason: 'SOURCE_CONFIGURATION_REQUIRED' }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUsaCostReadyForPricingHandoff(
+      execution({ status: 'BLOCKED', reason: 'UNKNOWN_FUTURE_REASON' }),
+    ),
+    false,
+  );
+  assert.equal(
+    isUsaCostReadyForPricingHandoff(
+      execution({ status: 'BLOCKED', reason: 'NORMALIZATION_TIMEOUT' }, null),
+    ),
+    false,
+  );
+  assert.equal(
+    isUsaCostReadyForPricingHandoff({
+      preflight: {
+        status: 'NEEDS_INPUT',
+        reason: 'MANUFACTURER_MISSING',
+        input: { type: 'MANUFACTURER', field: 'manufacturer' },
+        redirector: { redirector: 'REI_DO_IMPORTADO' },
+      },
+      calculation: null,
+    }),
+    false,
+  );
+  assert.equal(
+    isUsaCostReadyForPricingHandoff({
+      preflight: {
+        status: 'BLOCKED',
+        reason: 'SOURCE_CONFIGURATION_REQUIRED',
+        redirector: { redirector: 'REI_DO_IMPORTADO' },
+      },
+      calculation,
+    }),
+    false,
+  );
+});
 
 test('uses the backend preflight result for Red after timeout, including its weight requirement', async () => {
   const semanticDecision = { status: 'BLOCKED' as const, reason: 'NORMALIZATION_TIMEOUT' as const };
@@ -550,7 +651,7 @@ test('calculates through Red when its backend preflight becomes ready after time
   await h.call('UsaRedirectorPanel', 'onSubmit');
 
   assert.equal(h.services.executeUsaCost.mock.callCount(), 1);
-  assert.equal(h.nodes('CalculationModal')[0]!.props.usaCanSendToPricing, false);
+  assert.equal(h.nodes('CalculationModal')[0]!.props.usaCanSendToPricing, true);
 });
 
 for (const [name, sourceProduct] of [

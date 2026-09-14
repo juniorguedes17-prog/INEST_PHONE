@@ -51,6 +51,37 @@ const emptyUsaProductFilters: UsaProductFilters = {
   retailer: '',
 };
 
+const pricingHandoffTechnicalReasons = new Set([
+  'NORMALIZATION_TIMEOUT',
+  'NORMALIZATION_MODEL_ERROR',
+  'NORMALIZATION_INVALID_OUTPUT',
+]);
+
+type UsaPricingReadyCostExecution = Extract<
+  UsaCostExecutionResponse,
+  { calculation: NonNullable<UsaCostExecutionResponse['calculation']> }
+>;
+
+function isUsaCostReadyForPricingHandoff(
+  execution: UsaCostExecutionResponse | 'CONFIGURING' | null,
+): execution is UsaPricingReadyCostExecution {
+  if (
+    execution === null ||
+    execution === 'CONFIGURING' ||
+    execution.preflight.status !== 'READY_FOR_COST' ||
+    execution.calculation === null
+  ) {
+    return false;
+  }
+
+  const semanticDecision = execution.preflight.semanticDecision;
+  return (
+    semanticDecision.status === 'READY' ||
+    (semanticDecision.status === 'BLOCKED' &&
+      pricingHandoffTechnicalReasons.has(semanticDecision.reason))
+  );
+}
+
 export function UsaRadarOrigin() {
   const router = useRouter();
   const [query, setQuery] = useState('');
@@ -385,15 +416,7 @@ export function UsaRadarOrigin() {
   ]);
 
   const sendToPricing = useCallback(async () => {
-    if (
-      !selectedProduct ||
-      !costExecution ||
-      costExecution === 'CONFIGURING' ||
-      costExecution.preflight.status !== 'READY_FOR_COST' ||
-      costExecution.preflight.semanticDecision.status !== 'READY' ||
-      !costExecution.calculation ||
-      sendingToPricing
-    ) {
+    if (!selectedProduct || !isUsaCostReadyForPricingHandoff(costExecution) || sendingToPricing) {
       return;
     }
     const calculation = costExecution.calculation;
@@ -437,12 +460,7 @@ export function UsaRadarOrigin() {
     }
   }, [costExecution, router, selectedProduct, sendingToPricing]);
 
-  const canSendUsaCostToPricing =
-    costExecution !== null &&
-    costExecution !== 'CONFIGURING' &&
-    costExecution.preflight.status === 'READY_FOR_COST' &&
-    costExecution.preflight.semanticDecision.status === 'READY' &&
-    costExecution.calculation !== null;
+  const canSendUsaCostToPricing = isUsaCostReadyForPricingHandoff(costExecution);
 
   const displayPreflight =
     costExecution !== null &&
