@@ -25,6 +25,7 @@
     "typecheck": "pnpm typecheck:web && pnpm typecheck:api",
     "typecheck:web": "pnpm --filter @inest/web typecheck",
     "typecheck:api": "pnpm --filter @inest/api typecheck",
+    "test:web": "tsx --tsconfig apps/web/tsconfig.json --test \"apps/web/**/*.spec.ts\"",
     "test:api": "pnpm --filter @inest/api test",
     "test:regression:parser-identity": "pnpm --filter @inest/api exec vitest run src/modules/evolution-webhook/supplier-list.parser.spec.ts src/modules/evolution-webhook/golden-dataset.spec.ts src/modules/evolution-webhook/supplier-snapshot-scope.spec.ts src/modules/evolution-webhook/product-identity-shadow.spec.ts src/modules/evolution-webhook/evolution-webhook.service.spec.ts && pnpm --filter @inest/product-identity test",
     "test:regression:full": "pnpm test:api && pnpm --filter @inest/product-identity test && pnpm lint && pnpm typecheck",
