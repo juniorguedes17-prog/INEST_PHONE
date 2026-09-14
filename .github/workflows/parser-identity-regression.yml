@@ -36,5 +36,8 @@ jobs:
         env:
           DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/inest_phone?schema=public
 
+      - name: Build Product Identity
+        run: pnpm run build:product-identity
+
       - name: Run parser and product identity regression gate
         run: pnpm test:regression:parser-identity
