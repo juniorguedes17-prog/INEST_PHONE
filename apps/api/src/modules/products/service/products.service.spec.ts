@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { CreateProductDto } from '../dto/product.dto';
 import { ProductsRepository } from '../repository/products.repository';
@@ -26,6 +26,17 @@ function createRepository(existing: unknown = null) {
     createProfitRegistration: vi.fn().mockResolvedValue({ id: 'product-2', ...dto }),
     createModel: vi.fn().mockResolvedValue({ id: 'model-2' }),
     updateProduct: vi.fn().mockResolvedValue({ id: 'product-1', ...dto, netProfit: 1090 }),
+    restoreProduct: vi.fn().mockResolvedValue({
+      status: 'restored',
+      oldValue: { id: 'product-1', ...dto, deletedAt: new Date() },
+      product: {
+        id: 'product-1',
+        ...dto,
+        deletedAt: null,
+        active: true,
+        status: 'ACTIVE',
+      },
+    }),
     findProduct: vi.fn().mockResolvedValue({
       id: 'product-1',
       ...dto,
@@ -122,6 +133,43 @@ describe('ProductsService manual catalog management', () => {
     await service.update('product-1', updateDto);
 
     expect(repository.updateProduct).toHaveBeenCalledWith('product-1', updateDto, undefined);
+  });
+
+  it.each([true, false])(
+    'restores a soft-deleted Product while preserving explicit classification %s',
+    async (isAppleOriginal) => {
+      const repository = createRepository();
+      const service = new ProductsService(repository as unknown as ProductsRepository);
+
+      const result = await service.restore('product-1', !isAppleOriginal);
+
+      expect(repository.restoreProduct).toHaveBeenCalledWith(
+        'product-1',
+        !isAppleOriginal,
+        undefined,
+      );
+      expect(result).toMatchObject({ id: 'product-1', active: true, status: 'ACTIVE' });
+    },
+  );
+
+  it('requires explicit classification when restoring a historical null Product', async () => {
+    const repository = createRepository();
+    repository.restoreProduct.mockResolvedValueOnce({ status: 'classification_required' });
+    const service = new ProductsService(repository as unknown as ProductsRepository);
+
+    await expect(service.restore('product-1')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it.each([
+    ['not_found', NotFoundException],
+    ['not_deleted', ConflictException],
+    ['identity_conflict', ConflictException],
+  ] as const)('maps restore result %s to a controlled error', async (status, ErrorType) => {
+    const repository = createRepository();
+    repository.restoreProduct.mockResolvedValueOnce({ status });
+    const service = new ProductsService(repository as unknown as ProductsRepository);
+
+    await expect(service.restore('product-1')).rejects.toBeInstanceOf(ErrorType);
   });
 
   it('allows missing profit registration only on an eligible existing Product', async () => {

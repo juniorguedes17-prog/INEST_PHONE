@@ -88,6 +88,16 @@ export class ProductsController {
     return this.productsService.deactivate(id, user);
   }
 
+  @Patch(':id/restore')
+  @ApiOperation({ summary: 'Restaura um produto excluido preservando sua identidade.' })
+  restore(
+    @Param('id') id: string,
+    @Body() body: { isAppleOriginal?: boolean | null },
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.productsService.restore(id, body.isAppleOriginal, user);
+  }
+
   @Post('categories')
   createCategory(@Body() dto: UpsertCategoryDto) {
     return this.productsService.createCategory(dto);

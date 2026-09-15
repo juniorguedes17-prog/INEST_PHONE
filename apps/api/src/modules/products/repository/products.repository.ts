@@ -24,6 +24,13 @@ type ResolvedUpsertModelDto = Omit<UpsertModelDto, 'normalizedName'> & {
   normalizedName: string;
 };
 
+export type RestoreProductResult =
+  | { status: 'restored'; oldValue: ProductRecord; product: ProductRecord }
+  | { status: 'not_found' }
+  | { status: 'not_deleted'; product: ProductRecord }
+  | { status: 'classification_required'; product: ProductRecord }
+  | { status: 'identity_conflict'; product: ProductRecord };
+
 @Injectable()
 export class ProductsRepository {
   constructor(@Inject(PrismaService) private readonly prismaService: PrismaService) {}
@@ -151,6 +158,70 @@ export class ProductsRepository {
       where: { id },
       data: { deletedAt: new Date(), status: 'INACTIVE', active: false, updatedBy: userId },
       include: this.include,
+    });
+  }
+
+  restoreProduct(id: string, explicitIsAppleOriginal?: boolean | null, userId?: string) {
+    return this.prisma.$transaction<RestoreProductResult>(async (transaction) => {
+      const product = await transaction.product.findUnique({
+        where: { id },
+        include: this.include,
+      });
+      if (!product) return { status: 'not_found' };
+
+      const lifecycle = product as ProductRecord & { deletedAt?: Date | null };
+      if (lifecycle.deletedAt === null || lifecycle.deletedAt === undefined) {
+        return { status: 'not_deleted', product };
+      }
+
+      const isAppleOriginal =
+        typeof product.isAppleOriginal === 'boolean'
+          ? product.isAppleOriginal
+          : explicitIsAppleOriginal;
+      if (typeof isAppleOriginal !== 'boolean') {
+        return { status: 'classification_required', product };
+      }
+      if (!product.normalizedDescription || !product.profitCondition) {
+        return { status: 'identity_conflict', product };
+      }
+
+      const conflicts = await transaction.product.findMany({
+        where: {
+          id: { not: id },
+          deletedAt: null,
+          active: true,
+          status: 'ACTIVE',
+          normalizedDescription: product.normalizedDescription,
+          profitCondition: product.profitCondition,
+        },
+        select: { id: true },
+        take: 2,
+      });
+      if (conflicts.length > 0) return { status: 'identity_conflict', product };
+
+      const restored = await transaction.product.update({
+        where: { id },
+        data: {
+          deletedAt: null,
+          active: true,
+          status: 'ACTIVE',
+          ...(typeof product.isAppleOriginal === 'boolean' ? {} : { isAppleOriginal }),
+          updatedBy: userId,
+        },
+        include: this.include,
+      });
+      await transaction.auditLog?.create({
+        data: {
+          entity: 'products',
+          userId,
+          operationType: 'UPDATE',
+          entityId: restored.id,
+          oldValue: product,
+          newValue: restored,
+          context: { event: 'products.restored' },
+        },
+      });
+      return { status: 'restored', oldValue: product, product: restored };
     });
   }
 

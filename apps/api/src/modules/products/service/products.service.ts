@@ -169,6 +169,29 @@ export class ProductsService {
     return product;
   }
 
+  async restore(id: string, explicitIsAppleOriginal?: boolean | null, user?: AuthenticatedUser) {
+    const result = await this.productsRepository.restoreProduct(
+      id,
+      explicitIsAppleOriginal,
+      user?.id,
+    );
+    if (result.status === 'not_found') {
+      throw new NotFoundException('Produto nao encontrado.');
+    }
+    if (result.status === 'not_deleted') {
+      throw new ConflictException('Produto nao esta excluido e nao pode ser restaurado.');
+    }
+    if (result.status === 'classification_required') {
+      throw new BadRequestException(
+        'Classificacao financeira do produto deve ser informada para restauracao.',
+      );
+    }
+    if (result.status === 'identity_conflict') {
+      throw new ConflictException('Identidade financeira ja pertence a um produto elegivel.');
+    }
+    return result.product;
+  }
+
   async references() {
     const [categories, models, colors, storages] = await this.productsRepository.listReferences();
     return { categories, models, colors, storages };

@@ -104,6 +104,217 @@ describe('ProductsRepository manual catalog persistence', () => {
     );
   });
 
+  it.each([true, false])(
+    'restores lifecycle atomically and preserves classification %s and financial identity',
+    async (isAppleOriginal) => {
+      const deletedAt = new Date('2026-09-15T12:00:00.000Z');
+      const historical = {
+        id: 'product-1',
+        ...dto,
+        normalizedDescription: 'iphone 17 pro max 256gb',
+        profitProductId: 133,
+        isAppleOriginal,
+        deletedAt,
+        active: false,
+        status: 'INACTIVE',
+        model: { id: 'model-1', name: 'iPhone 17 Pro Max' },
+        storage: { id: 'storage-256', displayName: '256 GB' },
+      };
+      const restored = { ...historical, deletedAt: null, active: true, status: 'ACTIVE' };
+      const transaction = {
+        product: {
+          findUnique: vi.fn().mockResolvedValue(historical),
+          findMany: vi.fn().mockResolvedValue([]),
+          update: vi.fn().mockResolvedValue(restored),
+        },
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+      };
+      const prisma = {
+        $transaction: vi.fn(async (callback) => callback(transaction)),
+        product: transaction.product,
+      };
+      const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+      const result = await repository.restoreProduct('product-1', !isAppleOriginal, 'user-1');
+
+      expect(result).toEqual({ status: 'restored', oldValue: historical, product: restored });
+      expect(transaction.product.update).toHaveBeenCalledWith({
+        where: { id: 'product-1' },
+        data: {
+          deletedAt: null,
+          active: true,
+          status: 'ACTIVE',
+          updatedBy: 'user-1',
+        },
+        include: expect.any(Object),
+      });
+      expect(restored).toMatchObject({
+        id: historical.id,
+        modelId: historical.modelId,
+        profitCondition: historical.profitCondition,
+        productDescription: historical.productDescription,
+        normalizedDescription: historical.normalizedDescription,
+        profitProductId: historical.profitProductId,
+        netProfit: historical.netProfit,
+        isAppleOriginal,
+      });
+      expect(transaction.auditLog.create).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([true, false])(
+    'restores a null historical classification only from an explicit decision %s',
+    async (isAppleOriginal) => {
+      const historical = {
+        id: 'product-1',
+        ...dto,
+        normalizedDescription: 'iphone 17 pro max 256gb',
+        isAppleOriginal: null,
+        deletedAt: new Date(),
+        active: false,
+        status: 'INACTIVE',
+      };
+      const update = vi.fn().mockResolvedValue({
+        ...historical,
+        deletedAt: null,
+        active: true,
+        status: 'ACTIVE',
+        isAppleOriginal,
+      });
+      const transaction = {
+        product: {
+          findUnique: vi.fn().mockResolvedValue(historical),
+          findMany: vi.fn().mockResolvedValue([]),
+          update,
+        },
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+      };
+      const prisma = {
+        $transaction: vi.fn(async (callback) => callback(transaction)),
+        product: transaction.product,
+      };
+      const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+      await repository.restoreProduct('product-1', isAppleOriginal);
+
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ isAppleOriginal }) }),
+      );
+    },
+  );
+
+  it.each([
+    ['missing Product', null, undefined, 'not_found'],
+    [
+      'already active Product',
+      { ...dto, id: 'product-1', deletedAt: null },
+      undefined,
+      'not_deleted',
+    ],
+    [
+      'null classification without decision',
+      {
+        ...dto,
+        id: 'product-1',
+        normalizedDescription: 'iphone 17 pro max 256gb',
+        deletedAt: new Date(),
+        isAppleOriginal: null,
+      },
+      undefined,
+      'classification_required',
+    ],
+  ] as const)('performs no write for %s', async (_case, product, authority, status) => {
+    const transaction = {
+      product: {
+        findUnique: vi.fn().mockResolvedValue(product),
+        findMany: vi.fn(),
+        update: vi.fn(),
+      },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback) => callback(transaction)),
+      product: transaction.product,
+    };
+    const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+    await expect(repository.restoreProduct('product-1', authority)).resolves.toMatchObject({
+      status,
+    });
+    expect(transaction.product.update).not.toHaveBeenCalled();
+    expect(transaction.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('fails closed without a write when an eligible identity conflict exists', async () => {
+    const historical = {
+      id: 'product-1',
+      ...dto,
+      normalizedDescription: 'iphone 17 pro max 256gb',
+      isAppleOriginal: true,
+      deletedAt: new Date(),
+    };
+    const transaction = {
+      product: {
+        findUnique: vi.fn().mockResolvedValue(historical),
+        findMany: vi.fn().mockResolvedValue([{ id: 'eligible-product' }]),
+        update: vi.fn(),
+      },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback) => callback(transaction)),
+      product: transaction.product,
+    };
+    const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+    await expect(repository.restoreProduct('product-1')).resolves.toMatchObject({
+      status: 'identity_conflict',
+    });
+    expect(transaction.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: { not: 'product-1' },
+          deletedAt: null,
+          active: true,
+          status: 'ACTIVE',
+        }),
+        take: 2,
+      }),
+    );
+    expect(transaction.product.update).not.toHaveBeenCalled();
+  });
+
+  it('rolls back the restore when its atomic update fails', async () => {
+    const committed = { deletedAt: new Date(), active: false, status: 'INACTIVE' };
+    const transaction = {
+      product: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: 'product-1',
+          ...dto,
+          normalizedDescription: 'iphone 17 pro max 256gb',
+          isAppleOriginal: true,
+          ...committed,
+        }),
+        findMany: vi.fn().mockResolvedValue([]),
+        update: vi.fn().mockRejectedValue(new Error('restore failed')),
+      },
+      auditLog: { create: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback) => callback(transaction)),
+      product: transaction.product,
+    };
+    const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+    await expect(repository.restoreProduct('product-1')).rejects.toThrow('restore failed');
+    expect(committed).toEqual({
+      deletedAt: expect.any(Date),
+      active: false,
+      status: 'INACTIVE',
+    });
+    expect(transaction.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('registers missing profit on the same Product without increasing Product count', async () => {
     const create = vi.fn();
     const update = vi.fn().mockResolvedValue({
