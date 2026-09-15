@@ -27,6 +27,6 @@ import { PricingWorkSnapshotService } from './service/pricing-work-snapshot.serv
     GoogleSheetsProfitProvider,
     ProductProfitProvider,
   ],
-  exports: [PricingService],
+  exports: [PricingService, PricingRepository],
 })
 export class PricingModule {}

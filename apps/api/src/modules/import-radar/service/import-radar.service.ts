@@ -36,6 +36,8 @@ import {
   normalizeManufacturerAlias,
 } from '../../manufacturers/manufacturer-alias-normalizer';
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
+import { PricingRepository } from '../../pricing/repository/pricing.repository';
+import type { PricingCatalogProductRecord } from '../../pricing/interfaces/pricing-prisma.interface';
 
 @Injectable()
 export class ImportRadarService {
@@ -51,6 +53,8 @@ export class ImportRadarService {
     private readonly productNormalization?: ProductNormalizationService,
     @Inject(ManufacturersService)
     private readonly manufacturersService?: ManufacturersService,
+    @Inject(PricingRepository)
+    private readonly pricingRepository?: PricingRepository,
   ) {}
 
   async search(query: ImportSearchQueryDto, user: AuthenticatedUser) {
@@ -112,21 +116,54 @@ export class ImportRadarService {
       convertedPrice + cdeExit + redirectCost + brazilDispatch + invoiceTax + correiosLabel,
     );
 
-    const catalog = await this.repository.listActiveCatalogProducts();
-    const { productResolution } = semanticNormalization.accepted
-      ? this.analyzeCatalogProduct(semanticDto, catalog, semanticNormalization.identityText)
-      : {
-          productResolution: {
-            status: 'MISSING' as const,
-            reason: 'catalog_no_match' as const,
-            candidateCount: 0,
-          },
-        };
-    const catalogProduct =
-      productResolution.status === 'FOUND'
-        ? (catalog.find((product) => product.id === productResolution.productId) ?? null)
-        : null;
     const sourceCondition = normalizeProductCondition(semanticDto.condition ?? '');
+    const automaticCatalogCandidates =
+      (dto.origin ?? 'PY') === 'PY' &&
+      this.pricingRepository &&
+      semanticDto.model?.trim() &&
+      semanticDto.capacity?.trim() &&
+      sourceCondition.status === 'RESOLVED'
+        ? this.pricingRepository.findEligibleCatalogProductCandidates({
+            model: semanticDto.model,
+            capacity: semanticDto.capacity,
+            condition: sourceCondition.condition,
+          })
+        : Promise.resolve([]);
+    const [catalog, candidates] = await Promise.all([
+      this.repository.listActiveCatalogProducts(),
+      automaticCatalogCandidates,
+    ]);
+    const automaticProductResolution =
+      candidates.length > 1
+        ? {
+            status: 'AMBIGUOUS' as const,
+            reason: 'multiple_catalog_candidates' as const,
+            candidateCount: candidates.length,
+          }
+        : candidates.length === 1
+          ? {
+              status: 'FOUND' as const,
+              productId: candidates[0]!.id,
+              candidateCount: 1,
+            }
+          : null;
+    const { productResolution } = automaticProductResolution
+      ? { productResolution: automaticProductResolution }
+      : semanticNormalization.accepted
+        ? this.analyzeCatalogProduct(semanticDto, catalog, semanticNormalization.identityText)
+        : {
+            productResolution: {
+              status: 'MISSING' as const,
+              reason: 'catalog_no_match' as const,
+              candidateCount: 0,
+            },
+          };
+    const catalogProduct =
+      candidates.length === 1
+        ? candidates[0]!
+        : productResolution.status === 'FOUND'
+          ? (catalog.find((product) => product.id === productResolution.productId) ?? null)
+          : null;
     const condition =
       this.toStructuredCondition(catalogProduct?.profitCondition) ??
       (sourceCondition.status === 'RESOLVED' ? sourceCondition.condition : null);
@@ -173,15 +210,17 @@ export class ImportRadarService {
       manufacturerKey: financialClassification.manufacturerKey ?? null,
       manufacturerProvenance: financialClassification.provenance ?? null,
       pricingEligibility:
-        semanticNormalization.accepted || financialClassification.classification === 'NON_APPLE'
-          ? this.resolvePricingEligibility({
-              dto: semanticDto,
-              identityText: semanticNormalization.identityText,
-              catalogProduct,
-              condition,
-              financialClassification,
-            })
-          : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const),
+        candidates.length > 1
+          ? ({ status: 'BLOCKED', reason: 'financial_identity_ambiguous' } as const)
+          : semanticNormalization.accepted || financialClassification.classification === 'NON_APPLE'
+            ? this.resolvePricingEligibility({
+                dto: semanticDto,
+                identityText: semanticNormalization.identityText,
+                catalogProduct,
+                condition,
+                financialClassification,
+              })
+            : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const),
       matchedProductType: redirectRule?.productType ?? 'Nao identificado',
       dollarQuote: importSettings.dollarQuote,
       breakdown: {
@@ -398,7 +437,9 @@ export class ImportRadarService {
     dto: CalculateImportCostDto;
     identityText: string;
     catalogProduct:
-      Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>[number] | null;
+      | Awaited<ReturnType<ImportRadarRepository['listActiveCatalogProducts']>>[number]
+      | PricingCatalogProductRecord
+      | null;
     condition: ImportProductCondition | null;
     financialClassification: FinancialClassificationResult;
   }): PricingEligibilityDecision & { input?: { type: 'MANUFACTURER'; suggestedValue?: string } } {

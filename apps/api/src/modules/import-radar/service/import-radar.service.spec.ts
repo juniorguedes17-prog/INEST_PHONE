@@ -13,6 +13,9 @@ import {
 } from '../../evolution-webhook/product-normalization.service';
 import { ManufacturersService } from '../../manufacturers/service/manufacturers.service';
 import { roundMoneyToCents } from '../validators/import-radar.validators';
+import { PricingRepository } from '../../pricing/repository/pricing.repository';
+import type { PricingCatalogProductRecord } from '../../pricing/interfaces/pricing-prisma.interface';
+import { normalizeCanonicalProductIdentity } from '@inest/product-identity';
 
 const PRODUCT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -45,6 +48,7 @@ function createService(
     brazilDispatchPerBox: number;
     correiosLabel: number;
   }>,
+  eligibleCatalogCandidates: PricingCatalogProductRecord[] = [],
 ) {
   const repository = {
     listActiveCatalogProducts: vi.fn().mockResolvedValue(catalog),
@@ -63,6 +67,9 @@ function createService(
       },
     }),
   };
+  const pricingRepository = {
+    findEligibleCatalogProductCandidates: vi.fn().mockResolvedValue(eligibleCatalogCandidates),
+  };
   return new ImportRadarService(
     settings as unknown as SettingsService,
     repository as unknown as ImportRadarRepository,
@@ -70,7 +77,27 @@ function createService(
     {} as ComprasParaguaiProvider,
     productNormalization as ProductNormalizationService | undefined,
     manufacturerResolver as ManufacturersService | undefined,
+    pricingRepository as unknown as PricingRepository,
   );
+}
+
+function eligibleCatalogProduct(
+  overrides: Partial<PricingCatalogProductRecord> = {},
+): PricingCatalogProductRecord {
+  return {
+    id: PRODUCT_ID,
+    profitProductId: 18,
+    productDescription: 'iPhone 18 Pro Max 256GB',
+    normalizedDescription: 'iphone 18 pro max 256gb',
+    productType: 'IPHONE_SEALED',
+    isAppleOriginal: true,
+    profitCondition: 'NOVO',
+    category: { name: 'iPhone' },
+    model: { name: 'iPhone 18 Pro Max' },
+    color: null,
+    storage: { displayName: '256 GB' },
+    ...overrides,
+  };
 }
 
 function semanticCandidate(
@@ -313,6 +340,95 @@ describe('ImportRadarService catalog product handoff', () => {
       catalogProductId: null,
       condition: 'NOVO',
       productResolution: { status: 'MISSING' },
+    });
+  });
+
+  it('reconciles one eligible PY Product even when its model is outside the canonical registry', async () => {
+    const product = eligibleCatalogProduct();
+    const input = {
+      ...importProduct,
+      name: 'iPhone 18 Pro Max 256GB',
+      sourceEvidence: 'iPhone 18 Pro Max 256GB',
+      model: 'iPhone 18 Pro Max',
+    };
+
+    expect(
+      normalizeCanonicalProductIdentity({
+        productName: input.name,
+        model: input.model,
+        capacity: input.capacity,
+        quality: input.condition,
+      }).canonicalModelMatched,
+    ).toBe(false);
+
+    const result = await createService([], undefined, undefined, undefined, [product]).calculate(
+      input,
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      catalogProductId: product.id,
+      productResolution: { status: 'FOUND', productId: product.id, candidateCount: 1 },
+      financialClassification: 'APPLE',
+      financialClassificationReason: 'canonical_product',
+      pricingEligibility: { status: 'ELIGIBLE', reason: null },
+    });
+  });
+
+  it.each([
+    [
+      null,
+      'UNRESOLVED',
+      'classification_unresolved',
+      { status: 'BLOCKED', reason: 'classification_unresolved' },
+    ],
+    [false, 'NON_APPLE', 'canonical_product', { status: 'ELIGIBLE', reason: null }],
+  ] as const)(
+    'preserves existing financial authority for a reconciled PY Product with isAppleOriginal=%s',
+    async (isAppleOriginal, classification, reason, pricingEligibility) => {
+      const product = eligibleCatalogProduct({ isAppleOriginal });
+      const result = await createService([], undefined, undefined, undefined, [product]).calculate(
+        {
+          ...importProduct,
+          name: 'iPhone 18 Pro Max 256GB',
+          sourceEvidence: 'iPhone 18 Pro Max 256GB',
+          model: 'iPhone 18 Pro Max',
+        },
+        { id: 'user-1' } as never,
+      );
+
+      expect(result).toMatchObject({
+        catalogProductId: product.id,
+        productResolution: { status: 'FOUND', productId: product.id, candidateCount: 1 },
+        financialClassification: classification,
+        financialClassificationReason: reason,
+        pricingEligibility,
+      });
+    },
+  );
+
+  it('fails closed without selecting a Product when PY catalog reconciliation is ambiguous', async () => {
+    const result = await createService([], undefined, undefined, undefined, [
+      eligibleCatalogProduct({ id: 'py-candidate-a' }),
+      eligibleCatalogProduct({ id: 'py-candidate-b' }),
+    ]).calculate(
+      {
+        ...importProduct,
+        name: 'iPhone 18 Pro Max 256GB',
+        sourceEvidence: 'iPhone 18 Pro Max 256GB',
+        model: 'iPhone 18 Pro Max',
+      },
+      { id: 'user-1' } as never,
+    );
+
+    expect(result).toMatchObject({
+      catalogProductId: null,
+      productResolution: {
+        status: 'AMBIGUOUS',
+        reason: 'multiple_catalog_candidates',
+        candidateCount: 2,
+      },
+      pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_ambiguous' },
     });
   });
 
