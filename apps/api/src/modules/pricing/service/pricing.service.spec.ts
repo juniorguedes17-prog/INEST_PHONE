@@ -1054,38 +1054,42 @@ describe('PricingService native product profit integration', () => {
     },
   );
 
-  it('fails closed without falling back when a persisted Product.id is inactive or missing', async () => {
-    const repository = {
-      findBrazilRadarQuote: vi
-        .fn()
-        .mockResolvedValue(brazilRadarQuote({ productId: CATALOG_PRODUCT_ID })),
-      findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
-      findActiveCatalogProduct: vi.fn(),
-      listPricingConfigurations: vi.fn().mockResolvedValue([]),
-    };
-    const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
-    const profitProvider = {
-      getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '' }),
-    };
-    const service = new PricingService(
-      repository as unknown as PricingRepository,
-      settingsService as unknown as SettingsService,
-      profitProvider as unknown as ProductProfitProvider,
-    );
+  it.each(['soft-deleted', 'inactive', 'non-active status', 'missing'] as const)(
+    'fails closed without profit registration or fallback when a linked Product is %s',
+    async () => {
+      const repository = {
+        findBrazilRadarQuote: vi
+          .fn()
+          .mockResolvedValue(brazilRadarQuote({ productId: CATALOG_PRODUCT_ID })),
+        findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+        findActiveCatalogProduct: vi.fn(),
+        listPricingConfigurations: vi.fn().mockResolvedValue([]),
+      };
+      const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '' }),
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
 
-    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+      const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
 
-    expect(repository.findActiveCatalogProduct).not.toHaveBeenCalled();
-    expect(result).toMatchObject({
-      catalogProductId: null,
-      desiredNetProfit: null,
-      salePrice: null,
-      offerPrice: null,
-      calculationStatus: 'missing_profit',
-      calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
-      offerDraft: null,
-    });
-  });
+      expect(repository.findActiveCatalogProductById).toHaveBeenCalledWith(CATALOG_PRODUCT_ID);
+      expect(repository.findActiveCatalogProduct).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        catalogProductId: null,
+        desiredNetProfit: null,
+        salePrice: null,
+        offerPrice: null,
+        calculationStatus: 'insufficient_identity',
+        calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
+        offerDraft: null,
+      });
+    },
+  );
 
   it('keeps an unmatched Radar product and resolves profit by condition and canonical description', async () => {
     const repository = {

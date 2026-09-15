@@ -1055,7 +1055,7 @@ export class PricingService {
         }
       : productIdUnavailable
         ? {
-            calculationStatus: 'missing_profit' as const,
+            calculationStatus: 'insufficient_identity' as const,
             calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
           }
         : conditionError
