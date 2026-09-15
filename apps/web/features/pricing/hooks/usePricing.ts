@@ -55,6 +55,28 @@ const initialFilters: PricingFilters = {
   sort: 'lowest_price',
 };
 
+export function deriveOfferProductType(
+  financialClassification: BrazilRadarQuotePricing['financialClassification'],
+  condition: BrazilRadarQuotePricing['profit']['condition'],
+): 'IPHONE_SEALED' | 'IPHONE_USED' | 'ACCESSORY' {
+  if (financialClassification !== 'APPLE') {
+    return 'ACCESSORY';
+  }
+
+  return condition === 'NOVO' ? 'IPHONE_SEALED' : 'IPHONE_USED';
+}
+
+export function resolveOfferProductType(
+  financialClassification: BrazilRadarQuotePricing['financialClassification'],
+  condition: TemporaryImportPricing['profit']['condition'],
+): ReturnType<typeof deriveOfferProductType> | null {
+  if (condition === null) {
+    return null;
+  }
+
+  return deriveOfferProductType(financialClassification, condition);
+}
+
 export function usePricing({
   includeOfferIncrement = true,
   offerIncrement,
@@ -195,12 +217,13 @@ export function usePricing({
     ) {
       return;
     }
-    const isIphone = /iphone/i.test(temporaryImportPricing.product.name);
-    const productType = isIphone
-      ? temporaryImportPricing.profit.condition === 'NOVO'
-        ? 'IPHONE_SEALED'
-        : 'IPHONE_USED'
-      : 'ACCESSORY';
+    const productType = resolveOfferProductType(
+      temporaryImportPricing.financialClassification,
+      temporaryImportPricing.profit.condition,
+    );
+    if (productType === null) {
+      return;
+    }
 
     await sendOfferDraft(
       applyOfferPrice({
@@ -256,12 +279,7 @@ export function usePricing({
       throw new Error('A cotacao nao esta pronta para gerar oferta.');
     }
 
-    const isIphone = /iphone/i.test(item.product.name);
-    const productType = isIphone
-      ? item.profit.condition === 'NOVO'
-        ? 'IPHONE_SEALED'
-        : 'IPHONE_USED'
-      : 'ACCESSORY';
+    const productType = deriveOfferProductType(item.financialClassification, item.profit.condition);
 
     return {
       ...item.offerDraft,
