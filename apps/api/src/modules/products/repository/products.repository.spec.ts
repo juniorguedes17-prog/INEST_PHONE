@@ -104,6 +104,83 @@ describe('ProductsRepository manual catalog persistence', () => {
     );
   });
 
+  it('registers missing profit on the same Product without increasing Product count', async () => {
+    const create = vi.fn();
+    const update = vi.fn().mockResolvedValue({
+      id: 'product-1',
+      profitProductId: 133,
+      netProfit: 1090,
+    });
+    const transaction = {
+      product: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'product-1', profitProductId: null }),
+        findFirst: vi.fn().mockResolvedValue({ profitProductId: 132 }),
+        create,
+        update,
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback) => callback(transaction)),
+      product: transaction.product,
+    };
+    const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+    const result = await repository.updateProduct(
+      'product-1',
+      { ...dto, netProfit: 1090 },
+      'user-1',
+    );
+
+    expect(result).toMatchObject({ id: 'product-1', profitProductId: 133, netProfit: 1090 });
+    expect(create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'product-1' },
+        data: expect.objectContaining({
+          profitProductId: 133,
+          netProfit: 1090,
+          normalizedDescription: 'iphone 17 pro max 256gb',
+        }),
+      }),
+    );
+  });
+
+  it('preserves the existing profit identity when the same Product is reprocessed', async () => {
+    const findFirst = vi.fn();
+    const update = vi.fn().mockResolvedValue({
+      id: 'product-1',
+      profitProductId: 133,
+      netProfit: 1090,
+    });
+    const transaction = {
+      product: {
+        findUnique: vi.fn().mockResolvedValue({ id: 'product-1', profitProductId: 133 }),
+        findFirst,
+        create: vi.fn(),
+        update,
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback) => callback(transaction)),
+      product: transaction.product,
+    };
+    const repository = new ProductsRepository(prisma as unknown as PrismaService);
+
+    await repository.updateProduct('product-1', { ...dto, netProfit: 1090 }, 'user-1');
+    await repository.updateProduct('product-1', { ...dto, netProfit: 1090 }, 'user-1');
+
+    expect(findFirst).not.toHaveBeenCalled();
+    expect(transaction.product.create).not.toHaveBeenCalled();
+    expect(update).toHaveBeenCalledTimes(2);
+    expect(update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: 'product-1' },
+        data: expect.objectContaining({ profitProductId: 133, netProfit: 1090 }),
+      }),
+    );
+  });
+
   it('creates the canonical Model and Product in the same transaction', async () => {
     const product = {
       findFirst: vi.fn().mockResolvedValue({ profitProductId: 132 }),

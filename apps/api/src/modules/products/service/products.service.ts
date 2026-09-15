@@ -90,6 +90,18 @@ export class ProductsService {
   async update(id: string, dto: UpdateProductDto, user?: AuthenticatedUser) {
     const oldValue = await this.productsRepository.findProduct(id);
     ensureExists(oldValue, 'Produto nao encontrado.');
+    const lifecycle = oldValue as typeof oldValue & { deletedAt?: Date | null };
+    const isMissingProfit =
+      lifecycle.profitProductId === null ||
+      lifecycle.profitProductId === undefined ||
+      lifecycle.netProfit === null ||
+      lifecycle.netProfit === undefined;
+    if (
+      isMissingProfit &&
+      (lifecycle.deletedAt !== null || lifecycle.active !== true || lifecycle.status !== 'ACTIVE')
+    ) {
+      throw new ConflictException('Produto nao esta elegivel para cadastro de lucro.');
+    }
     await this.validateReferences(dto);
     await this.ensureUniqueProfitIdentity(dto, id);
     const product = await this.productsRepository.updateProduct(id, dto, user?.id);

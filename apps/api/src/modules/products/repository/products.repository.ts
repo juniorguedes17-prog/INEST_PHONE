@@ -119,14 +119,30 @@ export class ProductsRepository {
   }
 
   updateProduct(id: string, dto: UpdateProductDto, userId?: string) {
-    return this.prisma.product.update({
-      where: { id },
-      data: {
-        ...dto,
-        normalizedDescription: normalizeProfitProductDescription(dto.productDescription),
-        updatedBy: userId,
-      },
-      include: this.include,
+    return this.prisma.$transaction(async (transaction) => {
+      const currentProduct = await transaction.product.findUnique({
+        where: { id },
+        include: this.include,
+      });
+      const latestProfitProduct = currentProduct?.profitProductId
+        ? null
+        : await transaction.product.findFirst({
+            where: { profitProductId: { not: null } },
+            orderBy: { profitProductId: 'desc' },
+            select: { profitProductId: true },
+          });
+
+      return transaction.product.update({
+        where: { id },
+        data: {
+          ...dto,
+          profitProductId:
+            currentProduct?.profitProductId ?? (latestProfitProduct?.profitProductId ?? 0) + 1,
+          normalizedDescription: normalizeProfitProductDescription(dto.productDescription),
+          updatedBy: userId,
+        },
+        include: this.include,
+      });
     });
   }
 

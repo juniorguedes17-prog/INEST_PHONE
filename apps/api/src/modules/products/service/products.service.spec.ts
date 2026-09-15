@@ -25,7 +25,14 @@ function createRepository(existing: unknown = null) {
     createProfitRegistration: vi.fn().mockResolvedValue({ id: 'product-2', ...dto }),
     createModel: vi.fn().mockResolvedValue({ id: 'model-2' }),
     updateProduct: vi.fn().mockResolvedValue({ id: 'product-1', ...dto, netProfit: 1090 }),
-    findProduct: vi.fn().mockResolvedValue({ id: 'product-1', ...dto }),
+    findProduct: vi.fn().mockResolvedValue({
+      id: 'product-1',
+      ...dto,
+      profitProductId: 1,
+      active: true,
+      status: 'ACTIVE',
+      deletedAt: null,
+    }),
     createAuditLog: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -66,8 +73,53 @@ describe('ProductsService manual catalog management', () => {
     expect(repository.createProduct).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['soft-deleted', { deletedAt: new Date(), active: false, status: 'INACTIVE' }],
+    ['inactive', { deletedAt: null, active: false, status: 'ACTIVE' }],
+    ['non-active status', { deletedAt: null, active: true, status: 'INACTIVE' }],
+  ] as const)(
+    'blocks profit registration when only a %s Product occupies the financial identity',
+    async (_state, lifecycle) => {
+      const repository = createRepository();
+      repository.findProduct.mockResolvedValue({
+        id: 'historical-product',
+        ...dto,
+        profitProductId: null,
+        netProfit: null,
+        ...lifecycle,
+      });
+      const service = new ProductsService(repository as unknown as ProductsRepository);
+
+      await expect(service.update('historical-product', dto)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+
+      expect(repository.createProduct).not.toHaveBeenCalled();
+      expect(repository.updateProduct).not.toHaveBeenCalled();
+    },
+  );
+
   it('updates the persisted net profit using the existing product endpoint flow', async () => {
     const repository = createRepository();
+    const service = new ProductsService(repository as unknown as ProductsRepository);
+    const updateDto = { ...dto, netProfit: 1090 };
+
+    await service.update('product-1', updateDto);
+
+    expect(repository.updateProduct).toHaveBeenCalledWith('product-1', updateDto, undefined);
+  });
+
+  it('allows missing profit registration only on an eligible existing Product', async () => {
+    const repository = createRepository();
+    repository.findProduct.mockResolvedValue({
+      id: 'product-1',
+      ...dto,
+      profitProductId: null,
+      netProfit: null,
+      active: true,
+      status: 'ACTIVE',
+      deletedAt: null,
+    });
     const service = new ProductsService(repository as unknown as ProductsRepository);
     const updateDto = { ...dto, netProfit: 1090 };
 
