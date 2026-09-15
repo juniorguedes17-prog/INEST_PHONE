@@ -17,6 +17,7 @@ import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.inte
 import {
   CreateProductDto,
   CreateProfitRegistrationDto,
+  HistoricalProductLookupQueryDto,
   ProductQueryDto,
   UpdateProductDto,
   UpsertCategoryDto,
@@ -43,6 +44,12 @@ export class ProductsController {
   @ApiOperation({ summary: 'Lista categorias, modelos, cores e capacidades.' })
   references() {
     return this.productsService.references();
+  }
+
+  @Get('historical-lookup')
+  @ApiOperation({ summary: 'Localiza um produto historico pela identidade financeira.' })
+  historicalLookup(@Query() query: HistoricalProductLookupQueryDto) {
+    return this.productsService.historicalLookup(query);
   }
 
   @Get(':id')

@@ -61,6 +61,17 @@ export class ProductQueryDto {
   productType?: string;
 }
 
+export class HistoricalProductLookupQueryDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  description!: string;
+
+  @ApiProperty({ enum: PRODUCT_CONDITIONS })
+  @IsIn(PRODUCT_CONDITIONS)
+  condition!: (typeof PRODUCT_CONDITIONS)[number];
+}
+
 export class CreateProductDto {
   @ApiProperty()
   @IsUUID()

@@ -26,6 +26,8 @@ function createRepository(existing: unknown = null) {
     createProfitRegistration: vi.fn().mockResolvedValue({ id: 'product-2', ...dto }),
     createModel: vi.fn().mockResolvedValue({ id: 'model-2' }),
     updateProduct: vi.fn().mockResolvedValue({ id: 'product-1', ...dto, netProfit: 1090 }),
+    softDeleteProduct: vi.fn(),
+    setStatus: vi.fn(),
     restoreProduct: vi.fn().mockResolvedValue({
       status: 'restored',
       oldValue: { id: 'product-1', ...dto, deletedAt: new Date() },
@@ -62,6 +64,59 @@ describe('ProductsService manual catalog management', () => {
       undefined,
     );
     expect(repository.createProduct).toHaveBeenCalledWith(dto, undefined);
+  });
+
+  it.each([
+    ['active', { deletedAt: null, active: true, status: 'ACTIVE' }],
+    ['soft-deleted', { deletedAt: new Date(), active: false, status: 'INACTIVE' }],
+    ['inactive', { deletedAt: null, active: false, status: 'INACTIVE' }],
+  ] as const)(
+    'finds a %s Product by its existing financial identity without a write',
+    async (_state, lifecycle) => {
+      const repository = createRepository({
+        id: 'product-1',
+        ...dto,
+        normalizedDescription: 'iphone 17 pro max 256gb',
+        model: { id: dto.modelId, name: 'iPhone 17 Pro Max' },
+        storage: { id: 'storage-256', displayName: '256 GB' },
+        profitProductId: 133,
+        ...lifecycle,
+      });
+      const service = new ProductsService(repository as unknown as ProductsRepository);
+
+      const result = await service.historicalLookup({
+        description: '  IPHONE 17 PRO MAX 256GB  ',
+        condition: 'NOVO',
+      });
+
+      expect(repository.findProfitIdentity).toHaveBeenCalledWith('NOVO', 'iphone 17 pro max 256gb');
+      expect(result).toMatchObject({
+        id: 'product-1',
+        normalizedDescription: 'iphone 17 pro max 256gb',
+        ...lifecycle,
+      });
+      expect(repository.createProduct).not.toHaveBeenCalled();
+      expect(repository.updateProduct).not.toHaveBeenCalled();
+      expect(repository.softDeleteProduct).not.toHaveBeenCalled();
+      expect(repository.setStatus).not.toHaveBeenCalled();
+      expect(repository.restoreProduct).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns controlled not found without writing for a distinct condition or missing identity', async () => {
+    const repository = createRepository();
+    const service = new ProductsService(repository as unknown as ProductsRepository);
+
+    await expect(
+      service.historicalLookup({ description: dto.productDescription, condition: 'CPO' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(repository.findProfitIdentity).toHaveBeenCalledWith('CPO', 'iphone 17 pro max 256gb');
+    expect(repository.createProduct).not.toHaveBeenCalled();
+    expect(repository.updateProduct).not.toHaveBeenCalled();
+    expect(repository.softDeleteProduct).not.toHaveBeenCalled();
+    expect(repository.setStatus).not.toHaveBeenCalled();
+    expect(repository.restoreProduct).not.toHaveBeenCalled();
   });
 
   it.each([true, false])(

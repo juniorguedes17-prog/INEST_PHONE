@@ -9,6 +9,7 @@ import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.inte
 import {
   CreateProductDto,
   CreateProfitRegistrationDto,
+  HistoricalProductLookupQueryDto,
   ProductQueryDto,
   UpdateProductDto,
   UpsertCategoryDto,
@@ -35,6 +36,32 @@ export class ProductsService {
     const product = await this.productsRepository.findProduct(id);
     ensureExists(product, 'Produto nao encontrado.');
     return product;
+  }
+
+  async historicalLookup(query: HistoricalProductLookupQueryDto) {
+    const normalizedDescription = normalizeProfitProductDescription(query.description);
+    const product = await this.productsRepository.findProfitIdentity(
+      query.condition,
+      normalizedDescription,
+    );
+    if (!product) {
+      throw new BadRequestException('Produto nao encontrado.');
+    }
+    const lifecycle = product as NonNullable<typeof product> & { deletedAt?: Date | null };
+    return {
+      id: product.id,
+      productDescription: product.productDescription,
+      normalizedDescription: product.normalizedDescription,
+      model: product.model,
+      storage: product.storage,
+      profitCondition: product.profitCondition,
+      deletedAt: lifecycle.deletedAt ?? null,
+      active: product.active,
+      status: product.status,
+      isAppleOriginal: product.isAppleOriginal,
+      profitProductId: product.profitProductId,
+      netProfit: product.netProfit,
+    };
   }
 
   async create(dto: CreateProductDto, user?: AuthenticatedUser) {
