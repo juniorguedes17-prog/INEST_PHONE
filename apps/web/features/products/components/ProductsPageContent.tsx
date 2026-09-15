@@ -14,7 +14,13 @@ import {
   StatusBadge,
 } from '@/components/shared';
 import { useProducts } from '../hooks/useProducts';
-import { ProductFormPayload, ProductItem } from '../types/products';
+import {
+  ProductFormPayload,
+  ProductItem,
+  ProductReference,
+  ProductReferences,
+  ProductSaveRequest,
+} from '../types/products';
 import { ProductFacetsDrawer } from '@/features/price-radar/components/ProductFacetsDrawer';
 import { buildCanonicalModelFacetOptions } from '@/features/price-radar/utils/brazil-radar-facets';
 import { getProductCardPresentation } from '@/utils/product-card-presentation';
@@ -37,6 +43,8 @@ const statuses = [
   ['PENDING_REVIEW', 'Pendente'],
   ['REJECTED', 'Rejeitado'],
 ];
+
+const NEW_MODEL_SELECT_VALUE = 'new';
 
 export function ProductsPageContent() {
   const {
@@ -64,24 +72,10 @@ export function ProductsPageContent() {
     [allProducts],
   );
 
-  const initialForm = useMemo<ProductFormPayload>(() => {
-    const categoryId = editingProduct?.categoryId ?? references.categories[0]?.id ?? '';
-    const firstModel = references.models.find((model) => model.categoryId === categoryId);
-
-    return {
-      categoryId,
-      modelId: editingProduct?.modelId ?? firstModel?.id ?? '',
-      colorId: editingProduct?.colorId ?? '',
-      storageId: editingProduct?.storageId ?? '',
-      productType: editingProduct?.productType ?? 'IPHONE_SEALED',
-      status: editingProduct?.status ?? 'ACTIVE',
-      qualityGrade: editingProduct?.qualityGrade ?? '',
-      criticalNotes: editingProduct?.criticalNotes ?? '',
-      productDescription: editingProduct?.productDescription ?? '',
-      profitCondition: editingProduct?.profitCondition ?? 'NOVO',
-      netProfit: formatProfitForInput(editingProduct?.netProfit),
-    };
-  }, [editingProduct, references.categories, references.models]);
+  const initialForm = useMemo(
+    () => buildInitialProductForm(editingProduct, references),
+    [editingProduct, references],
+  );
 
   function openCreateModal() {
     setEditingProduct(null);
@@ -245,10 +239,11 @@ export function ProductsPageContent() {
         initialForm={initialForm}
         references={references}
         saving={saving}
+        error={error}
         onClose={() => setModalOpen(false)}
-        onSave={async (payload) => {
-          await save(payload, editingProduct?.id);
-          setModalOpen(false);
+        onSave={async (request) => {
+          const saved = await save(request);
+          if (saved) setModalOpen(false);
         }}
       />
     </div>
@@ -336,8 +331,9 @@ interface ProductFormModalProps {
   initialForm: ProductFormPayload;
   references: ReturnType<typeof useProducts>['references'];
   saving: boolean;
+  error: string | null;
   onClose: () => void;
-  onSave: (payload: ProductFormPayload) => Promise<void>;
+  onSave: (request: ProductSaveRequest) => Promise<void>;
 }
 
 function ProductFormModal({
@@ -346,10 +342,14 @@ function ProductFormModal({
   initialForm,
   references,
   saving,
+  error,
   onClose,
   onSave,
 }: ProductFormModalProps) {
   const [form, setForm] = useState(initialForm);
+  const [modelMode, setModelMode] = useState<'existing' | 'new'>('existing');
+  const [newModelName, setNewModelName] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
   const availableModels = useMemo(
     () => references.models.filter((item) => item.categoryId === form.categoryId),
     [form.categoryId, references.models],
@@ -357,15 +357,25 @@ function ProductFormModal({
 
   useEffect(() => {
     setForm(initialForm);
+    setModelMode('existing');
+    setNewModelName('');
+    setValidationError(null);
   }, [initialForm]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    void onSave({
-      ...form,
-      colorId: form.colorId || undefined,
-      storageId: form.storageId || undefined,
+    const result = buildProductSaveRequest({
+      form,
+      modelMode,
+      newModelName,
+      productId: product?.id,
     });
+    if (!result.request) {
+      setValidationError(result.error ?? null);
+      return;
+    }
+    setValidationError(null);
+    void onSave(result.request);
   }
 
   return (
@@ -377,21 +387,22 @@ function ProductFormModal({
       contentClassName="min-h-0 flex-1 overflow-y-auto pr-1"
     >
       <form className="grid gap-4" onSubmit={handleSubmit}>
+        {validationError ? (
+          <ErrorState title="Revise o modelo" description={validationError} />
+        ) : null}
+        {error ? <ErrorState title="Atencao" description={error} /> : null}
         <SelectInput
           label="Categoria"
           value={form.categoryId}
           options={references.categories.map((item) => [item.id, item.name ?? item.id])}
-          onChange={(value) =>
-            setForm((current) => ({
-              ...current,
-              categoryId: value,
-              modelId: references.models.some(
-                (item) => item.id === current.modelId && item.categoryId === value,
-              )
-                ? current.modelId
-                : (references.models.find((item) => item.categoryId === value)?.id ?? ''),
-            }))
-          }
+          onChange={(value) => {
+            setValidationError(null);
+            setModelMode('existing');
+            setNewModelName('');
+            setForm((current) =>
+              changeProductCategory(current, value, references.models, references.categories),
+            );
+          }}
         />
         <TextInput
           label="Descricao do produto"
@@ -423,10 +434,36 @@ function ProductFormModal({
         </div>
         <SelectInput
           label="Modelo"
-          value={form.modelId}
-          options={availableModels.map((item) => [item.id, item.name ?? item.id])}
-          onChange={(value) => setForm((current) => ({ ...current, modelId: value }))}
+          value={modelMode === 'new' ? NEW_MODEL_SELECT_VALUE : form.modelId}
+          options={[
+            ['', 'Selecione um modelo'],
+            ...availableModels.map((item) => [item.id, item.name ?? item.id]),
+            ...(product ? [] : [[NEW_MODEL_SELECT_VALUE, '+ Novo modelo']]),
+          ]}
+          onChange={(value) => {
+            setValidationError(null);
+            if (value === NEW_MODEL_SELECT_VALUE) {
+              setModelMode('new');
+              setForm((current) => ({ ...current, modelId: '' }));
+              return;
+            }
+            setModelMode('existing');
+            setNewModelName('');
+            setForm((current) => ({ ...current, modelId: value }));
+          }}
+          required
         />
+        {modelMode === 'new' ? (
+          <TextInput
+            label="Nome do novo modelo"
+            value={newModelName}
+            onChange={(value) => {
+              setValidationError(null);
+              setNewModelName(value);
+            }}
+            required
+          />
+        ) : null}
         <div className="grid gap-4 md:grid-cols-2">
           <SelectInput
             label="Cor"
@@ -572,11 +609,13 @@ function SelectInput({
   value,
   options,
   onChange,
+  required = false,
 }: {
   label: string;
   value: string;
   options: string[][];
   onChange: (value: string) => void;
+  required?: boolean;
 }) {
   return (
     <label className="block">
@@ -584,6 +623,7 @@ function SelectInput({
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        required={required}
         className="field-control"
       >
         {options.map(([valueOption, labelOption]) => (
@@ -594,4 +634,75 @@ function SelectInput({
       </select>
     </label>
   );
+}
+
+export function changeProductCategory(
+  form: ProductFormPayload,
+  categoryId: string,
+  models: ProductReference[],
+  categories: ProductReference[],
+): ProductFormPayload {
+  const keepsSelectedModel = models.some(
+    (model) => model.id === form.modelId && model.categoryId === categoryId,
+  );
+  const category = categories.find((item) => item.id === categoryId);
+
+  return {
+    ...form,
+    categoryId,
+    modelId: keepsSelectedModel ? form.modelId : '',
+    productType: category?.type ?? form.productType,
+  };
+}
+
+export function buildInitialProductForm(
+  product: ProductItem | null,
+  references: ProductReferences,
+): ProductFormPayload {
+  const categoryId = product?.categoryId ?? references.categories[0]?.id ?? '';
+  const category = references.categories.find((item) => item.id === categoryId);
+
+  return {
+    categoryId,
+    modelId: product?.modelId ?? '',
+    colorId: product?.colorId ?? '',
+    storageId: product?.storageId ?? '',
+    productType: product?.productType ?? category?.type ?? '',
+    status: product?.status ?? 'ACTIVE',
+    qualityGrade: product?.qualityGrade ?? '',
+    criticalNotes: product?.criticalNotes ?? '',
+    productDescription: product?.productDescription ?? '',
+    profitCondition: product?.profitCondition ?? 'NOVO',
+    netProfit: formatProfitForInput(product?.netProfit),
+  };
+}
+
+export function buildProductSaveRequest({
+  form,
+  modelMode,
+  newModelName,
+  productId,
+}: {
+  form: ProductFormPayload;
+  modelMode: 'existing' | 'new';
+  newModelName: string;
+  productId?: string;
+}): { request?: ProductSaveRequest; error?: string } {
+  const payload = {
+    ...form,
+    colorId: form.colorId || undefined,
+    storageId: form.storageId || undefined,
+  };
+
+  if (modelMode === 'existing') {
+    if (!form.modelId) return { error: 'Selecione um modelo existente ou escolha Novo modelo.' };
+    return { request: { modelMode, payload, id: productId } };
+  }
+
+  const name = newModelName.trim();
+  if (!name) return { error: 'Informe o nome do novo modelo.' };
+  if (productId)
+    return { error: 'A criacao de modelo esta disponivel apenas para novos produtos.' };
+
+  return { request: { modelMode, payload, modelName: name } };
 }

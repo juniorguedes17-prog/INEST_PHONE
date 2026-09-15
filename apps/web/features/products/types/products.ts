@@ -57,7 +57,7 @@ export type ProfitRegistrationProductPayload = Omit<ProductFormPayload, 'modelId
 
 export interface ProfitRegistrationModelPayload {
   name: string;
-  canonicalModelKey: string;
+  canonicalModelKey?: string;
   productType: string;
 }
 
@@ -65,6 +65,18 @@ export interface ProfitRegistrationPayload {
   product: ProfitRegistrationProductPayload;
   model: ProfitRegistrationModelPayload;
 }
+
+export type ProductSaveRequest =
+  | {
+      modelMode: 'existing';
+      payload: ProductFormPayload;
+      id?: string;
+    }
+  | {
+      modelMode: 'new';
+      payload: ProductFormPayload;
+      modelName: string;
+    };
 
 export interface ProductFilters {
   search: string;

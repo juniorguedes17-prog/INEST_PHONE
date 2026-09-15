@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  createProfitRegistration,
   createProduct,
   deleteProduct,
   getProductReferences,
@@ -14,6 +15,8 @@ import {
   ProductFormPayload,
   ProductItem,
   ProductReferences,
+  ProductSaveRequest,
+  ProfitRegistrationPayload,
 } from '../types/products';
 import { getCanonicalModelKey } from '@/features/price-radar/utils/brazil-radar-facets';
 
@@ -77,28 +80,31 @@ export function useProducts() {
   const products = useMemo(
     () =>
       filters.modelId
-        ? allProducts.filter((product) => getCanonicalModelKey(toFacetSource(product)) === filters.modelId)
+        ? allProducts.filter(
+            (product) => getCanonicalModelKey(toFacetSource(product)) === filters.modelId,
+          )
         : allProducts,
     [allProducts, filters.modelId],
   );
 
-  async function save(payload: ProductFormPayload, id?: string) {
+  async function save(request: ProductSaveRequest) {
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      if (id) {
-        await updateProduct(id, payload);
-        setSuccess('Produto atualizado com sucesso.');
-      } else {
-        await createProduct(payload);
-        setSuccess('Produto cadastrado com sucesso.');
-      }
+      await persistProduct(request);
+      setSuccess(
+        request.modelMode === 'existing' && request.id
+          ? 'Produto atualizado com sucesso.'
+          : 'Produto cadastrado com sucesso.',
+      );
       await load();
+      return true;
     } catch (productError) {
       setError(
         productError instanceof Error ? productError.message : 'Nao foi possivel salvar produto.',
       );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -131,7 +137,9 @@ export function useProducts() {
       await load();
     } catch (productError) {
       setError(
-        productError instanceof Error ? productError.message : 'Nao foi possivel atualizar o produto.',
+        productError instanceof Error
+          ? productError.message
+          : 'Nao foi possivel atualizar o produto.',
       );
     } finally {
       setSaving(false);
@@ -152,6 +160,59 @@ export function useProducts() {
     save,
     remove,
     setActive,
+  };
+}
+
+interface ProductPersistence {
+  createProduct: typeof createProduct;
+  createProfitRegistration: typeof createProfitRegistration;
+  updateProduct: typeof updateProduct;
+}
+
+const productPersistence: ProductPersistence = {
+  createProduct,
+  createProfitRegistration,
+  updateProduct,
+};
+
+export async function persistProduct(
+  request: ProductSaveRequest,
+  persistence: ProductPersistence = productPersistence,
+) {
+  if (request.modelMode === 'existing' && request.id) {
+    return persistence.updateProduct(request.id, request.payload);
+  }
+  if (request.modelMode === 'existing') {
+    return persistence.createProduct(request.payload);
+  }
+
+  return persistence.createProfitRegistration(
+    buildNewModelProfitRegistrationPayload(request.payload, request.modelName),
+  );
+}
+
+export function buildNewModelProfitRegistrationPayload(
+  payload: ProductFormPayload,
+  modelName: string,
+): ProfitRegistrationPayload {
+  return {
+    product: {
+      categoryId: payload.categoryId,
+      colorId: payload.colorId,
+      storageId: payload.storageId,
+      productType: payload.productType,
+      isAppleOriginal: payload.isAppleOriginal,
+      status: payload.status,
+      qualityGrade: payload.qualityGrade,
+      criticalNotes: payload.criticalNotes,
+      productDescription: payload.productDescription,
+      profitCondition: payload.profitCondition,
+      netProfit: payload.netProfit,
+    },
+    model: {
+      name: modelName.trim(),
+      productType: payload.productType,
+    },
   };
 }
 
