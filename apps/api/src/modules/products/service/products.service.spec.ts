@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { CreateProductDto } from '../dto/product.dto';
 import { ProductsRepository } from '../repository/products.repository';
@@ -8,6 +8,7 @@ const dto: CreateProductDto = {
   categoryId: 'category-1',
   modelId: 'model-1',
   productType: 'IPHONE_SEALED',
+  isAppleOriginal: true,
   productDescription: 'iPhone 17 Pro Max 256GB',
   profitCondition: 'NOVO',
   netProfit: 590,
@@ -52,7 +53,7 @@ describe('ProductsService manual catalog management', () => {
     expect(repository.createProduct).toHaveBeenCalledWith(dto, undefined);
   });
 
-  it.each([true, false, null])(
+  it.each([true, false])(
     'preserves the explicit Apple originality classification %s in the Product API flow',
     async (isAppleOriginal) => {
       const repository = createRepository();
@@ -62,6 +63,20 @@ describe('ProductsService manual catalog management', () => {
       await service.create(classifiedDto);
 
       expect(repository.createProduct).toHaveBeenCalledWith(classifiedDto, undefined);
+    },
+  );
+
+  it.each([undefined, null])(
+    'rejects a new Product without explicit financial classification (%s)',
+    async (isAppleOriginal) => {
+      const repository = createRepository();
+      const service = new ProductsService(repository as unknown as ProductsRepository);
+
+      await expect(service.create({ ...dto, isAppleOriginal })).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+
+      expect(repository.createProduct).not.toHaveBeenCalled();
     },
   );
 
@@ -152,6 +167,43 @@ describe('ProductsService manual catalog management', () => {
       },
       undefined,
     );
+  });
+
+  it.each([true, false])(
+    'preserves explicit financial classification %s in atomic Product creation',
+    async (isAppleOriginal) => {
+      const repository = createRepository();
+      const service = new ProductsService(repository as unknown as ProductsRepository);
+      const registration = {
+        product: { ...dto, isAppleOriginal, storageId: undefined },
+        model: {
+          name: 'Modelo novo',
+          productType: dto.productType,
+        },
+      };
+
+      await service.createProfitRegistration(registration);
+
+      expect(repository.createProfitRegistration).toHaveBeenCalledWith(
+        registration.product,
+        expect.any(Object),
+        undefined,
+      );
+    },
+  );
+
+  it('rejects atomic Product creation without explicit financial classification', async () => {
+    const repository = createRepository();
+    const service = new ProductsService(repository as unknown as ProductsRepository);
+
+    await expect(
+      service.createProfitRegistration({
+        product: { ...dto, isAppleOriginal: null, storageId: undefined },
+        model: { name: 'Modelo novo', productType: dto.productType },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(repository.createProfitRegistration).not.toHaveBeenCalled();
   });
 
   it('generates a scoped cadastral key for an unknown model without canonicalModelKey', async () => {

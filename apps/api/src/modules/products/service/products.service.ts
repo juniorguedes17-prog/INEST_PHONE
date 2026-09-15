@@ -1,4 +1,10 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
   CreateProductDto,
@@ -32,6 +38,7 @@ export class ProductsService {
   }
 
   async create(dto: CreateProductDto, user?: AuthenticatedUser) {
+    this.ensureExplicitFinancialClassification(dto);
     await this.validateReferences(dto);
     await this.ensureUniqueProfitIdentity(dto);
     const product = await this.productsRepository.createProduct(dto, user?.id);
@@ -46,6 +53,7 @@ export class ProductsService {
   }
 
   async createProfitRegistration(dto: CreateProfitRegistrationDto, user?: AuthenticatedUser) {
+    this.ensureExplicitFinancialClassification(dto.product);
     if (dto.model.productType !== dto.product.productType) {
       throw new NotFoundException('Modelo canonico incompativel com o tipo comercial do produto.');
     }
@@ -275,6 +283,12 @@ export class ProductsService {
       throw new ConflictException(
         'Ja existe um produto cadastrado para esta descricao e condicao.',
       );
+    }
+  }
+
+  private ensureExplicitFinancialClassification(dto: Pick<CreateProductDto, 'isAppleOriginal'>) {
+    if (typeof dto.isAppleOriginal !== 'boolean') {
+      throw new BadRequestException('Classificacao financeira do produto deve ser informada.');
     }
   }
 }

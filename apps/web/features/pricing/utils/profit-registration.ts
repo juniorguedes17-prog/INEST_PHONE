@@ -12,6 +12,7 @@ import type {
 } from '../../products/types/products';
 
 export interface ProfitRegistrationItem {
+  financialClassification: 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
   product: {
     name: string;
     category: string;
@@ -46,7 +47,10 @@ type ProfitRegistrationResolution =
   | { action: 'incomplete'; reason: ProfitRegistrationIncompleteReason; message: string };
 
 type ProfitRegistrationIncompleteReason =
-  'NO_CANONICAL_MODEL' | 'MULTIPLE_CANONICAL_MODELS' | 'INCOMPATIBLE_PRODUCT_TYPE';
+  | 'NO_CANONICAL_MODEL'
+  | 'MULTIPLE_CANONICAL_MODELS'
+  | 'INCOMPATIBLE_PRODUCT_TYPE'
+  | 'FINANCIAL_CLASSIFICATION_UNRESOLVED';
 
 const catalogProductTypes = new Set([
   'IPHONE_SEALED',
@@ -108,6 +112,20 @@ export function resolveProfitRegistration({
     };
   }
 
+  const isAppleOriginal =
+    item.financialClassification === 'APPLE'
+      ? true
+      : item.financialClassification === 'NON_APPLE'
+        ? false
+        : null;
+  if (isAppleOriginal === null) {
+    return {
+      action: 'incomplete',
+      reason: 'FINANCIAL_CLASSIFICATION_UNRESOLVED',
+      message: incompleteRegistrationMessage('FINANCIAL_CLASSIFICATION_UNRESOLVED'),
+    };
+  }
+
   if (!identity.canonicalModelMatched || !identity.canonicalModelKey) {
     return {
       action: 'incomplete',
@@ -148,6 +166,7 @@ export function resolveProfitRegistration({
     colorId,
     storageId,
     productType,
+    isAppleOriginal,
     status: 'ACTIVE',
     productDescription: item.profit.productDescription.trim() || item.product.name.trim(),
     profitCondition: item.product.condition,
@@ -263,6 +282,8 @@ function incompleteRegistrationMessage(reason: ProfitRegistrationIncompleteReaso
       return 'Mais de um Model canonico compativel foi encontrado para cadastrar o Lucro Liquido.';
     case 'INCOMPATIBLE_PRODUCT_TYPE':
       return 'O Model canonico possui categoria comercial ou tipo de produto incompativel.';
+    case 'FINANCIAL_CLASSIFICATION_UNRESOLVED':
+      return 'A classificacao financeira deve estar resolvida para criar um novo Product.';
   }
 }
 

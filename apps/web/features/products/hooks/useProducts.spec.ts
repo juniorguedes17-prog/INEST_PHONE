@@ -9,6 +9,7 @@ const product: ProductFormPayload = {
   colorId: undefined,
   storageId: 'storage-256',
   productType: 'IPHONE_SEALED',
+  isAppleOriginal: true,
   status: 'ACTIVE',
   productDescription: 'iPhone 18 Pro Max',
   profitCondition: 'NOVO',
@@ -73,6 +74,16 @@ test('new model uses the atomic H1 endpoint without frontend-owned keys', async 
   assert.equal('canonicalModelKey' in payload.model, false);
   assert.equal('normalizedName' in payload.model, false);
   assert.equal('modelId' in payload.product, false);
+  assert.equal(payload.product.isAppleOriginal, true);
+});
+
+test('new model preserves an explicit Non-Apple classification', () => {
+  const payload = buildNewModelProfitRegistrationPayload(
+    { ...product, isAppleOriginal: false },
+    'Produto novo',
+  );
+
+  assert.equal(payload.product.isAppleOriginal, false);
 });
 
 test('backend conflict is surfaced without falling back to an existing model', async () => {

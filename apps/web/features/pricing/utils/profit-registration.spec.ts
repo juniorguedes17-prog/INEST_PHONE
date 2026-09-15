@@ -5,6 +5,7 @@ import { resolveProfitRegistration } from './profit-registration';
 import type { BrazilRadarQuotePricing } from '../types/pricing';
 
 const item = {
+  financialClassification: 'APPLE',
   sourceQuoteId: 'quote-1',
   catalogProductId: null,
   product: {
@@ -53,12 +54,39 @@ test('cria o payload nativo para cotacao sem Product correspondente', () => {
       colorId: 'color-preto',
       storageId: 'storage-2tb',
       productType: 'IPHONE_SEALED',
+      isAppleOriginal: true,
       status: 'ACTIVE',
       productDescription: 'iPhone 17 Pro Max 2TB',
       profitCondition: 'NOVO',
       netProfit: '1.090,00',
     },
   });
+});
+
+test('transports an explicit Non-Apple classification without using the product name', () => {
+  const result = resolveProfitRegistration({
+    item: { ...item, financialClassification: 'NON_APPLE' },
+    netProfit: '500',
+    products: [],
+    references,
+  });
+
+  assert.equal(result.action, 'create');
+  if (result.action !== 'create') return;
+  assert.equal(result.payload.isAppleOriginal, false);
+});
+
+test('does not create a Product when financial classification is unresolved', () => {
+  const result = resolveProfitRegistration({
+    item: { ...item, financialClassification: 'UNRESOLVED' },
+    netProfit: '500',
+    products: [],
+    references,
+  });
+
+  assert.equal(result.action, 'incomplete');
+  if (result.action !== 'incomplete') return;
+  assert.equal(result.reason, 'FINANCIAL_CLASSIFICATION_UNRESOLVED');
 });
 
 test('atualiza Product existente sem criar duplicata', () => {

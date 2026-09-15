@@ -433,6 +433,28 @@ function ProductFormModal({
           />
         </div>
         <SelectInput
+          label="Classificacao"
+          value={
+            form.isAppleOriginal === true
+              ? 'APPLE'
+              : form.isAppleOriginal === false
+                ? 'NON_APPLE'
+                : ''
+          }
+          options={[
+            ['', 'Selecione'],
+            ['APPLE', 'Apple'],
+            ['NON_APPLE', 'Non-Apple'],
+          ]}
+          onChange={(value) =>
+            setForm((current) => ({
+              ...current,
+              isAppleOriginal: value === 'APPLE' ? true : value === 'NON_APPLE' ? false : undefined,
+            }))
+          }
+          required
+        />
+        <SelectInput
           label="Modelo"
           value={modelMode === 'new' ? NEW_MODEL_SELECT_VALUE : form.modelId}
           options={[
@@ -512,7 +534,10 @@ function ProductFormModal({
           <ActionButton variant="secondary" onClick={onClose}>
             Cancelar
           </ActionButton>
-          <ActionButton type="submit" disabled={saving}>
+          <ActionButton
+            type="submit"
+            disabled={saving || typeof form.isAppleOriginal !== 'boolean'}
+          >
             {saving ? 'Salvando...' : 'Salvar'}
           </ActionButton>
         </div>
@@ -668,6 +693,7 @@ export function buildInitialProductForm(
     colorId: product?.colorId ?? '',
     storageId: product?.storageId ?? '',
     productType: product?.productType ?? category?.type ?? '',
+    isAppleOriginal: product?.isAppleOriginal ?? undefined,
     status: product?.status ?? 'ACTIVE',
     qualityGrade: product?.qualityGrade ?? '',
     criticalNotes: product?.criticalNotes ?? '',
@@ -688,6 +714,10 @@ export function buildProductSaveRequest({
   newModelName: string;
   productId?: string;
 }): { request?: ProductSaveRequest; error?: string } {
+  if (typeof form.isAppleOriginal !== 'boolean') {
+    return { error: 'Selecione a classificacao financeira do produto.' };
+  }
+
   const payload = {
     ...form,
     colorId: form.colorId || undefined,

@@ -26,6 +26,7 @@ const form: ProductFormPayload = {
   colorId: '',
   storageId: 'storage-256',
   productType: 'IPHONE_SEALED',
+  isAppleOriginal: true,
   status: 'ACTIVE',
   productDescription: 'iPhone 18 Pro Max',
   profitCondition: 'NOVO',
@@ -38,6 +39,38 @@ test('new product starts without selecting the first model', () => {
   assert.equal(initial.categoryId, 'category-a');
   assert.equal(initial.modelId, '');
   assert.equal(initial.productType, 'IPHONE_SEALED');
+  assert.equal(initial.isAppleOriginal, undefined);
+});
+
+test('new product requires an explicit financial classification', () => {
+  const result = buildProductSaveRequest({
+    form: { ...form, modelId: 'model-a', isAppleOriginal: undefined },
+    modelMode: 'existing',
+    newModelName: '',
+  });
+
+  assert.equal(result.request, undefined);
+  assert.equal(result.error, 'Selecione a classificacao financeira do produto.');
+});
+
+test('new Product sends the explicit Apple classification', () => {
+  const result = buildProductSaveRequest({
+    form: { ...form, modelId: 'model-a', isAppleOriginal: true },
+    modelMode: 'existing',
+    newModelName: '',
+  });
+
+  assert.equal(result.request?.payload.isAppleOriginal, true);
+});
+
+test('new Product sends the explicit Non-Apple classification', () => {
+  const result = buildProductSaveRequest({
+    form: { ...form, modelId: 'model-a', isAppleOriginal: false },
+    modelMode: 'existing',
+    newModelName: '',
+  });
+
+  assert.equal(result.request?.payload.isAppleOriginal, false);
 });
 
 test('existing model requires an explicit model and keeps the current create payload', () => {
@@ -120,3 +153,44 @@ test('editing preserves the existing product model', () => {
   assert.equal(initial.modelId, 'model-a');
   assert.equal(initial.productType, 'IPHONE_SEALED');
 });
+
+test('editing presents true, false and null financial classifications without inference', () => {
+  assert.equal(
+    buildInitialProductForm({ ...productForEdit(true), isAppleOriginal: true }, references)
+      .isAppleOriginal,
+    true,
+  );
+  assert.equal(
+    buildInitialProductForm({ ...productForEdit(false), isAppleOriginal: false }, references)
+      .isAppleOriginal,
+    false,
+  );
+  const unclassified = buildInitialProductForm(
+    { ...productForEdit(null), isAppleOriginal: null },
+    references,
+  );
+  assert.equal(unclassified.isAppleOriginal, undefined);
+  assert.equal(
+    buildProductSaveRequest({
+      form: unclassified,
+      modelMode: 'existing',
+      newModelName: '',
+      productId: unclassified.modelId,
+    }).request,
+    undefined,
+  );
+});
+
+function productForEdit(isAppleOriginal: boolean | null): ProductItem {
+  return {
+    id: 'product-a',
+    categoryId: 'category-a',
+    modelId: 'model-a',
+    productType: 'IPHONE_SEALED',
+    isAppleOriginal,
+    status: 'ACTIVE',
+    productDescription: 'Produto cadastrado',
+    profitCondition: 'NOVO',
+    netProfit: 590,
+  };
+}
