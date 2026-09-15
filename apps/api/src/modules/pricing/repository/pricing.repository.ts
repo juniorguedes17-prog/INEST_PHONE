@@ -1,8 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ProductStatus } from '@prisma/client';
+import { ProductCondition, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';
+import { normalizeProductModelNameComponent } from '../../products/product-model-normalizer';
 import { PricingPrismaClient } from '../interfaces/pricing-prisma.interface';
+import { normalizeProfitProductDescription } from '../providers/google-sheets-profit.provider';
 export { OFFER_INCREMENT_KEY } from '../utils/offer-increment';
 
 export const PRICING_SCOPE = 'pricing';
@@ -75,6 +77,52 @@ export class PricingRepository {
         storage: { select: { displayName: true } },
       },
     });
+  }
+
+  async findEligibleCatalogProductCandidates(input: {
+    model: string;
+    capacity: string;
+    condition: ProductCondition;
+  }) {
+    const normalizedModel = normalizeProductModelNameComponent(input.model);
+    const normalizedCapacity = normalizeProfitProductDescription(input.capacity);
+    if (!normalizedModel || !normalizedCapacity) return [];
+
+    const candidates = await this.prismaService.product.findMany({
+      where: {
+        active: true,
+        status: ProductStatus.ACTIVE,
+        deletedAt: null,
+        profitCondition: input.condition,
+      },
+      select: {
+        id: true,
+        profitProductId: true,
+        productDescription: true,
+        normalizedDescription: true,
+        productType: true,
+        isAppleOriginal: true,
+        profitCondition: true,
+        category: { select: { name: true } },
+        model: { select: { name: true } },
+        color: { select: { name: true } },
+        storage: { select: { displayName: true } },
+      },
+    });
+
+    const matches = [];
+    for (const candidate of candidates) {
+      if (normalizeProductModelNameComponent(candidate.model.name) !== normalizedModel) continue;
+      if (
+        !candidate.storage ||
+        normalizeProfitProductDescription(candidate.storage.displayName) !== normalizedCapacity
+      ) {
+        continue;
+      }
+      matches.push(candidate);
+      if (matches.length === 2) break;
+    }
+    return matches;
   }
 
   listActiveCatalogProducts(): Promise<ProductIdShadowCandidate[]> {

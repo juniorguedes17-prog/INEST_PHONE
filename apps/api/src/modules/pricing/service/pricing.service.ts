@@ -471,17 +471,37 @@ export class PricingService {
 
   async calculateTemporaryImport(dto: TemporaryImportPricingDto) {
     const origin = dto.origin ?? 'PY';
-    const [settings, pricingConfigurations, profitCatalog, catalogProduct] = await Promise.all([
-      this.settingsService.getSettings(),
-      this.pricingRepository.listPricingConfigurations(),
-      this.profitProvider.getCatalog(),
-      dto.catalogProductId
-        ? this.pricingRepository.findActiveCatalogProductById(dto.catalogProductId)
-        : Promise.resolve(null),
-    ]);
-    if (dto.catalogProductId && !catalogProduct) {
+    const automaticCatalogCandidates =
+      origin === 'US' &&
+      !dto.catalogProductId &&
+      dto.model?.trim() &&
+      dto.capacity?.trim() &&
+      dto.condition
+        ? this.pricingRepository.findEligibleCatalogProductCandidates({
+            model: dto.model,
+            capacity: dto.capacity,
+            condition: dto.condition,
+          })
+        : Promise.resolve([]);
+    const [settings, pricingConfigurations, profitCatalog, explicitCatalogProduct, candidates] =
+      await Promise.all([
+        this.settingsService.getSettings(),
+        this.pricingRepository.listPricingConfigurations(),
+        this.profitProvider.getCatalog(),
+        dto.catalogProductId
+          ? this.pricingRepository.findActiveCatalogProductById(dto.catalogProductId)
+          : Promise.resolve(null),
+        automaticCatalogCandidates,
+      ]);
+    if (dto.catalogProductId && !explicitCatalogProduct) {
       throw new BadRequestException('Produto canonico ativo nao encontrado para esta importacao.');
     }
+    if (candidates.length > 1) {
+      throw new BadRequestException(
+        'Mais de um produto canonico ativo corresponde a esta importacao.',
+      );
+    }
+    const catalogProduct = explicitCatalogProduct ?? candidates[0] ?? null;
     if (origin === 'US' && !catalogProduct && !dto.provider?.trim()) {
       throw new BadRequestException('Provider e obrigatorio para uma oferta externa USA.');
     }

@@ -85,6 +85,7 @@ function temporaryPyPricingDto(
 function createTemporaryPyPricingService(records: ProfitSheetCatalog['records']) {
   const repository = {
     findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+    findEligibleCatalogProductCandidates: vi.fn().mockResolvedValue([]),
     listPricingConfigurations: vi
       .fn()
       .mockResolvedValue([{ key: 'pricing.offer_increment', value: '100', type: 'currency' }]),

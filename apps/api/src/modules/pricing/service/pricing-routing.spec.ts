@@ -72,6 +72,7 @@ function setup(
   const repository = {
     findActiveCatalogProductById: vi.fn().mockResolvedValue(product),
     findActiveCatalogProduct: vi.fn().mockResolvedValue(product),
+    findEligibleCatalogProductCandidates: vi.fn().mockResolvedValue([]),
     findBrazilRadarQuote: vi.fn().mockResolvedValue(quote),
     listPricingConfigurations: vi.fn().mockResolvedValue(configurations),
     listQuotes: vi.fn().mockResolvedValue([
@@ -589,6 +590,184 @@ describe('Pricing canonical originality routing', () => {
       calculationStatus: 'ready',
       desiredNetProfit: 500,
       offerDraft: { payload: { productId: null } },
+    });
+  });
+
+  describe('USA eligible catalog Product reconciliation', () => {
+    function configureUsa(
+      fixture: ReturnType<typeof setup>,
+      overrides: Partial<TemporaryImportPricingDto> = {},
+    ) {
+      fixture.dto = {
+        ...fixture.dto,
+        origin: 'US',
+        catalogProductId: undefined,
+        sourceProductId: 'apple-us:MJW44LL/A',
+        productName: 'Apple iPhone 18 Pro Max 256GB Black NOVO',
+        displayName: 'Apple iPhone 18 Pro Max 256GB Black NOVO',
+        model: 'iPhone 18 Pro Max',
+        capacity: '256GB',
+        condition: 'NOVO',
+        provider: 'apple_us',
+        retailer: 'Apple Store USA',
+        ...overrides,
+      };
+      fixture.product.productDescription = 'iPhone 18 Pro Max 256GB';
+      fixture.product.model.name = 'iPhone 18 Pro Max';
+    }
+
+    it('reconciles one eligible USA Product and reuses its existing profit', async () => {
+      const fixture = setup(true, 700, 500);
+      configureUsa(fixture);
+      fixture.repository.findEligibleCatalogProductCandidates.mockResolvedValue([fixture.product]);
+
+      const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+      expect(fixture.repository.findEligibleCatalogProductCandidates).toHaveBeenCalledWith({
+        model: 'iPhone 18 Pro Max',
+        capacity: '256GB',
+        condition: 'NOVO',
+      });
+      expect(result).toMatchObject({
+        origin: 'US',
+        catalogProductId: fixture.product.id,
+        financialClassification: 'APPLE',
+        calculationStatus: 'ready',
+        desiredNetProfit: 500,
+        offerDraft: { payload: { productId: fixture.product.id } },
+      });
+    });
+
+    it('reports missing profit after reconciling the unique eligible USA Product', async () => {
+      const fixture = setup(true);
+      configureUsa(fixture);
+      fixture.repository.findEligibleCatalogProductCandidates.mockResolvedValue([fixture.product]);
+
+      const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+      expect(result).toMatchObject({
+        catalogProductId: fixture.product.id,
+        financialClassification: 'APPLE',
+        calculationStatus: 'missing_profit',
+        desiredNetProfit: null,
+        offerDraft: null,
+      });
+    });
+
+    it('preserves the external USA path when no eligible Product matches', async () => {
+      const fixture = setup(true, 700, 500);
+      configureUsa(fixture, {
+        productName: 'Apple iPhone 17 Pro Max 256GB',
+        displayName: 'Apple iPhone 17 Pro Max 256GB',
+        model: 'iPhone 17 Pro Max',
+      });
+
+      const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+      expect(result).toMatchObject({
+        catalogProductId: null,
+        financialClassification: 'APPLE',
+        calculationStatus: 'ready',
+        desiredNetProfit: 500,
+        offerDraft: { payload: { productId: null } },
+      });
+    });
+
+    it('fails closed when more than one eligible USA Product matches', async () => {
+      const fixture = setup(true, 700, 500);
+      configureUsa(fixture);
+      fixture.repository.findEligibleCatalogProductCandidates.mockResolvedValue([
+        fixture.product,
+        { ...fixture.product, id: 'catalog-product-duplicate' },
+      ]);
+
+      await expect(fixture.service.calculateTemporaryImport(fixture.dto)).rejects.toThrow(
+        'Mais de um produto canonico ativo corresponde a esta importacao.',
+      );
+      expect(fixture.repository.findActiveCatalogProductById).not.toHaveBeenCalled();
+    });
+
+    it('preserves an explicit valid catalogProductId without automatic reconciliation', async () => {
+      const fixture = setup(true, 700, 500);
+      configureUsa(fixture, { catalogProductId: fixture.product.id });
+
+      const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+      expect(fixture.repository.findActiveCatalogProductById).toHaveBeenCalledWith(
+        fixture.product.id,
+      );
+      expect(fixture.repository.findEligibleCatalogProductCandidates).not.toHaveBeenCalled();
+      expect(result.catalogProductId).toBe(fixture.product.id);
+    });
+
+    it('preserves the explicit invalid catalogProductId error without fallback', async () => {
+      const fixture = setup(true, 700, 500);
+      configureUsa(fixture, { catalogProductId: 'missing-catalog-product' });
+      fixture.repository.findActiveCatalogProductById.mockResolvedValue(null);
+      fixture.repository.findEligibleCatalogProductCandidates.mockResolvedValue([fixture.product]);
+
+      await expect(fixture.service.calculateTemporaryImport(fixture.dto)).rejects.toThrow(
+        'Produto canonico ativo nao encontrado para esta importacao.',
+      );
+      expect(fixture.repository.findEligibleCatalogProductCandidates).not.toHaveBeenCalled();
+    });
+
+    it.each(['Canon', 'Garmin', 'Samsung'])(
+      'preserves %s as NON_APPLE when no eligible Product matches',
+      async (manufacturer) => {
+        const fixture = setup(true, 2677.07);
+        configureUsa(fixture, {
+          sourceProductId: `${manufacturer.toLowerCase()}-us:device-1`,
+          productName: `${manufacturer} Device`,
+          displayName: `${manufacturer} Device`,
+          category: 'Outros',
+          brand: undefined,
+          model: `${manufacturer} Device`,
+          sourceManufacturer: manufacturer,
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+          provider: `${manufacturer.toLowerCase()}_us`,
+          retailer: `${manufacturer} Store`,
+        });
+        fixture.manufacturers.resolve.mockResolvedValue({
+          status: 'FOUND',
+          manufacturerId: `manufacturer-${manufacturer.toLowerCase()}`,
+          manufacturerKey: manufacturer.toLowerCase(),
+          canonicalName: manufacturer,
+          provenance: 'EXPLICIT_SOURCE_VALIDATED',
+          normalizedEvidence: manufacturer.toLowerCase(),
+          matchedAlias: manufacturer,
+          normalizedAlias: manufacturer.toLowerCase(),
+        });
+
+        const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+        expect(result).toMatchObject({
+          catalogProductId: null,
+          financialClassification: 'NON_APPLE',
+          calculationStatus: 'ready',
+          profit: { source: 'non_apple_electronics_policy' },
+        });
+      },
+    );
+
+    it('keeps an unknown external manufacturer fail-closed when no Product matches', async () => {
+      const fixture = setup(true, 700, 500);
+      configureUsa(fixture, {
+        sourceProductId: 'unknown-us:device-1',
+        productName: 'Unknown Device 256GB',
+        displayName: 'Unknown Device 256GB',
+        category: 'Outros',
+        brand: undefined,
+        model: 'Unknown Device',
+        sourceManufacturer: undefined,
+        sourceManufacturerProvenance: undefined,
+        provider: 'unknown_us',
+        retailer: 'Unknown Store',
+      });
+
+      await expect(fixture.service.calculateTemporaryImport(fixture.dto)).rejects.toThrow(
+        'Classificacao financeira do produto externo nao resolvida.',
+      );
     });
   });
 
