@@ -673,7 +673,7 @@ describe('Pricing canonical originality routing', () => {
       });
     });
 
-    it('fails closed when more than one eligible USA Product matches', async () => {
+    it('keeps more than one eligible USA Product pending without selecting one', async () => {
       const fixture = setup(true, 700, 500);
       configureUsa(fixture);
       fixture.repository.findEligibleCatalogProductCandidates.mockResolvedValue([
@@ -681,9 +681,18 @@ describe('Pricing canonical originality routing', () => {
         { ...fixture.product, id: 'catalog-product-duplicate' },
       ]);
 
-      await expect(fixture.service.calculateTemporaryImport(fixture.dto)).rejects.toThrow(
-        'Mais de um produto canonico ativo corresponde a esta importacao.',
-      );
+      const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+      expect(result).toMatchObject({
+        catalogProductId: null,
+        financialClassification: 'UNRESOLVED',
+        calculationStatus: 'ambiguous_identity',
+        importCosts: { totalCost: 700 },
+        desiredNetProfit: null,
+        salePrice: null,
+        offerPrice: null,
+        offerDraft: null,
+      });
       expect(fixture.repository.findActiveCatalogProductById).not.toHaveBeenCalled();
     });
 
@@ -750,7 +759,7 @@ describe('Pricing canonical originality routing', () => {
       },
     );
 
-    it('keeps an unknown external manufacturer fail-closed when no Product matches', async () => {
+    it('keeps an unknown external manufacturer pending when no Product matches', async () => {
       const fixture = setup(true, 700, 500);
       configureUsa(fixture, {
         sourceProductId: 'unknown-us:device-1',
@@ -765,9 +774,18 @@ describe('Pricing canonical originality routing', () => {
         retailer: 'Unknown Store',
       });
 
-      await expect(fixture.service.calculateTemporaryImport(fixture.dto)).rejects.toThrow(
-        'Classificacao financeira do produto externo nao resolvida.',
-      );
+      const result = await fixture.service.calculateTemporaryImport(fixture.dto);
+
+      expect(result).toMatchObject({
+        catalogProductId: null,
+        financialClassification: 'UNRESOLVED',
+        calculationStatus: 'classification_unresolved',
+        importCosts: { totalCost: 700 },
+        desiredNetProfit: null,
+        salePrice: null,
+        offerPrice: null,
+        offerDraft: null,
+      });
     });
   });
 

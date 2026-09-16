@@ -928,6 +928,32 @@ test('sends only the FinalCost through the existing temporary pricing handoff', 
   assert.ok(h.storage.has('inest.temporary-import-pricing'));
 });
 
+test('stores a pending temporary pricing response and navigates to Pricing', async () => {
+  const h = setup();
+  h.pricing.calculateTemporaryImportPricing.mock.mockImplementation(async (payload: unknown) => ({
+    ...(payload as Props),
+    temporary: true,
+    financialClassification: 'UNRESOLVED',
+    calculationStatus: 'ambiguous_identity',
+    calculationError: 'Mais de um produto canonico ativo corresponde a esta importacao.',
+    desiredNetProfit: null,
+    salePrice: null,
+    offerPrice: null,
+    offerDraft: null,
+  }));
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  await h.call('CalculationModal', 'onSendToPricing');
+
+  const stored = JSON.parse(h.storage.get('inest.temporary-import-pricing')!) as Props;
+  assert.equal(stored.calculationStatus, 'ambiguous_identity');
+  assert.equal(stored.totalCost, 5500);
+  assert.equal(h.router.push.mock.calls[0]!.arguments[0], '/pricing?temporaryImport=usa');
+});
+
 test('invalidates a Red calculation before allowing the same modal to calculate Rei', async () => {
   const h = setup();
   await h.select();

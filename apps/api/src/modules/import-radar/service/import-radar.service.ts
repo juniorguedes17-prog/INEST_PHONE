@@ -209,8 +209,8 @@ export class ImportRadarService {
       financialClassificationReason: financialClassification.reason,
       manufacturerKey: financialClassification.manufacturerKey ?? null,
       manufacturerProvenance: financialClassification.provenance ?? null,
-      pricingEligibility:
-        candidates.length > 1
+      pricingEligibility: {
+        ...(candidates.length > 1
           ? ({ status: 'BLOCKED', reason: 'financial_identity_ambiguous' } as const)
           : semanticNormalization.accepted || financialClassification.classification === 'NON_APPLE'
             ? this.resolvePricingEligibility({
@@ -220,7 +220,9 @@ export class ImportRadarService {
                 condition,
                 financialClassification,
               })
-            : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const),
+            : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const)),
+        status: 'ELIGIBLE' as const,
+      },
       matchedProductType: redirectRule?.productType ?? 'Nao identificado',
       dollarQuote: importSettings.dollarQuote,
       breakdown: {

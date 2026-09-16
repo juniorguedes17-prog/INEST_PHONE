@@ -4,6 +4,7 @@ import {
   BrazilRadarQuotePricing,
   BrazilRadarPricingBatchStorage,
   ConfirmBrazilRadarManufacturerRequest,
+  ConfirmTemporaryImportManufacturerRequest,
   BrazilRadarQuotePricingRequest,
   OfferDraft,
   PricingFilters,
@@ -68,6 +69,20 @@ export async function calculateTemporaryImportPricing(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+  return parseResponse<TemporaryImportPricing>(response);
+}
+
+export async function confirmTemporaryImportManufacturer(
+  payload: ConfirmTemporaryImportManufacturerRequest,
+): Promise<TemporaryImportPricing> {
+  const response = await authenticatedFetch(
+    `${env.apiUrl}/pricing/temporary-import/confirm-manufacturer`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
   return parseResponse<TemporaryImportPricing>(response);
 }
 

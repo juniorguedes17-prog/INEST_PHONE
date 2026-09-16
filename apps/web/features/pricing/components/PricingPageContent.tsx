@@ -38,6 +38,10 @@ type MissingProfitItem =
   | { kind: 'brazil'; item: ReturnType<typeof usePricing>['brazilRadarPricings'][number] }
   | { kind: 'temporary-import'; item: TemporaryImportPricing };
 
+type ManufacturerItem =
+  | { kind: 'brazil'; item: BrazilRadarQuotePricing }
+  | { kind: 'temporary-import'; item: TemporaryImportPricing };
+
 const sortOptions = [
   ['lowest_price', 'Menor preço'],
   ['highest_price', 'Maior preço'],
@@ -73,7 +77,7 @@ export function PricingPageContent() {
   const [profitModalError, setProfitModalError] = useState<string | null>(null);
   const [selectedOfferIds, setSelectedOfferIds] = useState<Set<string>>(() => new Set());
   const [profitItem, setProfitItem] = useState<MissingProfitItem | null>(null);
-  const [manufacturerItem, setManufacturerItem] = useState<BrazilRadarQuotePricing | null>(null);
+  const [manufacturerItem, setManufacturerItem] = useState<ManufacturerItem | null>(null);
   const [manufacturerName, setManufacturerName] = useState('');
   const [manufacturerError, setManufacturerError] = useState<string | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
@@ -229,7 +233,11 @@ export function PricingPageContent() {
     if (!manufacturerItem || !manufacturerName.trim()) return;
     setManufacturerError(null);
     try {
-      await pricing.confirmBrazilManufacturer(manufacturerItem, manufacturerName.trim());
+      if (manufacturerItem.kind === 'brazil') {
+        await pricing.confirmBrazilManufacturer(manufacturerItem.item, manufacturerName.trim());
+      } else {
+        await pricing.confirmTemporaryManufacturer(manufacturerItem.item, manufacturerName.trim());
+      }
       setManufacturerItem(null);
       setManufacturerName('');
     } catch (manufacturerConfirmationError) {
@@ -381,7 +389,7 @@ export function PricingPageContent() {
                     onGenerateOffer={() => pricing.generateBrazilRadarOffer(item)}
                     onRegisterProfit={() => openProfitModal({ kind: 'brazil', item })}
                     onConfirmManufacturer={() => {
-                      setManufacturerItem(item);
+                      setManufacturerItem({ kind: 'brazil', item });
                       setManufacturerName('');
                       setManufacturerError(null);
                     }}
@@ -398,6 +406,14 @@ export function PricingPageContent() {
                         item: pricing.temporaryImportPricing!,
                       })
                     }
+                    onConfirmManufacturer={() => {
+                      setManufacturerItem({
+                        kind: 'temporary-import',
+                        item: pricing.temporaryImportPricing!,
+                      });
+                      setManufacturerName('');
+                      setManufacturerError(null);
+                    }}
                   />
                 ) : null}
                 {paginatedItems.map((item) => (
@@ -649,7 +665,7 @@ function ManufacturerConfirmationModal({
   onClose,
   onSave,
 }: {
-  item: BrazilRadarQuotePricing | null;
+  item: ManufacturerItem | null;
   value: string;
   error: string | null;
   saving: boolean;
@@ -683,7 +699,8 @@ function ManufacturerConfirmationModal({
         }}
       >
         <p className="text-sm text-inest-muted">
-          Precisamos confirmar o fabricante de <strong>{item.product.name}</strong> para continuar.
+          Precisamos confirmar o fabricante de <strong>{item.item.product.name}</strong> para
+          continuar.
         </p>
         <label className="grid gap-2 text-sm font-bold text-inest-text">
           Fabricante
@@ -802,11 +819,13 @@ function TemporaryImportPricingCard({
   generating,
   onGenerateOffer,
   onRegisterProfit,
+  onConfirmManufacturer,
 }: {
   item: NonNullable<ReturnType<typeof usePricing>['temporaryImportPricing']>;
   generating: boolean;
   onGenerateOffer: () => void;
   onRegisterProfit: () => void;
+  onConfirmManufacturer: () => void;
 }) {
   const presentation = getProductCardPresentation({
     canonicalDescription: item.profit.productDescription,
@@ -834,6 +853,11 @@ function TemporaryImportPricingCard({
             </StatusBadge>
           ))}
         </div>
+        {item.calculationStatus !== 'ready' && item.calculationError ? (
+          <p className="mt-2 text-xs font-bold text-amber-700" role="status">
+            {item.calculationError}
+          </p>
+        ) : null}
       </div>
       <div className="min-w-0">
         <p className="text-[10px] font-black uppercase text-inest-muted">Fornecedor</p>
@@ -880,6 +904,17 @@ function TemporaryImportPricingCard({
             onClick={onRegisterProfit}
           >
             Cadastrar lucro
+          </ActionButton>
+        ) : null}
+        {item.calculationStatus === 'classification_unresolved' &&
+        item.financialClassificationReason === 'manufacturer_missing' ? (
+          <ActionButton
+            variant="primary"
+            className="mt-1 h-9 px-3 text-xs"
+            disabled={generating}
+            onClick={onConfirmManufacturer}
+          >
+            Confirmar fabricante
           </ActionButton>
         ) : null}
       </div>

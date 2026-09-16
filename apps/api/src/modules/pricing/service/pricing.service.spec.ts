@@ -449,6 +449,161 @@ describe('PricingService native product profit integration', () => {
     });
   });
 
+  it('returns an unresolved temporary pricing item with cost preserved and no Offer draft', async () => {
+    const service = createTemporaryPyPricingService([]);
+
+    const result = await service.calculateTemporaryImport(
+      temporaryPyPricingDto({
+        productName: 'Unstructured external product',
+        displayName: 'Unstructured external product',
+        category: 'Outros',
+        brand: undefined,
+        sourceManufacturer: null,
+        sourceManufacturerProvenance: undefined,
+        model: undefined,
+        capacity: undefined,
+      }),
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      calculationStatus: 'classification_unresolved',
+      catalogProductId: null,
+      importCosts: { totalCost: 5000 },
+      desiredNetProfit: null,
+      margin: null,
+      salePrice: null,
+      offerPrice: null,
+      offerDraft: null,
+    });
+  });
+
+  it('reuses manufacturer confirmation to resolve and recalculate a temporary import', async () => {
+    const repository = {
+      findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+      findEligibleCatalogProductCandidates: vi.fn().mockResolvedValue([]),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const manufacturers = {
+      resolve: vi
+        .fn()
+        .mockResolvedValueOnce({
+          status: 'MISSING',
+          normalizedEvidence: 'garmin',
+        })
+        .mockResolvedValueOnce({
+          status: 'FOUND',
+          manufacturerId: 'manufacturer-garmin',
+          manufacturerKey: 'garmin',
+          canonicalName: 'Garmin',
+          provenance: 'EXPLICIT_SOURCE_VALIDATED',
+          normalizedEvidence: 'garmin',
+        }),
+      confirm: vi.fn().mockResolvedValue({
+        status: 'FOUND',
+        manufacturerKey: 'garmin',
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [],
+          fetchedAt: '2026-09-16T00:00:00.000Z',
+        }),
+      } as unknown as ProductProfitProvider,
+      undefined,
+      manufacturers as never,
+    );
+
+    const result = await service.confirmTemporaryImportManufacturer(
+      {
+        ...temporaryPyPricingDto({
+          productName: 'Garmin Vivoactive 6',
+          displayName: 'Garmin Vivoactive 6',
+          category: 'Smartwatch',
+          brand: 'Garmin',
+          sourceManufacturer: 'Garmin',
+          sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+          model: 'Vivoactive 6',
+          capacity: undefined,
+        }),
+        canonicalName: 'Garmin',
+      },
+      { id: 'settings-user' } as never,
+    );
+
+    expect(manufacturers.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canonicalName: 'Garmin',
+        alias: 'Garmin',
+        userId: 'settings-user',
+      }),
+    );
+    expect(result).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      calculationStatus: 'ready',
+      importCosts: { totalCost: 5000 },
+      recalculationRequest: {
+        sourceManufacturer: 'Garmin',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      },
+    });
+    expect(result.offerDraft).not.toBeNull();
+  });
+
+  it('keeps multiple canonical USA candidates pending without selecting one or throwing', async () => {
+    const repository = {
+      findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+      findEligibleCatalogProductCandidates: vi
+        .fn()
+        .mockResolvedValue([{ id: 'candidate-a' }, { id: 'candidate-b' }]),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [],
+          fetchedAt: '2026-09-16T00:00:00.000Z',
+        }),
+      } as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateTemporaryImport({
+      origin: 'US',
+      sourceProductId: 'amazon-us:ambiguous-product',
+      productName: 'Apple iPhone 17 Pro 256GB',
+      displayName: 'Apple iPhone 17 Pro 256GB',
+      category: 'iPhone',
+      supplier: 'Amazon',
+      store: 'Amazon',
+      productUrl: 'https://example.com/ambiguous-product',
+      priceUsd: 1000,
+      totalCost: 5000,
+      brand: 'Apple',
+      model: 'iPhone 17 Pro',
+      capacity: '256GB',
+      condition: 'NOVO',
+      provider: 'amazon_us',
+      retailer: 'Amazon',
+    });
+
+    expect(result).toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      calculationStatus: 'ambiguous_identity',
+      catalogProductId: null,
+      product: { id: null },
+      importCosts: { totalCost: 5000 },
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      offerDraft: null,
+    });
+  });
+
   it('applies commercial endings configured in the pricing scope', async () => {
     const repository = {
       findActiveCatalogProductById: vi.fn().mockResolvedValue({

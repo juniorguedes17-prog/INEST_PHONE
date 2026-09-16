@@ -195,8 +195,8 @@ export function ParaguayRadarOrigin() {
 
   async function sendToPricing() {
     if (!calculation) return;
-    if (calculation.pricingEligibility.status !== 'ELIGIBLE') {
-      setError(pricingEligibilityMessage(calculation.pricingEligibility.reason));
+    if (!hasValidCalculatedCost(calculation)) {
+      setError('Custo calculado ausente ou invalido. Envio para Precificacao bloqueado.');
       return;
     }
 
@@ -652,7 +652,7 @@ export function CalculationModal({
 }) {
   const usaCalculation = usaCostExecution?.calculation ?? null;
   const usaMode = Boolean(usaBeforeCost || usaCalculation);
-  const canSendToPricing = calculation?.pricingEligibility.status === 'ELIGIBLE';
+  const canSendToPricing = calculation ? hasValidCalculatedCost(calculation) : false;
   const needsManufacturer = calculation?.pricingEligibility.status === 'NEEDS_INPUT';
 
   return (
@@ -786,6 +786,11 @@ export function CalculationModal({
           </div>
           {!canSendToPricing ? (
             <p className="text-sm font-bold text-red-700" role="alert">
+              Custo calculado ausente ou invalido. Envio para Precificacao bloqueado.
+            </p>
+          ) : null}
+          {canSendToPricing && calculation.pricingEligibility.reason ? (
+            <p className="text-sm font-bold text-amber-700" role="status">
               {pricingEligibilityMessage(calculation.pricingEligibility.reason)}
             </p>
           ) : null}
@@ -878,15 +883,19 @@ export function buildTemporaryPricingRequest(
 function pricingEligibilityMessage(reason: ImportCalculation['pricingEligibility']['reason']) {
   switch (reason) {
     case 'condition_unresolved':
-      return 'Condicao do produto nao resolvida. Envio para Precificacao bloqueado.';
+      return 'Condicao do produto pendente. A resolucao continuara na Precificacao.';
     case 'financial_identity_insufficient':
-      return 'Informacoes insuficientes para identificar a configuracao financeira Apple.';
+      return 'Informacoes insuficientes para resolver a identidade financeira. A pendencia continuara na Precificacao.';
     case 'financial_identity_ambiguous':
-      return 'Identidade financeira Apple ambigua. Envio para Precificacao bloqueado.';
+      return 'Identidade financeira ambigua. A pendencia continuara na Precificacao.';
     case 'classification_unresolved':
     default:
-      return 'Classificacao financeira do produto externo nao resolvida. Envio para Precificacao bloqueado.';
+      return 'Classificacao financeira pendente. A resolucao continuara na Precificacao.';
   }
+}
+
+function hasValidCalculatedCost(calculation: ImportCalculation) {
+  return Number.isFinite(calculation.total) && calculation.total > 0;
 }
 
 function toPlainText(value: unknown): string {

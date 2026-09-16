@@ -282,3 +282,14 @@ export class TemporaryImportPricingDto {
   @IsObject()
   usaCostBreakdown?: Record<string, string | number | null>;
 }
+
+export class ConfirmTemporaryImportManufacturerDto extends TemporaryImportPricingDto {
+  @ApiProperty()
+  @IsString()
+  canonicalName!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  alias?: string;
+}

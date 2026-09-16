@@ -259,7 +259,7 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(unresolved).toMatchObject({
       financialClassification: 'UNRESOLVED',
       financialClassificationReason: 'classification_unresolved',
-      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+      pricingEligibility: { status: 'ELIGIBLE', reason: 'classification_unresolved' },
     });
   });
 
@@ -380,7 +380,7 @@ describe('ImportRadarService catalog product handoff', () => {
       null,
       'UNRESOLVED',
       'classification_unresolved',
-      { status: 'BLOCKED', reason: 'classification_unresolved' },
+      { status: 'ELIGIBLE', reason: 'classification_unresolved' },
     ],
     [false, 'NON_APPLE', 'canonical_product', { status: 'ELIGIBLE', reason: null }],
   ] as const)(
@@ -407,7 +407,7 @@ describe('ImportRadarService catalog product handoff', () => {
     },
   );
 
-  it('fails closed without selecting a Product when PY catalog reconciliation is ambiguous', async () => {
+  it('hands off PY cost without selecting a Product when catalog reconciliation is ambiguous', async () => {
     const result = await createService([], undefined, undefined, undefined, [
       eligibleCatalogProduct({ id: 'py-candidate-a' }),
       eligibleCatalogProduct({ id: 'py-candidate-b' }),
@@ -428,7 +428,7 @@ describe('ImportRadarService catalog product handoff', () => {
         reason: 'multiple_catalog_candidates',
         candidateCount: 2,
       },
-      pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_ambiguous' },
+      pricingEligibility: { status: 'ELIGIBLE', reason: 'financial_identity_ambiguous' },
     });
   });
 
@@ -606,7 +606,7 @@ describe('ImportRadarService catalog product handoff', () => {
     });
   });
 
-  it('fails closed for an explicit manufacturer missing from the registry', async () => {
+  it('keeps a missing manufacturer diagnostic without blocking the Pricing handoff', async () => {
     const manufacturerResolver = {
       resolve: vi.fn().mockResolvedValue({ status: 'MISSING', normalizedEvidence: 'novamarca' }),
     };
@@ -628,7 +628,7 @@ describe('ImportRadarService catalog product handoff', () => {
       financialClassification: 'UNRESOLVED',
       financialClassificationReason: 'manufacturer_missing',
       pricingEligibility: {
-        status: 'NEEDS_INPUT',
+        status: 'ELIGIBLE',
         reason: 'classification_unresolved',
         inputType: 'MANUFACTURER',
         diagnosticReason: 'manufacturer_missing',
@@ -702,7 +702,7 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(manufacturerResolver.confirm).not.toHaveBeenCalled();
   });
 
-  it('fails closed for an explicit manufacturer with ambiguous registry matches', async () => {
+  it('keeps an ambiguous manufacturer diagnostic without blocking the Pricing handoff', async () => {
     const manufacturerResolver = {
       resolve: vi.fn().mockResolvedValue({
         status: 'AMBIGUOUS',
@@ -727,7 +727,7 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(result).toMatchObject({
       financialClassification: 'UNRESOLVED',
       financialClassificationReason: 'manufacturer_ambiguous',
-      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+      pricingEligibility: { status: 'ELIGIBLE', reason: 'classification_unresolved' },
     });
   });
 
@@ -764,7 +764,7 @@ describe('ImportRadarService catalog product handoff', () => {
 
     expect(result).toMatchObject({
       financialClassification: 'UNRESOLVED',
-      pricingEligibility: { status: 'BLOCKED', reason: 'classification_unresolved' },
+      pricingEligibility: { status: 'ELIGIBLE', reason: 'classification_unresolved' },
     });
   });
 
@@ -1103,7 +1103,7 @@ describe('ImportRadarService catalog product handoff', () => {
       },
       catalogProductId: null,
       financialClassification: 'APPLE',
-      pricingEligibility: { status: 'BLOCKED' },
+      pricingEligibility: { status: 'ELIGIBLE' },
     });
   });
 
@@ -1136,7 +1136,7 @@ describe('ImportRadarService catalog product handoff', () => {
         category: importProduct.category,
       },
       catalogProductId: null,
-      pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
+      pricingEligibility: { status: 'ELIGIBLE', reason: 'financial_identity_insufficient' },
     });
   });
 
@@ -1177,7 +1177,7 @@ describe('ImportRadarService catalog product handoff', () => {
         productResolution: { status: 'MISSING', reason: 'catalog_no_match' },
         financialClassification: 'APPLE',
         pricingEligibility: {
-          status: 'BLOCKED',
+          status: 'ELIGIBLE',
           reason: 'financial_identity_insufficient',
         },
       });
@@ -1203,7 +1203,7 @@ describe('ImportRadarService catalog product handoff', () => {
       },
       catalogProductId: null,
       productResolution: { status: 'MISSING' },
-      pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
+      pricingEligibility: { status: 'ELIGIBLE', reason: 'financial_identity_insufficient' },
     });
   });
 
@@ -1270,7 +1270,7 @@ describe('ImportRadarService catalog product handoff', () => {
       expect(result.product.capacity).toBe(capacity);
       expect(result.product.condition).toBeUndefined();
       expect(result.pricingEligibility).toEqual({
-        status: 'BLOCKED',
+        status: 'ELIGIBLE',
         reason: 'financial_identity_insufficient',
       });
     },
@@ -1310,7 +1310,7 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(result.product.condition).toBeUndefined();
     expect(result).toMatchObject({
       financialClassification: 'UNRESOLVED',
-      pricingEligibility: { status: 'BLOCKED', reason: 'financial_identity_insufficient' },
+      pricingEligibility: { status: 'ELIGIBLE', reason: 'financial_identity_insufficient' },
     });
   });
 

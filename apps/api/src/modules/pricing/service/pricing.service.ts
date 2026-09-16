@@ -4,6 +4,7 @@ import { SettingsService } from '../../settings/service/settings.service';
 import {
   BrazilRadarQuotePricingDto,
   ConfirmBrazilRadarManufacturerDto,
+  ConfirmTemporaryImportManufacturerDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
   TemporaryImportPricingDto,
@@ -496,12 +497,8 @@ export class PricingService {
     if (dto.catalogProductId && !explicitCatalogProduct) {
       throw new BadRequestException('Produto canonico ativo nao encontrado para esta importacao.');
     }
-    if (candidates.length > 1) {
-      throw new BadRequestException(
-        'Mais de um produto canonico ativo corresponde a esta importacao.',
-      );
-    }
-    const catalogProduct = explicitCatalogProduct ?? candidates[0] ?? null;
+    const catalogProduct =
+      explicitCatalogProduct ?? (candidates.length === 1 ? candidates[0]! : null);
     if (origin === 'US' && !catalogProduct && !dto.provider?.trim()) {
       throw new BadRequestException('Provider e obrigatorio para uma oferta externa USA.');
     }
@@ -526,20 +523,50 @@ export class PricingService {
       dto.sourceManufacturer,
       dto.sourceManufacturerProvenance,
     );
-    const financialClassification = resolveFinancialClassification({
-      canonicalProduct: catalogProduct,
-      productName: dto.productName,
-      category: dto.category,
-      model: dto.model,
-      capacity: dto.capacity,
-      color: dto.color,
-      condition: profitCondition,
-      sourceManufacturer: dto.sourceManufacturer,
-      sourceManufacturerProvenance: dto.sourceManufacturerProvenance,
-      manufacturerResolution,
-    });
+    const financialClassification: FinancialClassificationResult =
+      candidates.length > 1
+        ? { classification: 'UNRESOLVED', reason: 'classification_unresolved' }
+        : resolveFinancialClassification({
+            canonicalProduct: catalogProduct,
+            productName: dto.productName,
+            category: dto.category,
+            model: dto.model,
+            capacity: dto.capacity,
+            color: dto.color,
+            condition: profitCondition,
+            sourceManufacturer: dto.sourceManufacturer,
+            sourceManufacturerProvenance: dto.sourceManufacturerProvenance,
+            manufacturerResolution,
+          });
+    if (candidates.length > 1) {
+      return this.buildTemporaryImportResult({
+        dto,
+        catalogProduct: null,
+        financialClassification,
+        profitCondition,
+        profitProductDescription,
+        profitCatalog,
+        pricingConfigurations,
+        settings,
+        desiredNetProfit: null,
+        calculationStatus: 'ambiguous_identity',
+        calculationError: 'Mais de um produto canonico ativo corresponde a esta importacao.',
+      });
+    }
     if (financialClassification.classification === 'UNRESOLVED') {
-      throw new BadRequestException('Classificacao financeira do produto externo nao resolvida.');
+      return this.buildTemporaryImportResult({
+        dto,
+        catalogProduct,
+        financialClassification,
+        profitCondition,
+        profitProductDescription,
+        profitCatalog,
+        pricingConfigurations,
+        settings,
+        desiredNetProfit: null,
+        calculationStatus: 'classification_unresolved',
+        calculationError: 'Classificacao financeira do produto externo nao resolvida.',
+      });
     }
     const nonApple = this.calculateNonApplePricing(
       financialClassification.classification === 'NON_APPLE' ? false : true,
@@ -680,6 +707,41 @@ export class PricingService {
     });
   }
 
+  async confirmTemporaryImportManufacturer(
+    dto: ConfirmTemporaryImportManufacturerDto,
+    user: AuthenticatedUser,
+  ) {
+    if (!this.manufacturersService) {
+      throw new BadRequestException('Servico de fabricantes indisponivel.');
+    }
+    const { canonicalName, alias, ...pricingDto } = dto;
+    const current = await this.calculateTemporaryImport(pricingDto);
+    if (current.financialClassification === 'APPLE') {
+      throw new BadRequestException('Produto Apple nao pode ser confirmado no registry externo.');
+    }
+    if (current.financialClassificationReason !== 'manufacturer_missing') {
+      throw new BadRequestException('A confirmacao de fabricante nao e necessaria para este item.');
+    }
+
+    const sourceManufacturer = pricingDto.sourceManufacturer?.trim() || canonicalName.trim();
+    await this.manufacturersService.confirm({
+      canonicalName,
+      alias: alias?.trim() || sourceManufacturer,
+      userId: user.id,
+      context: {
+        origin: pricingDto.origin ?? 'PY',
+        sourceProductId: pricingDto.sourceProductId,
+        sourceName: pricingDto.productName,
+        sourceManufacturer: pricingDto.sourceManufacturer ?? null,
+      },
+    });
+    return this.calculateTemporaryImport({
+      ...pricingDto,
+      sourceManufacturer,
+      sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+    });
+  }
+
   private buildUsaPricingResult({
     input,
     financialClassification,
@@ -782,7 +844,8 @@ export class PricingService {
       | 'condition_unresolved'
       | 'insufficient_identity'
       | 'ambiguous_identity'
-      | 'collision';
+      | 'collision'
+      | 'classification_unresolved';
     calculationError?: string | null;
     nonApple?: ReturnType<PricingService['calculateNonApplePricing']>;
     profitRecordId?: string | null;

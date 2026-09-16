@@ -19,6 +19,7 @@ import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.inte
 import {
   BrazilRadarQuotePricingDto,
   ConfirmBrazilRadarManufacturerDto,
+  ConfirmTemporaryImportManufacturerDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
   ReplaceBrazilRadarWorkSnapshotDto,
@@ -88,6 +89,17 @@ export class PricingController {
   @ApiOperation({ summary: 'Calcula precificacao temporaria para um item do Radar Paraguai.' })
   calculateTemporaryImport(@Body() dto: TemporaryImportPricingDto) {
     return this.pricingService.calculateTemporaryImport(dto);
+  }
+
+  @Post('temporary-import/confirm-manufacturer')
+  @UseGuards(PermissionsGuard)
+  @Permissions('settings:configure')
+  @ApiOperation({ summary: 'Confirma fabricante externo e recalcula a importacao temporaria.' })
+  confirmTemporaryImportManufacturer(
+    @Body() dto: ConfirmTemporaryImportManufacturerDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.pricingService.confirmTemporaryImportManufacturer(dto, user);
   }
 
   @Post('radar-quote')

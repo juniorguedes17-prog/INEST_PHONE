@@ -296,6 +296,55 @@ test('uses commercialName only in the USA/PY modal presentation with visual fall
   assert.doesNotMatch(usaRendered, /Long raw Garmin retailer title/);
 });
 
+test('allows calculated PY cost with pending identity and keeps invalid cost blocked', () => {
+  const modal = setup().CalculationModal;
+  assert.ok(modal);
+  const render = (total: number) =>
+    modal({
+      calculation: {
+        product,
+        sourceCommercialIdentity: { displayName: product.name },
+        pricingEligibility: {
+          status: 'ELIGIBLE',
+          reason: 'financial_identity_insufficient',
+        },
+        breakdown: {},
+        total,
+        matchedProductType: 'Celular',
+      },
+      sending: false,
+      onClose: () => undefined,
+      onSendToPricing: () => undefined,
+      onConfirmManufacturer: () => undefined,
+    });
+  const findSendButton = (tree: Element) => {
+    let match: Element | undefined;
+    const visit = (value: unknown) => {
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (!value || typeof value !== 'object' || !('props' in value)) return;
+      const element = value as Element;
+      if (
+        element.type === 'ActionButton' &&
+        element.props.children === 'Enviar para Precificação'
+      ) {
+        match = element;
+      }
+      Object.values(element.props).forEach(visit);
+    };
+    visit(tree);
+    return match;
+  };
+
+  const valid = render(4995);
+  assert.equal(findSendButton(valid)?.props.disabled, false);
+  assert.match(JSON.stringify(valid), /identidade financeira/);
+  assert.doesNotMatch(JSON.stringify(valid), /financeira Apple|Envio para Precificacao bloqueado/);
+
+  const invalid = render(0);
+  assert.equal(findSendButton(invalid)?.props.disabled, true);
+  assert.match(JSON.stringify(invalid), /Custo calculado ausente ou invalido/);
+});
+
 test('renders Red Delaware breakdown labels without changing its values', () => {
   const h = setup();
   const rendered = JSON.stringify(

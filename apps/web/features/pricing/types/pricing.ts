@@ -188,10 +188,15 @@ export interface TemporaryImportPricingRequest {
   usaCostBreakdown?: Record<string, string | number | null>;
 }
 
+export interface ConfirmTemporaryImportManufacturerRequest extends TemporaryImportPricingRequest {
+  canonicalName: string;
+  alias?: string;
+}
+
 export interface TemporaryImportPricing {
   temporary: true;
   origin: 'PY' | 'US';
-  financialClassification: 'APPLE' | 'NON_APPLE';
+  financialClassification: 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
   financialClassificationReason: string;
   manufacturerKey: string | null;
   manufacturerProvenance: string | null;
@@ -201,7 +206,8 @@ export interface TemporaryImportPricing {
     | 'condition_unresolved'
     | 'insufficient_identity'
     | 'ambiguous_identity'
-    | 'collision';
+    | 'collision'
+    | 'classification_unresolved';
   calculationError: string | null;
   catalogProductId: string | null;
   recalculationRequest: TemporaryImportPricingRequest;
