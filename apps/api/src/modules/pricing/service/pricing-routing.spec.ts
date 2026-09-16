@@ -356,7 +356,7 @@ describe('Pricing canonical originality routing', () => {
       model: undefined,
       capacity: undefined,
       color: undefined,
-      sourceManufacturer: 'Canon',
+      sourceManufacturer: 'Canon EOS Rebel T7, CPU DIGIC, RAM 4GB, Storage 128GB',
       sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
       condition: undefined,
     };
@@ -403,6 +403,11 @@ describe('Pricing canonical originality routing', () => {
       offerPrice: result.offerPrice,
       importCosts: result.importCosts,
       engineMetadata: result.engineMetadata,
+    });
+    expect(fixture.manufacturers.resolve).toHaveBeenCalledWith({
+      evidence: 'Canon EOS Rebel T7, CPU DIGIC, RAM 4GB, Storage 128GB',
+      matchMode: 'TEXT_BOUNDARY',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
     });
   });
 
@@ -678,7 +683,7 @@ describe('Pricing canonical originality routing', () => {
       const result = await fixture.service.calculateTemporaryImport(fixture.dto);
 
       expect(fixture.repository.findEligibleCatalogProductCandidates).toHaveBeenCalledWith({
-        model: 'iPhone 18 Pro Max',
+        modelKey: 'iphone-18-pro-max',
         capacity: '256GB',
         condition: 'NOVO',
       });
@@ -689,6 +694,25 @@ describe('Pricing canonical originality routing', () => {
         calculationStatus: 'ready',
         desiredNetProfit: 500,
         offerDraft: { payload: { productId: fixture.product.id } },
+      });
+    });
+
+    it('canonicalizes a specification-heavy model before catalog lookup', async () => {
+      const fixture = setup(true, 700, 500);
+      configureUsa(fixture, {
+        productName: 'Apple Mac Mini MMFK3LL/A Apple M2 8GB 512GB',
+        displayName: 'Apple Mac Mini MMFK3LL/A Apple M2 8GB 512GB',
+        model: 'Apple Mac Mini MMFK3LL/A Apple M2 8GB 512GB',
+        capacity: '512GB',
+      });
+      fixture.repository.findEligibleCatalogProductCandidates.mockResolvedValue([fixture.product]);
+
+      await fixture.service.calculateTemporaryImport(fixture.dto);
+
+      expect(fixture.repository.findEligibleCatalogProductCandidates).toHaveBeenCalledWith({
+        modelKey: 'mac-mini',
+        capacity: '512GB',
+        condition: 'NOVO',
       });
     });
 

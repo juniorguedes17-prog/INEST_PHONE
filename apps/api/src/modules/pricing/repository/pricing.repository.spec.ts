@@ -12,7 +12,7 @@ function catalogProduct(id: string, model: string, capacity: string | null) {
     isAppleOriginal: true,
     profitCondition: 'NOVO',
     category: { name: 'iPhone Lacrado' },
-    model: { name: model },
+    model: { name: model, normalizedName: model.toLowerCase().replace(/\s+/g, '-') },
     color: null,
     storage: capacity ? { displayName: capacity } : null,
   };
@@ -24,7 +24,7 @@ describe('PricingRepository.findEligibleCatalogProductCandidates', () => {
     const repository = new PricingRepository({ product: { findMany } } as unknown as PrismaService);
 
     await repository.findEligibleCatalogProductCandidates({
-      model: 'iPhone 18 Pro Max',
+      modelKey: 'iphone-18-pro-max',
       capacity: '256GB',
       condition: 'NOVO',
     });
@@ -53,7 +53,7 @@ describe('PricingRepository.findEligibleCatalogProductCandidates', () => {
     const repository = new PricingRepository({ product: { findMany } } as unknown as PrismaService);
 
     const result = await repository.findEligibleCatalogProductCandidates({
-      model: '  iPhone 18 Pro Max ',
+      modelKey: 'iphone-18-pro-max',
       capacity: '256GB',
       condition: 'NOVO',
     });
@@ -68,7 +68,7 @@ describe('PricingRepository.findEligibleCatalogProductCandidates', () => {
 
     await expect(
       repository.findEligibleCatalogProductCandidates({
-        model: '---',
+        modelKey: '',
         capacity: '---',
         condition: 'NOVO',
       }),

@@ -59,6 +59,7 @@ import type {
   UsaFinalCostPricingRequest,
   UsaFinalCostPricingResult,
 } from '../usa-final-cost-pricing.contract';
+import { resolveCatalogModelLookupKey } from '@inest/product-identity';
 
 function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResolution) {
   switch (resolution.status) {
@@ -493,14 +494,22 @@ export class PricingService {
 
   async calculateTemporaryImport(dto: TemporaryImportPricingDto) {
     const origin = dto.origin ?? 'PY';
+    const catalogModelKey = resolveCatalogModelLookupKey({
+      productName: dto.productName,
+      category: dto.category,
+      model: dto.model,
+      capacity: dto.capacity,
+      color: dto.color,
+      quality: dto.condition,
+    });
     const automaticCatalogCandidates =
       origin === 'US' &&
       !dto.catalogProductId &&
-      dto.model?.trim() &&
+      catalogModelKey &&
       dto.capacity?.trim() &&
       dto.condition
         ? this.pricingRepository.findEligibleCatalogProductCandidates({
-            model: dto.model,
+            modelKey: catalogModelKey,
             capacity: dto.capacity,
             condition: dto.condition,
           })
@@ -1353,7 +1362,7 @@ export class PricingService {
     }
     return this.manufacturersService.resolve({
       evidence: sourceManufacturer,
-      matchMode: 'EXACT_ALIAS',
+      matchMode: 'TEXT_BOUNDARY',
       provenance: 'EXPLICIT_SOURCE_VALIDATED',
     });
   }

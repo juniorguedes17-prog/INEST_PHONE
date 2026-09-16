@@ -2,7 +2,6 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ProductCondition, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import type { ProductIdShadowCandidate } from '../../evolution-webhook/product-identity-shadow';
-import { normalizeProductModelNameComponent } from '../../products/product-model-normalizer';
 import { PricingPrismaClient } from '../interfaces/pricing-prisma.interface';
 import { normalizeProfitProductDescription } from '../providers/google-sheets-profit.provider';
 export { OFFER_INCREMENT_KEY } from '../utils/offer-increment';
@@ -80,13 +79,12 @@ export class PricingRepository {
   }
 
   async findEligibleCatalogProductCandidates(input: {
-    model: string;
+    modelKey: string;
     capacity: string;
     condition: ProductCondition;
   }) {
-    const normalizedModel = normalizeProductModelNameComponent(input.model);
     const normalizedCapacity = normalizeProfitProductDescription(input.capacity);
-    if (!normalizedModel || !normalizedCapacity) return [];
+    if (!input.modelKey || !normalizedCapacity) return [];
 
     const candidates = await this.prismaService.product.findMany({
       where: {
@@ -104,7 +102,7 @@ export class PricingRepository {
         isAppleOriginal: true,
         profitCondition: true,
         category: { select: { name: true } },
-        model: { select: { name: true } },
+        model: { select: { name: true, normalizedName: true } },
         color: { select: { name: true } },
         storage: { select: { displayName: true } },
       },
@@ -112,7 +110,7 @@ export class PricingRepository {
 
     const matches = [];
     for (const candidate of candidates) {
-      if (normalizeProductModelNameComponent(candidate.model.name) !== normalizedModel) continue;
+      if (candidate.model.normalizedName !== input.modelKey) continue;
       if (
         !candidate.storage ||
         normalizeProfitProductDescription(candidate.storage.displayName) !== normalizedCapacity

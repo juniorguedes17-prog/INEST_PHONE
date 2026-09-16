@@ -70,7 +70,7 @@ export interface PricingCatalogProductRecord {
   isAppleOriginal?: boolean | null;
   profitCondition?: string | null;
   category?: { name: string } | null;
-  model?: { name: string } | null;
+  model?: { name: string; normalizedName?: string } | null;
   color?: { name: string } | null;
   storage?: { displayName: string } | null;
 }

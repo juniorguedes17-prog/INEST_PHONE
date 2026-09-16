@@ -109,6 +109,41 @@ describe('resolveManufacturer', () => {
     ).toMatchObject({ status: 'MISSING' });
   });
 
+  it.each([
+    ['Acme Phone X', 'acme'],
+    ['Acme Phone X, CPU 12-core, GPU 16-core, RAM 32GB, SSD 1TB', 'acme'],
+    ['Samsung Galaxy Device RAM 8GB Storage 256GB', 'samsung'],
+    ['Xiaomi Redmi Device, CPU Octa Core, RAM 4GB, Storage 128GB', 'xiaomi'],
+  ])('isolates one registered manufacturer from structured evidence: %s', (evidence, key) => {
+    const result = resolveManufacturer(
+      {
+        evidence,
+        matchMode: 'TEXT_BOUNDARY',
+        provenance: 'EXPLICIT_SOURCE_VALIDATED',
+      },
+      [alias('acme', 'Acme'), alias('samsung', 'Samsung'), alias('xiaomi', 'Xiaomi')],
+    );
+
+    expect(result).toMatchObject({
+      status: 'FOUND',
+      manufacturerKey: key,
+      normalizedAlias: key,
+    });
+  });
+
+  it('keeps manufacturer evidence without a registered alias unresolved', () => {
+    expect(
+      resolveManufacturer(
+        {
+          evidence: 'Unknown Device CPU 12-core GPU 16-core RAM 32GB SSD 1TB',
+          matchMode: 'TEXT_BOUNDARY',
+          provenance: 'EXPLICIT_SOURCE_VALIDATED',
+        },
+        [alias('acme', 'Acme')],
+      ),
+    ).toMatchObject({ status: 'MISSING' });
+  });
+
   it('does not choose a first manufacturer when commercial text has two matches', () => {
     expect(
       resolveManufacturer(

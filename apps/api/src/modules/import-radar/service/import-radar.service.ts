@@ -30,7 +30,10 @@ import {
   type PricingEligibilityDecision,
 } from '../financial-classification';
 import { formatSourceDisplayName } from '../source-display-name';
-import { deriveProfitLookupIdentity } from '@inest/product-identity';
+import {
+  deriveProfitLookupIdentity,
+  resolveCatalogModelLookupKey,
+} from '@inest/product-identity';
 import {
   isReservedAppleManufacturerAlias,
   normalizeManufacturerAlias,
@@ -117,14 +120,22 @@ export class ImportRadarService {
     );
 
     const sourceCondition = normalizeProductCondition(semanticDto.condition ?? '');
+    const catalogModelKey = resolveCatalogModelLookupKey({
+      productName: semanticNormalization.identityText,
+      category: semanticDto.category,
+      model: semanticDto.model,
+      capacity: semanticDto.capacity,
+      color: semanticDto.color,
+      quality: sourceCondition.status === 'RESOLVED' ? sourceCondition.condition : undefined,
+    });
     const automaticCatalogCandidates =
       (dto.origin ?? 'PY') === 'PY' &&
       this.pricingRepository &&
-      semanticDto.model?.trim() &&
+      catalogModelKey &&
       semanticDto.capacity?.trim() &&
       sourceCondition.status === 'RESOLVED'
         ? this.pricingRepository.findEligibleCatalogProductCandidates({
-            model: semanticDto.model,
+            modelKey: catalogModelKey,
             capacity: semanticDto.capacity,
             condition: sourceCondition.condition,
           })
@@ -425,7 +436,7 @@ export class ImportRadarService {
     }
     return this.manufacturersService.resolve({
       evidence: sourceManufacturer,
-      matchMode: 'EXACT_ALIAS',
+      matchMode: 'TEXT_BOUNDARY',
       provenance: 'EXPLICIT_SOURCE_VALIDATED',
     });
   }

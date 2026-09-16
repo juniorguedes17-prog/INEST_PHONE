@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   normalizeCanonicalProductIdentity,
   normalizeCanonicalText,
+  resolveCatalogModelLookupKey,
 } from './canonical-product-identity';
 import { normalizeProductCondition } from './product-condition-normalizer';
 
@@ -398,6 +399,64 @@ test('preserva o comportamento fail-closed para produto desconhecido', () => {
   assert.equal(result.canonicalStorage, '512GB');
   assert.equal(result.canonicalScreenSource, 'unknown');
   assert.equal(result.canonicalConnectivitySource, 'unknown');
+});
+
+test('produz chave de lookup cadastral sem misturar especificacoes da variante', () => {
+  for (const [source, expected] of [
+    [
+      {
+        productName: 'Apple Mac Mini MMFK3LL/A Apple M2 8GB RAM SSD 512GB',
+        model: 'Apple Mac Mini MMFK3LL/A Apple M2',
+      },
+      'mac-mini',
+    ],
+    [
+      {
+        productName: 'MacBook Pro M5 Pro 16-inch 24GB RAM 1TB SSD',
+        model: 'MacBook Pro M5 Pro 16-inch',
+      },
+      'macbook-pro',
+    ],
+    [{ productName: 'iPhone 17 Pro 256GB', model: 'iPhone 17 Pro' }, 'iphone-17-pro'],
+    [{ productName: 'Redmi A5 4/128GB', model: 'Redmi A5' }, 'redmi-a5'],
+  ] as const) {
+    assert.equal(resolveCatalogModelLookupKey(source), expected);
+  }
+});
+
+test('nao inventa chave de modelo a partir de titulo bruto sem modelo estruturado', () => {
+  assert.equal(resolveCatalogModelLookupKey('Produto XYZ Pro CPU 12 GPU 16 RAM 32GB'), null);
+  assert.equal(
+    resolveCatalogModelLookupKey({
+      productName: 'Produto XYZ Pro CPU 12 GPU 16 RAM 32GB',
+      model: '',
+    }),
+    null,
+  );
+});
+
+test('nao depende de hardcode de SKU para resolver o modelo canonico', () => {
+  assert.equal(
+    resolveCatalogModelLookupKey({
+      productName: 'Mac Mini ABC123 M2 8GB 512GB',
+      model: 'Mac Mini ABC123 M2',
+    }),
+    'mac-mini',
+  );
+  assert.equal(
+    resolveCatalogModelLookupKey({
+      productName: 'Mac Mini ZYX987 M2 8GB 512GB',
+      model: 'Mac Mini ZYX987 M2',
+    }),
+    'mac-mini',
+  );
+  assert.equal(
+    resolveCatalogModelLookupKey({
+      productName: 'Produto desconhecido ABC123 RAM 8GB Storage 512GB',
+      model: '',
+    }),
+    null,
+  );
 });
 
 test('preserva a normalizacao textual pura', () => {

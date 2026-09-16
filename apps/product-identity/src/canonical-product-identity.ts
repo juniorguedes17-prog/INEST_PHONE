@@ -158,6 +158,31 @@ export function normalizeCanonicalProductIdentity(
   };
 }
 
+/**
+ * Produces the exact catalog-model lookup key before repository access.
+ * Variant attributes remain in CanonicalProductIdentity and are never folded
+ * into this key. An unclassified raw title is not promoted to a model.
+ */
+export function resolveCatalogModelLookupKey(input: CanonicalProductSource | string) {
+  const source: CanonicalProductSource = typeof input === 'string' ? { productName: input } : input;
+  const identity = normalizeCanonicalProductIdentity(source);
+
+  if (!identity.canonicalModelMatched) {
+    return source.model?.trim() ? toCatalogModelLookupKey(source.model) : null;
+  }
+
+  const variantAttributes = [identity.canonicalChip, identity.canonicalScreen]
+    .filter((value): value is string => Boolean(value))
+    .map(normalizeCanonicalText)
+    .sort((left, right) => right.length - left.length);
+  const catalogModel = variantAttributes.reduce(
+    (model, attribute) => removeCanonicalPhrase(model, attribute),
+    normalizeCanonicalText(identity.canonicalModelLabel),
+  );
+
+  return toCatalogModelLookupKey(catalogModel);
+}
+
 export function normalizeCanonicalText(value: string | null | undefined) {
   return (value ?? '')
     .toString()
@@ -656,6 +681,22 @@ function containsTerm(text: string, term: string) {
 
 function containsPhrase(text: string, phrase: string) {
   return new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(phrase)}(?=$|[^a-z0-9])`).test(text);
+}
+
+function removeCanonicalPhrase(text: string, phrase: string) {
+  if (!phrase) return text;
+  return text
+    .replace(new RegExp(`(?:^|\\s)${escapeRegExp(phrase)}(?=$|\\s)`, 'g'), ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toCatalogModelLookupKey(value: string) {
+  const key = normalizeCanonicalText(value)
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return key || null;
 }
 
 function escapeRegExp(value: string) {

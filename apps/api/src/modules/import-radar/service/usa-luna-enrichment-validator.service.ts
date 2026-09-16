@@ -156,7 +156,7 @@ export class UsaLunaEnrichmentValidatorService {
     }
     const resolution = await this.manufacturers.resolve({
       evidence: value,
-      matchMode: 'EXACT_ALIAS',
+      matchMode: 'TEXT_BOUNDARY',
       provenance: 'AI_CANDIDATE_VALIDATED',
     });
     if (resolution.status === 'FOUND') {

@@ -133,7 +133,7 @@ export class ShippingWeightRegistrationService {
     return toShippingWeightManufacturerResolution(
       await this.manufacturersService.resolve({
         evidence: source.sourceManufacturer,
-        matchMode: 'EXACT_ALIAS',
+        matchMode: 'TEXT_BOUNDARY',
         provenance: 'EXPLICIT_SOURCE_VALIDATED',
       }),
     );

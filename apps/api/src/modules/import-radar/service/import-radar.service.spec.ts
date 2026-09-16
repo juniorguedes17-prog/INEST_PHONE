@@ -453,7 +453,7 @@ describe('ImportRadarService catalog product handoff', () => {
         model: undefined,
         capacity: undefined,
         condition: undefined,
-        sourceManufacturer: 'Canon',
+        sourceManufacturer: 'Canon EOS Rebel T7, CPU DIGIC, RAM 4GB, Storage 128GB',
         sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
       },
       { id: 'user-1' } as never,
@@ -465,6 +465,11 @@ describe('ImportRadarService catalog product handoff', () => {
       financialClassificationReason: 'manufacturer_registry',
       manufacturerKey: 'canon',
       pricingEligibility: { status: 'ELIGIBLE', reason: null },
+    });
+    expect(manufacturerResolver.resolve).toHaveBeenCalledWith({
+      evidence: 'Canon EOS Rebel T7, CPU DIGIC, RAM 4GB, Storage 128GB',
+      matchMode: 'TEXT_BOUNDARY',
+      provenance: 'EXPLICIT_SOURCE_VALIDATED',
     });
   });
 
