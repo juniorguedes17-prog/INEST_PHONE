@@ -113,6 +113,10 @@ describe('PricingService USA FinalCost entrypoint', () => {
         model: 'iPhone 17 Pro',
         capacity: '512GB',
         color: 'Cosmic Orange',
+        ram: '8GB',
+        chip: 'A19 Pro',
+        screenSize: '6.3"',
+        connectivity: '5G',
       },
     });
 
@@ -123,11 +127,15 @@ describe('PricingService USA FinalCost entrypoint', () => {
       financialIdentity: {
         model: 'iPhone 17 Pro',
         capacity: '512GB',
+        ram: '8GB',
+        chip: 'A19 Pro',
+        screenSize: '6.3"',
+        connectivity: '5G',
         condition: 'SEMINOVO',
       },
       profit: {
         recordId: 'profit-iphone-17p-512-seminovo',
-        productDescription: 'iPhone 17 Pro 512GB',
+        productDescription: 'iPhone 17 Pro A19 Pro 6.3" 8GB 512GB 5G',
       },
     });
   });

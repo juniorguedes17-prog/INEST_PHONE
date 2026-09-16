@@ -478,6 +478,133 @@ describe('PricingService native product profit integration', () => {
     });
   });
 
+  it('confirms a Temporary Import condition for one execution and reaches ready with existing profit', async () => {
+    const profitDescription = 'Mac Mini M2 8GB 512GB';
+    const service = createTemporaryPyPricingService([
+      {
+        productId: 'mac-mini-m2-new',
+        condition: 'NOVO',
+        productDescription: profitDescription,
+        normalizedDescription: profitDescription.toLowerCase(),
+        netProfit: 700,
+      },
+    ]);
+    const request = temporaryPyPricingDto({
+      productName: 'Apple Mac Mini M2 Memoria 8GB SSD 512GB',
+      displayName: 'Apple Mac Mini M2 Memoria 8GB SSD 512GB',
+      category: 'Mac Mini',
+      model: 'Mac Mini M2',
+      chip: 'M2',
+      ram: '8GB',
+      capacity: '512GB',
+      screenSize: null,
+      connectivity: null,
+      condition: undefined,
+    });
+
+    await expect(service.calculateTemporaryImport(request)).resolves.toMatchObject({
+      calculationStatus: 'condition_unresolved',
+      offerDraft: null,
+    });
+    const result = await service.confirmTemporaryImportCondition({ ...request, condition: 'NOVO' });
+
+    expect(result).toMatchObject({
+      calculationStatus: 'ready',
+      desiredNetProfit: 700,
+      product: {
+        ram: '8GB',
+        chip: 'M2',
+        screenSize: null,
+        connectivity: null,
+      },
+      recalculationRequest: {
+        condition: 'NOVO',
+        ram: '8GB',
+        chip: 'M2',
+        capacity: '512GB',
+      },
+      profit: { condition: 'NOVO', productDescription: profitDescription },
+    });
+    expect(result.offerDraft).not.toBeNull();
+  });
+
+  it('moves condition confirmation to missing_profit when Apple profit is absent', async () => {
+    const service = createTemporaryPyPricingService([]);
+    const request = temporaryPyPricingDto({
+      productName: 'Apple Mac Mini M2 Memoria 8GB SSD 512GB',
+      category: 'Mac Mini',
+      model: 'Mac Mini M2',
+      chip: 'M2',
+      ram: '8GB',
+      capacity: '512GB',
+      condition: undefined,
+    });
+
+    await expect(
+      service.confirmTemporaryImportCondition({ ...request, condition: 'NOVO' }),
+    ).resolves.toMatchObject({
+      calculationStatus: 'missing_profit',
+      desiredNetProfit: null,
+      offerDraft: null,
+    });
+  });
+
+  it('exposes the next insufficient identity after condition confirmation', async () => {
+    const service = createTemporaryPyPricingService([]);
+    const request = temporaryPyPricingDto({
+      productName: 'Apple Mac Mini M2',
+      category: 'Mac Mini',
+      model: 'Mac Mini M2',
+      capacity: undefined,
+      condition: undefined,
+    });
+
+    await expect(
+      service.confirmTemporaryImportCondition({ ...request, condition: 'NOVO' }),
+    ).resolves.toMatchObject({
+      calculationStatus: 'insufficient_identity',
+      offerDraft: null,
+    });
+  });
+
+  it('keeps multiple candidates ambiguous after condition confirmation without persistence', async () => {
+    const repository = {
+      findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+      findEligibleCatalogProductCandidates: vi
+        .fn()
+        .mockResolvedValue([{ id: 'candidate-a' }, { id: 'candidate-b' }]),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const manufacturers = { resolve: vi.fn(), confirm: vi.fn() };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '2026-09-16T00:00:00Z' }),
+      } as unknown as ProductProfitProvider,
+      undefined,
+      manufacturers as never,
+    );
+    const request = temporaryPyPricingDto({
+      origin: 'US',
+      provider: 'amazon_us',
+      productName: 'Apple iPhone 17 Pro 256GB',
+      category: 'iPhone',
+      model: 'iPhone 17 Pro',
+      capacity: '256GB',
+      condition: undefined,
+    });
+
+    const result = await service.confirmTemporaryImportCondition({ ...request, condition: 'NOVO' });
+
+    expect(result).toMatchObject({
+      calculationStatus: 'ambiguous_identity',
+      catalogProductId: null,
+      offerDraft: null,
+    });
+    expect(manufacturers.confirm).not.toHaveBeenCalled();
+  });
+
   it('reuses manufacturer confirmation to resolve and recalculate a temporary import', async () => {
     const repository = {
       findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
@@ -1119,7 +1246,7 @@ describe('PricingService native product profit integration', () => {
         desiredNetProfit: null,
         salePrice: null,
         offerPrice: null,
-        calculationStatus: 'missing_profit',
+        calculationStatus: 'condition_unresolved',
         calculationError:
           'Condicao da cotacao do Radar Brasil diverge da condicao do produto mestre associado.',
         offerDraft: null,
@@ -1159,7 +1286,7 @@ describe('PricingService native product profit integration', () => {
       desiredNetProfit: null,
       salePrice: null,
       offerPrice: null,
-      calculationStatus: 'missing_profit',
+      calculationStatus: 'condition_unresolved',
       calculationError: 'Condicao do produto mestre associado ausente ou invalida.',
       offerDraft: null,
     });
@@ -1202,7 +1329,7 @@ describe('PricingService native product profit integration', () => {
         desiredNetProfit: null,
         salePrice: null,
         offerPrice: null,
-        calculationStatus: 'missing_profit',
+        calculationStatus: 'condition_unresolved',
         calculationError: 'Condicao da cotacao do Radar Brasil ausente ou invalida.',
         offerDraft: null,
       });

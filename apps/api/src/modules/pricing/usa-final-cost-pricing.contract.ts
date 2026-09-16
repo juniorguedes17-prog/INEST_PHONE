@@ -18,6 +18,10 @@ export interface UsaNormalizedPricingContext {
   model: string | null;
   capacity: string | null;
   color: string | null;
+  ram?: string | null;
+  chip?: string | null;
+  screenSize?: string | null;
+  connectivity?: string | null;
 }
 
 /**

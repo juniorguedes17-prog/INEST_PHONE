@@ -19,6 +19,7 @@ import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.inte
 import {
   BrazilRadarQuotePricingDto,
   ConfirmBrazilRadarManufacturerDto,
+  ConfirmTemporaryImportConditionDto,
   ConfirmTemporaryImportManufacturerDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
@@ -100,6 +101,14 @@ export class PricingController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.pricingService.confirmTemporaryImportManufacturer(dto, user);
+  }
+
+  @Post('temporary-import/confirm-condition')
+  @UseGuards(PermissionsGuard)
+  @Permissions('settings:configure')
+  @ApiOperation({ summary: 'Confirma a condicao desta importacao e recalcula sem persistir.' })
+  confirmTemporaryImportCondition(@Body() dto: ConfirmTemporaryImportConditionDto) {
+    return this.pricingService.confirmTemporaryImportCondition(dto);
   }
 
   @Post('radar-quote')

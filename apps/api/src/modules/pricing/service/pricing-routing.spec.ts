@@ -854,13 +854,29 @@ describe('Pricing canonical originality routing', () => {
     expect(fixture.repository.findActiveCatalogProduct).toHaveBeenCalledOnce();
   });
 
-  it('keeps BR condition incompatibility blocked, including non-Apple', async () => {
+  it('routes BR Non-Apple without making condition a financial gate', async () => {
     const fixture = setup(false);
     fixture.quote.condition = 'CPO';
     const result = await fixture.calculate('BR');
-    expect(result).toMatchObject({ calculationStatus: 'missing_profit', salePrice: null });
-    expect(result.calculationError).toContain('diverge');
-    expect(result).not.toHaveProperty('engineMetadata');
+    expect(result).toMatchObject({
+      calculationStatus: 'ready',
+      engineMetadata: { engine: 'NON_APPLE_ELECTRONICS' },
+    });
+    expect(result.salePrice).not.toBeNull();
+    expect('offerDraft' in result && result.offerDraft).not.toBeNull();
+  });
+
+  it('routes BR Non-Apple with missing condition through the existing engine', async () => {
+    const fixture = setup(false);
+    Object.assign(fixture.quote, { condition: null });
+
+    const result = await fixture.calculate('BR');
+
+    expect(result).toMatchObject({
+      calculationStatus: 'ready',
+      engineMetadata: { engine: 'NON_APPLE_ELECTRONICS' },
+    });
+    expect('offerDraft' in result && result.offerDraft).not.toBeNull();
   });
 
   it('does not route an unavailable/inactive canonical Product', async () => {

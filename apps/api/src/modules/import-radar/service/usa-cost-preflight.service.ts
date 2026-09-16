@@ -382,6 +382,10 @@ function toNormalizedPricingContext(
     model: context.fields.model.value,
     capacity: context.fields.storage.value,
     color: context.fields.color.value,
+    ram: context.fields.ram.value,
+    chip: context.fields.chip.value,
+    screenSize: context.fields.screen.value,
+    connectivity: context.fields.connectivity.value,
   };
 }
 

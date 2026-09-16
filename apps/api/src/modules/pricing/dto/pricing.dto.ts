@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, OmitType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
@@ -250,6 +250,26 @@ export class TemporaryImportPricingDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  ram?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  chip?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  screenSize?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  connectivity?: string | null;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   color?: string;
 
   @ApiPropertyOptional()
@@ -292,4 +312,12 @@ export class ConfirmTemporaryImportManufacturerDto extends TemporaryImportPricin
   @IsOptional()
   @IsString()
   alias?: string;
+}
+
+export class ConfirmTemporaryImportConditionDto extends OmitType(TemporaryImportPricingDto, [
+  'condition',
+] as const) {
+  @ApiProperty({ enum: ['NOVO', 'SEMINOVO', 'CPO'] })
+  @IsIn(['NOVO', 'SEMINOVO', 'CPO'])
+  condition!: 'NOVO' | 'SEMINOVO' | 'CPO';
 }

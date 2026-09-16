@@ -487,6 +487,7 @@ function escapeRegExp(value: string): string {
 export function inferProductAttributes(name: string) {
   const normalized = normalizeText(name);
   const macBookAttributes = inferMacBookAttributes(name);
+  const explicitMemory = inferExplicitMemoryAttributes(name);
   const category = normalized.includes('iphone')
     ? 'iPhone'
     : normalized.includes('macbook')
@@ -500,7 +501,8 @@ export function inferProductAttributes(name: string) {
             : 'Outros';
   const capacity =
     macBookAttributes?.capacity ??
-    name.match(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/i)?.[0]?.replace(/\s+/g, ' ');
+    explicitMemory.storage ??
+    inferFirstUnclassifiedCapacity(name, explicitMemory.ramSpan);
   const model =
     macBookAttributes?.model ??
     name
@@ -532,6 +534,7 @@ export function inferProductAttributes(name: string) {
         : undefined,
     model,
     capacity,
+    ram: macBookAttributes?.ram ?? explicitMemory.ram,
     color: color ? color.charAt(0).toUpperCase() + color.slice(1) : undefined,
   };
 }
@@ -544,6 +547,7 @@ function inferMacBookAttributes(name: string) {
   const display = name.match(
     /\b(13|14|15|16)(?:\.\d+)?\s*(?:["\u201c\u201d\u2033]|pol(?:egadas?)?)?\b/i,
   )?.[1];
+  const explicitMemory = inferExplicitMemoryAttributes(name);
   const memory = Array.from(name.matchAll(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/gi))
     .map((match) => {
       const amount = match[1] ?? '';
@@ -551,12 +555,55 @@ function inferMacBookAttributes(name: string) {
       return amount && unit ? `${amount}${unit}` : '';
     })
     .filter(Boolean);
-  const capacity = memory.length ? memory.join('/') : undefined;
-  const model = ['MacBook', capitalize(familyMatch[1] ?? ''), chip, display, capacity]
+  const capacity = explicitMemory.storage ?? (memory.length ? memory.join('/') : undefined);
+  const model = [
+    'MacBook',
+    capitalize(familyMatch[1] ?? ''),
+    chip,
+    display,
+    explicitMemory.ram,
+    capacity,
+  ]
     .filter(Boolean)
     .join(' ');
 
-  return { model, capacity };
+  return { model, capacity, ram: explicitMemory.ram };
+}
+
+function inferExplicitMemoryAttributes(name: string) {
+  const ramMatch =
+    /\b(\d+(?:\.\d+)?)\s*(GB|TB)\s*(?:de\s+)?(?:ram|memory|mem[oó]ria)\b/i.exec(name) ??
+    /\b(?:ram|memory|mem[oó]ria)\s*[:=-]?\s*(\d+(?:\.\d+)?)\s*(GB|TB)\b/i.exec(name);
+  const storageMatch =
+    /\b(?:ssd|storage|armazenamento)\s*[:=-]?\s*(\d+(?:\.\d+)?)\s*(GB|TB)\b/i.exec(name) ??
+    /\b(\d+(?:\.\d+)?)\s*(GB|TB)\s*(?:de\s+)?(?:ssd|storage|armazenamento)\b/i.exec(name);
+
+  return {
+    ram: normalizeCapacityMatch(ramMatch),
+    storage: normalizeCapacityMatch(storageMatch),
+    ramSpan:
+      ramMatch?.index === undefined
+        ? null
+        : { start: ramMatch.index, end: ramMatch.index + ramMatch[0].length },
+  };
+}
+
+function inferFirstUnclassifiedCapacity(
+  name: string,
+  excludedSpan: { start: number; end: number } | null,
+) {
+  const matches = Array.from(name.matchAll(/\b(\d+(?:\.\d+)?)\s*(GB|TB)\b/gi));
+  const match = matches.find((candidate) => {
+    const index = candidate.index ?? -1;
+    return !excludedSpan || index < excludedSpan.start || index >= excludedSpan.end;
+  });
+  return normalizeCapacityMatch(match);
+}
+
+function normalizeCapacityMatch(match: RegExpExecArray | RegExpMatchArray | undefined | null) {
+  const amount = match?.[1];
+  const unit = match?.[2]?.toUpperCase();
+  return amount && unit ? `${amount}${unit}` : undefined;
 }
 
 function capitalize(value: string) {

@@ -911,6 +911,12 @@ describe('ImportRadarService catalog product handoff', () => {
         color,
         condition: 'NOVO',
       });
+      expect(normalized.normalizedPricing).toEqual({
+        ram: candidate.ramCandidate,
+        chip: candidate.chipCandidate,
+        screenSize: candidate.screenCandidate,
+        connectivity: candidate.connectivityCandidate,
+      });
       expect(normalized.sourceCommercialIdentity.commercialName).toBe(candidate.commercialName);
       expect({
         productResolution: normalized.productResolution,
@@ -1308,6 +1314,12 @@ describe('ImportRadarService catalog product handoff', () => {
     expect(result.product.model).toBeUndefined();
     expect(result.product.capacity).toBeUndefined();
     expect(result.product.condition).toBeUndefined();
+    expect(result.normalizedPricing).toEqual({
+      ram: null,
+      chip: null,
+      screenSize: null,
+      connectivity: null,
+    });
     expect(result).toMatchObject({
       financialClassification: 'UNRESOLVED',
       pricingEligibility: { status: 'ELIGIBLE', reason: 'financial_identity_insufficient' },

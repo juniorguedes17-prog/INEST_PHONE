@@ -39,6 +39,12 @@ export interface ImportSearchResponse {
 
 export interface ImportCalculation {
   product: ImportProduct;
+  normalizedPricing: {
+    ram?: string | null;
+    chip?: string | null;
+    screenSize?: string | null;
+    connectivity?: string | null;
+  };
   catalogProductId: string | null;
   condition: 'NOVO' | 'SEMINOVO' | 'CPO' | null;
   sourceCommercialIdentity: {

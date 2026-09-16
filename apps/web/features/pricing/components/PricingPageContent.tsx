@@ -42,6 +42,8 @@ type ManufacturerItem =
   | { kind: 'brazil'; item: BrazilRadarQuotePricing }
   | { kind: 'temporary-import'; item: TemporaryImportPricing };
 
+type ProfitCondition = 'NOVO' | 'SEMINOVO' | 'CPO';
+
 const sortOptions = [
   ['lowest_price', 'Menor preço'],
   ['highest_price', 'Maior preço'],
@@ -80,6 +82,9 @@ export function PricingPageContent() {
   const [manufacturerItem, setManufacturerItem] = useState<ManufacturerItem | null>(null);
   const [manufacturerName, setManufacturerName] = useState('');
   const [manufacturerError, setManufacturerError] = useState<string | null>(null);
+  const [conditionItem, setConditionItem] = useState<TemporaryImportPricing | null>(null);
+  const [conditionValue, setConditionValue] = useState<ProfitCondition | ''>('');
+  const [conditionError, setConditionError] = useState<string | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
   const models = useMemo(() => buildCanonicalModelFacetOptions(pricing.items), [pricing.items]);
   const colors = useUnique(pricing.items.flatMap((item) => getCanonicalColors(item)));
@@ -249,6 +254,22 @@ export function PricingPageContent() {
     }
   }
 
+  async function saveCondition() {
+    if (!conditionItem || !conditionValue) return;
+    setConditionError(null);
+    try {
+      await pricing.confirmTemporaryCondition(conditionItem, conditionValue);
+      setConditionItem(null);
+      setConditionValue('');
+    } catch (confirmationError) {
+      setConditionError(
+        confirmationError instanceof Error
+          ? confirmationError.message
+          : 'Nao foi possivel confirmar a condicao.',
+      );
+    }
+  }
+
   return (
     <div className="grid gap-4">
       <PageHeader
@@ -414,6 +435,11 @@ export function PricingPageContent() {
                       setManufacturerName('');
                       setManufacturerError(null);
                     }}
+                    onConfirmCondition={() => {
+                      setConditionItem(pricing.temporaryImportPricing!);
+                      setConditionValue('');
+                      setConditionError(null);
+                    }}
                   />
                 ) : null}
                 {paginatedItems.map((item) => (
@@ -523,6 +549,15 @@ export function PricingPageContent() {
         onChange={setManufacturerName}
         onClose={() => setManufacturerItem(null)}
         onSave={() => void saveManufacturer()}
+      />
+      <ConditionConfirmationModal
+        item={conditionItem}
+        value={conditionValue}
+        error={conditionError}
+        saving={pricing.saving}
+        onChange={setConditionValue}
+        onClose={() => setConditionItem(null)}
+        onSave={() => void saveCondition()}
       />
     </div>
   );
@@ -719,6 +754,76 @@ function ManufacturerConfirmationModal({
   );
 }
 
+function ConditionConfirmationModal({
+  item,
+  value,
+  error,
+  saving,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  item: TemporaryImportPricing | null;
+  value: ProfitCondition | '';
+  error: string | null;
+  saving: boolean;
+  onChange: (value: ProfitCondition | '') => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  if (!item) return null;
+  return (
+    <Modal
+      open
+      title="Confirmar condicao"
+      onClose={onClose}
+      footer={
+        <>
+          <ActionButton variant="secondary" disabled={saving} onClick={onClose}>
+            Cancelar
+          </ActionButton>
+          <ActionButton
+            type="submit"
+            form="condition-confirmation-form"
+            disabled={saving || !value}
+          >
+            {saving ? 'Confirmando...' : 'Confirmar e recalcular'}
+          </ActionButton>
+        </>
+      }
+    >
+      <form
+        id="condition-confirmation-form"
+        className="grid gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave();
+        }}
+      >
+        <p className="text-sm text-inest-muted">
+          Selecione a condicao de <strong>{item.product.name}</strong> somente para esta execucao.
+        </p>
+        <label className="grid gap-2 text-sm font-bold text-inest-text">
+          Condicao
+          <select
+            autoFocus
+            required
+            value={value}
+            onChange={(event) => onChange(event.target.value as ProfitCondition | '')}
+            className="field-control"
+          >
+            <option value="">Selecione</option>
+            <option value="NOVO">Novo</option>
+            <option value="SEMINOVO">Seminovo</option>
+            <option value="CPO">CPO</option>
+          </select>
+        </label>
+        {error ? <p className="text-sm font-bold text-red-700">{error}</p> : null}
+      </form>
+    </Modal>
+  );
+}
+
 function MissingProfitModal({
   open,
   item,
@@ -820,12 +925,14 @@ function TemporaryImportPricingCard({
   onGenerateOffer,
   onRegisterProfit,
   onConfirmManufacturer,
+  onConfirmCondition,
 }: {
   item: NonNullable<ReturnType<typeof usePricing>['temporaryImportPricing']>;
   generating: boolean;
   onGenerateOffer: () => void;
   onRegisterProfit: () => void;
   onConfirmManufacturer: () => void;
+  onConfirmCondition: () => void;
 }) {
   const presentation = getProductCardPresentation({
     canonicalDescription: item.profit.productDescription,
@@ -915,6 +1022,16 @@ function TemporaryImportPricingCard({
             onClick={onConfirmManufacturer}
           >
             Confirmar fabricante
+          </ActionButton>
+        ) : null}
+        {item.calculationStatus === 'condition_unresolved' ? (
+          <ActionButton
+            variant="primary"
+            className="mt-1 h-9 px-3 text-xs"
+            disabled={generating}
+            onClick={onConfirmCondition}
+          >
+            Confirmar condicao
           </ActionButton>
         ) : null}
       </div>

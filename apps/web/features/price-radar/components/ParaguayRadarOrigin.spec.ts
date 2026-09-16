@@ -211,6 +211,12 @@ test('does not disguise a missing PY structured model as the commercial product 
   assert.ok(buildRequest);
   const calculation = {
     product: { ...product, model: undefined },
+    normalizedPricing: {
+      ram: '8GB',
+      chip: 'M2',
+      screenSize: null,
+      connectivity: null,
+    },
     catalogProductId: null,
     sourceCommercialIdentity: {
       displayName: 'Nome apenas para apresentacao',
@@ -243,6 +249,10 @@ test('does not disguise a missing PY structured model as the commercial product 
   assert.equal(withoutModel.productName, product.name);
   assert.equal(withoutModel.displayName, 'Nome apenas para apresentacao');
   assert.equal('commercialName' in withoutModel, false);
+  assert.equal(withoutModel.ram, '8GB');
+  assert.equal(withoutModel.chip, 'M2');
+  assert.equal(withoutModel.screenSize, null);
+  assert.equal(withoutModel.connectivity, null);
 });
 
 test('uses commercialName only in the USA/PY modal presentation with visual fallback', () => {

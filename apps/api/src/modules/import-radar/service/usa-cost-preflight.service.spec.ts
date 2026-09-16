@@ -62,11 +62,11 @@ function createContext(
       family: { value: null },
       model: { value: product.model },
       storage: { value: product.capacity },
-      ram: { value: null },
-      chip: { value: null },
-      screen: { value: null },
+      ram: { value: null as string | null },
+      chip: { value: null as string | null },
+      screen: { value: null as string | null },
       color: { value: product.color ?? null },
-      connectivity: { value: null },
+      connectivity: { value: null as string | null },
       condition: { value: condition },
       quantity: { value: null },
       feature: { value: null },
@@ -198,10 +198,14 @@ describe('UsaCostPreflightService', () => {
     ).resolves.toMatchObject({ status: 'READY_FOR_COST', condition: 'SEMINOVO' });
   });
 
-  it('carries P6F-approved model and storage to the Pricing handoff', async () => {
+  it('carries every P6F-approved pricing attribute to the Pricing handoff', async () => {
     const context = createContext('CELULAR', 'SEMINOVO');
     context.fields.model.value = 'iPhone 17 Pro';
     context.fields.storage.value = '512GB';
+    context.fields.ram.value = '8GB';
+    context.fields.chip.value = 'A19 Pro';
+    context.fields.screen.value = '6.3"';
+    context.fields.connectivity.value = '5G';
     const { service } = createService(readyDecision, context);
 
     await expect(
@@ -221,6 +225,29 @@ describe('UsaCostPreflightService', () => {
         category: 'iPhone',
         model: 'iPhone 17 Pro',
         capacity: '512GB',
+        ram: '8GB',
+        chip: 'A19 Pro',
+        screenSize: '6.3"',
+        connectivity: '5G',
+      },
+    });
+  });
+
+  it('keeps absent optional pricing attributes null without defaults', async () => {
+    const { service } = createService(readyDecision, createContext('CELULAR'));
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      normalizedPricing: {
+        ram: null,
+        chip: null,
+        screenSize: null,
+        connectivity: null,
       },
     });
   });

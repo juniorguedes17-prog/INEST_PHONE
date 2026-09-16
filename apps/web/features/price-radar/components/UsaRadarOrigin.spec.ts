@@ -94,7 +94,16 @@ const ready = {
   redirector: { redirector: 'REI_DO_IMPORTADO' },
   shippingWeightLbs: null,
   condition: 'SEMINOVO',
-  normalizedPricing: { category: 'iPhone', model: 'iPhone 17 Pro', capacity: '512GB', color: null },
+  normalizedPricing: {
+    category: 'iPhone',
+    model: 'iPhone 17 Pro',
+    capacity: '512GB',
+    color: null,
+    ram: '8GB',
+    chip: 'A19 Pro',
+    screenSize: '6.3"',
+    connectivity: '5G',
+  },
 };
 const componentSource = readFileSync(`${componentDirectory}/UsaRadarOrigin.tsx`, 'utf8');
 const componentCode = ts.transpileModule(
@@ -924,6 +933,10 @@ test('sends only the FinalCost through the existing temporary pricing handoff', 
   assert.equal(payload.origin, 'US');
   assert.equal(payload.totalCost, 5500);
   assert.equal(payload.provider, 'amazon_us');
+  assert.equal(payload.ram, '8GB');
+  assert.equal(payload.chip, 'A19 Pro');
+  assert.equal(payload.screenSize, '6.3"');
+  assert.equal(payload.connectivity, '5G');
   assert.equal(h.router.push.mock.calls[0]!.arguments[0], '/pricing?temporaryImport=usa');
   assert.ok(h.storage.has('inest.temporary-import-pricing'));
 });

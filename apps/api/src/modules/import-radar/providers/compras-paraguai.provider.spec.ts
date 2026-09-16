@@ -313,9 +313,29 @@ describe('ComprasParaguaiProvider parsers', () => {
       ),
     ).toMatchObject({
       category: 'MacBook',
-      model: 'MacBook Neo A18 Pro 13 8GB/256GB',
-      capacity: '8GB/256GB',
+      model: 'MacBook Neo A18 Pro 13 8GB 256GB',
+      ram: '8GB',
+      capacity: '256GB',
     });
+  });
+
+  it.each([
+    ['Notebook 8GB RAM / 512GB SSD', '8GB', '512GB'],
+    ['Notebook 16GB RAM 1TB SSD', '16GB', '1TB'],
+    ['Notebook 24GB Memory / SSD 512GB', '24GB', '512GB'],
+    ['Notebook Memória 32GB / 2TB Storage', '32GB', '2TB'],
+  ])('separa RAM e storage quando os marcadores sao explicitos: %s', (name, ram, capacity) => {
+    expect(inferProductAttributes(name)).toMatchObject({ ram, capacity });
+  });
+
+  it.each([
+    ['Produto 512GB', undefined, '512GB'],
+    ['Produto 1TB', undefined, '1TB'],
+    ['Smartphone Android 8/256GB', undefined, '256GB'],
+    ['Notebook RAM 16GB', '16GB', undefined],
+    ['Notebook SSD 2TB', undefined, '2TB'],
+  ])('nao inventa RAM ou storage ausente: %s', (name, ram, capacity) => {
+    expect(inferProductAttributes(name)).toMatchObject({ ram, capacity });
   });
 
   it('retorna falha controlada quando a fonte esta indisponivel', async () => {

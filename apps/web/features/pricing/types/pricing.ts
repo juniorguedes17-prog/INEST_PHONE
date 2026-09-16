@@ -136,6 +136,7 @@ export interface BrazilRadarQuotePricing {
     | 'insufficient_identity'
     | 'ambiguous_identity'
     | 'collision'
+    | 'condition_unresolved'
     | 'classification_unresolved';
   calculationError: string | null;
   offerDraft: OfferDraft | null;
@@ -179,6 +180,10 @@ export interface TemporaryImportPricingRequest {
   sourceManufacturerProvenance?: 'EXPLICIT_SOURCE';
   model?: string;
   capacity?: string;
+  ram?: string | null;
+  chip?: string | null;
+  screenSize?: string | null;
+  connectivity?: string | null;
   color?: string;
   city?: string;
   condition?: 'NOVO' | 'SEMINOVO' | 'CPO';
@@ -191,6 +196,10 @@ export interface TemporaryImportPricingRequest {
 export interface ConfirmTemporaryImportManufacturerRequest extends TemporaryImportPricingRequest {
   canonicalName: string;
   alias?: string;
+}
+
+export interface ConfirmTemporaryImportConditionRequest extends TemporaryImportPricingRequest {
+  condition: 'NOVO' | 'SEMINOVO' | 'CPO';
 }
 
 export interface TemporaryImportPricing {
@@ -218,6 +227,10 @@ export interface TemporaryImportPricing {
     brand: string;
     model: string;
     capacity: string;
+    ram: string | null;
+    chip: string | null;
+    screenSize: string | null;
+    connectivity: string | null;
     color: string;
     supplier: string;
     store: string;

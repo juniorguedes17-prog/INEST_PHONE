@@ -185,6 +185,7 @@ export class ImportRadarService {
     });
     const result = {
       product: semanticDto,
+      normalizedPricing: semanticNormalization.normalizedPricing,
       sourceCommercialIdentity: {
         sourceProductId: dto.id,
         sourceName: dto.name,
@@ -529,6 +530,12 @@ export class ImportRadarService {
 
 type ParaguaySemanticNormalization = {
   product: CalculateImportCostDto;
+  normalizedPricing: {
+    ram: string | null;
+    chip: string | null;
+    screenSize: string | null;
+    connectivity: string | null;
+  };
   identityText: string;
   commercialName: string | null;
   status: ProductSemanticNormalizationStatus;
@@ -644,6 +651,12 @@ function adaptParaguaySemanticCandidate(
   ].filter((value): value is string => Boolean(value));
   return {
     product,
+    normalizedPricing: {
+      ram,
+      chip,
+      screenSize: screen,
+      connectivity,
+    },
     identityText,
     commercialName: validatedCommercialName(candidate.commercialName, presentationAttributes),
     status,
@@ -659,6 +672,12 @@ function failedParaguayNormalization(
 ): ParaguaySemanticNormalization {
   return {
     product: { ...dto },
+    normalizedPricing: {
+      ram: null,
+      chip: null,
+      screenSize: null,
+      connectivity: null,
+    },
     identityText: paraguayStructuredIdentityText(dto),
     commercialName: null,
     status,

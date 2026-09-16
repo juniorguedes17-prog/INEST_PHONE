@@ -4,6 +4,7 @@ import { SettingsService } from '../../settings/service/settings.service';
 import {
   BrazilRadarQuotePricingDto,
   ConfirmBrazilRadarManufacturerDto,
+  ConfirmTemporaryImportConditionDto,
   ConfirmTemporaryImportManufacturerDto,
   GenerateOfferDraftDto,
   PricingQueryDto,
@@ -91,12 +92,28 @@ function getUsaProfitProductDescription(
   source: UsaFinalCostPricingRequest['sourceProduct'],
 ) {
   const base = context.model?.trim() || source.model?.trim() || source.sourceName.trim();
-  const capacity = context.capacity?.trim();
-  if (!capacity) return base;
+  return appendFinancialIdentityAttributes(base, [
+    context.chip,
+    context.screenSize,
+    context.ram,
+    context.capacity,
+    context.connectivity,
+  ]);
+}
 
-  const normalizedBase = normalizeProfitProductDescription(base);
-  const normalizedCapacity = normalizeProfitProductDescription(capacity);
-  return normalizedBase.includes(normalizedCapacity) ? base : `${base} ${capacity}`;
+function appendFinancialIdentityAttributes(
+  base: string,
+  attributes: Array<string | null | undefined>,
+) {
+  return attributes.reduce<string>((description, attribute) => {
+    const value = attribute?.trim();
+    if (!value) return description;
+    const normalizedDescription = normalizeProfitProductDescription(description);
+    const normalizedValue = normalizeProfitProductDescription(value);
+    return normalizedDescription.includes(normalizedValue)
+      ? description
+      : `${description} ${value}`;
+  }, base.trim());
 }
 
 function getDirectProductProfitCalculationState(lookup: ProfitLookupResult) {
@@ -360,6 +377,10 @@ export class PricingService {
       model: source.model ?? null,
       capacity: source.capacity ?? null,
       color: source.color ?? null,
+      ram: null,
+      chip: null,
+      screenSize: null,
+      connectivity: null,
     };
     const condition = input.condition;
     const manufacturerResolution =
@@ -507,16 +528,10 @@ export class PricingService {
       dto,
       catalogProduct?.profitCondition,
     );
-    const structuredProfitDescription = dto.model?.trim()
-      ? dto.capacity?.trim() &&
-        !normalizeProfitProductDescription(dto.model).includes(
-          normalizeProfitProductDescription(dto.capacity),
-        )
-        ? `${dto.model.trim()} ${dto.capacity.trim()}`
-        : dto.model.trim()
-      : null;
-    const sourceProfitDescription =
-      structuredProfitDescription ?? (dto.displayName?.trim() || dto.productName.trim());
+    const sourceProfitDescription = appendFinancialIdentityAttributes(
+      dto.model?.trim() || dto.displayName?.trim() || dto.productName.trim(),
+      [dto.chip, dto.screenSize, dto.ram, dto.capacity, dto.connectivity],
+    );
     const profitProductDescription =
       catalogProduct?.productDescription?.trim() || sourceProfitDescription;
     const explicitManufacturerResolution = await this.resolveExplicitSourceManufacturer(
@@ -745,6 +760,15 @@ export class PricingService {
     return this.calculateTemporaryImport(pricingDto);
   }
 
+  async confirmTemporaryImportCondition(dto: ConfirmTemporaryImportConditionDto) {
+    const { condition, ...pricingDto } = dto;
+    const current = await this.calculateTemporaryImport(pricingDto);
+    if (current.calculationStatus !== 'condition_unresolved') {
+      throw new BadRequestException('A confirmacao de condicao nao e necessaria para este item.');
+    }
+    return this.calculateTemporaryImport({ ...pricingDto, condition });
+  }
+
   private buildUsaPricingResult({
     input,
     financialClassification,
@@ -785,6 +809,10 @@ export class PricingService {
           model: input.sourceProduct.model ?? null,
           capacity: input.sourceProduct.capacity ?? null,
           color: input.sourceProduct.color ?? null,
+          ram: null,
+          chip: null,
+          screenSize: null,
+          connectivity: null,
         }),
         condition: input.condition,
       },
@@ -888,6 +916,10 @@ export class PricingService {
         brand: dto.brand ?? '',
         model: dto.model ?? '',
         capacity: dto.capacity ?? '',
+        ram: dto.ram ?? null,
+        chip: dto.chip ?? null,
+        screenSize: dto.screenSize ?? null,
+        connectivity: dto.connectivity ?? null,
         color: dto.color ?? '',
         supplier: dto.supplier ?? dto.retailer ?? dto.provider ?? '',
         store: dto.store ?? dto.retailer ?? dto.provider ?? '',
@@ -1001,7 +1033,7 @@ export class PricingService {
         : catalogProfitCondition && catalogProfitCondition !== quoteProfitCondition
           ? 'Condicao da cotacao do Radar Brasil diverge da condicao do produto mestre associado.'
           : null;
-    const canResolveProfit = !productIdUnavailable && !conditionError;
+    const canResolveAppleProfit = !productIdUnavailable && !conditionError;
     const baseFinancialClassification = resolveFinancialClassification({
       canonicalProduct: catalogProduct,
       productName: quote.productName,
@@ -1029,7 +1061,7 @@ export class PricingService {
       : baseFinancialClassification;
     const pricingEligibility = resolveClassificationPricingEligibility(financialClassification);
     const nonApple =
-      canResolveProfit && financialClassification.classification === 'NON_APPLE'
+      !productIdUnavailable && financialClassification.classification === 'NON_APPLE'
         ? this.calculateNonApplePricing(
             false,
             toNumber(quote.price),
@@ -1040,7 +1072,7 @@ export class PricingService {
     const profitCondition = quoteProfitCondition ?? quote.condition?.trim() ?? '';
     const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
     const shouldResolveAppleProfit =
-      canResolveProfit && financialClassification.classification === 'APPLE';
+      canResolveAppleProfit && financialClassification.classification === 'APPLE';
     const legacyProfitLookup = !shouldResolveAppleProfit
       ? { status: 'not_found' as const }
       : this.findProfit(
@@ -1095,7 +1127,7 @@ export class PricingService {
         });
       }
     }
-    const profitRecord = !canResolveProfit
+    const profitRecord = !shouldResolveAppleProfit
       ? null
       : pricingResolutionSource === 'PRODUCT_ID'
         ? legacyProfitLookup.status === 'found'
@@ -1114,31 +1146,26 @@ export class PricingService {
         settings,
         pricingConfigurations,
       );
-    const { calculationStatus, calculationError } = !quoteProfitCondition
+    const { calculationStatus, calculationError } = productIdUnavailable
       ? {
-          calculationStatus: 'missing_profit' as const,
-          calculationError: conditionError,
+          calculationStatus: 'insufficient_identity' as const,
+          calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
         }
-      : productIdUnavailable
+      : financialClassification.classification === 'UNRESOLVED'
         ? {
-            calculationStatus: 'insufficient_identity' as const,
-            calculationError: 'Produto mestre associado a cotacao nao esta ativo ou nao existe.',
+            calculationStatus: 'classification_unresolved' as const,
+            calculationError: 'Classificacao financeira do produto externo nao resolvida.',
           }
-        : conditionError
-          ? {
-              calculationStatus: 'missing_profit' as const,
-              calculationError: conditionError,
-            }
-          : financialClassification.classification === 'UNRESOLVED'
+        : nonApple
+          ? { calculationStatus: 'ready' as const, calculationError: null }
+          : !quoteProfitCondition || conditionError
             ? {
-                calculationStatus: 'classification_unresolved' as const,
-                calculationError: 'Classificacao financeira do produto externo nao resolvida.',
+                calculationStatus: 'condition_unresolved' as const,
+                calculationError: conditionError,
               }
-            : nonApple
-              ? { calculationStatus: 'ready' as const, calculationError: null }
-              : pricingResolutionSource === 'PRODUCT_ID'
-                ? getDirectProductProfitCalculationState(legacyProfitLookup)
-                : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
+            : pricingResolutionSource === 'PRODUCT_ID'
+              ? getDirectProductProfitCalculationState(legacyProfitLookup)
+              : getBrazilRadarProfitCalculationState(profitIdentityResolution!);
     const contact = quote.currentList.supplierContact;
     const productName = catalogProduct?.productDescription?.trim() || quote.productName.trim();
 

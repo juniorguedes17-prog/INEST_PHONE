@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   calculateBrazilRadarQuotePricing,
   confirmBrazilRadarManufacturer,
+  confirmTemporaryImportCondition,
   confirmTemporaryImportManufacturer,
   calculateTemporaryImportPricing,
   generateOfferDraft,
@@ -412,6 +413,25 @@ export function usePricing({
     }
   }
 
+  async function confirmTemporaryCondition(
+    item: TemporaryImportPricing,
+    condition: 'NOVO' | 'SEMINOVO' | 'CPO',
+  ) {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const recalculated = await confirmTemporaryImportCondition({
+        ...item.recalculationRequest,
+        condition,
+      });
+      setTemporaryImportPricing(recalculated);
+      setSuccess('Condicao confirmada e importacao recalculada.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function registerTemporaryImportProfit(item: TemporaryImportPricing, netProfit: string) {
     setSaving(true);
     setSuccess(null);
@@ -487,6 +507,7 @@ export function usePricing({
     registerBrazilRadarProfit,
     confirmBrazilManufacturer,
     confirmTemporaryManufacturer,
+    confirmTemporaryCondition,
     registerTemporaryImportProfit,
   };
 }
