@@ -499,13 +499,13 @@ describe('Pricing canonical originality routing', () => {
     });
   });
 
-  it('prices a BR manufacturer end to end after an inline confirmation and reuses it', async () => {
+  it('persists a BR manufacturer confirmation when the source text omits its canonical name', async () => {
     const fixture = setup(null, 1690);
     fixture.quote.productId = '';
-    fixture.quote.productName = 'Garmin Vivoactive 6';
-    fixture.quote.model = 'Vivoactive 6';
-    fixture.quote.category = 'Smartwatch';
-    fixture.quote.condition = 'CPO';
+    fixture.quote.productName = 'Redmi A5 4/128GB';
+    fixture.quote.model = 'Redmi A5';
+    fixture.quote.category = 'Celular';
+    fixture.quote.condition = 'NOVO';
     fixture.repository.findActiveCatalogProduct.mockResolvedValue(null);
 
     const manufacturerRepository = new MemoryManufacturersRepository();
@@ -531,22 +531,23 @@ describe('Pricing canonical originality routing', () => {
     });
 
     const afterConfirmation = await service.confirmBrazilRadarManufacturer(
-      { sourceQuoteId: fixture.quote.id, canonicalName: 'Garmin', alias: 'Garmin' },
+      { sourceQuoteId: fixture.quote.id, canonicalName: 'Xiaomi' },
       { id: 'settings-user' } as never,
     );
 
     expect(manufacturerRepository.identities).toHaveLength(1);
     expect(manufacturerRepository.identities[0]).toMatchObject({
-      manufacturerKey: 'garmin',
-      canonicalName: 'Garmin',
+      manufacturerKey: 'xiaomi',
+      canonicalName: 'Xiaomi',
       status: 'ACTIVE',
     });
     expect(manufacturerRepository.aliases).toHaveLength(1);
+    expect(manufacturerRepository.aliases[0]).toMatchObject({ alias: 'Redmi A5' });
     expect(manufacturerRepository.audits).toHaveLength(1);
     expect(afterConfirmation).toMatchObject({
       financialClassification: 'NON_APPLE',
       financialClassificationReason: 'manufacturer_registry',
-      manufacturerKey: 'garmin',
+      manufacturerKey: 'xiaomi',
       pricingEligibility: { status: 'ELIGIBLE' },
       calculationStatus: 'ready',
       desiredNetProfit: expect.any(Number),
@@ -568,13 +569,66 @@ describe('Pricing canonical originality routing', () => {
     });
     expect(secondOccurrence).toMatchObject({
       financialClassification: 'NON_APPLE',
-      manufacturerKey: 'garmin',
+      manufacturerKey: 'xiaomi',
       pricingEligibility: { status: 'ELIGIBLE' },
       calculationStatus: 'ready',
     });
     expect(manufacturerRepository.identities).toHaveLength(1);
     expect(manufacturerRepository.aliases).toHaveLength(1);
     expect(manufacturerRepository.audits).toHaveLength(1);
+  });
+
+  it('reuses a temporary-import manufacturer confirmation without sourceManufacturer', async () => {
+    const fixture = setup(null, 799);
+    fixture.dto = {
+      ...fixture.dto,
+      catalogProductId: undefined,
+      productName: 'Redmi A5 4/128GB',
+      displayName: 'Redmi A5 4/128GB',
+      category: 'Celular',
+      brand: undefined,
+      model: 'Redmi A5',
+      capacity: '128GB',
+      sourceManufacturer: undefined,
+      sourceManufacturerProvenance: undefined,
+    };
+    const manufacturerRepository = new MemoryManufacturersRepository();
+    const manufacturers = new ManufacturersService(
+      manufacturerRepository as unknown as ManufacturersRepository,
+    );
+    const service = new PricingService(
+      fixture.repository as unknown as PricingRepository,
+      fixture.settings as unknown as SettingsService,
+      fixture.provider as unknown as ProductProfitProvider,
+      fixture.normalization as unknown as ProductNormalizationService,
+      manufacturers,
+    );
+
+    await expect(service.calculateTemporaryImport(fixture.dto)).resolves.toMatchObject({
+      financialClassification: 'UNRESOLVED',
+      financialClassificationReason: 'manufacturer_missing',
+      calculationStatus: 'classification_unresolved',
+      offerDraft: null,
+    });
+
+    const afterConfirmation = await service.confirmTemporaryImportManufacturer(
+      { ...fixture.dto, canonicalName: 'Xiaomi' },
+      { id: 'settings-user' } as never,
+    );
+
+    expect(manufacturerRepository.aliases).toHaveLength(1);
+    expect(manufacturerRepository.aliases[0]).toMatchObject({ alias: 'Redmi A5' });
+    expect(afterConfirmation).toMatchObject({
+      financialClassification: 'NON_APPLE',
+      manufacturerKey: 'xiaomi',
+      calculationStatus: 'ready',
+      offerDraft: expect.any(Object),
+    });
+    await expect(service.calculateTemporaryImport(fixture.dto)).resolves.toMatchObject({
+      financialClassification: 'NON_APPLE',
+      manufacturerKey: 'xiaomi',
+      calculationStatus: 'ready',
+    });
   });
 
   it('uses structured Apple financial identity without Product.id', async () => {

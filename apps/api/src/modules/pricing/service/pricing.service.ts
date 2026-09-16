@@ -519,10 +519,13 @@ export class PricingService {
       structuredProfitDescription ?? (dto.displayName?.trim() || dto.productName.trim());
     const profitProductDescription =
       catalogProduct?.productDescription?.trim() || sourceProfitDescription;
-    const manufacturerResolution = await this.resolveExplicitSourceManufacturer(
+    const explicitManufacturerResolution = await this.resolveExplicitSourceManufacturer(
       dto.sourceManufacturer,
       dto.sourceManufacturerProvenance,
     );
+    const manufacturerResolution =
+      explicitManufacturerResolution ??
+      (await this.resolveTextManufacturer(dto.displayName?.trim() || dto.productName));
     const financialClassification: FinancialClassificationResult =
       candidates.length > 1
         ? { classification: 'UNRESOLVED', reason: 'classification_unresolved' }
@@ -723,10 +726,14 @@ export class PricingService {
       throw new BadRequestException('A confirmacao de fabricante nao e necessaria para este item.');
     }
 
-    const sourceManufacturer = pricingDto.sourceManufacturer?.trim() || canonicalName.trim();
+    const confirmationAlias =
+      alias?.trim() ||
+      pricingDto.sourceManufacturer?.trim() ||
+      pricingDto.model?.trim() ||
+      pricingDto.productName.trim();
     await this.manufacturersService.confirm({
       canonicalName,
-      alias: alias?.trim() || sourceManufacturer,
+      alias: confirmationAlias,
       userId: user.id,
       context: {
         origin: pricingDto.origin ?? 'PY',
@@ -735,11 +742,7 @@ export class PricingService {
         sourceManufacturer: pricingDto.sourceManufacturer ?? null,
       },
     });
-    return this.calculateTemporaryImport({
-      ...pricingDto,
-      sourceManufacturer,
-      sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
-    });
+    return this.calculateTemporaryImport(pricingDto);
   }
 
   private buildUsaPricingResult({
@@ -1253,9 +1256,11 @@ export class PricingService {
         'A confirmacao de fabricante nao e necessaria para esta cotacao.',
       );
     }
+    const confirmationAlias =
+      dto.alias?.trim() || current.product.model?.trim() || current.product.name;
     await this.manufacturersService.confirm({
       canonicalName: dto.canonicalName,
-      alias: dto.alias,
+      alias: confirmationAlias,
       userId: user.id,
       context: {
         origin: 'BR',
