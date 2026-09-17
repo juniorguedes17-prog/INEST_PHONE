@@ -1,7 +1,14 @@
+import {
+  canonicalFamilyRegistry,
+  type CanonicalFamilyDefinition,
+  type CanonicalFamilyKey,
+} from './canonical-family-registry';
+
 export interface CanonicalModelRegistryEntry {
   key: string;
   label: string;
   category: string;
+  familyKey: CanonicalFamilyKey;
   aliases: readonly string[];
   invariants?: Readonly<{ screen?: string; chip?: string }>;
   safeDefaults?: Readonly<{ connectivity?: string }>;
@@ -11,10 +18,11 @@ function entry(
   key: string,
   label: string,
   category: string,
+  familyKey: CanonicalFamilyKey,
   aliases: readonly string[],
   metadata: Pick<CanonicalModelRegistryEntry, 'invariants' | 'safeDefaults'> = {},
 ): CanonicalModelRegistryEntry {
-  return { key, label, category, aliases: [...new Set([label, ...aliases])], ...metadata };
+  return { key, label, category, familyKey, aliases: [...new Set([label, ...aliases])], ...metadata };
 }
 
 function iphone(
@@ -47,6 +55,7 @@ function iphone(
     `iphone-${generation}${variant ? `-${variant.toLowerCase().replace(/\s+/g, '-')}` : ''}`,
     `iPhone ${generation}${labelSuffix}`,
     'iPhone',
+    'iphone',
     aliases,
   );
 }
@@ -62,9 +71,14 @@ function macbook(
     key,
     label,
     'MacBook',
+    'macbook',
     includeScreenUnits ? withScreenUnitAliases(aliases) : aliases,
     metadata,
   );
+}
+
+function macMini(key: string, label: string, aliases: readonly string[]) {
+  return entry(key, label, 'MacBook', 'mac-mini', aliases);
 }
 
 function imac(
@@ -72,7 +86,7 @@ function imac(
   label: string,
   aliases: readonly string[],
 ) {
-  return entry(key, label, 'iMac', withScreenUnitAliases(aliases));
+  return entry(key, label, 'iMac', 'imac', withScreenUnitAliases(aliases));
 }
 
 function macStudio(
@@ -80,7 +94,7 @@ function macStudio(
   label: string,
   aliases: readonly string[],
 ) {
-  return entry(key, label, 'Mac Studio', aliases);
+  return entry(key, label, 'Mac Studio', 'mac-studio', aliases);
 }
 
 function withScreenUnitAliases(aliases: readonly string[]) {
@@ -97,7 +111,7 @@ function ipad(
   aliases: readonly string[],
   metadata: Pick<CanonicalModelRegistryEntry, 'invariants' | 'safeDefaults'> = {},
 ) {
-  return entry(key, label, 'iPad', aliases, {
+  return entry(key, label, 'iPad', 'ipad', aliases, {
     ...metadata,
     safeDefaults: { connectivity: 'Wi-Fi', ...metadata.safeDefaults },
   });
@@ -112,7 +126,7 @@ function watch(
   const aliasesWithUnits = aliases.flatMap((alias) =>
     /\s\d{2}$/.test(alias) ? [alias, `${alias}mm`] : [alias],
   );
-  return entry(key, label, 'Apple Watch', aliasesWithUnits, {
+  return entry(key, label, 'Apple Watch', 'apple-watch', aliasesWithUnits, {
     ...metadata,
     safeDefaults: { connectivity: 'GPS', ...metadata?.safeDefaults },
   });
@@ -123,7 +137,11 @@ function accessory(
   label: string,
   aliases: readonly string[],
 ) {
-  return entry(key, label, 'Acessorios', aliases);
+  return entry(key, label, 'Acessorios', 'accessory', aliases);
+}
+
+function airpods(key: string, label: string, aliases: readonly string[]) {
+  return entry(key, label, 'Acessorios', 'airpods', aliases);
 }
 
 export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
@@ -203,9 +221,9 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   macbook('macbook-pro-m5-max-16', 'MacBook Pro M5 Max 16"', ['macbook pro m5 max 16', 'mac pro m5 max 16'], false, {
     invariants: { chip: 'M5 Max', screen: '16"' },
   }),
-  macbook('mac-mini-m2', 'Mac Mini M2', ['mac mini m2']),
-  macbook('mac-mini-m4', 'Mac Mini M4', ['mac mini m4']),
-  macbook('mac-mini-m4-pro', 'Mac Mini M4 Pro', ['mac mini m4 pro']),
+  macMini('mac-mini-m2', 'Mac Mini M2', ['mac mini m2']),
+  macMini('mac-mini-m4', 'Mac Mini M4', ['mac mini m4']),
+  macMini('mac-mini-m4-pro', 'Mac Mini M4 Pro', ['mac mini m4 pro']),
   imac('imac-m4-24', 'iMac M4 24"', ['imac m4 24']),
   imac('imac-m5-24', 'iMac M5 24"', ['imac m5 24']),
   macStudio('mac-studio-m3-ultra', 'Mac Studio M3 Ultra', ['mac studio m3 ultra']),
@@ -259,13 +277,13 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   watch('apple-watch-ultra-2-49', 'Apple Watch Ultra 2 49mm', ['apple watch ultra 2 49', 'watch ultra 2 49', 'ultra 2 49']),
   watch('apple-watch-ultra-3-49', 'Apple Watch Ultra 3 49mm', ['apple watch ultra 3 49', 'watch ultra 3 49', 'ultra 3 49']),
 
-  accessory('airpods', 'AirPods', ['airpods', 'air pods']),
-  accessory('airpods-2', 'AirPods 2', ['airpods 2', 'air pods 2']),
-  accessory('airpods-4', 'AirPods 4', ['airpods 4', 'air pods 4']),
-  accessory('airpods-pro-2', 'AirPods Pro 2', ['airpods pro 2', 'air pods pro 2']),
-  accessory('airpods-pro-3', 'AirPods Pro 3', ['airpods pro 3', 'air pods pro 3']),
-  accessory('airpods-max', 'AirPods Max', ['airpods max', 'air pods max']),
-  accessory('airpods-max-2', 'AirPods Max 2', ['airpods max 2', 'air pods max 2']),
+  airpods('airpods', 'AirPods', ['airpods', 'air pods']),
+  airpods('airpods-2', 'AirPods 2', ['airpods 2', 'air pods 2']),
+  airpods('airpods-4', 'AirPods 4', ['airpods 4', 'air pods 4']),
+  airpods('airpods-pro-2', 'AirPods Pro 2', ['airpods pro 2', 'air pods pro 2']),
+  airpods('airpods-pro-3', 'AirPods Pro 3', ['airpods pro 3', 'air pods pro 3']),
+  airpods('airpods-max', 'AirPods Max', ['airpods max', 'air pods max']),
+  airpods('airpods-max-2', 'AirPods Max 2', ['airpods max 2', 'air pods max 2']),
   accessory('earpods', 'EarPods', ['earpods', 'ear pods']),
   accessory('apple-pencil', 'Apple Pencil', ['apple pencil', 'pencil apple']),
   accessory('apple-pencil-1', 'Apple Pencil 1', ['apple pencil 1', 'pencil 1']),
@@ -283,3 +301,17 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   ]),
   accessory('apple-cable-usb-c', 'Cabo Apple USB-C', ['cabo apple usb c']),
 ] as const;
+
+export function validateCanonicalModelFamilyReferences(
+  models: readonly CanonicalModelRegistryEntry[],
+  families: readonly CanonicalFamilyDefinition[] = canonicalFamilyRegistry,
+) {
+  const familyKeys = new Set(families.map((family) => family.key));
+  for (const model of models) {
+    if (!familyKeys.has(model.familyKey)) {
+      throw new Error(`Unknown canonical family key for model ${model.key}: ${model.familyKey}`);
+    }
+  }
+}
+
+validateCanonicalModelFamilyReferences(canonicalModelRegistry);

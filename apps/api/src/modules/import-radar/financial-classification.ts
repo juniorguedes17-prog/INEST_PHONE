@@ -1,10 +1,13 @@
-import { normalizeCanonicalProductIdentity } from '@inest/product-identity';
+import {
+  normalizeCanonicalProductIdentity,
+  type FinancialClassification,
+} from '@inest/product-identity';
 import type {
   FinancialClassificationAuthorityProvenance,
   ManufacturerResolution,
 } from '../manufacturers/manufacturer-resolver';
 
-export type FinancialClassification = 'APPLE' | 'NON_APPLE' | 'UNRESOLVED';
+export type { FinancialClassification } from '@inest/product-identity';
 export type SourceManufacturerProvenance = 'EXPLICIT_SOURCE';
 
 export type FinancialClassificationReason =
@@ -34,7 +37,7 @@ export interface FinancialClassificationResult {
   reason: FinancialClassificationReason;
   manufacturerKey?: string;
   canonicalName?: string;
-  provenance?: FinancialClassificationAuthorityProvenance;
+  provenance?: FinancialClassificationAuthorityProvenance | 'CANONICAL_FAMILY_REGISTRY';
 }
 
 export type PricingEligibilityStatus = 'ELIGIBLE' | 'NEEDS_INPUT' | 'BLOCKED';
@@ -84,6 +87,34 @@ export function resolveClassificationPricingEligibility(
 export function resolveFinancialClassification(
   input: FinancialClassificationInput,
 ): FinancialClassificationResult {
+  const identity = normalizeCanonicalProductIdentity({
+    productName: input.productName,
+    category: input.category ?? undefined,
+    model: input.model ?? undefined,
+    capacity: input.capacity ?? undefined,
+    color: input.color ?? undefined,
+    quality: input.condition ?? undefined,
+  });
+  const canonicalClassification =
+    identity.canonicalFamilyStatus === 'matched'
+      ? identity.canonicalFamilyClassification
+      : null;
+  const productClassification =
+    input.canonicalProduct?.isAppleOriginal === true
+      ? 'APPLE'
+      : input.canonicalProduct?.isAppleOriginal === false
+        ? 'NON_APPLE'
+        : null;
+
+  if (
+    productClassification &&
+    !identity.canonicalModelMatched &&
+    canonicalClassification &&
+    productClassification !== canonicalClassification
+  ) {
+    return { classification: 'UNRESOLVED', reason: 'manufacturer_conflict' };
+  }
+
   if (input.canonicalProduct?.isAppleOriginal === true) {
     return {
       classification: 'APPLE',
@@ -99,25 +130,31 @@ export function resolveFinancialClassification(
     };
   }
 
-  const identity = normalizeCanonicalProductIdentity({
-    productName: input.productName,
-    category: input.category ?? undefined,
-    model: input.model ?? undefined,
-    capacity: input.capacity ?? undefined,
-    color: input.color ?? undefined,
-    quality: input.condition ?? undefined,
-  });
-  const appleByRegistry = identity.canonicalModelMatched;
   const manufacturer = input.manufacturerResolution ?? null;
 
-  if (appleByRegistry) {
+  if (identity.canonicalFamilyStatus === 'ambiguous') {
+    return { classification: 'UNRESOLVED', reason: 'manufacturer_conflict' };
+  }
+
+  if (identity.canonicalModelMatched) {
     if (manufacturer?.status === 'FOUND') {
       return { classification: 'UNRESOLVED', reason: 'manufacturer_conflict' };
     }
     return {
-      classification: 'APPLE',
+      classification: canonicalClassification ?? 'UNRESOLVED',
       reason: 'apple_registry',
       provenance: 'APPLE_CANONICAL_REGISTRY',
+    };
+  }
+
+  if (canonicalClassification) {
+    if (manufacturer?.status === 'FOUND') {
+      return { classification: 'UNRESOLVED', reason: 'manufacturer_conflict' };
+    }
+    return {
+      classification: canonicalClassification,
+      reason: 'apple_registry',
+      provenance: 'CANONICAL_FAMILY_REGISTRY',
     };
   }
 

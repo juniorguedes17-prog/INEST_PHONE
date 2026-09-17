@@ -72,6 +72,9 @@ test('preserva a identidade homologada de iPhone Pro Max', () => {
 
   assert.deepEqual(result, {
     canonicalCategory: 'iPhone',
+    canonicalFamily: 'iphone',
+    canonicalFamilyStatus: 'matched',
+    canonicalFamilyClassification: 'APPLE',
     canonicalModelKey: 'iphone-17-pro-max',
     canonicalModelLabel: 'iPhone 17 Pro Max',
     canonicalModelMatched: true,
@@ -97,6 +100,9 @@ test('preserva RAM, armazenamento, tela e chip de MacBook', () => {
 
   assert.deepEqual(result, {
     canonicalCategory: 'MacBook',
+    canonicalFamily: 'macbook',
+    canonicalFamilyStatus: 'matched',
+    canonicalFamilyClassification: 'APPLE',
     canonicalModelKey: 'macbook-air-m5-13',
     canonicalModelLabel: 'MacBook Air M5 13"',
     canonicalModelMatched: true,
@@ -370,6 +376,9 @@ test('preserva tamanho e conectividade de Apple Watch', () => {
 
   assert.deepEqual(result, {
     canonicalCategory: 'Apple Watch',
+    canonicalFamily: 'apple-watch',
+    canonicalFamilyStatus: 'matched',
+    canonicalFamilyClassification: 'APPLE',
     canonicalModelKey: 'apple-watch-series-11-46',
     canonicalModelLabel: 'Apple Watch Series 11 46mm',
     canonicalModelMatched: true,

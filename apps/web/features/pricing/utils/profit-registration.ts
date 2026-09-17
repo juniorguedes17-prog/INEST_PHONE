@@ -2,6 +2,7 @@ import {
   canonicalColorAliases,
   normalizeCanonicalProductIdentity,
   normalizeCanonicalText,
+  resolveCatalogModelLookupKey,
 } from '../../price-radar/utils/canonical-product-identity';
 import type {
   ProductFormPayload,
@@ -100,6 +101,7 @@ export function resolveProfitRegistration({
 
   const source = toCanonicalSource(item);
   const identity = normalizeCanonicalProductIdentity(source);
+  const catalogModelKey = resolveCatalogModelLookupKey(source);
   const matchingProduct = products.find((product) =>
     matchesCatalogProduct(product, item, identity),
   );
@@ -126,7 +128,7 @@ export function resolveProfitRegistration({
     };
   }
 
-  if (!identity.canonicalModelMatched || !identity.canonicalModelKey) {
+  if (!identity.canonicalModelMatched || !identity.canonicalModelKey || !catalogModelKey) {
     return {
       action: 'incomplete',
       reason: 'NO_CANONICAL_MODEL',
@@ -137,17 +139,20 @@ export function resolveProfitRegistration({
 
   const canonicalModelCandidates = references.models.filter(
     (candidate) =>
-      candidate.name &&
-      normalizeCanonicalProductIdentity({
-        productName: candidate.name,
-        category: identity.canonicalCategory,
-      }).canonicalModelKey === identity.canonicalModelKey,
+      candidate.normalizedName === catalogModelKey ||
+      (candidate.name &&
+        normalizeCanonicalProductIdentity({
+          productName: candidate.name,
+          category: identity.canonicalCategory,
+        }).canonicalModelKey === identity.canonicalModelKey),
   );
 
   const catalogType = resolveCatalogProductType(
     canonicalModelCandidates,
     references,
+    catalogModelKey,
     identity.canonicalModelKey,
+    identity.canonicalCategory,
   );
   if (catalogType.action === 'incomplete') {
     return {
@@ -194,7 +199,9 @@ export function resolveProfitRegistration({
 function resolveCatalogProductType(
   canonicalModelCandidates: ProductReferences['models'],
   references: ProductReferences,
-  canonicalModelKey: string,
+  catalogModelKey: string,
+  financialModelKey: string,
+  canonicalCategory: string,
 ): CatalogProductTypeResolution {
   if (canonicalModelCandidates.length === 0) {
     return { action: 'incomplete', reason: 'NO_CANONICAL_MODEL' };
@@ -247,8 +254,35 @@ function resolveCatalogProductType(
     };
   }
 
+  const catalogModelIds = new Set(
+    compatibleMatches
+      .filter((candidate) => candidate.model.normalizedName === catalogModelKey)
+      .map((candidate) => candidate.model.id),
+  );
+  const financialModelIds = new Set(
+    compatibleMatches
+      .filter(
+        (candidate) =>
+          candidate.model.normalizedName === financialModelKey ||
+          (candidate.model.name &&
+            normalizeCanonicalProductIdentity({
+              productName: candidate.model.name,
+              category: canonicalCategory,
+            }).canonicalModelKey === financialModelKey),
+      )
+      .map((candidate) => candidate.model.id),
+  );
+  if (catalogModelIds.size > 0 && financialModelIds.size > 0) {
+    const modelIds = new Set([...catalogModelIds, ...financialModelIds]);
+    if (modelIds.size > 1) {
+      return { action: 'incomplete', reason: 'MULTIPLE_CANONICAL_MODELS' };
+    }
+  }
+
   const canonicalModels = compatibleMatches.filter(
-    (candidate) => candidate.model.normalizedName === canonicalModelKey,
+    (candidate) =>
+      candidate.model.normalizedName === catalogModelKey ||
+      candidate.model.normalizedName === financialModelKey,
   );
   if (canonicalModels.length === 1) {
     const [canonicalModel] = canonicalModels;

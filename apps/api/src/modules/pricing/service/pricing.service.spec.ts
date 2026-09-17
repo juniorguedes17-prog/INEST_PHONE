@@ -478,6 +478,37 @@ describe('PricingService native product profit integration', () => {
     });
   });
 
+  it('keeps an Apple family match pending when the generation is not cataloged', async () => {
+    const service = createTemporaryPyPricingService([]);
+    const title =
+      'Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 24GB memory, 512GB storage';
+
+    const result = await service.calculateTemporaryImport(
+      temporaryPyPricingDto({
+        productName: title,
+        displayName: title,
+        category: 'Mac Mini',
+        model: title,
+        chip: 'M6',
+        ram: '24GB',
+        capacity: '512GB',
+        condition: 'NOVO',
+      }),
+    );
+
+    expect(result).toMatchObject({
+      financialClassification: 'APPLE',
+      calculationStatus: 'insufficient_identity',
+      catalogProductId: null,
+      importCosts: { totalCost: 5000 },
+      product: { chip: 'M6', ram: '24GB', capacity: '512GB' },
+      desiredNetProfit: null,
+      salePrice: null,
+      offerPrice: null,
+      offerDraft: null,
+    });
+  });
+
   it('confirms a Temporary Import condition for one execution and reaches ready with existing profit', async () => {
     const profitDescription = 'Mac Mini M2 8GB 512GB';
     const service = createTemporaryPyPricingService([

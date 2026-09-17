@@ -63,6 +63,180 @@ test('cria o payload nativo para cotacao sem Product correspondente', () => {
   });
 });
 
+test('localiza o Model cadastral do payload real de Mac Mini sem reduzir a identidade financeira', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'Apple Mac Mini MCX44LL/A Apple M4 Pro / Memória 24GB / SSD 512GB',
+        category: 'Mac Mini',
+        model: 'Apple Mac Mini MCX44LL/A Apple M4 Pro',
+        capacity: '512GB',
+        color: '',
+        condition: 'NOVO',
+      },
+      profit: {
+        productDescription: 'Apple Mac Mini MCX44LL/A Apple M4 Pro 24GB 512GB',
+      },
+    },
+    netProfit: '1.500,00',
+    products: [],
+    references: {
+      categories: [{ id: 'category-mac', name: 'MacBook', type: 'MACBOOK' }],
+      models: [
+        {
+          id: 'model-mac-mini',
+          categoryId: 'category-mac',
+          name: 'Mac Mini',
+          normalizedName: 'mac-mini',
+          productType: 'MACBOOK',
+        },
+      ],
+      colors: [],
+      storages: [{ id: 'storage-512', displayName: '512GB' }],
+    },
+  });
+
+  assert.equal(result.action, 'create');
+  if (result.action !== 'create') return;
+  assert.equal(result.payload.modelId, 'model-mac-mini');
+  assert.equal(result.payload.storageId, 'storage-512');
+  assert.equal(result.payload.profitCondition, 'NOVO');
+  assert.equal(
+    result.payload.productDescription,
+    'Apple Mac Mini MCX44LL/A Apple M4 Pro 24GB 512GB',
+  );
+});
+
+test('falha fechado quando as chaves financeira e cadastral apontam para Models distintos', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'Apple Mac Mini MCX44LL/A Apple M4 Pro / Memória 24GB / SSD 512GB',
+        category: 'Mac Mini',
+        model: 'Apple Mac Mini MCX44LL/A Apple M4 Pro',
+        capacity: '512GB',
+        color: '',
+        condition: 'NOVO',
+      },
+      profit: {
+        productDescription: 'Apple Mac Mini MCX44LL/A Apple M4 Pro 24GB 512GB',
+      },
+    },
+    netProfit: '1.500,00',
+    products: [],
+    references: {
+      categories: [{ id: 'category-mac', name: 'MacBook', type: 'MACBOOK' }],
+      models: [
+        {
+          id: 'model-catalog',
+          categoryId: 'category-mac',
+          name: 'Mac Mini',
+          normalizedName: 'mac-mini',
+          productType: 'MACBOOK',
+        },
+        {
+          id: 'model-financial',
+          categoryId: 'category-mac',
+          name: 'Mac Mini M4 Pro',
+          normalizedName: 'legacy-m4-pro-custom',
+          productType: 'MACBOOK',
+        },
+      ],
+      colors: [],
+      storages: [{ id: 'storage-512', displayName: '512GB' }],
+    },
+  });
+
+  assert.equal(result.action, 'incomplete');
+  if (result.action !== 'incomplete') return;
+  assert.equal(result.reason, 'MULTIPLE_CANONICAL_MODELS');
+});
+
+test('aceita as chaves financeira e cadastral quando ambas resolvem o mesmo Model', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'Apple Mac Mini MCX44LL/A Apple M4 Pro / Memória 24GB / SSD 512GB',
+        category: 'Mac Mini',
+        model: 'Apple Mac Mini MCX44LL/A Apple M4 Pro',
+        capacity: '512GB',
+        color: '',
+        condition: 'NOVO',
+      },
+      profit: {
+        productDescription: 'Apple Mac Mini MCX44LL/A Apple M4 Pro 24GB 512GB',
+      },
+    },
+    netProfit: '1.500,00',
+    products: [],
+    references: {
+      categories: [{ id: 'category-mac', name: 'MacBook', type: 'MACBOOK' }],
+      models: [
+        {
+          id: 'model-shared',
+          categoryId: 'category-mac',
+          name: 'Mac Mini M4 Pro',
+          normalizedName: 'mac-mini',
+          productType: 'MACBOOK',
+        },
+      ],
+      colors: [],
+      storages: [{ id: 'storage-512', displayName: '512GB' }],
+    },
+  });
+
+  assert.equal(result.action, 'create');
+  if (result.action !== 'create') return;
+  assert.equal(result.payload.modelId, 'model-shared');
+});
+
+test('reutiliza a mesma projecao cadastral para outra familia rica existente', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'Apple MacBook Pro M5 Pro 16-inch 24GB RAM 1TB SSD',
+        category: 'MacBook',
+        model: 'MacBook Pro M5 Pro 16-inch',
+        capacity: '1TB',
+        color: '',
+        condition: 'NOVO',
+      },
+      profit: {
+        productDescription: 'MacBook Pro M5 Pro 16-inch 24GB RAM 1TB SSD',
+      },
+    },
+    netProfit: '1.700,00',
+    products: [],
+    references: {
+      categories: [{ id: 'category-mac', name: 'MacBook', type: 'MACBOOK' }],
+      models: [
+        {
+          id: 'model-macbook-pro',
+          categoryId: 'category-mac',
+          name: 'MacBook Pro',
+          normalizedName: 'macbook-pro',
+          productType: 'MACBOOK',
+        },
+      ],
+      colors: [],
+      storages: [{ id: 'storage-1tb', displayName: '1TB' }],
+    },
+  });
+
+  assert.equal(result.action, 'create');
+  if (result.action !== 'create') return;
+  assert.equal(result.payload.modelId, 'model-macbook-pro');
+  assert.equal(result.payload.storageId, 'storage-1tb');
+});
+
 test('transports an explicit Non-Apple classification without using the product name', () => {
   const result = resolveProfitRegistration({
     item: { ...item, financialClassification: 'NON_APPLE' },

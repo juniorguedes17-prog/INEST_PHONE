@@ -63,7 +63,57 @@ describe('resolveFinancialClassification', () => {
         productName: 'MacBook Air M5 13 16GB 512GB',
         condition: 'NOVO',
       }),
-    ).toMatchObject({ classification: 'APPLE', reason: 'apple_registry' });
+    ).toMatchObject({
+      classification: 'APPLE',
+      reason: 'apple_registry',
+      provenance: 'APPLE_CANONICAL_REGISTRY',
+    });
+  });
+
+  it('uses the canonical family authority when the generation is not cataloged', () => {
+    expect(
+      resolveFinancialClassification({
+        productName:
+          'Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 24GB memory, 512GB storage',
+        condition: 'NOVO',
+      }),
+    ).toMatchObject({
+      classification: 'APPLE',
+      reason: 'apple_registry',
+      provenance: 'CANONICAL_FAMILY_REGISTRY',
+    });
+  });
+
+  it('fails closed for conflicts involving canonical family evidence', () => {
+    expect(
+      resolveFinancialClassification({
+        productName:
+          'Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 24GB memory, 512GB storage',
+        canonicalProduct: { isAppleOriginal: false },
+      }),
+    ).toMatchObject({ classification: 'UNRESOLVED', reason: 'manufacturer_conflict' });
+    expect(
+      resolveFinancialClassification({
+        productName:
+          'Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 24GB memory, 512GB storage',
+        manufacturerResolution: canon,
+      }),
+    ).toMatchObject({ classification: 'UNRESOLVED', reason: 'manufacturer_conflict' });
+    expect(
+      resolveFinancialClassification({
+        productName: 'Mac Mini M4 Pro 24GB 512GB iPhone 17 Pro 256GB',
+      }),
+    ).toMatchObject({ classification: 'UNRESOLVED', reason: 'manufacturer_conflict' });
+  });
+
+  it('does not promote an explicit source manufacturer without current registry authority', () => {
+    expect(
+      resolveFinancialClassification({
+        productName: 'Produto XYZ Pro 512GB',
+        sourceManufacturer: 'Apple',
+        sourceManufacturerProvenance: 'EXPLICIT_SOURCE',
+      }),
+    ).toMatchObject({ classification: 'UNRESOLVED', reason: 'classification_unresolved' });
   });
 
   it('accepts only a registry-resolved explicit source manufacturer for third-party routing', () => {

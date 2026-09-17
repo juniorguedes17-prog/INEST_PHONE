@@ -378,13 +378,18 @@ describe('ImportRadarService catalog product handoff', () => {
   it.each([
     [
       null,
+      'APPLE',
+      'apple_registry',
+      { status: 'ELIGIBLE', reason: 'financial_identity_insufficient' },
+    ],
+    [
+      false,
       'UNRESOLVED',
-      'classification_unresolved',
+      'manufacturer_conflict',
       { status: 'ELIGIBLE', reason: 'classification_unresolved' },
     ],
-    [false, 'NON_APPLE', 'canonical_product', { status: 'ELIGIBLE', reason: null }],
   ] as const)(
-    'preserves existing financial authority for a reconciled PY Product with isAppleOriginal=%s',
+    'applies family evidence fail-closed for a reconciled PY Product with isAppleOriginal=%s',
     async (isAppleOriginal, classification, reason, pricingEligibility) => {
       const product = eligibleCatalogProduct({ isAppleOriginal });
       const result = await createService([], undefined, undefined, undefined, [product]).calculate(

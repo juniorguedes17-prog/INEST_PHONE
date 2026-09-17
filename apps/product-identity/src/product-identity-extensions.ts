@@ -5,22 +5,13 @@ import {
   type CanonicalProductSource,
 } from './canonical-product-identity';
 import { canonicalModelRegistry } from './canonical-model-registry';
+import type { ProductIdentityFamily } from './canonical-family-registry';
 import { normalizeProductCondition } from './product-condition-normalizer';
+
+export type { ProductIdentityFamily } from './canonical-family-registry';
 
 export type ProductIdentityResolutionStatus =
   'valid' | 'insufficient_identity' | 'ambiguous_identity';
-
-export type ProductIdentityFamily =
-  | 'iphone'
-  | 'ipad'
-  | 'macbook'
-  | 'mac-mini'
-  | 'imac'
-  | 'mac-studio'
-  | 'apple-watch'
-  | 'airpods'
-  | 'accessory'
-  | 'unknown';
 
 export interface CanonicalVariantIdentity {
   status: ProductIdentityResolutionStatus;
@@ -226,7 +217,7 @@ function createIdentityContext(input: CanonicalProductSource | string): Identity
       .filter(Boolean)
       .join(' '),
   );
-  const family = resolveFamily(canonical);
+  const family = canonical.canonicalFamily;
   const feature = resolveFeature(text);
 
   return {
@@ -235,7 +226,9 @@ function createIdentityContext(input: CanonicalProductSource | string): Identity
     text,
     commercialFinish: resolveCommercialFinish(text),
     ignoredDescriptors: resolveIgnoredDescriptors(text, family),
-    ambiguity: !canonical.canonicalModelMatched && hasConflictingRegistryMatches(text),
+    ambiguity:
+      canonical.canonicalFamilyStatus === 'ambiguous' ||
+      (!canonical.canonicalModelMatched && hasConflictingRegistryMatches(text)),
     values: {
       model: canonical.canonicalModelKey || null,
       condition: resolveExplicitCondition(text),
@@ -335,20 +328,6 @@ function resolveStatus(
     return 'insufficient_identity';
   }
   return 'valid';
-}
-
-function resolveFamily(identity: CanonicalProductIdentity): ProductIdentityFamily {
-  const model = identity.canonicalModelKey;
-  if (model.startsWith('iphone-')) return 'iphone';
-  if (model.startsWith('ipad-')) return 'ipad';
-  if (model.startsWith('mac-mini-')) return 'mac-mini';
-  if (model.startsWith('imac-')) return 'imac';
-  if (model.startsWith('mac-studio-')) return 'mac-studio';
-  if (model.startsWith('macbook-')) return 'macbook';
-  if (model.startsWith('apple-watch-')) return 'apple-watch';
-  if (model.startsWith('airpods')) return 'airpods';
-  if (identity.canonicalCategory === 'Acessorios' && model) return 'accessory';
-  return 'unknown';
 }
 
 function resolveExplicitCondition(text: string) {

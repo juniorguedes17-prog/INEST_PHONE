@@ -2,7 +2,17 @@ import {
   canonicalModelRegistry,
   type CanonicalModelRegistryEntry,
 } from './canonical-model-registry';
+import {
+  findCanonicalFamilyDefinition,
+  resolveCanonicalFamily,
+  type CanonicalFamilyClassification,
+  type CanonicalFamilyResolutionStatus,
+  type ProductIdentityFamily,
+} from './canonical-family-registry';
+import { normalizeCanonicalText } from './canonical-text';
 import { normalizeProductCondition } from './product-condition-normalizer';
+
+export { normalizeCanonicalText } from './canonical-text';
 
 export interface CanonicalProductSource {
   productDescription?: string | null;
@@ -18,6 +28,9 @@ export interface CanonicalProductSource {
 
 export interface CanonicalProductIdentity {
   canonicalCategory: string;
+  canonicalFamily: ProductIdentityFamily;
+  canonicalFamilyStatus: CanonicalFamilyResolutionStatus;
+  canonicalFamilyClassification: CanonicalFamilyClassification | null;
   canonicalModelKey: string;
   canonicalModelLabel: string;
   canonicalModelMatched: boolean;
@@ -95,6 +108,7 @@ export function normalizeCanonicalProductIdentity(
   const identityText = normalizeCanonicalText(
     [preferredText, source.category, source.model].filter(Boolean).join(' '),
   );
+  const familyText = normalizeCanonicalText([preferredText, source.model].filter(Boolean).join(' '));
   const attributeText = normalizeCanonicalText(
     [
       source.productDescription,
@@ -118,6 +132,7 @@ export function normalizeCanonicalProductIdentity(
     screen: explicitScreen,
     chip: explicitChip,
   });
+  const familyResolution = resolveProductFamily(familyText, modelResolution.entry);
   const canonicalCategory = modelResolution.entry?.category ?? inferredCategory;
   const canonicalScreen = explicitScreen ?? modelResolution.entry?.invariants?.screen ?? null;
   const canonicalScreenSource: CanonicalAttributeSource = explicitScreen
@@ -141,6 +156,9 @@ export function normalizeCanonicalProductIdentity(
 
   return {
     canonicalCategory,
+    canonicalFamily: familyResolution.family,
+    canonicalFamilyStatus: familyResolution.status,
+    canonicalFamilyClassification: familyResolution.classification,
     canonicalModelKey: modelResolution.entry?.key ?? '',
     canonicalModelLabel: modelResolution.entry?.label ?? '',
     canonicalModelMatched: Boolean(modelResolution.entry),
@@ -183,30 +201,33 @@ export function resolveCatalogModelLookupKey(input: CanonicalProductSource | str
   return toCatalogModelLookupKey(catalogModel);
 }
 
-export function normalizeCanonicalText(value: string | null | undefined) {
-  return (value ?? '')
-    .toString()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[\u{1F4B0}\u{1F4B2}\u{1F4B5}]\s*\d[\d.,]*\b/gu, ' ')
-    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}]/gu, ' ')
-    .replace(/\*|~|`/g, ' ')
-    .replace(/\b\d{1,2}[\s/.-]+\d{1,2}[\s/.-]+20\d{2}\b/g, ' ')
-    .replace(/\br\$?\s*\d[\d.,]*\b|\$\s*\d[\d.,]*/gi, ' ')
-    .replace(/\b\d{2,4}[.,]\d{2}\b/g, ' ')
-    .replace(/[|_()[\]{}:;,+-]/g, ' ')
-    .replace(/\b(\d+)\s*(gb|tb|mm)\b/gi, '$1$2')
-    .replace(/\b(\d+)\s*g\b/gi, '$1g')
-    .replace(/\b(\d+(?:\.\d+)?)\s*(?:inch|inches|polegadas?)\b/gi, '$1inch')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
 interface CanonicalModelResolution {
   entry: CanonicalModelRegistryEntry | null;
   confidence: number;
   matchMethod: CanonicalProductIdentity['canonicalModelMatchMethod'];
+}
+
+function resolveProductFamily(
+  identityText: string,
+  modelEntry: CanonicalModelRegistryEntry | null,
+) {
+  const textResolution = resolveCanonicalFamily(identityText);
+  if (!modelEntry) return textResolution;
+
+  const modelFamily = findCanonicalFamilyDefinition(modelEntry.familyKey);
+  if (!modelFamily) {
+    return { status: 'unresolved', family: 'unknown', label: null, classification: null } as const;
+  }
+  if (textResolution.status === 'ambiguous') return textResolution;
+  if (textResolution.status === 'matched' && textResolution.family !== modelEntry.familyKey) {
+    return { status: 'ambiguous', family: 'unknown', label: null, classification: null } as const;
+  }
+  return {
+    status: 'matched',
+    family: modelFamily.key,
+    label: modelFamily.label,
+    classification: modelFamily.classification,
+  } as const;
 }
 
 function resolveCanonicalModel({
