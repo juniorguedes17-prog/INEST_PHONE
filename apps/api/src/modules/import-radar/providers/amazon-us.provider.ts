@@ -17,7 +17,7 @@ const CACHE_TTL_MS = 5 * 60_000;
 
 interface AmazonSearchCandidate {
   asin: string;
-  category: string;
+  category?: string;
 }
 
 interface CacheEntry {
@@ -135,8 +135,9 @@ export class AmazonUsProvider implements ImportProvider {
 }
 
 /**
- * Search results are used only to discover Amazon-owned ASINs and their
- * structured source category. The price and seller always come from the
+ * Search results are used only to discover Amazon-owned ASINs. A source
+ * category is retained when Amazon exposes it, but is not required to
+ * recognize a valid search result. The price and seller always come from the
  * corresponding public product buy-box.
  */
 export function parseAmazonUsSearchHtml(html: string): AmazonSearchCandidate[] {
@@ -160,15 +161,16 @@ export function parseAmazonUsSearchHtml(html: string): AmazonSearchCandidate[] {
     const card = html.slice(cardStart, cardEnd);
 
     const categories = uniqueTextMatches(card, /\bdata-category\s*=\s*"([^"]+)"/gi);
-    if (categories.length !== 1 || !categories[0]) continue;
+    if (categories.length > 1) continue;
 
-    const candidate = { asin, category: categories[0] };
+    const category = categories.length === 1 ? categories[0] : undefined;
+    const candidate = category ? { asin, category } : { asin };
     const existing = candidates.get(asin);
-    if (existing && existing.category !== candidate.category) {
+    if (existing?.category && candidate.category && existing.category !== candidate.category) {
       candidates.delete(asin);
       continue;
     }
-    candidates.set(asin, candidate);
+    if (!existing || (!existing.category && candidate.category)) candidates.set(asin, candidate);
   }
 
   if (!candidates.size) {
@@ -196,7 +198,7 @@ export function parseAmazonUsDetailHtml(
 
   if (!sourceName || !priceUsd || seller !== 'Amazon.com') return null;
 
-  const evidence = deriveAmazonSourceEvidence(sourceName, candidate.category);
+  const evidence = deriveAmazonSourceEvidence(sourceName, candidate.category ?? '');
 
   return {
     id: `amazon-us:${candidate.asin}`,
@@ -204,7 +206,7 @@ export function parseAmazonUsDetailHtml(
     name: sourceName,
     store: 'Amazon USA',
     retailer: 'Amazon',
-    category: candidate.category,
+    category: candidate.category ?? '',
     priceUsd,
     productUrl: new URL(`/dp/${candidate.asin}`, AMAZON_US_BASE_URL).toString(),
     origin: 'US',

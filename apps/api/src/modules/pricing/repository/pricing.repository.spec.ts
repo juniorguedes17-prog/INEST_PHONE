@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { PricingRepository } from './pricing.repository';
 
-function catalogProduct(id: string, model: string, capacity: string | null) {
+function catalogProduct(
+  id: string,
+  model: string,
+  capacity: string | null,
+  variantAttributes: Record<string, string> | null = null,
+) {
   return {
     id,
     profitProductId: 1,
@@ -15,6 +20,7 @@ function catalogProduct(id: string, model: string, capacity: string | null) {
     model: { name: model, normalizedName: model.toLowerCase().replace(/\s+/g, '-') },
     color: null,
     storage: capacity ? { displayName: capacity } : null,
+    variantAttributes,
   };
 }
 
@@ -74,5 +80,107 @@ describe('PricingRepository.findEligibleCatalogProductCandidates', () => {
       }),
     ).resolves.toEqual([]);
     expect(findMany).not.toHaveBeenCalled();
+  });
+
+  it('eliminates the artificial MacBook ambiguity with applicable structured attributes', async () => {
+    const compatible = catalogProduct('macbook-16gb', 'MacBook Pro', '1TB', {
+      ram: '16GB',
+      screen: 'Standard Display',
+    });
+    const incompatible = catalogProduct('macbook-8gb', 'MacBook Pro', '1TB', {
+      ram: '8GB',
+      screen: 'Standard Display',
+    });
+    const findMany = vi.fn().mockResolvedValue([compatible, incompatible]);
+    const repository = new PricingRepository({ product: { findMany } } as unknown as PrismaService);
+
+    const beforeStructuredIdentity = await repository.findEligibleCatalogProductCandidates({
+      modelKey: 'macbook-pro',
+      capacity: '1TB',
+      condition: 'NOVO',
+    });
+    const result = await repository.findEligibleCatalogProductCandidates({
+      modelKey: 'macbook-pro',
+      capacity: '1TB',
+      condition: 'NOVO',
+      variantAttributes: { ram: '16GB', screen: 'Standard Display' },
+    });
+
+    expect(beforeStructuredIdentity.map((candidate) => candidate.id)).toEqual([
+      'macbook-16gb',
+      'macbook-8gb',
+    ]);
+    expect(result.map((candidate) => candidate.id)).toEqual(['macbook-16gb']);
+  });
+
+  it('preserves fail-closed behavior when structured identity cannot distinguish candidates', async () => {
+    const first = catalogProduct('macbook-a', 'MacBook Pro', '1TB', {
+      ram: '16GB',
+      screen: 'Standard Display',
+    });
+    const second = catalogProduct('macbook-b', 'MacBook Pro', '1TB', {
+      ram: '16GB',
+      screen: 'Standard Display',
+    });
+    const repository = new PricingRepository({
+      product: { findMany: vi.fn().mockResolvedValue([first, second]) },
+    } as unknown as PrismaService);
+
+    await expect(
+      repository.findEligibleCatalogProductCandidates({
+        modelKey: 'macbook-pro',
+        capacity: '1TB',
+        condition: 'NOVO',
+        variantAttributes: { ram: '16GB', screen: 'Standard Display' },
+      }),
+    ).resolves.toHaveLength(2);
+  });
+
+  it('does not invent a missing structured dimension and preserves a legacy unique candidate', async () => {
+    const first = catalogProduct('macbook-16gb', 'MacBook Pro', '1TB', {
+      ram: '16GB',
+      screen: 'Standard Display',
+    });
+    const second = catalogProduct('macbook-8gb', 'MacBook Pro', '1TB', {
+      ram: '8GB',
+      screen: 'Standard Display',
+    });
+    const repository = new PricingRepository({
+      product: { findMany: vi.fn().mockResolvedValue([first, second]) },
+    } as unknown as PrismaService);
+
+    await expect(
+      repository.findEligibleCatalogProductCandidates({
+        modelKey: 'macbook-pro',
+        capacity: '1TB',
+        condition: 'NOVO',
+      }),
+    ).resolves.toHaveLength(2);
+
+    const uniqueRepository = new PricingRepository({
+      product: { findMany: vi.fn().mockResolvedValue([first]) },
+    } as unknown as PrismaService);
+    await expect(
+      uniqueRepository.findEligibleCatalogProductCandidates({
+        modelKey: 'macbook-pro',
+        capacity: '1TB',
+        condition: 'NOVO',
+      }),
+    ).resolves.toEqual([first]);
+  });
+
+  it('preserves zero compatible candidates', async () => {
+    const repository = new PricingRepository({
+      product: { findMany: vi.fn().mockResolvedValue([]) },
+    } as unknown as PrismaService);
+
+    await expect(
+      repository.findEligibleCatalogProductCandidates({
+        modelKey: 'macbook-pro',
+        capacity: '1TB',
+        condition: 'NOVO',
+        variantAttributes: { ram: '16GB', screen: 'Standard Display' },
+      }),
+    ).resolves.toEqual([]);
   });
 });

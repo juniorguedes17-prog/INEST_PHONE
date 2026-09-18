@@ -14,6 +14,9 @@ export interface ImportProduct {
   sourceManufacturerProvenance?: 'EXPLICIT_SOURCE';
   model?: string;
   capacity?: string;
+  ram?: string;
+  chip?: string;
+  screenSize?: string;
   color?: string;
   sourceEvidence?: string;
   city?: string;
@@ -130,6 +133,9 @@ export interface UsaSourceProduct {
   category: string;
   model?: string;
   capacity?: string;
+  ram?: string;
+  chip?: string;
+  screenSize?: string;
   color?: string;
   condition?: 'NOVO' | 'SEMINOVO' | 'CPO';
   imageUrl?: string;

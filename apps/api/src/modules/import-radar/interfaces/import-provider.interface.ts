@@ -22,6 +22,9 @@ export interface ImportProviderProduct {
   sourceManufacturerProvenance?: SourceManufacturerProvenance;
   model?: string;
   capacity?: string;
+  ram?: string;
+  chip?: string;
+  screenSize?: string;
   color?: string;
   city?: string;
   priceBrlSource?: number;

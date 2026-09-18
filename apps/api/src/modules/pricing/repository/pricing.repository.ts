@@ -9,6 +9,18 @@ export { OFFER_INCREMENT_KEY } from '../utils/offer-increment';
 export const PRICING_SCOPE = 'pricing';
 export const MODEL_PROFIT_PREFIX = 'model_profit.';
 
+function matchesVariantAttributes(
+  persisted: unknown,
+  expected: Readonly<Record<string, string>> | undefined,
+) {
+  if (!expected || Object.keys(expected).length === 0) return true;
+  if (!persisted || typeof persisted !== 'object' || Array.isArray(persisted)) return false;
+
+  return Object.entries(expected).every(
+    ([key, value]) => (persisted as Record<string, unknown>)[key] === value,
+  );
+}
+
 @Injectable()
 export class PricingRepository {
   constructor(@Inject(PrismaService) private readonly prismaService: PrismaService) {}
@@ -82,6 +94,7 @@ export class PricingRepository {
     modelKey: string;
     capacity: string;
     condition: ProductCondition;
+    variantAttributes?: Readonly<Record<string, string>>;
   }) {
     const normalizedCapacity = normalizeProfitProductDescription(input.capacity);
     if (!input.modelKey || !normalizedCapacity) return [];
@@ -105,6 +118,7 @@ export class PricingRepository {
         model: { select: { name: true, normalizedName: true } },
         color: { select: { name: true } },
         storage: { select: { displayName: true } },
+        variantAttributes: true,
       },
     });
 
@@ -115,6 +129,9 @@ export class PricingRepository {
         !candidate.storage ||
         normalizeProfitProductDescription(candidate.storage.displayName) !== normalizedCapacity
       ) {
+        continue;
+      }
+      if (!matchesVariantAttributes(candidate.variantAttributes, input.variantAttributes)) {
         continue;
       }
       matches.push(candidate);

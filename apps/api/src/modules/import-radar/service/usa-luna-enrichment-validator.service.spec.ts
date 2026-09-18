@@ -95,6 +95,33 @@ function createService(
 }
 
 describe('UsaLunaEnrichmentValidatorService', () => {
+  it('keeps Apple-provided Mac attributes as source fields when no enrichment candidate exists', async () => {
+    const { service } = createService(null);
+
+    const result = await service.enrich(
+      product({
+        sourceName: 'MacBook Pro, 14-inch, M4 Pro Chip, Space Black, 24GB unified memory, 1TB storage',
+        sourceManufacturer: 'Apple',
+        model: 'MacBook Pro',
+        capacity: '1TB',
+        chip: 'M4 Pro',
+        ram: '24GB',
+        screenSize: '14"',
+        color: 'Space Black',
+        condition: 'NOVO',
+      }),
+    );
+
+    expect(result.fields).toMatchObject({
+      chip: { value: 'M4 Pro', provenance: 'SOURCE' },
+      ram: { value: '24GB', provenance: 'SOURCE' },
+      screen: { value: '14"', provenance: 'SOURCE' },
+      storage: { value: '1TB', provenance: 'SOURCE' },
+      color: { value: 'Space Black', provenance: 'SOURCE' },
+      condition: { value: 'NOVO', provenance: 'SOURCE' },
+    });
+  });
+
   it.each([
     [
       'Samsung',

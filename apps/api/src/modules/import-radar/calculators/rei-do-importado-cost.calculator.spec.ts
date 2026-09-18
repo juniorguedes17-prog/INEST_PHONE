@@ -130,6 +130,19 @@ describe('calculateReiDoImportadoCost', () => {
     },
   );
 
+  it('keeps the full converted weight internally for a five-pound OTHER shipment', () => {
+    const result = calculateReiDoImportadoCost(input({ shippingWeightLbs: 5 }));
+
+    expect(result.breakdown.weightKg).toBeCloseTo(2.26796185, 8);
+
+    expect(result.breakdown).toMatchObject({
+      halfKgBlocks: 5,
+      baseShippingUsd: 600,
+      shippingDiscountUsd: 60,
+      shippingUsd: 540,
+    });
+  });
+
   it('uses configured Rei do Importado rates rather than calculator defaults', () => {
     const result = calculateReiDoImportadoCost(
       input({

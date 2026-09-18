@@ -483,6 +483,9 @@ export function UsaRadarOrigin() {
         category: displayPreflight?.normalizedPricing.category ?? selectedProduct.category,
         model: displayPreflight?.normalizedPricing.model ?? selectedProduct.model,
         capacity: displayPreflight?.normalizedPricing.capacity ?? selectedProduct.capacity,
+        ram: displayPreflight?.normalizedPricing.ram ?? selectedProduct.ram,
+        chip: displayPreflight?.normalizedPricing.chip ?? selectedProduct.chip,
+        screenSize: displayPreflight?.normalizedPricing.screenSize ?? selectedProduct.screenSize,
         color: displayPreflight?.normalizedPricing.color ?? selectedProduct.color,
         condition: displayPreflight?.condition ?? selectedProduct.condition,
       })
@@ -1246,9 +1249,7 @@ function UsaProductCard({
   onSelect: (checked: boolean) => void;
   onCalculate: () => void;
 }) {
-  const attributes = [product.model, product.capacity, product.color, product.condition].filter(
-    Boolean,
-  );
+  const attributes = usaProductBadges(product);
   return (
     <article
       className={`grid gap-4 rounded-2xl border bg-inest-surface p-5 shadow-[0_14px_34px_rgba(16,24,40,0.055)] lg:grid-cols-[72px_minmax(0,1fr)_190px_auto] lg:items-center ${selected ? 'border-inest-blue bg-blue-50/40' : 'border-inest-line/70'}`}
@@ -1323,6 +1324,18 @@ function UsaProductCard({
       </div>
     </article>
   );
+}
+
+function usaProductBadges(product: UsaSourceProduct) {
+  return [
+    product.model,
+    product.screenSize,
+    product.chip,
+    product.ram,
+    product.capacity,
+    product.color,
+    product.condition,
+  ].filter(Boolean);
 }
 
 function formatUsd(value: number) {

@@ -107,7 +107,7 @@ const ready = {
 };
 const componentSource = readFileSync(`${componentDirectory}/UsaRadarOrigin.tsx`, 'utf8');
 const componentCode = ts.transpileModule(
-  `${componentSource}\nexport { humanizeUsaBlockedReason as __testHumanizeUsaBlockedReason, isUsaCostReadyForPricingHandoff as __testIsUsaCostReadyForPricingHandoff };`,
+  `${componentSource}\nexport { usaProductBadges as __testUsaProductBadges, humanizeUsaBlockedReason as __testHumanizeUsaBlockedReason, isUsaCostReadyForPricingHandoff as __testIsUsaCostReadyForPricingHandoff };`,
   {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
   },
@@ -173,6 +173,7 @@ function setup(
   let cursor = 0;
   const exports: {
     UsaRadarOrigin?: () => Element;
+    __testUsaProductBadges?: (product: Props) => string[];
     __testHumanizeUsaBlockedReason?: (reason: string) => string;
     __testIsUsaCostReadyForPricingHandoff?: (execution: unknown) => boolean;
   } = {};
@@ -278,8 +279,24 @@ function setup(
     select,
     humanizeUsaBlockedReason: exports.__testHumanizeUsaBlockedReason!,
     isUsaCostReadyForPricingHandoff: exports.__testIsUsaCostReadyForPricingHandoff!,
+    usaProductBadges: exports.__testUsaProductBadges!,
   };
 }
+
+test('renders Apple Mac source attributes as the title and badges without reparsing', () => {
+  const h = setup();
+  assert.deepEqual(
+    [...h.usaProductBadges({
+      ...secondProduct,
+      screenSize: '14"',
+      chip: 'M4 Pro',
+      ram: '24GB',
+      capacity: '1TB',
+      color: 'Space Black',
+    })],
+    ['MacBook Air', '14"', 'M4 Pro', '24GB', '1TB', 'Space Black', 'NOVO'],
+  );
+});
 
 test('maps USA normalization failures and real conflicts to distinct user messages', () => {
   const { humanizeUsaBlockedReason } = setup();

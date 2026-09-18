@@ -233,6 +233,45 @@ describe('UsaCostPreflightService', () => {
     });
   });
 
+  it('carries Apple source-provided Mac attributes to the Pricing handoff without defaults', async () => {
+    const context = createContext('OTHER', 'NOVO');
+    context.fields.model.value = 'MacBook Pro';
+    context.fields.storage.value = '1TB';
+    context.fields.ram.value = '24GB';
+    context.fields.chip.value = 'M4 Pro';
+    context.fields.screen.value = '14"';
+    context.fields.color.value = 'Space Black';
+    const { service } = createService(readyDecision, context);
+
+    await expect(
+      service.preflight({
+        sourceProduct: {
+          ...product,
+          sourceName: 'MacBook Pro, 14-inch, M4 Pro Chip, Space Black, 24GB unified memory, 1TB storage',
+          category: 'Mac',
+          model: 'MacBook Pro',
+          capacity: '1TB',
+          ram: '24GB',
+          chip: 'M4 Pro',
+          screenSize: '14"',
+          color: 'Space Black',
+        },
+        redirector: redirector('REI_DO_IMPORTADO'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY_FOR_COST',
+      normalizedPricing: {
+        model: 'MacBook Pro',
+        capacity: '1TB',
+        ram: '24GB',
+        chip: 'M4 Pro',
+        screenSize: '14"',
+        color: 'Space Black',
+      },
+    });
+  });
+
   it('keeps absent optional pricing attributes null without defaults', async () => {
     const { service } = createService(readyDecision, createContext('CELULAR'));
 

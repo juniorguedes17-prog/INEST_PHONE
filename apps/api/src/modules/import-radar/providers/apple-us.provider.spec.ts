@@ -7,6 +7,7 @@ import {
   parseAppleUsConfiguredProductsHtml,
   parseAppleUsDirectConfigurationHtml,
 } from './apple-us.provider';
+import { adaptUsaSourceProduct } from '../usa-source-product.adapter';
 
 const iphoneCatalogHtml = `
   <a href="/shop/buy-iphone/iphone-example" data-display-name="iPhone&nbsp;Example" data-part-number="IPHONE_EXAMPLE_MAIN">
@@ -87,6 +88,24 @@ const macbookAirVariantPageHtml = `
       "offers":[{"@type":"Offer","priceCurrency":"USD","price":1599,"sku":"MDHC4LL/A"}]
     }
   </script>`;
+
+function macConfigurationHtml(
+  name: string,
+  sku: string,
+  price: number,
+  url: string,
+) {
+  return `
+    <script type="application/ld+json">
+      {
+        "@context":"https://schema.org",
+        "@type":"Product",
+        "name":"${name}",
+        "url":"${url}",
+        "offers":[{"@type":"Offer","priceCurrency":"USD","price":${price},"sku":"${sku}"}]
+      }
+    </script>`;
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -211,6 +230,118 @@ describe('AppleUsProvider', () => {
     expect(product?.sourceEvidence).toContain('16GB memory');
     expect(product?.sourceEvidence).toContain('1TB storage');
     expect(product?.sourceEvidence).toContain('USD $1599.00');
+  });
+
+  it('preserves Apple-provided Mac attributes through the USA source product contract', () => {
+    const [catalogProduct] = parseAppleUsCatalogHtml(macbookAirFamilyCatalogHtml, 'Mac');
+    const product = parseAppleUsDirectConfigurationHtml(
+      macbookAirVariantPageHtml,
+      catalogProduct!,
+      'https://www.apple.com/shop/buy-mac/macbook-air/13-inch-starlight-m5-chip-10-core-cpu-10-core-gpu-16gb-memory-1tb-storage',
+    );
+
+    expect(product).toMatchObject({
+      model: 'MacBook Air',
+      chip: 'M5',
+      ram: '16GB',
+      screenSize: '13"',
+      capacity: '1TB',
+      color: 'Starlight',
+      condition: 'NOVO',
+    });
+    expect(adaptUsaSourceProduct({ providerName: 'apple_us', product: product! })).toMatchObject({
+      chip: 'M5',
+      ram: '16GB',
+      screenSize: '13"',
+      capacity: '1TB',
+      color: 'Starlight',
+      condition: 'NOVO',
+    });
+  });
+
+  it('keeps distinct MacBook Pro hardware and does not replace screen size with display text', () => {
+    const [catalogProduct] = parseAppleUsCatalogHtml(macbookAirFamilyCatalogHtml, 'Mac');
+    const baseUrl = 'https://www.apple.com/shop/buy-mac/macbook-pro';
+    const m4 = parseAppleUsDirectConfigurationHtml(
+      macConfigurationHtml(
+        'MacBook Pro, 14-inch, M4 Chip, Space Black, 16GB unified memory, 1TB storage, Standard display',
+        'MBP_M4',
+        1999,
+        `${baseUrl}/m4`,
+      ),
+      catalogProduct!,
+      `${baseUrl}/m4`,
+    );
+    const m4Pro = parseAppleUsDirectConfigurationHtml(
+      macConfigurationHtml(
+        'MacBook Pro, 16-inch, M4 Pro Chip, Space Black, 24GB unified memory, 1TB storage, Standard display',
+        'MBP_M4_PRO',
+        2399,
+        `${baseUrl}/m4-pro`,
+      ),
+      catalogProduct!,
+      `${baseUrl}/m4-pro`,
+    );
+
+    expect(m4).toMatchObject({ chip: 'M4', ram: '16GB', screenSize: '14"', capacity: '1TB' });
+    expect(m4Pro).toMatchObject({
+      chip: 'M4 Pro',
+      ram: '24GB',
+      screenSize: '16"',
+      capacity: '1TB',
+    });
+    expect(m4?.id).not.toBe(m4Pro?.id);
+    expect(m4?.chip).not.toBe(m4Pro?.chip);
+    expect(m4?.ram).not.toBe(m4Pro?.ram);
+  });
+
+  it('does not invent unavailable Mac fields and keeps Mac mini without a screen', () => {
+    const [catalogProduct] = parseAppleUsCatalogHtml(macbookAirFamilyCatalogHtml, 'Mac');
+    const baseUrl = 'https://www.apple.com/shop/buy-mac';
+    const macMini = parseAppleUsDirectConfigurationHtml(
+      macConfigurationHtml(
+        'Mac mini, M4 Chip, Silver, 24GB unified memory, 512GB storage',
+        'MAC_MINI_M4',
+        999,
+        `${baseUrl}/mac-mini/m4`,
+      ),
+      catalogProduct!,
+      `${baseUrl}/mac-mini/m4`,
+    );
+    const incompleteAir = parseAppleUsDirectConfigurationHtml(
+      macConfigurationHtml(
+        'MacBook Air, Starlight, 1TB storage',
+        'MACBOOK_AIR_INCOMPLETE',
+        1299,
+        `${baseUrl}/macbook-air/incomplete`,
+      ),
+      catalogProduct!,
+      `${baseUrl}/macbook-air/incomplete`,
+    );
+    const iMac = parseAppleUsDirectConfigurationHtml(
+      macConfigurationHtml(
+        'iMac, 24-inch, M4 Chip, Blue, 16GB unified memory, 512GB storage',
+        'IMAC_M4',
+        1499,
+        `${baseUrl}/imac/m4`,
+      ),
+      catalogProduct!,
+      `${baseUrl}/imac/m4`,
+    );
+
+    expect(macMini).toMatchObject({ chip: 'M4', ram: '24GB', capacity: '512GB' });
+    expect(macMini).not.toHaveProperty('screenSize');
+    expect(iMac).toMatchObject({
+      chip: 'M4',
+      ram: '16GB',
+      screenSize: '24"',
+      capacity: '512GB',
+      color: 'Blue',
+    });
+    expect(incompleteAir).toMatchObject({ capacity: '1TB' });
+    expect(incompleteAir).not.toHaveProperty('chip');
+    expect(incompleteAir).not.toHaveProperty('ram');
+    expect(incompleteAir).not.toHaveProperty('screenSize');
   });
   it('does not duplicate an Apple configuration when the same public link appears more than once', () => {
     const [catalogProduct] = parseAppleUsCatalogHtml(iphone17ProFamilyCatalogHtml, 'iPhone');

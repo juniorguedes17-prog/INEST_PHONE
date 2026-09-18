@@ -762,6 +762,66 @@ describe('PricingService native product profit integration', () => {
     });
   });
 
+  it('passes only the applicable structured MacBook identity to catalog resolution', async () => {
+    const catalogProduct = {
+      id: 'macbook-pro-16gb-1tb',
+      profitProductId: 701,
+      productDescription: 'MacBook Pro 16GB 1TB Standard Display',
+      normalizedDescription: 'macbook pro 16gb 1tb standard display',
+      productType: 'MACBOOK',
+      isAppleOriginal: true,
+      profitCondition: 'NOVO',
+      category: { name: 'MacBook' },
+      model: { name: 'MacBook Pro' },
+      color: null,
+      storage: { displayName: '1TB' },
+      variantAttributes: { ram: '16GB', screen: 'Standard Display' },
+    };
+    const repository = {
+      findActiveCatalogProductById: vi.fn().mockResolvedValue(null),
+      findEligibleCatalogProductCandidates: vi.fn().mockResolvedValue([catalogProduct]),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '2026-09-16T00:00:00Z' }),
+      } as unknown as ProductProfitProvider,
+    );
+
+    const result = await service.calculateTemporaryImport({
+      origin: 'US',
+      sourceProductId: 'apple-store:macbook-pro-1tb',
+      productName: 'Apple MacBook Pro 16GB 1TB Standard Display',
+      displayName: 'Apple MacBook Pro 16GB 1TB Standard Display',
+      category: 'MacBook',
+      supplier: 'Apple Store USA',
+      store: 'Apple Store USA',
+      productUrl: 'https://example.com/macbook-pro',
+      priceUsd: 2000,
+      totalCost: 10779.03,
+      model: 'MacBook Pro',
+      capacity: '1TB',
+      ram: '16GB',
+      screenSize: 'Standard Display',
+      condition: 'NOVO',
+      provider: 'apple_us',
+      retailer: 'Apple Store USA',
+    });
+
+    expect(repository.findEligibleCatalogProductCandidates).toHaveBeenCalledWith({
+      modelKey: 'macbook-pro',
+      capacity: '1TB',
+      condition: 'NOVO',
+      variantAttributes: { ram: '16GB', screen: 'Standard Display' },
+    });
+    expect(result).toMatchObject({
+      catalogProductId: 'macbook-pro-16gb-1tb',
+      calculationStatus: 'missing_profit',
+    });
+  });
+
   it('applies commercial endings configured in the pricing scope', async () => {
     const repository = {
       findActiveCatalogProductById: vi.fn().mockResolvedValue({

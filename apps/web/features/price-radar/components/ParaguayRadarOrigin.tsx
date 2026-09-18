@@ -726,7 +726,14 @@ export function CalculationModal({
                                                                     : key}
                           </dt>
                           <dd className="font-extrabold text-inest-text">
-                            {key.endsWith('Brl') ? formatBrl(value) : value}
+                            {key.endsWith('Brl')
+                              ? formatBrl(value)
+                              : key === 'weightKg'
+                                ? value.toLocaleString('pt-BR', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })
+                                : value}
                           </dd>
                         </div>,
                       ],

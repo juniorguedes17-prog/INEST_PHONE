@@ -462,3 +462,52 @@ test('renders Rei do Importado commercial labels and preserves every breakdown v
   assert.ok(rendered.includes('"children":135'));
   assert.ok(rendered.includes('"children":"R$ 444,83"'));
 });
+
+test('formats only the displayed Rei freight weight in pt-BR with two decimals', () => {
+  const h = setup();
+  const rendered = JSON.stringify(
+    h.CalculationModal!({
+      calculation: null,
+      usaCostExecution: {
+        calculation: {
+          sourceCommercialIdentity: { sourceName: 'Camera', sourceUrl: 'https://example.com' },
+          redirector: { redirector: 'REI_DO_IMPORTADO' },
+          breakdown: {
+            productPriceUsd: 1000,
+            usdBrlQuote: 5,
+            shippingWeightLbs: 5,
+            classification: 'OTHER',
+            quantity: null,
+            weightKg: 2.26796185,
+            halfKgBlocks: 5,
+            baseShippingUsd: 600,
+            shippingDiscountPercent: 10,
+            shippingDiscountUsd: 60,
+            shippingUsd: 540,
+            insurancePercent: 0,
+            insuranceBrl: 0,
+            taxTreatment: 'EXEMPT',
+            taxPercent: 0,
+            taxUsd: 0,
+            taxBrl: 0,
+            productValueBrl: 5000,
+            shippingBrl: 2700,
+          },
+          finalCost: { amountBrl: 7700 },
+        },
+      },
+      sending: false,
+      onClose: () => undefined,
+      onSendToPricing: () => undefined,
+      onConfirmManufacturer: () => undefined,
+    }),
+  );
+
+  assert.ok(rendered.includes('Peso do Frete (kg)'));
+  assert.ok(rendered.includes('"children":"2,27"'));
+  assert.ok(!rendered.includes('2.26796185'));
+  assert.ok(rendered.includes('"children":5'));
+  assert.ok(rendered.includes('"children":600'));
+  assert.ok(rendered.includes('"children":60'));
+  assert.ok(rendered.includes('"children":540'));
+});

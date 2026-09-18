@@ -6,6 +6,9 @@ export type UsaProductDisplayNameInput = {
   category?: string | null;
   model?: string | null;
   capacity?: string | null;
+  ram?: string | null;
+  chip?: string | null;
+  screenSize?: string | null;
   color?: string | null;
   condition?: string | null;
 };
@@ -24,7 +27,16 @@ function buildStructuredPresentationName(input: UsaProductDisplayNameInput): str
   const manufacturer = compact(input.sourceManufacturer);
   const model = compact(input.model);
   const values = model
-    ? [manufacturer, model, input.capacity, input.color, input.condition]
+    ? [
+        manufacturer,
+        model,
+        input.screenSize,
+        input.chip,
+        input.ram,
+        input.capacity,
+        input.color,
+        input.condition,
+      ]
     : [manufacturer, input.category, input.capacity, input.color, input.condition];
   const uniqueValues: string[] = [];
   const seen = new Set<string>();

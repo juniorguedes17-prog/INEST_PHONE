@@ -59,7 +59,11 @@ import type {
   UsaFinalCostPricingRequest,
   UsaFinalCostPricingResult,
 } from '../usa-final-cost-pricing.contract';
-import { resolveCatalogModelLookupKey } from '@inest/product-identity';
+import {
+  normalizeCanonicalProductIdentity,
+  profitIdentityPolicies,
+  resolveCatalogModelLookupKey,
+} from '@inest/product-identity';
 
 function getBrazilRadarProfitCalculationState(resolution: ProfitIdentityResolution) {
   switch (resolution.status) {
@@ -115,6 +119,40 @@ function appendFinancialIdentityAttributes(
       ? description
       : `${description} ${value}`;
   }, base.trim());
+}
+
+function resolveCatalogCandidateVariantAttributes(dto: TemporaryImportPricingDto) {
+  const family = normalizeCanonicalProductIdentity({
+    productName: dto.productName,
+    category: dto.category,
+    model: dto.model,
+    capacity: dto.capacity,
+    color: dto.color,
+    quality: dto.condition,
+  }).canonicalFamily;
+  const policy = profitIdentityPolicies.find((item) => item.family === family);
+  if (!policy) return {};
+
+  const applicableDimensions = new Set([...policy.required, ...policy.optional]);
+  const supplied = {
+    ram: dto.ram,
+    chip: dto.chip,
+    screen: dto.screenSize,
+    connectivity: dto.connectivity,
+  } as const;
+
+  const attributes: Record<string, string> = {};
+  for (const [dimension, value] of Object.entries(supplied)) {
+    if (
+      applicableDimensions.has(dimension as never) &&
+      typeof value === 'string' &&
+      value.trim().length > 0 &&
+      value === value.trim()
+    ) {
+      attributes[dimension] = value;
+    }
+  }
+  return attributes;
 }
 
 function getDirectProductProfitCalculationState(lookup: ProfitLookupResult) {
@@ -494,6 +532,7 @@ export class PricingService {
 
   async calculateTemporaryImport(dto: TemporaryImportPricingDto) {
     const origin = dto.origin ?? 'PY';
+    const catalogCandidateVariantAttributes = resolveCatalogCandidateVariantAttributes(dto);
     const catalogModelKey = resolveCatalogModelLookupKey({
       productName: dto.productName,
       category: dto.category,
@@ -512,6 +551,9 @@ export class PricingService {
             modelKey: catalogModelKey,
             capacity: dto.capacity,
             condition: dto.condition,
+            ...(Object.keys(catalogCandidateVariantAttributes).length > 0
+              ? { variantAttributes: catalogCandidateVariantAttributes }
+              : {}),
           })
         : Promise.resolve([]);
     const [settings, pricingConfigurations, profitCatalog, explicitCatalogProduct, candidates] =

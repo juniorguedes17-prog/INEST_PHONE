@@ -71,6 +71,21 @@ export class UsaEnrichmentSourceProductDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  ram?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  chip?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  screenSize?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   color?: string;
 
   @ApiPropertyOptional({ enum: ['NOVO', 'SEMINOVO', 'CPO'], nullable: true })

@@ -36,6 +36,23 @@ test('builds a timeout-safe presentation name from existing structured fields', 
   );
 });
 
+test('builds a Mac title exclusively from source-provided structured attributes', () => {
+  assert.equal(
+    resolveUsaProductDisplayName({
+      sourceName: 'MacBook Pro source title',
+      sourceManufacturer: 'Apple',
+      model: 'MacBook Pro',
+      screenSize: '14"',
+      chip: 'M4 Pro',
+      ram: '24GB',
+      capacity: '1TB',
+      color: 'Space Black',
+      condition: 'NOVO',
+    }),
+    'Apple MacBook Pro 14" M4 Pro 24GB 1TB Space Black NOVO',
+  );
+});
+
 test('uses partial structured fields without requiring model, storage, or condition', () => {
   assert.equal(
     resolveUsaProductDisplayName({

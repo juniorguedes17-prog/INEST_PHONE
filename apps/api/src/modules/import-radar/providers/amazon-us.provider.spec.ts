@@ -18,6 +18,14 @@ const searchHtml = `
     <div data-category="CELL_PHONES"></div>
   </div>`;
 
+const searchHtmlWithoutCategory = `
+  <div data-asin="AMAZON0001" data-component-type="s-search-result" class="s-result-item"></div>
+  <div data-asin="MARKET0001" data-component-type="s-search-result" class="s-result-item"></div>
+  <div data-asin="INVALID" data-component-type="s-search-result" class="s-result-item"></div>`;
+
+const singleSearchHtmlWithoutCategory =
+  '<div data-asin="AMAZON0001" data-component-type="s-search-result" class="s-result-item"></div>';
+
 const amazonDetailHtml = `
   <meta name="title" content="Example&nbsp;Phone">
   <div id="corePriceDisplay_mobile_feature_div">
@@ -70,6 +78,13 @@ describe('AmazonUsProvider', () => {
     expect(parseAmazonUsSearchHtml(searchHtml)).toEqual([
       { asin: 'AMAZON0001', category: 'CELL_PHONES' },
       { asin: 'MARKET0001', category: 'CELL_PHONES' },
+    ]);
+  });
+
+  it('keeps multiple structurally valid cards without data-category and rejects an invalid ASIN', () => {
+    expect(parseAmazonUsSearchHtml(searchHtmlWithoutCategory)).toEqual([
+      { asin: 'AMAZON0001' },
+      { asin: 'MARKET0001' },
     ]);
   });
 
@@ -181,6 +196,31 @@ describe('AmazonUsProvider', () => {
     expect(second).toEqual(first);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('/s?k=phone');
+  });
+
+  it('does not mark Amazon unavailable solely because a valid search card has no data-category', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(response(singleSearchHtmlWithoutCategory))
+        .mockResolvedValueOnce(response(amazonDetailHtml)),
+    );
+
+    const result = await new AmazonUsProvider().searchUsaWithDiagnostics({ search: 'phone' });
+
+    expect(result.products).toEqual([
+      expect.objectContaining({
+        sourceProductId: 'amazon-us:AMAZON0001',
+        category: '',
+        retailer: 'Amazon',
+      }),
+    ]);
+    expect(result.report).toMatchObject({
+      status: 'OK',
+      returnedCount: 1,
+      diagnostics: { candidates: 1, failedDetails: 0 },
+    });
   });
 
   it('does not label failed PDP access as an empty successful provider', async () => {

@@ -28,6 +28,9 @@ export interface UsaSourceProduct extends SourceCommercialIdentity<'US'> {
   category: string;
   model?: string;
   capacity?: string;
+  ram?: string;
+  chip?: string;
+  screenSize?: string;
   color?: string;
   condition?: ImportProviderProduct['condition'];
   imageUrl?: string;
@@ -66,6 +69,9 @@ export function adaptUsaSourceProduct(input: UsaSourceProductAdapterInput): UsaS
   const sourceManufacturer = optionalText(product.sourceManufacturer);
   const model = optionalText(product.model);
   const capacity = optionalText(product.capacity);
+  const ram = optionalText(product.ram);
+  const chip = optionalText(product.chip);
+  const screenSize = optionalText(product.screenSize);
   const color = optionalText(product.color);
   const imageUrl = optionalText(product.imageUrl);
 
@@ -93,6 +99,9 @@ export function adaptUsaSourceProduct(input: UsaSourceProductAdapterInput): UsaS
     category: product.category,
     ...(model ? { model } : {}),
     ...(capacity ? { capacity } : {}),
+    ...(ram ? { ram } : {}),
+    ...(chip ? { chip } : {}),
+    ...(screenSize ? { screenSize } : {}),
     ...(color ? { color } : {}),
     condition: product.condition,
     ...(imageUrl ? { imageUrl } : {}),

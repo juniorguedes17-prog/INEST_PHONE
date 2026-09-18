@@ -398,6 +398,7 @@ function createAppleConfiguredProduct(
   sourceColor: string | null,
 ): ImportProviderProduct {
   const model = deriveAppleModel(variant.sourceName, variant.capacity, sourceColor);
+  const macAttributes = extractAppleMacAttributes(variant.sourceName);
 
   return {
     id: `apple-us:${variant.sourceProductId}`,
@@ -418,7 +419,26 @@ function createAppleConfiguredProduct(
     condition: 'NOVO',
     ...(model ? { model } : {}),
     ...(variant.capacity ? { capacity: variant.capacity } : {}),
+    ...(macAttributes.ram ? { ram: macAttributes.ram } : {}),
+    ...(macAttributes.chip ? { chip: macAttributes.chip } : {}),
+    ...(macAttributes.screenSize ? { screenSize: macAttributes.screenSize } : {}),
     ...(sourceColor ? { color: sourceColor } : {}),
+  };
+}
+
+function extractAppleMacAttributes(sourceName: string) {
+  if (!/\b(?:MacBook|Mac mini|iMac)\b/i.test(sourceName)) return {};
+
+  const chip = sourceName.match(/\b(M\d+(?:\s+(?:Pro|Max|Ultra))?)\s+Chip\b/i)?.[1];
+  const ram = sourceName.match(
+    /\b(\d+(?:\.\d+)?)\s*(GB|TB)\s+(?:unified\s+)?memory\b/i,
+  );
+  const screen = sourceName.match(/\b(\d+(?:\.\d+)?)\s*-\s*inch\b/i)?.[1];
+
+  return {
+    ...(chip ? { chip: chip.replace(/\s+/g, ' ') } : {}),
+    ...(ram?.[1] && ram[2] ? { ram: `${ram[1]}${ram[2].toUpperCase()}` } : {}),
+    ...(screen ? { screenSize: `${screen}"` } : {}),
   };
 }
 
@@ -441,7 +461,9 @@ function extractStorageCapacity(value: string): string | null {
 }
 
 function extractAppleColorFromSourceName(value: string): string | null {
-  const match = value.match(/,\s*([^,]+),\s*\d+(?:\.\d+)?\s*GB\s+memory\b/i);
+  const match = value.match(
+    /,\s*([^,]+),\s*\d+(?:\.\d+)?\s*GB\s+(?:unified\s+)?memory\b/i,
+  );
   return match?.[1] ? cleanSourceText(match[1]) : null;
 }
 
