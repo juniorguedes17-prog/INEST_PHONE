@@ -350,7 +350,12 @@ function isCategoryHeading(value: string, category: string | null) {
   if (/\b(?:pencil|airtag|magic\s?mouse|earpods)\b/i.test(value)) return false;
   if (/\bair\s?pods\s+(?:pro|max|regular|anc)\b/i.test(value)) return false;
   if (/\b(?:watch\s+)?(?:se|series|ultra|s\d+)\b/i.test(value)) return false;
-  return !hasPrice(value) && !/\b\d+\b/.test(value) && value.length < 60;
+  return (
+    !hasPrice(value) &&
+    !/\b\d+\b/.test(value) &&
+    !/\b[a-z]\d{3,}\b/i.test(value) &&
+    value.length < 60
+  );
 }
 
 function isProductHeading(

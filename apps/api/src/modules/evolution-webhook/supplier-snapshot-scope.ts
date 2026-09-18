@@ -40,7 +40,7 @@ const USED_MARKER = /\b(?:lista[-\s]*)?swap\b|\bsemi\s*novos?\b|\bseminovos?\b/i
 const PRIMARY_MARKER = /\b(?:lacrad[oa]s?|aparelhos\s+novos?|iphones?\s+novos?|sealed)\b/i;
 const GENERAL_MARKER =
   /\b(?:lista\s+(?:unificada|geral|diaria|de\s+precos|atualizada|completa)|tabela\s+de\s+precos|atualizacao)\b/i;
-const OFFER_MARKER = /(?:r\$|\$r|\$)\s*\d/i;
+const OFFER_MARKER = /(?:r\$|\$r|\$)\s*\d|\d[\d.,\s]*\s*(?:r\$|\$r)(?=\s|$)/i;
 
 export function extractSupplierDocumentBoundary(rawText: string): SupplierDocumentBoundary {
   const lines = rawText.split(/\r?\n/).map(cleanLine).filter(Boolean);
@@ -98,6 +98,9 @@ export function resolveSupplierSnapshotScope(
 
   if (hasPrimaryPreamble) {
     if (!hasUsedItems) return resolved('primary', 'explicit_primary_preamble', evidence);
+    if (isBroadMixedDocument && sectionMarkers.includes('used')) {
+      return resolved('general', 'broad_mixed_document', evidence);
+    }
     return ambiguous(evidence);
   }
 

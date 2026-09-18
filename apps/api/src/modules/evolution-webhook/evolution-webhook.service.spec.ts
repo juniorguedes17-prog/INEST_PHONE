@@ -1122,6 +1122,47 @@ Verde R$ 2.500`,
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
   });
 
+  it('roteia lista mista com preambulo primary e secao SWAP apos oferta com moeda no sufixo', async () => {
+    const { service, transaction } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-mixed-primary-preamble',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: {
+          conversation: `APPLE LACRADO ORIGINAL
+iPhone 16 128GB
+Preto 4.000,00 R$
+iPhone 16 Pro Max 512GB (CPO)
+Branco 6.500,00 R$
+iPad Smart Keyboard (A2480)
+Branco 1.100,00 R$
+SWAP
+iPhone 14 128GB
+Preto 1.800,00 R$`,
+        },
+      },
+    });
+
+    expect(result).toEqual({ accepted: true, supplierId: 'supplier-contact-id', items: 4 });
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(2);
+    const writes = transaction.supplierCurrentList.upsert.mock.calls.map(([call]) => call);
+    expect(writes.map((write) => write.create.snapshotScope)).toEqual([
+      'catalog:primary',
+      'catalog:used',
+    ]);
+    expect(
+      writes[0].create.items.create.map((item: { condition: string }) => item.condition),
+    ).toEqual(['NOVO', 'CPO', 'NOVO']);
+    expect(
+      writes[1].create.items.create.map((item: { condition: string }) => item.condition),
+    ).toEqual(['SEMINOVO']);
+  });
+
   it('roteia lista mista explicita com marcadores promocionais sem liberar inconclusive generico', async () => {
     const { service, transaction } = createService();
 

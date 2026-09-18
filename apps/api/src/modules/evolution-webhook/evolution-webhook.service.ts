@@ -45,7 +45,7 @@ type SnapshotWritePlan =
 const PARTIAL_UPDATE_MARKER =
   /\b(?:promo(?:c|ç)(?:[aã]o|ões)|ofertas?|baix(?:ou|amos)|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar|reposi(?:c|ç)(?:[aã]o|ões)|chegou\s+lacrad[oa]s?|remessas?)\b/i;
 const FULL_SNAPSHOT_MARKER =
-  /\b(?:lista(?:\s+(?:completa|geral|atual(?:izada)?|unificada|di[aá]ria|de\s+pre[cç]os?))?|tabela\s+(?:completa|geral)|todos?\s+os\s+produtos|(?:aparelhos?|produtos?)\s+(?:dispon[ií]veis?|lacrad[oa]s?|novos?\s+lacrad[oa]s?|semi[-\s]?novos?)|(?:iphone|iphones|xiaomis?)\s+(?:lacrad[oa]s?|semi[-\s]?novos?|swap\s+americanos?))\b/i;
+  /\b(?:lista(?:\s+(?:completa|geral|atual(?:izada)?|unificada|di[aá]ria|de\s+pre[cç]os?))?|tabela\s+(?:completa|geral)|todos?\s+os\s+produtos|apple\s+lacrad[oa]s?|(?:aparelhos?|produtos?)\s+(?:dispon[ií]veis?|lacrad[oa]s?|novos?\s+lacrad[oa]s?|semi[-\s]?novos?)|(?:iphone|iphones|xiaomis?)\s+(?:lacrad[oa]s?|semi[-\s]?novos?|swap\s+americanos?))\b/i;
 const GENERAL_REPLACED_SEGMENTED_SCOPES = ['catalog:primary', 'catalog:used'] as const;
 
 type SnapshotReplacementAuthority = 'SAME_SCOPE_ONLY' | 'ALL_SEGMENTED_SCOPES';
@@ -806,6 +806,19 @@ function resolveSnapshotWritePlan(
     };
   }
 
+  if (
+    updateClassification.mode === 'FULL_SNAPSHOT' &&
+    hasMixedSnapshotAuthority(resolution, hasPrimaryItems, hasUsedItems)
+  ) {
+    return {
+      authority: 'FULL_SNAPSHOT',
+      targets: [
+        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY' },
+        { scopeKey: 'catalog:used', itemGroup: 'USED' },
+      ],
+    };
+  }
+
   if (updateClassification.mode === 'FULL_SNAPSHOT' && resolvedScope) {
     return {
       authority: 'FULL_SNAPSHOT',
@@ -853,6 +866,26 @@ function hasExplicitMixedSnapshotAuthority(
     resolution.evidence.preambleMarkers.includes('used') &&
     hasPrimaryItems &&
     hasUsedItems
+  );
+}
+
+function hasMixedSnapshotAuthority(
+  resolution: SupplierSnapshotScopeResolution,
+  hasPrimaryItems: boolean,
+  hasUsedItems: boolean,
+) {
+  if (!hasPrimaryItems || !hasUsedItems) return false;
+
+  if (hasExplicitMixedSnapshotAuthority(resolution, hasPrimaryItems, hasUsedItems)) {
+    return true;
+  }
+
+  return (
+    resolution.status === 'RESOLVED' &&
+    resolution.scopeKey === 'catalog:general' &&
+    resolution.reason === 'broad_mixed_document' &&
+    resolution.evidence.preambleMarkers.includes('primary') &&
+    resolution.evidence.sectionMarkers.includes('used')
   );
 }
 

@@ -243,6 +243,59 @@ describe('supplier list parser', () => {
     expect(items.map((item) => item.condition)).toEqual(['CPO', 'NOVO', 'NOVO']);
   });
 
+  it('mantem o contrato de catalogo misto com codigo de modelo, CPO isolado e SWAP', () => {
+    const items = parseSupplierListText(`
+      APPLE LACRADO ORIGINAL
+      iPhone 16 Pro Max 512GB (CPO)
+      Preto 6.500,00 R$
+      iPad Smart Keyboard (A2480)
+      Branco 1.100,00 R$
+      MacBook Neo 256GB 8RAM 13"
+      Indigo
+      Blush
+      4.450,00 R$
+      Silver
+      4.680,00 R$
+      SWAP
+      iPhone 14 128GB
+      Preto 1.800,00 R$
+      iPhone 14 128GB (GRADE B)
+      Preto 1.750,00 R$
+    `);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ normalizedName: 'iphone 16 pro max 512gb', condition: 'CPO' }),
+        expect.objectContaining({ normalizedName: 'ipad smart keyboard a2480', condition: 'NOVO' }),
+        expect.objectContaining({
+          normalizedName: 'macbook neo 256gb 8ram 13',
+          color: 'indigo',
+          price: 4450,
+          condition: 'NOVO',
+        }),
+        expect.objectContaining({
+          normalizedName: 'macbook neo 256gb 8ram 13',
+          color: 'blush',
+          price: 4450,
+          condition: 'NOVO',
+        }),
+        expect.objectContaining({
+          normalizedName: 'macbook neo 256gb 8ram 13',
+          color: 'silver',
+          price: 4680,
+          condition: 'NOVO',
+        }),
+        expect.objectContaining({
+          normalizedName: 'iphone 14 128gb',
+          condition: 'SEMINOVO',
+          price: 1800,
+        }),
+      ]),
+    );
+    expect(items.some((item) => item.price === 1750)).toBe(false);
+    expect(items.filter((item) => item.condition === 'CPO')).toHaveLength(1);
+  });
+
   it('preserva CPO em texto descritivo de novo lacrado dentro da secao CPO', () => {
     const items = parseSupplierListText(`
       APARELHOS CPO
