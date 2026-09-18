@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { canonicalModelRegistry } from './canonical-model-registry';
 import {
   normalizeCanonicalProductIdentity,
   normalizeCanonicalText,
@@ -89,6 +90,92 @@ test('preserva a identidade homologada de iPhone Pro Max', () => {
     canonicalConnectivity: null,
     canonicalConnectivitySource: 'unknown',
     canonicalChip: null,
+  });
+});
+
+test('resolve modelos iPhone 18 homologados sem inferir geracoes nao cadastradas', () => {
+  const expected = [
+    ['iPhone 18 Pro 256GB', 'iphone-18-pro', 'iPhone 18 Pro', '256GB'],
+    [
+      'iPhone 18 Pro Max 256gb eSIM Anatel',
+      'iphone-18-pro-max',
+      'iPhone 18 Pro Max',
+      '256GB',
+    ],
+    [
+      'iPhone 18 Pro Max 512gb eSIM Anatel',
+      'iphone-18-pro-max',
+      'iPhone 18 Pro Max',
+      '512GB',
+    ],
+    ['iPhone Duo', 'iphone-duo', 'iPhone Duo', null],
+  ] as const;
+
+  for (const [productName, modelKey, modelLabel, storage] of expected) {
+    const identity = normalizeCanonicalProductIdentity({ productName });
+
+    assert.equal(identity.canonicalFamily, 'iphone');
+    assert.equal(identity.canonicalFamilyStatus, 'matched');
+    assert.equal(identity.canonicalModelMatched, true);
+    assert.equal(identity.canonicalModelKey, modelKey);
+    assert.equal(identity.canonicalModelLabel, modelLabel);
+    assert.equal(identity.canonicalStorage, storage);
+  }
+
+  const pro = normalizeCanonicalProductIdentity({ productName: 'iPhone 18 Pro 256GB' });
+  const proMax = normalizeCanonicalProductIdentity({
+    productName: 'iPhone 18 Pro Max 256GB',
+  });
+  assert.equal(pro.canonicalModelKey, 'iphone-18-pro');
+  assert.equal(proMax.canonicalModelKey, 'iphone-18-pro-max');
+
+  for (const productName of [
+    'iPhone 18',
+    'iPhone 18 Plus',
+    'iPhone 18 Air',
+    'iPhone 18e',
+    'iPhone 18X',
+    'iPhone 19 Pro',
+    'iPhone 19 Pro Max',
+  ]) {
+    const identity = normalizeCanonicalProductIdentity({ productName });
+
+    assert.equal(identity.canonicalFamily, 'iphone');
+    assert.equal(identity.canonicalModelMatched, false);
+    assert.equal(identity.canonicalModelKey, '');
+    assert.equal(identity.canonicalModelLabel, '');
+  }
+});
+
+test('mantem aliases do helper geracional e a entry minima declarativa do Duo', () => {
+  const entryByKey = new Map(canonicalModelRegistry.map((entry) => [entry.key, entry]));
+
+  assert.deepEqual(entryByKey.get('iphone-18-pro')?.aliases, [
+    'iPhone 18 Pro',
+    'iphone 18 pro',
+    'iphone18pro',
+    'iphone18 pro',
+    'iph 18 pro',
+    '18 pro',
+  ]);
+  assert.deepEqual(entryByKey.get('iphone-18-pro-max')?.aliases, [
+    'iPhone 18 Pro Max',
+    'iphone 18 pro max',
+    'iphone18promax',
+    'iphone18 promax',
+    'iphone18 pro max',
+    'iph 18 pro max',
+    '18 pro max',
+    '18 promax',
+    '18 pm',
+    'iph 18 pm',
+  ]);
+  assert.deepEqual(entryByKey.get('iphone-duo'), {
+    key: 'iphone-duo',
+    label: 'iPhone Duo',
+    category: 'iPhone',
+    familyKey: 'iphone',
+    aliases: ['iPhone Duo'],
   });
 });
 

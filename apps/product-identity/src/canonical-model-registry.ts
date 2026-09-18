@@ -172,6 +172,9 @@ export const canonicalModelRegistry: readonly CanonicalModelRegistryEntry[] = [
   iphone(17, 'Air'),
   iphone(17, 'Pro'),
   iphone(17, 'Pro Max'),
+  iphone(18, 'Pro'),
+  iphone(18, 'Pro Max'),
+  entry('iphone-duo', 'iPhone Duo', 'iPhone', 'iphone', []),
 
   macbook('macbook-neo', 'MacBook Neo', ['macbook neo', 'mac neo']),
   macbook(

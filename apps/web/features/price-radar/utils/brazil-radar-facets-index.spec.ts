@@ -103,6 +103,54 @@ test('motor indexado preserva resultados do motor aprovado', () => {
   });
 });
 
+test('inclui modelos iPhone 18 governados na faceta sem alterar o motor indexado', () => {
+  const index = buildBrazilRadarFacetIndex([
+    quote({
+      id: 'iphone-18-pro',
+      productName: 'iPhone 18 Pro 256GB',
+      model: 'iPhone 18 Pro 256GB',
+      capacity: '256GB',
+    }),
+    quote({
+      id: 'iphone-18-pro-max-256',
+      productName: 'iPhone 18 Pro Max 256gb eSIM Anatel',
+      model: 'iPhone 18 Pro Max 256gb eSIM Anatel',
+      capacity: '256GB',
+    }),
+    quote({
+      id: 'iphone-18-pro-max-512',
+      productName: 'iPhone 18 Pro Max 512gb eSIM Anatel',
+      model: 'iPhone 18 Pro Max 512gb eSIM Anatel',
+      capacity: '512GB',
+    }),
+    quote({
+      id: 'iphone-duo',
+      productName: 'iPhone Duo',
+      model: 'iPhone Duo',
+      capacity: '',
+    }),
+  ]);
+
+  const facets = buildBrazilRadarFacetsFromIndex(index, emptyBrazilRadarFacetState);
+
+  assert.deepEqual(
+    facets.models.filter((model) => model.value.startsWith('iphone-18-') || model.value === 'iphone-duo'),
+    [
+      { value: 'iphone-18-pro', label: 'iPhone 18 Pro', count: 1 },
+      { value: 'iphone-18-pro-max', label: 'iPhone 18 Pro Max', count: 2 },
+      { value: 'iphone-duo', label: 'iPhone Duo', count: 1 },
+    ],
+  );
+
+  assert.deepEqual(
+    filterBrazilRadarQuotesByIndex(index, {
+      ...emptyBrazilRadarFacetState,
+      models: ['iphone-18-pro-max'],
+    }).map((quote) => quote.id),
+    ['iphone-18-pro-max-256', 'iphone-18-pro-max-512'],
+  );
+});
+
 test('facets indexados mantem self-excluding e reset aprovado', () => {
   const index = buildBrazilRadarFacetIndex(quotes);
   const filters = {

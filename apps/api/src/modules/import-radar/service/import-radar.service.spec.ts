@@ -100,6 +100,17 @@ function eligibleCatalogProduct(
   };
 }
 
+function eligibleUncatalogedIphone18(
+  overrides: Partial<PricingCatalogProductRecord> = {},
+): PricingCatalogProductRecord {
+  return eligibleCatalogProduct({
+    productDescription: 'iPhone 18 256GB',
+    normalizedDescription: 'iphone 18 256gb',
+    model: { name: 'iPhone 18' },
+    ...overrides,
+  });
+}
+
 function semanticCandidate(
   overrides: Partial<ProductSemanticNormalizationCandidate> = {},
 ): ProductSemanticNormalizationCandidate {
@@ -180,6 +191,13 @@ const importProduct = {
   model: 'iPhone 17 Pro Max',
   capacity: '256GB',
   condition: 'NOVO' as const,
+};
+
+const uncatalogedIphone18 = {
+  ...importProduct,
+  name: 'iPhone 18 256GB',
+  sourceEvidence: 'iPhone 18 256GB',
+  model: 'iPhone 18',
 };
 
 describe('ImportRadarService catalog product handoff', () => {
@@ -344,13 +362,8 @@ describe('ImportRadarService catalog product handoff', () => {
   });
 
   it('reconciles one eligible PY Product even when its model is outside the canonical registry', async () => {
-    const product = eligibleCatalogProduct();
-    const input = {
-      ...importProduct,
-      name: 'iPhone 18 Pro Max 256GB',
-      sourceEvidence: 'iPhone 18 Pro Max 256GB',
-      model: 'iPhone 18 Pro Max',
-    };
+    const product = eligibleUncatalogedIphone18();
+    const input = uncatalogedIphone18;
 
     expect(
       normalizeCanonicalProductIdentity({
@@ -391,14 +404,9 @@ describe('ImportRadarService catalog product handoff', () => {
   ] as const)(
     'applies family evidence fail-closed for a reconciled PY Product with isAppleOriginal=%s',
     async (isAppleOriginal, classification, reason, pricingEligibility) => {
-      const product = eligibleCatalogProduct({ isAppleOriginal });
+      const product = eligibleUncatalogedIphone18({ isAppleOriginal });
       const result = await createService([], undefined, undefined, undefined, [product]).calculate(
-        {
-          ...importProduct,
-          name: 'iPhone 18 Pro Max 256GB',
-          sourceEvidence: 'iPhone 18 Pro Max 256GB',
-          model: 'iPhone 18 Pro Max',
-        },
+        uncatalogedIphone18,
         { id: 'user-1' } as never,
       );
 
