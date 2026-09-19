@@ -12,6 +12,7 @@ import {
   type ProductNormalizationInput,
 } from './product-normalization.service';
 import {
+  hasLotDocumentHeader,
   resolveSupplierSnapshotScope,
   type SupplierSnapshotScopeResolution,
 } from './supplier-snapshot-scope';
@@ -56,7 +57,7 @@ export function classifySupplierListUpdateMode(text: string): SupplierListUpdate
 
 function classifySupplierListUpdate(text: string): SupplierListUpdateClassification {
   const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text);
-  const hasFullMarker = FULL_SNAPSHOT_MARKER.test(text);
+  const hasFullMarker = FULL_SNAPSHOT_MARKER.test(text) || hasLotDocumentHeader(text);
 
   if (hasPartialMarker && hasFullMarker) {
     return { mode: 'INCONCLUSIVE', hasPartialMarker, hasFullMarker };

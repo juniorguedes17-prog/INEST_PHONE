@@ -5,8 +5,89 @@ import {
   EvolutionWebhookService,
   supplierListItemMergeKey,
 } from './evolution-webhook.service';
+import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
+import { resolveSupplierSnapshotScope } from './supplier-snapshot-scope';
 
 const webhookSecret = 'this-is-a-test-webhook-secret-with-32-characters';
+
+const lotDocumentFixtures = [
+  {
+    id: '7046',
+    rawText: `Lote 7046 MAO
+*ENVIO DE CURITIBA 30/09*
+
+20 x iPhone 17 256GB.
+Cores: 8 Preto, 6 Branco, 6 Lavanda.*R$ 4600*
+
+12 x iPhone 17 Pro 256GB.
+Cores: 3 Laranja, 6 Prata, 3 Azul.*R$ 6200*
+
+15 x iPhone 17 Pro Max 256GB.
+Cores: 4 Laranja, 7 Prata, 4 Azul.*R$ 6900*
+
+8 x AirPods 4(ANC). *R$ 800*
+
+10 x AirPods Pro 3. *R$ 1100*
+
+6 x Apple Watch Ultra 3.
+Cores: 3 Preto, 3 Natural. *R$ 4000*
+
+5 x MacBook Air 2026 16GB 512GB.
+Cores: 3 Midnight, 2 Prata. *R$ 7000*
+
+2 x MacBook Air 2026 24GB 1TB.
+Cores: 1 Midnight, 1 Prata. *R$9000*
+
+2 x MacBook Pro 2026 M5 Pro 24GB 1TB.
+Cores: 2 Preto. *R$ 13000*
+
+*Envio de Curitiba 30/09*`,
+    parsedItems: 9,
+  },
+  {
+    id: '4041',
+    rawText: `Lote 4041 CVC
+*ENVIO DE CURITIBA 29/09*
+
+10 x iPhone 17 256GB.
+Cores: 6 Preto, 3 Branco, 1 Lavanda. *R$ 4600*
+
+7 x iPhone 17 Pro 256GB.
+Cores: 1 Laranja, 3 Prata, 2 Azul. *R$ 6200*
+
+7 x iPhone 17 Pro 512GB.
+Cores: 2 Laranja, 2 Prata, 3 Azul.*R$ 6800*
+
+7 x iPhone 17 Pro Max 256GB.
+Cores: 2 Laranja, 3 Prata, 2 Azul.*R$ 6900*
+
+5 x iPhone 17 Pro Max 512GB.
+Cores: 2 Laranja, 1 Prata, 2 Azul.*R$ 8000*
+
+1 x iPhone 17 Pro Max 1TB.
+Cores: 1 Azul.*R$ 9000*
+
+10 x AirPods Pro 3 *R$ 1100*
+
+3 x AirPods Max 2. *R$ 2800*
+Cores: 1 Preto, 1 Estelar, 1 Azul.
+
+9 x Apple Watch Séries 11 46mm.
+Cores: 5 Preto, 4 Gold Rose. *R$ 2000*
+
+8 x iPads 11º Geração 128GB.
+Cores: 4 Prata, 4 Azul. *R$ 2450*
+
+4 x MacBook Air M5 16GB 512GB.
+Cores: 1 Preto, 2 Azul, 1 Prata. *R$ 7000*
+
+2 x MacBook Pro 2026 M5 24GB 1TB.
+Cor: Preto *R$ 13000*
+
+*Envio de Curitiba 29/09*`,
+    parsedItems: 12,
+  },
+] as const;
 
 function catalogProduct(
   id: string,
@@ -117,6 +198,108 @@ describe('EvolutionWebhookService', () => {
     ['Produto A 128GB\nAzul R$ 5.500\nProduto B 256GB\nPreto R$ 6.000', 'INCONCLUSIVE'],
   ])('classifica mensagens de atualização (%s)', (text, expected) => {
     expect(classifySupplierListUpdateMode(text)).toBe(expected);
+  });
+
+  it.each(lotDocumentFixtures)(
+    'persiste o lote documental $id pelo contrato de snapshot existente',
+    async ({ id, rawText, parsedItems }) => {
+      const parsed = parseSupplierListText(rawText);
+      expect(parsed).toHaveLength(parsedItems);
+      expect(isValidParsedSupplierListSnapshot(parsed)).toBe(true);
+      expect(classifySupplierListUpdateMode(rawText)).toBe('FULL_SNAPSHOT');
+      expect(resolveSupplierSnapshotScope(rawText, parsed)).toMatchObject({
+        status: 'RESOLVED',
+        scopeKey: 'catalog:general',
+        reason: 'general_document_marker',
+      });
+
+      const { service, transaction } = createService();
+      const result = await service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: {
+            id: `message-lot-${id}`,
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: { conversation: rawText },
+        },
+      });
+
+      expect(result).toEqual({
+        accepted: true,
+        supplierId: 'supplier-contact-id',
+        items: parsedItems,
+      });
+      expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+      expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            snapshotScope: 'catalog:general',
+            items: { create: expect.any(Array) },
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each([
+    ['Lote 9821 ABC', 'iPhone 17 256GB\nPreto R$ 4.600\nAirPods Pro 3\nR$ 1.100'],
+    ['Lote 55 XYZ', 'iPhone 17 Pro 256GB\nAzul R$ 6.200\niPad 11 128GB\nPrata R$ 2.450'],
+  ])('persiste cabecalho de lote com identificador dinamico: %s', async (header, offers) => {
+    const rawText = `${header}\n${offers}`;
+    const { service, transaction } = createService();
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: `message-${header.replace(/\s+/g, '-').toLowerCase()}`,
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(classifySupplierListUpdateMode(rawText)).toBe('FULL_SNAPSHOT');
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ snapshotScope: 'catalog:general' }),
+      }),
+    );
+  });
+
+  it.each([
+    'Temos lote disponível hoje',
+    'Último lote de iPhone disponível',
+    'Lote promocional',
+    'Chegou lote novo, me chama',
+    'iPhone 17 256GB\nEsse lote está disponível\nPreto R$ 4.600',
+  ])('nao concede autoridade completa a texto comercial com lote: %s', (text) => {
+    expect(classifySupplierListUpdateMode(`${text}\nPreto R$ 4.600`)).toBe('INCONCLUSIVE');
+  });
+
+  it('nao persiste cabecalho de lote sem snapshot valido', async () => {
+    const { service, transaction } = createService();
+    const rawText = 'Lote 9999 ABC';
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-lot-invalid',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(classifySupplierListUpdateMode(rawText)).toBe('FULL_SNAPSHOT');
+    expect(result).toEqual({ accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' });
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
   });
 
   it('preserva snapshot existente quando a intenção da mensagem é inconclusiva', async () => {

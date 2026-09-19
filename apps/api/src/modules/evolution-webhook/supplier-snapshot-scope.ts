@@ -41,6 +41,12 @@ const PRIMARY_MARKER = /\b(?:lacrad[oa]s?|aparelhos\s+novos?|iphones?\s+novos?|s
 const GENERAL_MARKER =
   /\b(?:lista\s+(?:unificada|geral|diaria|de\s+precos|atualizada|completa)|tabela\s+de\s+precos|atualizacao)\b/i;
 const OFFER_MARKER = /(?:r\$|\$r|\$)\s*\d|\d[\d.,\s]*\s*(?:r\$|\$r)(?=\s|$)/i;
+const LOT_DOCUMENT_HEADER = /^lote\s+\d+(?:\s+\S(?:.*\S)?)?$/i;
+
+export function hasLotDocumentHeader(rawText: string) {
+  const firstLine = rawText.split(/\r?\n/).map(cleanLine).find(Boolean);
+  return Boolean(firstLine && LOT_DOCUMENT_HEADER.test(firstLine));
+}
 
 export function extractSupplierDocumentBoundary(rawText: string): SupplierDocumentBoundary {
   const lines = rawText.split(/\r?\n/).map(cleanLine).filter(Boolean);
@@ -66,7 +72,7 @@ export function resolveSupplierSnapshotScope(
   const boundary = extractSupplierDocumentBoundary(rawText);
   const preambleText = boundary.preambleLines.join('\n');
   const sectionText = boundary.sectionLines.join('\n');
-  const preambleMarkers = markersIn(preambleText);
+  const preambleMarkers = markersIn(preambleText, hasLotDocumentHeader(rawText));
   const sectionMarkers = markersIn(sectionText);
   const conditions = [...new Set(items.map((item) => item.condition).filter(isKnownCondition))];
   const categoryCount = new Set(items.map((item) => item.category).filter(Boolean)).size;
@@ -143,12 +149,12 @@ function isBroadDocument(items: readonly ParsedSupplierListItem[], categoryCount
   return items.length >= 2 && (categoryCount >= 2 || conditions.size >= 2);
 }
 
-function markersIn(text: string) {
+function markersIn(text: string, hasLotHeader = false) {
   const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const markers: string[] = [];
   if (USED_MARKER.test(normalized)) markers.push('used');
   if (PRIMARY_MARKER.test(normalized)) markers.push('primary');
-  if (GENERAL_MARKER.test(normalized)) markers.push('general');
+  if (GENERAL_MARKER.test(normalized) || hasLotHeader) markers.push('general');
   return markers;
 }
 
