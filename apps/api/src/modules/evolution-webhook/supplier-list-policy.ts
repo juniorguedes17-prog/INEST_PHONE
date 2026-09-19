@@ -2,6 +2,9 @@ import { normalizeProductCondition, type ProductCondition } from '@inest/product
 import type { ParsedSupplierListItem } from './evolution-webhook.types';
 
 export const TARGET_SUPPLIER_CONTACT_ID = '82c32e30-3646-4380-af38-e0b8dfe2914e';
+export const PRONINE_ATACADO_SUPPLIER_CONTACT_ID = '3d8643ed-a845-c45d-4d77-c90693c8d82e';
+export const X_ATACADO_SUPPLIER_CONTACT_ID = 'f98b1be8-cd04-41f4-98b4-790b6e9c16d4';
+export const X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID = '422062a1-94e1-42f0-9084-c0be6a1f2770';
 
 export interface SupplierListPolicy {
   requireDocumentHeader: boolean;
@@ -15,6 +18,18 @@ const DEFAULT_SUPPLIER_LIST_POLICY: SupplierListPolicy = {
 
 const SUPPLIER_LIST_POLICIES: Readonly<Record<string, SupplierListPolicy>> = {
   [TARGET_SUPPLIER_CONTACT_ID]: {
+    requireDocumentHeader: false,
+    defaultCondition: 'NOVO',
+  },
+  [PRONINE_ATACADO_SUPPLIER_CONTACT_ID]: {
+    requireDocumentHeader: false,
+    defaultCondition: 'NOVO',
+  },
+  [X_ATACADO_SUPPLIER_CONTACT_ID]: {
+    requireDocumentHeader: false,
+    defaultCondition: 'NOVO',
+  },
+  [X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID]: {
     requireDocumentHeader: false,
     defaultCondition: 'NOVO',
   },

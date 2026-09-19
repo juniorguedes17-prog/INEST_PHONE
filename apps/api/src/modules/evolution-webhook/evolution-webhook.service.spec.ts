@@ -9,7 +9,10 @@ import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supp
 import { resolveSupplierSnapshotScope } from './supplier-snapshot-scope';
 import {
   applySupplierListConditionPolicy,
+  PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
   TARGET_SUPPLIER_CONTACT_ID,
+  X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID,
+  X_ATACADO_SUPPLIER_CONTACT_ID,
 } from './supplier-list-policy';
 
 const webhookSecret = 'this-is-a-test-webhook-secret-with-32-characters';
@@ -91,6 +94,62 @@ Cor: Preto *R$ 13000*
 *Envio de Curitiba 29/09*`,
     parsedItems: 12,
   },
+] as const;
+
+const pronineFixtures = [
+  {
+    id: 'linha-18',
+    rawText: `LINHA 18
+CHEGADA ENTRE 30/09 - 10/10
+
+IPHONE 18 PRO
+256GB - R$8.900,00
+512GB - R$10.000,00
+1TB - R$12.200,00
+TODAS AS CORES
+
+IPHONE 18 PRO MAX
+256GB - R$9.400,00
+512GB - R$10.700,00
+1TB - R$12.900,00
+2TB - R$15.600,00
+TODAS AS CORES`,
+    parsedItems: 7,
+  },
+  {
+    id: 'pronta-entrega',
+    rawText: `PRONTA ENTREGA SAO PAULO
+
+17 PRO MAX 256
+SILVER - R$7000,00
+LARANJA - R$6.900,00
+AZUL - R$6.900,00`,
+    parsedItems: 3,
+  },
+] as const;
+
+const xAtacadoFixtures = [
+  {
+    id: 'iphone',
+    rawText: `iPhone 17 Pro Max 256GB — LL/A
+Blue — R$ 6.669
+Silver — R$ 6.669
+Orange — R$ 6.669`,
+    parsedItems: 3,
+  },
+  {
+    id: 'ipad',
+    rawText: `iPad 11 128GB
+Azul — R$ 2.550
+Pink — R$ 2.530
+Yellow — R$ 2.425`,
+    parsedItems: 3,
+  },
+] as const;
+
+const xAtacadoSupplierContactIds = [
+  X_ATACADO_SUPPLIER_CONTACT_ID,
+  X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID,
 ] as const;
 
 function catalogProduct(
@@ -256,6 +315,266 @@ describe('EvolutionWebhookService', () => {
             items: {
               create: expect.arrayContaining([expect.objectContaining({ condition: 'NOVO' })]),
             },
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each(pronineFixtures)(
+    'persiste a lista ProNine $id sem depender de marcador documental',
+    async ({ id, rawText, parsedItems }) => {
+      const { service, transaction } = createService(
+        [],
+        undefined,
+        PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
+      );
+
+      const result = await service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: {
+            id: `message-pronine-${id}`,
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: { conversation: rawText },
+        },
+      });
+
+      expect(result).toEqual({
+        accepted: true,
+        supplierId: PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
+        items: parsedItems,
+      });
+      expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            supplierContactId: PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
+            snapshotScope: 'catalog:primary',
+            items: {
+              create: expect.arrayContaining([expect.objectContaining({ condition: 'NOVO' })]),
+            },
+          }),
+        }),
+      );
+    },
+  );
+
+  it.each(['CHEGOU MAIS', ''])('aceita lista ProNine válida com cabeçalho %s', async (header) => {
+    const [, ...bodyLines] = pronineFixtures[1].rawText.split('\n');
+    const rawText = [header, ...bodyLines].filter(Boolean).join('\n');
+    const { service, transaction } = createService(
+      [],
+      undefined,
+      PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
+    );
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: `message-pronine-header-${header || 'none'}`,
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ snapshotScope: 'catalog:primary' }),
+      }),
+    );
+  });
+
+  it('preserva SEMINOVO explícito da lista ProNine', async () => {
+    const { service, transaction } = createService(
+      [],
+      undefined,
+      PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
+    );
+    const rawText = `SEMI NOVOS PRONTA ENTREGA SAO PAULO
+
+APARELHOS 100% ORIGINAIS - AMERICANOS GRADE A
+GARANTIA 60 DIAS
+
+IPHONE 16 PLUS 128 - R$3.480,00
+AZUL - 96%-95%
+PRETO - 93%`;
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-pronine-used',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          snapshotScope: 'catalog:used',
+          items: { create: [expect.objectContaining({ condition: 'SEMINOVO' })] },
+        }),
+      }),
+    );
+  });
+
+  it.each([
+    '17 PRO MAX 256 SILVER ESGOTADOS',
+    'que tem pedido para pagar DA LINHA 18 pode me chamar no PV AGORA',
+  ])('preserva fail-closed para mensagem ProNine não comercial: %s', async (rawText) => {
+    const { service, transaction } = createService(
+      [],
+      undefined,
+      PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
+    );
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: `message-pronine-invalid-${rawText.length}`,
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(result).toEqual({ accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' });
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+  });
+
+  it.each(xAtacadoSupplierContactIds)(
+    'persiste as ofertas de iPhone e iPad do contato X Atacado %s',
+    async (supplierContactId) => {
+      for (const fixture of xAtacadoFixtures) {
+        const { service, transaction } = createService([], undefined, supplierContactId);
+
+        const result = await service.receive(webhookSecret, {
+          event: 'MESSAGES_UPSERT',
+          data: {
+            key: {
+              id: `message-x-atacado-${supplierContactId}-${fixture.id}`,
+              remoteJid: '5511999999999@s.whatsapp.net',
+              fromMe: false,
+            },
+            message: { conversation: fixture.rawText },
+          },
+        });
+
+        expect(result).toEqual({
+          accepted: true,
+          supplierId: supplierContactId,
+          items: fixture.parsedItems,
+        });
+        expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+          expect.objectContaining({
+            create: expect.objectContaining({
+              supplierContactId,
+              snapshotScope: 'catalog:primary',
+              items: {
+                create: expect.arrayContaining([expect.objectContaining({ condition: 'NOVO' })]),
+              },
+            }),
+          }),
+        );
+      }
+    },
+  );
+
+  it.each(xAtacadoSupplierContactIds)(
+    'aceita oferta X Atacado com cabeçalho arbitrário e sem cabeçalho para %s',
+    async (supplierContactId) => {
+      for (const [headerMode, header] of [
+        ['arbitrary', 'Resumo comercial'],
+        ['none', ''],
+      ] as const) {
+        const { service, transaction } = createService([], undefined, supplierContactId);
+        const rawText = [header, xAtacadoFixtures[0].rawText].filter(Boolean).join('\n');
+
+        const result = await service.receive(webhookSecret, {
+          event: 'MESSAGES_UPSERT',
+          data: {
+            key: {
+              id: `message-x-atacado-${supplierContactId}-${headerMode}`,
+              remoteJid: '5511999999999@s.whatsapp.net',
+              fromMe: false,
+            },
+            message: { conversation: rawText },
+          },
+        });
+
+        expect(result).toEqual({
+          accepted: true,
+          supplierId: supplierContactId,
+          items: xAtacadoFixtures[0].parsedItems,
+        });
+        expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+      }
+    },
+  );
+
+  it.each(xAtacadoSupplierContactIds)(
+    'preserva fail-closed para mensagens X Atacado sem snapshot comercial: %s',
+    async (supplierContactId) => {
+      for (const rawText of [
+        '17 PRO MAX 256 SILVER ESGOTADOS',
+        'Aviso logístico: prazo de envio atualizado.',
+      ]) {
+        const { service, transaction } = createService([], undefined, supplierContactId);
+        const result = await service.receive(webhookSecret, {
+          event: 'MESSAGES_UPSERT',
+          data: {
+            key: {
+              id: `message-x-atacado-invalid-${supplierContactId}-${rawText.length}`,
+              remoteJid: '5511999999999@s.whatsapp.net',
+              fromMe: false,
+            },
+            message: { conversation: rawText },
+          },
+        });
+
+        expect(result).toEqual({
+          accepted: false,
+          ignored: true,
+          reason: 'invalid_or_empty_snapshot',
+        });
+        expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each(xAtacadoSupplierContactIds)(
+    'preserva condição explícita acima do default NOVO para X Atacado: %s',
+    async (supplierContactId) => {
+      const { service, transaction } = createService([], undefined, supplierContactId);
+      const rawText = 'SWAP\niPhone 17 Pro Max 256GB\nBlue R$ 6.669';
+
+      await service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: {
+            id: `message-x-atacado-used-${supplierContactId}`,
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: { conversation: rawText },
+        },
+      });
+
+      expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            snapshotScope: 'catalog:used',
+            items: { create: [expect.objectContaining({ condition: 'SEMINOVO' })] },
           }),
         }),
       );
