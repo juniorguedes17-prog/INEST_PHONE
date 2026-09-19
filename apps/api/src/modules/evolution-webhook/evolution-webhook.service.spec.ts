@@ -7,6 +7,10 @@ import {
 } from './evolution-webhook.service';
 import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
 import { resolveSupplierSnapshotScope } from './supplier-snapshot-scope';
+import {
+  applySupplierListConditionPolicy,
+  TARGET_SUPPLIER_CONTACT_ID,
+} from './supplier-list-policy';
 
 const webhookSecret = 'this-is-a-test-webhook-secret-with-32-characters';
 
@@ -108,7 +112,11 @@ function catalogProduct(
   };
 }
 
-function createService(catalog: unknown[] = [], productNormalization?: unknown) {
+function createService(
+  catalog: unknown[] = [],
+  productNormalization?: unknown,
+  supplierContactId = 'supplier-contact-id',
+) {
   const transaction = {
     evolutionWebhookReceipt: { create: vi.fn().mockResolvedValue({}) },
     supplierCurrentList: {
@@ -141,7 +149,7 @@ function createService(catalog: unknown[] = [], productNormalization?: unknown) 
     }),
   };
   const supplierContacts = {
-    findActiveByWhatsappNumber: vi.fn().mockResolvedValue({ id: 'supplier-contact-id' }),
+    findActiveByWhatsappNumber: vi.fn().mockResolvedValue({ id: supplierContactId }),
   };
 
   return {
@@ -201,19 +209,26 @@ describe('EvolutionWebhookService', () => {
   });
 
   it.each(lotDocumentFixtures)(
-    'persiste o lote documental $id pelo contrato de snapshot existente',
+    'persiste a lista real $id pela policy explicita do contato',
     async ({ id, rawText, parsedItems }) => {
       const parsed = parseSupplierListText(rawText);
       expect(parsed).toHaveLength(parsedItems);
       expect(isValidParsedSupplierListSnapshot(parsed)).toBe(true);
-      expect(classifySupplierListUpdateMode(rawText)).toBe('FULL_SNAPSHOT');
-      expect(resolveSupplierSnapshotScope(rawText, parsed)).toMatchObject({
+      const policyItems = applySupplierListConditionPolicy(parsed, TARGET_SUPPLIER_CONTACT_ID);
+      expect(policyItems.every((item) => item.condition === 'NOVO')).toBe(true);
+      expect(
+        resolveSupplierSnapshotScope(rawText, policyItems, TARGET_SUPPLIER_CONTACT_ID),
+      ).toMatchObject({
         status: 'RESOLVED',
-        scopeKey: 'catalog:general',
-        reason: 'general_document_marker',
+        scopeKey: 'catalog:primary',
+        reason: 'supplier_policy_content',
       });
 
-      const { service, transaction } = createService();
+      const { service, transaction, supplierContacts } = createService(
+        [],
+        undefined,
+        TARGET_SUPPLIER_CONTACT_ID,
+      );
       const result = await service.receive(webhookSecret, {
         event: 'MESSAGES_UPSERT',
         data: {
@@ -228,20 +243,128 @@ describe('EvolutionWebhookService', () => {
 
       expect(result).toEqual({
         accepted: true,
-        supplierId: 'supplier-contact-id',
+        supplierId: TARGET_SUPPLIER_CONTACT_ID,
         items: parsedItems,
       });
       expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+      expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledOnce();
       expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           create: expect.objectContaining({
-            snapshotScope: 'catalog:general',
-            items: { create: expect.any(Array) },
+            supplierContactId: TARGET_SUPPLIER_CONTACT_ID,
+            snapshotScope: 'catalog:primary',
+            items: {
+              create: expect.arrayContaining([expect.objectContaining({ condition: 'NOVO' })]),
+            },
           }),
         }),
       );
     },
   );
+
+  it.each(['arbitrary_header', 'no_header'])(
+    'aceita lista comercial valida com %s para o contato governado',
+    async (headerMode) => {
+      const [, , ...bodyLines] = lotDocumentFixtures[0].rawText.split('\n');
+      const body = bodyLines.join('\n');
+      const rawText =
+        headerMode === 'arbitrary_header' ? `Resumo semanal de estoque\n${body}` : body;
+      const { service, transaction, supplierContacts } = createService(
+        [],
+        undefined,
+        TARGET_SUPPLIER_CONTACT_ID,
+      );
+
+      const result = await service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: {
+            id: `message-${headerMode}`,
+            remoteJid: '5511999999999@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: { conversation: rawText },
+        },
+      });
+
+      expect(result).toEqual({
+        accepted: true,
+        supplierId: TARGET_SUPPLIER_CONTACT_ID,
+        items: lotDocumentFixtures[0].parsedItems,
+      });
+      expect(supplierContacts.findActiveByWhatsappNumber).toHaveBeenCalledOnce();
+      expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+      expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({ snapshotScope: 'catalog:primary' }),
+        }),
+      );
+    },
+  );
+
+  it('preserva fail-closed de contato nao governado sem marcador documental', async () => {
+    const [, , ...bodyLines] = lotDocumentFixtures[0].rawText.split('\n');
+    const { service, transaction } = createService();
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-other-supplier-no-header',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: bodyLines.join('\n') },
+      },
+    });
+
+    expect(result).toMatchObject({ accepted: true, supplierId: 'supplier-contact-id' });
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejeita mensagem comum do contato governado sem lista comercial valida', async () => {
+    const { service, transaction } = createService([], undefined, TARGET_SUPPLIER_CONTACT_ID);
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-common-text',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: 'Bom dia! Aviso administrativo: envio previsto para amanhã.' },
+      },
+    });
+
+    expect(result).toEqual({ accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' });
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+  });
+
+  it('preserva condição explicita reconhecida acima do default NOVO', async () => {
+    const { service, transaction } = createService([], undefined, TARGET_SUPPLIER_CONTACT_ID);
+    const rawText = 'SWAP\niPhone 17 256GB SEMINOVO\nPreto R$ 4.600';
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-explicit-used-condition',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(result).toMatchObject({ accepted: true });
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          snapshotScope: 'catalog:used',
+          items: { create: [expect.objectContaining({ condition: 'SEMINOVO' })] },
+        }),
+      }),
+    );
+  });
 
   it.each([
     ['Lote 9821 ABC', 'iPhone 17 256GB\nPreto R$ 4.600\nAirPods Pro 3\nR$ 1.100'],

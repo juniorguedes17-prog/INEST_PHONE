@@ -7,6 +7,7 @@ import { SupplierContactsService } from '../suppliers/service/supplier-contacts.
 import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contacts.validators';
 import { processParsedSupplierItemsShadow } from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
+import { applySupplierListConditionPolicy, getSupplierListPolicy } from './supplier-list-policy';
 import {
   ProductNormalizationService,
   type ProductNormalizationInput,
@@ -55,9 +56,19 @@ export function classifySupplierListUpdateMode(text: string): SupplierListUpdate
   return classifySupplierListUpdate(text).mode;
 }
 
-function classifySupplierListUpdate(text: string): SupplierListUpdateClassification {
+function classifySupplierListUpdate(
+  text: string,
+  supplierContactId?: string,
+  hasValidCommercialSnapshot = false,
+): SupplierListUpdateClassification {
   const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text);
-  const hasFullMarker = FULL_SNAPSHOT_MARKER.test(text) || hasLotDocumentHeader(text);
+  const supplierPolicy = supplierContactId ? getSupplierListPolicy(supplierContactId) : undefined;
+  const hasFullMarker =
+    FULL_SNAPSHOT_MARKER.test(text) ||
+    (supplierPolicy?.requireDocumentHeader !== false && hasLotDocumentHeader(text)) ||
+    (supplierPolicy?.requireDocumentHeader === false &&
+      hasValidCommercialSnapshot &&
+      !hasPartialMarker);
 
   if (hasPartialMarker && hasFullMarker) {
     return { mode: 'INCONCLUSIVE', hasPartialMarker, hasFullMarker };
@@ -253,10 +264,11 @@ export class EvolutionWebhookService {
       );
       return { accepted: false, ignored: true, reason: 'invalid_or_empty_snapshot' };
     }
-    const updateClassification = classifySupplierListUpdate(text);
+    const policyItems = applySupplierListConditionPolicy(items, supplier.id);
+    const updateClassification = classifySupplierListUpdate(text, supplier.id, true);
     const updateMode = updateClassification.mode;
-    const scopeResolution = resolveSupplierSnapshotScope(text, items);
-    const writePlan = resolveSnapshotWritePlan(updateClassification, scopeResolution, items);
+    const scopeResolution = resolveSupplierSnapshotScope(text, policyItems, supplier.id);
+    const writePlan = resolveSnapshotWritePlan(updateClassification, scopeResolution, policyItems);
     const fullSnapshotScope =
       writePlan.authority === 'FULL_SNAPSHOT' && writePlan.targets.length === 1
         ? (writePlan.targets[0]?.scopeKey ?? null)
@@ -284,7 +296,7 @@ export class EvolutionWebhookService {
       originalReason: rejection.reason,
     }));
     const itemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
-      items,
+      policyItems,
       {
         supplierContactId: supplier.id,
         sourceMessageId: message.messageId,

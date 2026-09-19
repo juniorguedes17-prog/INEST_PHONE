@@ -1,4 +1,5 @@
 import type { ParsedSupplierListItem } from './evolution-webhook.types';
+import { getSupplierListPolicy } from './supplier-list-policy';
 
 export type SupplierSnapshotScopeKey = 'catalog:used' | 'catalog:primary' | 'catalog:general';
 export type SupplierSnapshotScopeStatus = 'RESOLVED' | 'AMBIGUOUS' | 'UNKNOWN';
@@ -6,6 +7,7 @@ export type SupplierSnapshotScopeReason =
   | 'explicit_used_preamble'
   | 'explicit_primary_preamble'
   | 'general_document_marker'
+  | 'supplier_policy_content'
   | 'broad_mixed_document'
   | 'conflicting_document_evidence'
   | 'insufficient_document_evidence';
@@ -68,11 +70,16 @@ export function extractSupplierDocumentBoundary(rawText: string): SupplierDocume
 export function resolveSupplierSnapshotScope(
   rawText: string,
   items: readonly ParsedSupplierListItem[],
+  supplierContactId?: string,
 ): SupplierSnapshotScopeResolution {
+  const supplierPolicy = supplierContactId ? getSupplierListPolicy(supplierContactId) : null;
   const boundary = extractSupplierDocumentBoundary(rawText);
   const preambleText = boundary.preambleLines.join('\n');
   const sectionText = boundary.sectionLines.join('\n');
-  const preambleMarkers = markersIn(preambleText, hasLotDocumentHeader(rawText));
+  const preambleMarkers = markersIn(
+    preambleText,
+    supplierPolicy?.requireDocumentHeader !== false && hasLotDocumentHeader(rawText),
+  );
   const sectionMarkers = markersIn(sectionText);
   const conditions = [...new Set(items.map((item) => item.condition).filter(isKnownCondition))];
   const categoryCount = new Set(items.map((item) => item.category).filter(Boolean)).size;
@@ -121,6 +128,19 @@ export function resolveSupplierSnapshotScope(
 
   if (isBroadMixedDocument && sectionMarkers.includes('used')) {
     return resolved('general', 'broad_mixed_document', evidence);
+  }
+
+  if (
+    supplierPolicy?.requireDocumentHeader === false &&
+    items.length > 0 &&
+    items.every((item) => isKnownCondition(item.condition))
+  ) {
+    if (conditions.every((condition) => condition === 'SEMINOVO')) {
+      return resolved('used', 'supplier_policy_content', evidence);
+    }
+    if (conditions.every((condition) => condition === 'NOVO' || condition === 'CPO')) {
+      return resolved('primary', 'supplier_policy_content', evidence);
+    }
   }
 
   return { status: 'UNKNOWN', reason: 'insufficient_document_evidence', evidence };
