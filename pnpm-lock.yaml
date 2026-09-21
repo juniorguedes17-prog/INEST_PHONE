@@ -125,6 +125,52 @@ importers:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@22.20.0)
 
+  apps/contract-generator:
+    dependencies:
+      next:
+        specifier: 15.5.20
+        version: 15.5.20(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@eslint/js':
+        specifier: 9.39.4
+        version: 9.39.4
+      '@next/eslint-plugin-next':
+        specifier: 15.5.20
+        version: 15.5.20
+      '@types/node':
+        specifier: 22.20.0
+        version: 22.20.0
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: 19.2.3
+        version: 19.2.3(@types/react@19.2.17)
+      autoprefixer:
+        specifier: 10.5.2
+        version: 10.5.2(postcss@8.5.16)
+      eslint:
+        specifier: 9.39.4
+        version: 9.39.4(jiti@1.21.7)
+      postcss:
+        specifier: 8.5.16
+        version: 8.5.16
+      tailwindcss:
+        specifier: 3.4.19
+        version: 3.4.19(tsx@4.23.0)(yaml@2.9.0)
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.63.0
+        version: 8.63.0(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3)
+
   apps/product-identity:
     devDependencies:
       '@eslint/js':

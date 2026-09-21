@@ -189,12 +189,25 @@ export function parseSupplierListText(
       continue;
     }
 
+    const aggregatedColors = extractAggregatedColors(line);
+    if (aggregatedColors.length > 0) {
+      if (currentProduct) {
+        for (const color of aggregatedColors) {
+          if (!pendingColors.includes(color)) pendingColors.push(color);
+        }
+      }
+      continue;
+    }
+
     const isGradeQualifier = Boolean(lineGrade && currentProduct && isGradeQualifierLine(line));
     const isProductCandidate =
       !isGradeQualifier &&
       isProductHeading(line, activeCategory, currentProduct !== null, nextLine);
     if (isProductCandidate) {
-      currentProduct = withCategoryPrefix(removePrice(line), activeCategory);
+      currentProduct = withCategoryPrefix(
+        removeStructuralQuantityPrefix(removePrice(line)),
+        activeCategory,
+      );
       pendingColors = [];
       currentGrade = lineGrade ?? activeGrade;
       currentCondition = resolveProductCondition(currentProduct, activeCondition);
@@ -417,6 +430,36 @@ function isStandaloneColorLine(value: string) {
   );
 }
 
+function extractAggregatedColors(value: string): string[] {
+  const match = value.match(/^\s*cores?\s*:\s*(.+)\s*$/iu);
+  if (!match?.[1]) return [];
+
+  const entries = match[1].split(/[;,]/).map((entry) => entry.trim());
+  if (entries.length === 0 || entries.some((entry) => !entry)) return [];
+
+  const colors = entries.map((entry) => {
+    const colorMatch = entry.match(/^([1-9]\d*)\s+(.+)$/u);
+    if (!colorMatch?.[2]) return null;
+
+    const color = colorMatch[2]
+      .replace(/\s*\([^)]*\)\s*$/u, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return isAggregatedColorLabel(color) ? color : null;
+  });
+
+  return colors.every((color): color is string => Boolean(color)) ? colors : [];
+}
+
+function isAggregatedColorLabel(value: string) {
+  return (
+    /^[\p{L}\p{M}][\p{L}\p{M}\s/-]*$/u.test(value) &&
+    !PRODUCT_MARKERS.test(value) &&
+    !PRODUCT_IDENTITY_MARKERS.test(value) &&
+    !hasPrice(value)
+  );
+}
+
 function isOfferContinuationLine(value: string | null) {
   return Boolean(value && hasPrice(value) && extractColor(value));
 }
@@ -549,6 +592,10 @@ function withCategoryPrefix(value: string, category: string | null) {
   if (compactAppleProduct) return `${category ?? 'iPhone'} ${value}`;
   if (detectCategory(value)) return value;
   return `${category} ${value}`;
+}
+
+function removeStructuralQuantityPrefix(value: string) {
+  return value.replace(/^\s*[1-9]\d*\s*[x×]\s+(?=\S)/iu, '').trim();
 }
 
 export function normalizeProductText(value: string): string {

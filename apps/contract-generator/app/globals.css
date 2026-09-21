@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --inest-black: #050505;
+  --inest-purple: #7b2cff;
+  --inest-blue: #5f7cff;
+  --inest-ice: #f5f7fa;
+  --inest-white: #ffffff;
+  --inest-line: #e2e5eb;
+  background: var(--inest-ice);
+  color: var(--inest-black);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  max-width: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--inest-ice);
+  color: var(--inest-black);
+  font-family: var(--font-inter), Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.app-shell {
+  width: 100%;
+  min-height: 100vh;
+  padding: clamp(1rem, 4vw, 3rem);
+}
+
+.site-header {
+  display: flex;
+  width: min(100%, 64rem);
+  margin: 0 auto;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  flex-wrap: wrap;
+}
+
+.brand-name {
+  color: var(--inest-black);
+  font-family: var(--font-montserrat), Arial, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.brand-context {
+  color: #515866;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.page-content {
+  width: min(100%, 64rem);
+  margin: clamp(3rem, 10vh, 6rem) auto 0;
+}
+
+.route-placeholder {
+  width: 100%;
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  overflow-wrap: anywhere;
+  border: 1px solid var(--inest-line);
+  border-radius: 0.75rem;
+  background: var(--inest-white);
+}
+
+.route-kicker {
+  margin: 0 0 0.75rem;
+  color: var(--inest-purple);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.route-title {
+  margin: 0;
+  font-family: var(--font-montserrat), Arial, sans-serif;
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.route-description {
+  max-width: 42rem;
+  margin: 1rem 0 0;
+  color: #515866;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.route-label {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 1.5rem;
+  padding: 0.35rem 0.55rem;
+  overflow-wrap: anywhere;
+  border-radius: 0.25rem;
+  background: var(--inest-ice);
+  color: #303744;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.8125rem;
+}

@@ -1147,6 +1147,105 @@ describe('supplier list parser', () => {
     expect(isValidParsedSupplierListSnapshot(items)).toBe(true);
   });
 
+  it('separa o prefixo estrutural de quantidade sem remover numeros semanticos do produto', () => {
+    const items = parseSupplierListText(`
+      10 x iPhone 18 Pro 256GB
+      R$ 9.100
+      26 X iPhone 18 Pro Max 256GB
+      R$ 10.100
+      8 × iPhone 18 Pro Max 512GB
+      R$ 11.100
+      iPhone 18
+      R$ 7.000
+      iPhone 17 Pro Max 1TB
+      R$ 9.000
+      MacBook 13 256GB
+      R$ 8.000
+      Watch Series 11 2TB
+      R$ 4.000
+    `);
+
+    expect(items.map(({ productName, capacity }) => ({ productName, capacity }))).toEqual([
+      { productName: 'iPhone 18 Pro 256GB', capacity: '256GB' },
+      { productName: 'iPhone 18 Pro Max 256GB', capacity: '256GB' },
+      { productName: 'iPhone 18 Pro Max 512GB', capacity: '512GB' },
+      { productName: 'iPhone 18', capacity: null },
+      { productName: 'iPhone 17 Pro Max 1TB', capacity: '1TB' },
+      { productName: 'MacBook 13 256GB', capacity: '256GB' },
+      { productName: 'Watch Series 11 2TB', capacity: '2TB' },
+    ]);
+  });
+
+  it('expande cores agregadas com preco compartilhado sem multiplicar pela quantidade de estoque', () => {
+    const items = parseSupplierListText(`
+      26 x iPhone 18 Pro Max 256GB
+      Cores: 12 Burgundy, 5 Glacier, 4 Silver, 5 Black
+      R$ 10.100
+    `);
+
+    expect(items).toHaveLength(4);
+    expect(
+      items.map(({ productName, color, capacity, price }) => ({
+        productName,
+        color,
+        capacity,
+        price,
+      })),
+    ).toEqual([
+      {
+        productName: 'iPhone 18 Pro Max 256GB',
+        color: 'Burgundy',
+        capacity: '256GB',
+        price: 10100,
+      },
+      { productName: 'iPhone 18 Pro Max 256GB', color: 'Glacier', capacity: '256GB', price: 10100 },
+      { productName: 'iPhone 18 Pro Max 256GB', color: 'Silver', capacity: '256GB', price: 10100 },
+      { productName: 'iPhone 18 Pro Max 256GB', color: 'Black', capacity: '256GB', price: 10100 },
+    ]);
+  });
+
+  it('aceita uma cor agregada e preserva 1TB sem depender da soma declarada de estoque', () => {
+    const items = parseSupplierListText(`
+      2 x iPhone 18 Pro Max 1TB
+      Cores: 2 Burgundy(Bordô/Vinho)
+      R$ 12.100
+    `);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        productName: 'iPhone 18 Pro Max 1TB',
+        capacity: '1TB',
+        color: 'Burgundy',
+        price: 12100,
+      }),
+    ]);
+  });
+
+  it('nao exige que a quantidade total corresponda a distribuicao de cores', () => {
+    const items = parseSupplierListText(`
+      5 x iPhone 18 Pro 256GB
+      Cores: 1 Burgundy, 1 Glacier
+      R$ 9.100
+    `);
+
+    expect(items.map(({ color, productName }) => ({ color, productName }))).toEqual([
+      { color: 'Burgundy', productName: 'iPhone 18 Pro 256GB' },
+      { color: 'Glacier', productName: 'iPhone 18 Pro 256GB' },
+    ]);
+  });
+
+  it('mantem o formato anterior de cores isoladas e nao cria oferta a partir de mensagem administrativa', () => {
+    const existingFormat = parseSupplierListText(`
+      iPhone 17 Pro 256GB
+      Black
+      Silver
+      R$ 6.200
+    `);
+
+    expect(existingFormat.map(({ color }) => color)).toEqual(['black', 'silver']);
+    expect(parseSupplierListText('Pagamento via pix\nCores: 5 Burgundy, 5 Glacier')).toEqual([]);
+  });
+
   it('interpreta a promocao do Emilio com moeda no sufixo', () => {
     const [item] = parseSupplierListText(`
       PROMOÇÃO
