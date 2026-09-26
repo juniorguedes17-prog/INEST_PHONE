@@ -351,6 +351,55 @@ describe('supplier list parser', () => {
     expect(items.map((item) => item.condition)).toEqual(['CPO', 'NOVO']);
   });
 
+  it('encerra a condition herdada ao mudar de categoria sem evidencia propria', () => {
+    const items = parseSupplierListText(`
+      LISTA APPLE LACRADOS
+      IPHONES
+      iPhone 16 128GB
+      Preto R$ 4.000
+      LISTA APPLE CPO LACRADOS
+      iPhone 16 Pro 128GB
+      Natural R$ 3.500
+      APPLE WATCH
+      Apple Watch Series 11 46MM
+      Black R$ 2.000
+      IPAD
+      iPad 11 128GB
+      Azul R$ 2.500
+      MACBOOK
+      MacBook Air M5 13 16/512GB
+      Silver R$ 7.650
+      MacBook Neo 8/512GB
+      Midnight R$ 4.500
+      MAC MINI
+      Mac Mini M4 16/512GB
+      Silver R$ 5.000
+      MacBook Neo CPO 8/512GB
+      Silver R$ 4.550
+      IPHONES LACRADOS
+      iPhone 15 128GB
+      Azul R$ 3.000
+      SWAP
+      iPhone 14 128GB
+      Preto R$ 1.800
+    `);
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ productName: 'iPhone 16 128GB', condition: 'NOVO' }),
+        expect.objectContaining({ productName: 'iPhone 16 Pro 128GB', condition: 'CPO' }),
+        expect.objectContaining({ productName: 'Apple Watch Series 11 46MM', condition: null }),
+        expect.objectContaining({ productName: 'iPad 11 128GB', condition: null }),
+        expect.objectContaining({ productName: 'MacBook Air M5 13 16/512GB', condition: null }),
+        expect.objectContaining({ productName: 'MacBook Neo 8/512GB', condition: null }),
+        expect.objectContaining({ productName: 'Mac Mini M4 16/512GB', condition: null }),
+        expect.objectContaining({ productName: 'MacBook Neo 8/512GB', condition: 'CPO' }),
+        expect.objectContaining({ productName: 'iPhone 15 128GB', condition: 'NOVO' }),
+        expect.objectContaining({ productName: 'iPhone 14 128GB', condition: 'SEMINOVO' }),
+      ]),
+    );
+  });
+
   it('mantem condition nao resolvida quando a linha informa somente bateria', () => {
     const [item] = parseSupplierListText('iPhone 16 128GB\nBateria 100%\nPreto R$ 4.000');
 

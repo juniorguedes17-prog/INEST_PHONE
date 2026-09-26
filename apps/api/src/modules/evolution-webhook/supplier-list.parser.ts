@@ -82,6 +82,7 @@ export function parseSupplierListText(
   const items: ParsedSupplierListItem[] = [];
   let currentProduct: string | null = null;
   let activeCategory: string | null = null;
+  let lastProductCategory: string | null = null;
   let activeCondition: ProductCondition | null = null;
   let currentCondition: ProductCondition | null = null;
   let activeGrade: ProductGrade | null = null;
@@ -120,10 +121,15 @@ export function parseSupplierListText(
     }
     const sectionCategory = detectCategory(line);
     if (isCategoryHeading(line, sectionCategory)) {
+      const changesCategory =
+        lastProductCategory !== null && lastProductCategory !== sectionCategory;
       activeCategory = sectionCategory;
       const sectionCondition = detectCondition(line);
       if (sectionCondition.status === 'RESOLVED') activeCondition = sectionCondition.condition;
-      if (sectionCondition.status === 'UNRESOLVED' && sectionCondition.reason === 'conflicting') {
+      if (
+        sectionCondition.status === 'UNRESOLVED' &&
+        (sectionCondition.reason === 'conflicting' || changesCategory)
+      ) {
         activeCondition = null;
       }
       currentProduct = null;
@@ -155,6 +161,8 @@ export function parseSupplierListText(
         continue;
       }
       currentCondition = activeCondition;
+      activeCategory = null;
+      lastProductCategory = null;
       currentProduct = null;
       activeGrade = null;
       currentGrade = null;
@@ -169,6 +177,8 @@ export function parseSupplierListText(
       pendingColors = [];
       if (!currentProduct) {
         activeCondition = currentCondition;
+        activeCategory = null;
+        lastProductCategory = null;
         activeGrade = null;
         currentGrade = null;
       }
@@ -208,6 +218,7 @@ export function parseSupplierListText(
         removeStructuralQuantityPrefix(removePrice(line)),
         activeCategory,
       );
+      lastProductCategory = detectCategory(currentProduct) ?? lastProductCategory;
       pendingColors = [];
       currentGrade = lineGrade ?? activeGrade;
       currentCondition = resolveProductCondition(currentProduct, activeCondition);
