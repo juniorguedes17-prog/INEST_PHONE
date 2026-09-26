@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applySupplierListConditionPolicy,
+  BROCKTECH_SUPPLIER_CONTACT_IDS,
   getSupplierListPolicy,
   PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
   TARGET_SUPPLIER_CONTACT_ID,
@@ -47,6 +48,18 @@ describe('supplier list policy', () => {
       defaultCondition: null,
     });
   });
+
+  it.each(BROCKTECH_SUPPLIER_CONTACT_IDS)(
+    'habilita a herança parcial segura sem default de condition para BrockTech %s',
+    (supplierContactId) => {
+      expect(getSupplierListPolicy(supplierContactId)).toEqual({
+        requireDocumentHeader: false,
+        defaultCondition: null,
+        inheritPartialConditionFromCurrentList: true,
+      });
+      expect(applySupplierListConditionPolicy([item], supplierContactId)[0]?.condition).toBe(null);
+    },
+  );
 
   it.each(GOVERNED_SUPPLIER_CONTACT_IDS)(
     'aplica NOVO somente quando a condição não possui evidência explícita para %s',

@@ -267,8 +267,30 @@ export class EvolutionWebhookService {
     const policyItems = applySupplierListConditionPolicy(items, supplier.id);
     const updateClassification = classifySupplierListUpdate(text, supplier.id, true);
     const updateMode = updateClassification.mode;
-    const scopeResolution = resolveSupplierSnapshotScope(text, policyItems, supplier.id);
-    const writePlan = resolveSnapshotWritePlan(updateClassification, scopeResolution, policyItems);
+    const supplierPolicy = getSupplierListPolicy(supplier.id);
+    const canInheritPartialConditions =
+      updateMode === 'PARTIAL_UPDATE' &&
+      supplierPolicy.inheritPartialConditionFromCurrentList === true;
+    const currentPrimaryList = canInheritPartialConditions
+      ? await this.prisma.supplierCurrentList.findUnique({
+          where: {
+            supplierContactId_snapshotScope: {
+              supplierContactId: supplier.id,
+              snapshotScope: 'catalog:primary',
+            },
+          },
+          include: { items: true },
+        })
+      : null;
+    const resolvedPolicyItems = canInheritPartialConditions
+      ? resolvePartialConditionsFromCurrentList(policyItems, currentPrimaryList?.items ?? [])
+      : policyItems;
+    const scopeResolution = resolveSupplierSnapshotScope(text, resolvedPolicyItems, supplier.id);
+    const writePlan = resolveSnapshotWritePlan(
+      updateClassification,
+      scopeResolution,
+      resolvedPolicyItems,
+    );
     const fullSnapshotScope =
       writePlan.authority === 'FULL_SNAPSHOT' && writePlan.targets.length === 1
         ? (writePlan.targets[0]?.scopeKey ?? null)
@@ -296,7 +318,7 @@ export class EvolutionWebhookService {
       originalReason: rejection.reason,
     }));
     const itemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
-      policyItems,
+      resolvedPolicyItems,
       {
         supplierContactId: supplier.id,
         sourceMessageId: message.messageId,
@@ -794,6 +816,46 @@ export function supplierListItemMergeKey(item: SupplierListItemForMerge) {
     `condition:${normalizeMergeValue(item.condition)}`,
     `quality-grade:${normalizeMergeValue(item.qualityGrade)}`,
   ].join('|');
+}
+
+function supplierListItemConditionlessMergeKey(item: SupplierListItemForMerge) {
+  return [
+    `family:${normalizeMergeValue(item.category)}`,
+    `variant:${normalizeMergeValue(item.normalizedName)}`,
+    `model:${normalizeMergeValue(item.model)}`,
+    `capacity:${normalizeMergeValue(item.capacity)}`,
+    `color:${normalizeMergeValue(item.color)}`,
+    `quality-grade:${normalizeMergeValue(item.qualityGrade)}`,
+  ].join('|');
+}
+
+function resolvePartialConditionsFromCurrentList(
+  incomingItems: readonly ParsedSupplierListItem[],
+  existingItems: readonly SupplierListItemForMerge[],
+): ParsedSupplierListItem[] {
+  const conditionsByOffer = new Map<string, Set<'NOVO' | 'CPO'>>();
+
+  for (const item of existingItems) {
+    if (!isPrimaryOfferCondition(item.condition)) continue;
+    const key = supplierListItemConditionlessMergeKey(item);
+    const conditions = conditionsByOffer.get(key) ?? new Set<'NOVO' | 'CPO'>();
+    conditions.add(item.condition);
+    conditionsByOffer.set(key, conditions);
+  }
+
+  return incomingItems.flatMap((item) => {
+    if (item.condition !== null) return [item];
+
+    const conditions = conditionsByOffer.get(supplierListItemConditionlessMergeKey(item));
+    if (!conditions || conditions.size !== 1) return [];
+
+    const [condition] = conditions;
+    return condition ? [{ ...item, condition }] : [];
+  });
+}
+
+function isPrimaryOfferCondition(value: string | null): value is 'NOVO' | 'CPO' {
+  return value === 'NOVO' || value === 'CPO';
 }
 
 function normalizeMergeValue(value: string | null | undefined) {

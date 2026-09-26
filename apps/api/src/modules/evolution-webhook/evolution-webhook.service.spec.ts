@@ -9,6 +9,7 @@ import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supp
 import { resolveSupplierSnapshotScope } from './supplier-snapshot-scope';
 import {
   applySupplierListConditionPolicy,
+  BROCKTECH_SUPPLIER_CONTACT_IDS,
   PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
   TARGET_SUPPLIER_CONTACT_ID,
   X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID,
@@ -152,6 +153,37 @@ const xAtacadoSupplierContactIds = [
   X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID,
 ] as const;
 
+const BROCKTECH_SUPPLIER_CONTACT_ID = BROCKTECH_SUPPLIER_CONTACT_IDS[0];
+
+const brockTechPromotionP2 = `🔥 PROMOÇÕES DO DIA 🔥
+
+📲 *📲 18 PRO MAX 256*
+
+⬛️ BLACK
+🔥 *R$ 9.650.00*
+
+⬜️ SILVER
+🔥 *R$ 9.800.00*
+
+🟦 AZUL/GLACIER
+🔥 *R$ 9.890.00*
+
+BURGUNDY
+🔥 *R$ 11.000.00*`;
+
+const brockTechPromotionP3 = `🔥 PROMOÇÕES DO DIA 🔥
+
+📲 *📲 18 PRO MAX 256*
+
+⬛️ BLACK
+🔥 *R$ 9.500.00*
+
+⬜️ SILVER
+🔥 *R$ 9.800.00*
+
+🟦 AZUL/GLACIER
+🔥 *R$ 9.700.00*`;
+
 function catalogProduct(
   id: string,
   productDescription: string,
@@ -197,6 +229,7 @@ function createService(
     ),
     supplierCurrentList: {
       findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue({}),
     },
   };
@@ -246,6 +279,15 @@ function currentItem(
     rawLine: `${normalizedName} R$ ${price}`,
     ...overrides,
   };
+}
+
+function persistedItem(
+  id: string,
+  item: ReturnType<typeof parseSupplierListText>[number],
+  condition: 'NOVO' | 'CPO' | 'SEMINOVO',
+  price: number,
+) {
+  return { ...item, id, productId: null, condition, price };
 }
 
 describe('EvolutionWebhookService', () => {
@@ -1997,6 +2039,161 @@ Prata R$ 7.500`;
       duplicate: true,
     });
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+  });
+
+  it('atualiza a promocao parcial BrockTech P2 e P3 pela condition NOVO persistida', async () => {
+    const { service, prisma, transaction } = createService(
+      [],
+      undefined,
+      BROCKTECH_SUPPLIER_CONTACT_ID,
+    );
+    const p2Items = parseSupplierListText(brockTechPromotionP2);
+    const p3Items = parseSupplierListText(brockTechPromotionP3);
+
+    expect(p2Items.map(({ color, condition, price }) => ({ color, condition, price }))).toEqual([
+      { color: 'black', condition: null, price: 9650 },
+      { color: 'silver', condition: null, price: 9800 },
+      { color: 'azul', condition: null, price: 9890 },
+      { color: null, condition: null, price: 11000 },
+    ]);
+    expect(p3Items.map(({ color, condition, price }) => ({ color, condition, price }))).toEqual([
+      { color: 'black', condition: null, price: 9500 },
+      { color: 'silver', condition: null, price: 9800 },
+      { color: 'azul', condition: null, price: 9700 },
+    ]);
+
+    const persistedItems = p2Items.map((item, index) => ({
+      ...persistedItem(
+        `brock-${item.color ?? index}`,
+        item,
+        'NOVO',
+        [9800, 9900, 9950, 11100][index] ?? 0,
+      ),
+      color: index === 3 ? 'burgundy' : item.color,
+    }));
+    const currentList = { id: 'brock-primary-list', items: persistedItems };
+    prisma.supplierCurrentList.findUnique.mockImplementation(async () => currentList);
+    transaction.supplierCurrentList.findUnique.mockImplementation(async () => currentList);
+    transaction.supplierCurrentListItem.update.mockImplementation(async ({ where, data }) => {
+      const index = persistedItems.findIndex((item) => item.id === where.id);
+      if (index >= 0) persistedItems[index] = { ...persistedItems[index], ...data };
+      return {};
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'brock-p2', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: brockTechPromotionP2 },
+      },
+    });
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'brock-p3', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: brockTechPromotionP3 },
+      },
+    });
+
+    expect(
+      persistedItems.map(({ color, condition, price }) => ({ color, condition, price })),
+    ).toEqual([
+      { color: 'black', condition: 'NOVO', price: 9500 },
+      { color: 'silver', condition: 'NOVO', price: 9800 },
+      { color: 'azul', condition: 'NOVO', price: 9700 },
+      { color: 'burgundy', condition: 'NOVO', price: 11100 },
+    ]);
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+  });
+
+  it('herda CPO da oferta BrockTech unica e não atualiza match ambiguo ou desconhecido', async () => {
+    const payload = 'PROMOÇÕES DO DIA\nMacBook Neo 8/512GB\nSilver R$ 4.550';
+    const [incoming] = parseSupplierListText(payload);
+    expect(incoming).toMatchObject({ condition: null, color: 'silver', price: 4550 });
+
+    const cpo = persistedItem('neo-cpo', incoming!, 'CPO', 4600);
+    const cpoService = createService([], undefined, BROCKTECH_SUPPLIER_CONTACT_ID);
+    const cpoList = { id: 'brock-primary-list', items: [cpo] };
+    cpoService.prisma.supplierCurrentList.findUnique.mockResolvedValue(cpoList);
+    cpoService.transaction.supplierCurrentList.findUnique.mockResolvedValue(cpoList);
+
+    await cpoService.service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'brock-cpo', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: payload },
+      },
+    });
+
+    expect(cpoService.transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'neo-cpo' },
+        data: expect.objectContaining({ condition: 'CPO', price: 4550 }),
+      }),
+    );
+
+    const ambiguousService = createService([], undefined, BROCKTECH_SUPPLIER_CONTACT_ID);
+    ambiguousService.prisma.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'brock-primary-list',
+      items: [cpo, { ...cpo, id: 'neo-novo', condition: 'NOVO' }],
+    });
+    await ambiguousService.service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'brock-ambiguous', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: payload },
+      },
+    });
+
+    const unknownService = createService([], undefined, BROCKTECH_SUPPLIER_CONTACT_ID);
+    unknownService.prisma.supplierCurrentList.findUnique.mockResolvedValue(null);
+    await unknownService.service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'brock-unknown', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: payload },
+      },
+    });
+
+    for (const candidate of [ambiguousService, unknownService]) {
+      expect(candidate.transaction.supplierCurrentList.update).not.toHaveBeenCalled();
+      expect(candidate.transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+      expect(candidate.transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+    }
+  });
+
+  it.each([
+    ['NOVO', 'NOVO', 'catalog:primary'],
+    ['CPO', 'CPO', 'catalog:primary'],
+    ['SWAP', 'SEMINOVO', 'catalog:used'],
+  ] as const)('preserva a condition explícita BrockTech %s', async (heading, condition, scope) => {
+    const { service, transaction } = createService([], undefined, BROCKTECH_SUPPLIER_CONTACT_ID);
+    const payload = `PROMOÇÕES DO DIA\n${heading}\niPhone 18 Pro Max 256GB\nBlack R$ 9.500`;
+    const [incoming] = parseSupplierListText(payload);
+    const matchingItem = persistedItem('explicit-condition', incoming!, condition, 9800);
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: `${scope}-list`,
+      items: [matchingItem],
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: `brock-explicit-${condition}`,
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: payload },
+      },
+    });
+
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'explicit-condition' },
+        data: expect.objectContaining({ condition, price: 9500 }),
+      }),
+    );
   });
 
   it('atualiza SEMINOVO sem substituir CPO ou NOVO', async () => {
