@@ -14,6 +14,7 @@ const LOGISTIC_NEW_CONTEXT_MARKERS =
 const GRADE_MARKER = /\bgrade\s*(a\s*\+|ab|b|c|a)(?=\s|[^a-z0-9]|$)/gi;
 const YEAR_CONTEXT_HEADER = /^\s*ano\s*(?::|[-–—])?\s*(?:19|20)\d{2}\s*$/i;
 const CURRENCY_MARKER = String.raw`(?:R\$|\$R|\$|\u{1F4B0}|\u{1F4B2}|\u{1F4B5})`;
+const CURRENCY_EMOJI_MARKERS = new Set(['💰', '💲', '💵']);
 const MONEY_VALUE = String.raw`\d(?:[\d.,]|\s(?=\d{3}(?:\D|$)))*`;
 const PRICE_PREFIX = new RegExp(`${CURRENCY_MARKER}\\s*(${MONEY_VALUE})`, 'iu');
 const PRICE_SUFFIX = new RegExp(`(${MONEY_VALUE})\\s*(?:R\\$|\\$R)`, 'iu');
@@ -206,6 +207,9 @@ export function parseSupplierListText(
           if (!pendingColors.includes(color)) pendingColors.push(color);
         }
       }
+      if (!hasPrice(line, currentProduct !== null)) continue;
+    } else if (isAggregatedColorsLine(line)) {
+      pendingColors = [];
       continue;
     }
 
@@ -232,7 +236,10 @@ export function parseSupplierListText(
     }
 
     const lineColor = extractColor(line);
-    const price = extractPrice(line, Boolean(currentProduct && lineColor));
+    const price = extractPrice(
+      line,
+      Boolean(currentProduct && (lineColor || aggregatedColors.length > 0)),
+    );
     if (price === null) {
       if (currentProduct && lineColor && !isProductCandidate && isStandaloneColorLine(line)) {
         if (!pendingColors.includes(lineColor)) pendingColors.push(lineColor);
@@ -254,11 +261,14 @@ export function parseSupplierListText(
     }
 
     const productName = canonicalizeProductName(removePrice(currentProduct));
-    const colors = lineColor
-      ? [lineColor]
-      : pendingColors.length > 0
-        ? [...pendingColors]
-        : [extractColor(productName)];
+    const colors =
+      aggregatedColors.length > 0
+        ? aggregatedColors
+        : lineColor
+          ? [lineColor]
+          : pendingColors.length > 0
+            ? [...pendingColors]
+            : [extractColor(productName)];
     const nameWithoutColor = productName;
     const normalizedName = normalizeProductText(nameWithoutColor);
 
@@ -388,6 +398,7 @@ function isProductHeading(
   hasCurrentProduct: boolean,
   nextLine: string | null,
 ) {
+  if (isAggregatedColorsLine(value)) return false;
   const candidate = removePrice(value);
   if (!candidate) return false;
   if (isCommercialPriceLabel(candidate)) return false;
@@ -445,21 +456,28 @@ function extractAggregatedColors(value: string): string[] {
   const match = value.match(/^\s*cores?\s*:\s*(.+)\s*$/iu);
   if (!match?.[1]) return [];
 
-  const entries = match[1].split(/[;,]/).map((entry) => entry.trim());
+  const entries = removePrice(normalizePriceSearchText(match[1]), true)
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/[\s,.;:]+$/u, '')
+    .split(/[;,]/)
+    .map((entry) => entry.trim());
   if (entries.length === 0 || entries.some((entry) => !entry)) return [];
 
   const colors = entries.map((entry) => {
     const colorMatch = entry.match(/^([1-9]\d*)\s+(.+)$/u);
-    if (!colorMatch?.[2]) return null;
-
-    const color = colorMatch[2]
+    const color = (colorMatch?.[2] ?? entry)
       .replace(/\s*\([^)]*\)\s*$/u, '')
+      .replace(/[\s.,:;]+$/u, '')
       .replace(/\s+/g, ' ')
       .trim();
     return isAggregatedColorLabel(color) ? color : null;
   });
 
   return colors.every((color): color is string => Boolean(color)) ? colors : [];
+}
+
+function isAggregatedColorsLine(value: string) {
+  return /^\s*cores?\s*:/iu.test(value);
 }
 
 function isAggregatedColorLabel(value: string) {
@@ -704,8 +722,8 @@ function formatProductToken(token: string) {
   return token;
 }
 
-function removePrice(value: string) {
-  const match = findPriceMatch(value);
+function removePrice(value: string, allowBarePrice = false) {
+  const match = findPriceMatch(value, allowBarePrice);
   if (!match || match.index === undefined) return value.replace(/\s+/g, ' ').trim();
 
   return `${value.slice(0, match.index)}${value.slice(match.index + match[0].length)}`
@@ -719,10 +737,17 @@ function extractPrice(value: string, allowBarePrice = false): number | null {
 }
 
 function findPriceMatch(value: string, allowBarePrice = false) {
+  const normalizedValue = normalizePriceSearchText(value);
   return (
-    value.match(PRICE_PREFIX) ??
-    value.match(PRICE_SUFFIX) ??
-    (allowBarePrice ? value.match(PRICE_BARE_SUFFIX) : null)
+    normalizedValue.match(PRICE_PREFIX) ??
+    normalizedValue.match(PRICE_SUFFIX) ??
+    (allowBarePrice ? normalizedValue.match(PRICE_BARE_SUFFIX) : null)
+  );
+}
+
+function normalizePriceSearchText(value: string) {
+  return value.replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, (emoji) =>
+    CURRENCY_EMOJI_MARKERS.has(emoji) ? emoji : ' '.repeat(emoji.length),
   );
 }
 

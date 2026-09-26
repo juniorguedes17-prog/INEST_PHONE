@@ -50,7 +50,7 @@ Cores: 1 Midnight, 1 Prata. *R$9000*
 Cores: 2 Preto. *R$ 13000*
 
 *Envio de Curitiba 30/09*`,
-    parsedItems: 9,
+    parsedItems: 18,
   },
   {
     id: '4041',
@@ -93,7 +93,7 @@ Cores: 1 Preto, 2 Azul, 1 Prata. *R$ 7000*
 Cor: Preto *R$ 13000*
 
 *Envio de Curitiba 29/09*`,
-    parsedItems: 12,
+    parsedItems: 26,
   },
 ] as const;
 

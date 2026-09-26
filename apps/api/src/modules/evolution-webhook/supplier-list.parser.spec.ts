@@ -1270,6 +1270,185 @@ describe('supplier list parser', () => {
     ]);
   });
 
+  it.each([
+    'R$ 6.800',
+    '🔥R$ 6.800',
+    'R$ 🔥6.800',
+    'R$ 6.800🔥',
+    '🔥R$ 🔥6.800🔥',
+    '*R$ 🔥6.800*🔥',
+    '⚡R$ ⚡6.800⚡',
+  ])('trata emoji decorativo como transparente ao preco %s', (priceText) => {
+    const [item] = parseSupplierListText(`
+      iPhone 17 Pro 256GB
+      Black ${priceText}
+    `);
+
+    expect(item).toMatchObject({ color: 'black', price: 6800 });
+  });
+
+  it.each(['8800', '🔥8800', '8800🔥', '🔥8800🔥', '⚡8800⚡'])(
+    'mantem o contexto existente para preco bare decorado %s',
+    (priceText) => {
+      const [item] = parseSupplierListText(`
+        iPhone 17 Pro 256GB
+        Black ${priceText}
+      `);
+
+      expect(item).toMatchObject({ color: 'black', price: 8800 });
+    },
+  );
+
+  it('preserva marcadores de cor e processa cores agregadas com preco na mesma linha', () => {
+    const markerItems = parseSupplierListText(`
+      iPhone 17 Pro 256GB
+      ⬛️ BLACK R$ 6.800
+      ⬜️ SILVER R$ 6.800
+      🟦 AZUL/GLACIER R$ 6.800
+    `);
+    const aggregatedItems = parseSupplierListText(`
+      iPad Air 2026 128GB
+      Cores: 1 Cinza Espacial, 1 Estelar *R$ 🔥3.400*🔥
+    `);
+    const singleColorItems = parseSupplierListText(`
+      iPad 11 128GB
+      Cores: 2 Prata *R$ 2.450*
+      iPad Air 2026 128GB
+      Cores: Prata *R$ 3.400*
+    `);
+
+    expect(markerItems.map(({ color }) => color)).toEqual(['black', 'silver', 'azul']);
+    expect(aggregatedItems).toEqual([
+      expect.objectContaining({
+        productName: 'iPad Air 2026 128GB',
+        color: 'Cinza Espacial',
+        price: 3400,
+      }),
+      expect.objectContaining({
+        productName: 'iPad Air 2026 128GB',
+        color: 'Estelar',
+        price: 3400,
+      }),
+    ]);
+    expect(singleColorItems).toEqual([
+      expect.objectContaining({ productName: 'iPad 11 128GB', color: 'Prata', price: 2450 }),
+      expect.objectContaining({ productName: 'iPad Air 2026 128GB', color: 'Prata', price: 3400 }),
+    ]);
+    expect(
+      [...aggregatedItems, ...singleColorItems].some(({ productName }) =>
+        /^cores?:/iu.test(productName),
+      ),
+    ).toBe(false);
+  });
+
+  it('reproduz os payloads reais P1-P4 do LEILAO APPLE RF', () => {
+    const payloads = [
+      `iPhone 18 Lote 4
+*ENVIO 02/10*
+
+10 x iPhone 18 Pro 256GB.
+Cores: 4 Burgundy(Bordô/Vinho), 3 Glacier(Azul), 1 Silver(Prata), 2 Black(Preto). *🔥8800*🔥
+
+3 x iPhone 18 Pro 512GB.
+Cores: 1 Burgundy(Bordô/Vinho), 1 Glacier(Azul), 1 Black(Preto). *🔥9800*🔥
+
+10 x iPhone 18 Pro Max 256GB.
+Cores: 3 Burgundy(Bordô/Vinho), 3 Glacier(Azul), 2 Silver(Prata), 2 Black(Preto). *🔥9800*🔥
+
+4 x iPhone 18 Pro Max 512GB.
+Cores: 2 Burgundy(Bordô/Vinho), 1 Glacier(Azul), 1 Silver(Prata). *10800*
+
+3 x iPhone 18 Pro Max 1TB.
+Cores: 1 Burgundy(Bordô/Vinho), 1 Glacier(Azul), 1 Black(Preto *🔥11800*🔥
+
+2 x iPhone 18 Pro Max 2TB
+Cores: 2 Burgundy(Bordô/Vinho).*🔥12800*🔥
+
+*ENVIO 02/10*`,
+      `Lote 5507 IGU
+*ENVIO 05/10*
+
+1 x iPhone 17 Pro 256GB.
+Cores: 1 Laranja, *🔥R$ 6.200*🔥
+
+2 x iPhone 17 Pro 512GB.
+Cores: 1 Laranja, 1 Prata, 1 Azul. *R$ 🔥6.800*🔥
+
+2 x iPhone 17 Pro Max 256GB.
+Cores: 2 Azul. *R$ 🔥6.800*🔥
+
+3 x Apple Watch Séries 11 42mm.
+Cores: 3 Gold Rose. *🔥R$ 1.900*🔥
+
+3 x Apple Watch Séries 11 46mm.
+Cores: 1 Preto, 2 Gold Rose. *🔥R$ 2.000*🔥
+
+4 x Apple Watch Ultra 3.
+Cores: 2 Preto, 3 Natural Titanium. *🔥R$ 3.900*🔥
+
+3 x iPad 11º geração 128GB.
+Cores: 3 Azul, *🔥R$ 2.450*🔥
+
+2 x iPad Air 2026 128.
+Cores: 1 Cinza Espacial, 1 Estelar. *🔥R$ 3.400*🔥
+
+10 x AirPods 4(ANC). *🔥R$ 800*🔥
+
+3 x MacBook Air 2026 M5 16GB 512GB 13 Pols.
+Cores: 1 Preto, 2 Estelar *🔥R$ 6.900*🔥
+
+3 x MacBook Pro 2026 M5 Pro 24GB 1TB.
+Cores: 2 Prata. *🔥R$ 12.800*🔥
+
+*ENVIO 05/10*`,
+      `Lote 3955 RBO
+*ENVIO 06/10*
+
+7 x iPhone 17 256GB.
+Cores: 2 Preto, 2 Branco, 3 Lavanda. *🔥R$ 4500*🔥
+
+4 x iPhone 17 Pro 256GB.
+Cores: 1 Laranja, 3 Prata. *🔥R$ 6200*🔥
+
+9 x iPhone 17 Pro Max 256GB.
+Cores: 2 Laranja, 4 Prata, 3 Azul. *🔥R$ 6800*🔥
+
+7 x AirPods Pro 3 *🔥R$ 1100*🔥
+
+6 x MacBook Neo 2026 8GB 256GB.
+Cores: 3 Silver, 2 Indigo, 1 Citrus. *🔥R$ 4200*🔥
+
+4 x MacBook Neo 2026 8GB 512GB
+Cores: 2 Silver, 2 Indigo. *🔥R$ 5000*🔥
+
+4 x iPads 11º Geração 128GB.
+Cores: Prata 🔥*R$ 2450*🔥
+
+5 x MacBook Air 2026 M5 16GB 1TB 13,6 Pols.
+Cores: 2 Preto, 2 Prata, 1 Estelar. *🔥R$ 7900*🔥
+
+*ENVIO 06/10*`,
+      `*GALERA !!! SOBRINHA DO LOTE DO DIA 30 !!!*
+
+iPhone 18 Lote 3
+*ENVIO 30/09*
+
+1 x iPhone 18 Pro 512GB.
+Cores: 1 Silver(Prata) *🔥R$ 9800*🔥
+
+1 x iPhone 18 Pro Max 1TB.
+Cores: 1 Glacier(Azul). *🔥R$ 11800*🔥
+
+1 x iPhone 18 Pro Max 2TB
+Cores: 1 Glacier(Azul). *🔥R$ 12800*🔥
+
+*ENVIO 30/09*`,
+    ];
+
+    const parsedPayloads = payloads.map((payload) => parseSupplierListText(payload));
+    expect(parsedPayloads.map(({ length }) => length)).toEqual([15, 17, 18, 3]);
+  });
+
   it('nao exige que a quantidade total corresponda a distribuicao de cores', () => {
     const items = parseSupplierListText(`
       5 x iPhone 18 Pro 256GB
