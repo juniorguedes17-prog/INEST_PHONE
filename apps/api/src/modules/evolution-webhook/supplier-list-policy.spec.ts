@@ -3,6 +3,7 @@ import {
   applySupplierListConditionPolicy,
   BROCKTECH_SUPPLIER_CONTACT_IDS,
   getSupplierListPolicy,
+  MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
   PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
   TARGET_SUPPLIER_CONTACT_ID,
   X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID,
@@ -12,6 +13,7 @@ import type { ParsedSupplierListItem } from './evolution-webhook.types';
 
 const GOVERNED_SUPPLIER_CONTACT_IDS = [
   TARGET_SUPPLIER_CONTACT_ID,
+  MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
   PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
   X_ATACADO_SUPPLIER_CONTACT_ID,
   X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID,
@@ -71,6 +73,10 @@ describe('supplier list policy', () => {
         applySupplierListConditionPolicy([{ ...item, condition: 'SEMINOVO' }], supplierContactId)[0]
           ?.condition,
       ).toBe('SEMINOVO');
+      expect(
+        applySupplierListConditionPolicy([{ ...item, condition: 'CPO' }], supplierContactId)[0]
+          ?.condition,
+      ).toBe('CPO');
       expect(
         applySupplierListConditionPolicy(
           [{ ...item, condition: null, rawLine: 'SWAP — Preto R$ 4.600' }],

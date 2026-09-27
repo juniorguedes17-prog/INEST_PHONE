@@ -7,9 +7,11 @@ import {
 } from './evolution-webhook.service';
 import { isValidParsedSupplierListSnapshot, parseSupplierListText } from './supplier-list.parser';
 import { resolveSupplierSnapshotScope } from './supplier-snapshot-scope';
+import { mohamadNasserList20260926 } from './__fixtures__/mohamad-nasser-2026-09-26';
 import {
   applySupplierListConditionPolicy,
   BROCKTECH_SUPPLIER_CONTACT_IDS,
+  MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
   PRONINE_ATACADO_SUPPLIER_CONTACT_ID,
   TARGET_SUPPLIER_CONTACT_ID,
   X_ATACADO_SECONDARY_SUPPLIER_CONTACT_ID,
@@ -362,6 +364,83 @@ describe('EvolutionWebhookService', () => {
       );
     },
   );
+
+  it('persiste a lista real de 26/09/2026 de Mohamad Nasser pela policy do contato', async () => {
+    const parsed = parseSupplierListText(mohamadNasserList20260926);
+    expect(parsed).toHaveLength(123);
+    expect(isValidParsedSupplierListSnapshot(parsed)).toBe(true);
+    expect(parsed.filter((item) => item.condition === null)).toHaveLength(31);
+
+    const policyItems = applySupplierListConditionPolicy(
+      parsed,
+      MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+    );
+    expect(policyItems).toHaveLength(123);
+    expect(policyItems.filter((item) => item.condition === null)).toHaveLength(0);
+    expect(resolveSupplierSnapshotScope(mohamadNasserList20260926, parsed)).toMatchObject({
+      status: 'UNKNOWN',
+      reason: 'insufficient_document_evidence',
+    });
+    const { service: defaultService, transaction: defaultTransaction } = createService();
+    await defaultService.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-mohamad-nasser-default-policy-20260926',
+          remoteJid: '5511994430333@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: mohamadNasserList20260926 },
+      },
+    });
+    expect(defaultTransaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+
+    expect(
+      resolveSupplierSnapshotScope(
+        mohamadNasserList20260926,
+        policyItems,
+        MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+      ),
+    ).toMatchObject({
+      status: 'RESOLVED',
+      scopeKey: 'catalog:primary',
+      reason: 'supplier_policy_content',
+    });
+
+    const { service, transaction } = createService(
+      [],
+      undefined,
+      MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+    );
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-mohamad-nasser-20260926',
+          remoteJid: '5511994430333@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: mohamadNasserList20260926 },
+      },
+    });
+
+    expect(result).toEqual({
+      accepted: true,
+      supplierId: MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+      items: 123,
+    });
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          supplierContactId: MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+          snapshotScope: 'catalog:primary',
+          items: { create: expect.arrayContaining([]) },
+        }),
+      }),
+    );
+    const write = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0];
+    expect(write.create.items.create).toHaveLength(123);
+  });
 
   it.each(pronineFixtures)(
     'persiste a lista ProNine $id sem depender de marcador documental',
