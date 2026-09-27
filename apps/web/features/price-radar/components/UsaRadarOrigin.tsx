@@ -1233,6 +1233,8 @@ function humanizeUsaBlockedReason(reason: string) {
     MISSING_WEIGHT: 'Precisamos confirmar o peso para continuar.',
     SETTINGS_UNAVAILABLE: 'As configurações USA não estão disponíveis.',
     USD_BRL_QUOTE_NOT_CONFIGURED: 'A cotação USD/BRL não está configurada.',
+    FREIGHT_USD_BRL_QUOTE_NOT_CONFIGURED:
+      'Configure a cotação USD/BRL do frete Saspy em Configurações → Importação para continuar.',
     QUANTITY_UNRESOLVED: 'Não foi possível confirmar a quantidade de unidades desta compra.',
     SOURCE_CONFIGURATION_REQUIRED:
       'Selecione uma configuração comprável na fonte; este resultado representa uma família de produtos.',

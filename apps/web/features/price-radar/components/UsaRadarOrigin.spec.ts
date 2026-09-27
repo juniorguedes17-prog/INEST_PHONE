@@ -73,6 +73,23 @@ const appleIphone = {
   color: 'Mist Blue',
   condition: 'NOVO' as const,
 };
+const appleMacBook = {
+  ...appleIphone,
+  sourceProductId: 'apple-us:MDHC4LL/A',
+  sourceName: 'Apple MacBook Air 13" M5 16GB 1TB Starlight NOVO',
+  displayName: 'Apple MacBook Air 13" M5 16GB 1TB Starlight NOVO',
+  sourceUrl:
+    'https://www.apple.com/shop/buy-mac/macbook-air/13-inch-starlight-m5-chip-10-core-cpu-10-core-gpu-16gb-memory-1tb-storage',
+  category: 'Mac',
+  model: 'MacBook Air',
+  capacity: '1TB',
+  ram: '16GB',
+  chip: 'M5',
+  screenSize: '13"',
+  color: 'Starlight',
+  priceUsd: 1599,
+  offerKind: 'CONFIGURED_PRODUCT' as const,
+};
 const canon = {
   ...product,
   sourceName: 'Canon EOS Rebel T7 DSLR Camera',
@@ -967,7 +984,7 @@ test('shows Saspy and reuses the USA preflight, cost, and Pricing handoff', asyn
     redirector: { redirector: 'SASPY_EXPRESS' as const },
     shippingWeightLbs: 3.95,
   };
-  const h = setup(saspyReady, [product]);
+  const h = setup(saspyReady, [appleMacBook]);
 
   await h.select();
   await h.call('UsaProductCard', 'onCalculate');
@@ -978,6 +995,7 @@ test('shows Saspy and reuses the USA preflight, cost, and Pricing handoff', asyn
     'SASPY_EXPRESS',
   );
   assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, true);
+  assert.equal(h.nodes('CalculationModal')[0]!.props.usaCanSendToPricing, false);
 
   await h.call('UsaRedirectorPanel', 'onSubmit');
   assert.equal(
@@ -991,13 +1009,44 @@ test('shows Saspy and reuses the USA preflight, cost, and Pricing handoff', asyn
     ).redirector,
     'SASPY_EXPRESS',
   );
+  assert.equal(h.nodes('CalculationModal')[0]!.props.usaCanSendToPricing, true);
+  const calculatedCost = (
+    (h.nodes('CalculationModal')[0]!.props.usaCostExecution as Props).calculation as Props
+  ).finalCost as Props;
+  assert.equal(calculatedCost.currency, 'BRL');
 
   await h.call('CalculationModal', 'onSendToPricing');
   const pricingPayload = h.pricing.calculateTemporaryImportPricing.mock.calls[0]!
     .arguments[0] as Props;
   assert.equal(pricingPayload.origin, 'US');
-  assert.equal(pricingPayload.totalCost, 5500);
+  assert.equal(pricingPayload.sourceProductId, appleMacBook.sourceProductId);
+  assert.equal(pricingPayload.totalCost, calculatedCost.amountBrl);
   assert.equal(h.router.push.mock.calls[0]!.arguments[0], '/pricing?temporaryImport=usa');
+});
+
+test('explains the missing Saspy freight quote and keeps cost and Pricing closed', async () => {
+  const h = setup(
+    {
+      status: 'BLOCKED',
+      reason: 'FREIGHT_USD_BRL_QUOTE_NOT_CONFIGURED',
+      redirector: { redirector: 'SASPY_EXPRESS' },
+    },
+    [appleMacBook],
+  );
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'SASPY_EXPRESS');
+
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, false);
+  assert.equal(h.nodes('CalculationModal')[0]!.props.usaCanSendToPricing, false);
+  assert.match(
+    h.humanizeUsaBlockedReason('FREIGHT_USD_BRL_QUOTE_NOT_CONFIGURED'),
+    /cotação USD\/BRL do frete Saspy em Configurações → Importação/,
+  );
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  assert.equal(h.services.executeUsaCost.mock.calls.length, 0);
+  assert.equal(h.pricing.calculateTemporaryImportPricing.mock.calls.length, 0);
 });
 
 test('stores a pending temporary pricing response and navigates to Pricing', async () => {

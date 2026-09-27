@@ -24,6 +24,27 @@ const product: UsaSourceProduct = {
   priceUsd: 1199,
 };
 
+const appleMacBook: UsaSourceProduct = {
+  ...product,
+  providerName: 'apple_us',
+  sourceProductId: 'apple-us:MDHC4LL/A',
+  sourceName: 'Apple MacBook Air 13" M5 16GB 1TB Starlight NOVO',
+  displayName: 'Apple MacBook Air 13" M5 16GB 1TB Starlight NOVO',
+  sourceUrl:
+    'https://www.apple.com/shop/buy-mac/macbook-air/13-inch-starlight-m5-chip-10-core-cpu-10-core-gpu-16gb-memory-1tb-storage',
+  supplier: 'Apple Store USA',
+  retailer: 'Apple Store USA',
+  category: 'Mac',
+  model: 'MacBook Air',
+  capacity: '1TB',
+  ram: '16GB',
+  chip: 'M5',
+  screenSize: '13"',
+  color: 'Starlight',
+  priceUsd: 1599,
+  offerKind: 'CONFIGURED_PRODUCT',
+};
+
 const baseSettings = {
   importation: {
     dollarQuote: 5.35,
@@ -145,6 +166,72 @@ const readyDecision = {
 };
 
 describe('UsaCostPreflightService', () => {
+  it.each(['RED_DELAWARE', 'REI_DO_IMPORTADO', 'SASPY_EXPRESS'] as const)(
+    'keeps the configured Apple MacBook eligible with %s when required quotes and weight exist',
+    async (selection) => {
+      const context = createContext('OTHER');
+      context.fields.category.value = 'Mac';
+      context.fields.model.value = 'MacBook Air';
+      context.fields.storage.value = '1TB';
+      const { service, shippingWeights } = createService(readyDecision, context, {
+        status: 'WEIGHT_FOUND',
+        shippingWeightLbs: 3.95,
+      });
+
+      await expect(
+        service.preflight({
+          sourceProduct: appleMacBook,
+          redirector: redirector(selection),
+          composition: { kind: 'SINGLE_ITEM' },
+        }),
+      ).resolves.toMatchObject({
+        status: 'READY_FOR_COST',
+        shippingWeightLbs: 3.95,
+        condition: 'NOVO',
+      });
+      expect(shippingWeights.resolve).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('blocks only Saspy before weight resolution when the independent freight quote is absent', async () => {
+    const configuredSettings: TestSettings = {
+      importation: baseSettings.importation,
+      usaImport: {
+        ...baseSettings.usaImport,
+        saspyExpress: { shippingUsdPerKg: 23.5, freightUsdBrlQuote: null },
+      },
+    };
+    const results = await Promise.all(
+      (['RED_DELAWARE', 'REI_DO_IMPORTADO', 'SASPY_EXPRESS'] as const).map(async (selection) => {
+        const { service, shippingWeights } = createService(
+          readyDecision,
+          createContext('OTHER'),
+          { status: 'WEIGHT_FOUND', shippingWeightLbs: 3.95 },
+          configuredSettings,
+        );
+        const result = await service.preflight({
+          sourceProduct: appleMacBook,
+          redirector: redirector(selection),
+          composition: { kind: 'SINGLE_ITEM' },
+        });
+        return { result, weightResolutionCalls: shippingWeights.resolve.mock.calls.length };
+      }),
+    );
+
+    expect(results[0]).toMatchObject({
+      result: { status: 'READY_FOR_COST' },
+      weightResolutionCalls: 1,
+    });
+    expect(results[1]).toMatchObject({
+      result: { status: 'READY_FOR_COST' },
+      weightResolutionCalls: 1,
+    });
+    expect(results[2]).toMatchObject({
+      result: { status: 'BLOCKED', reason: 'FREIGHT_USD_BRL_QUOTE_NOT_CONFIGURED' },
+      weightResolutionCalls: 0,
+    });
+  });
+
   it.each(['RED_DELAWARE', 'REI_DO_IMPORTADO', 'SASPY_EXPRESS'] as const)(
     'blocks family starting prices before any operational processing for %s',
     async (selection) => {

@@ -27,6 +27,27 @@ const sourceProduct: UsaSourceProduct = {
   priceUsd: 1199,
 };
 
+const appleMacBook: UsaSourceProduct = {
+  ...sourceProduct,
+  providerName: 'apple_us',
+  sourceProductId: 'apple-us:MDHC4LL/A',
+  sourceName: 'Apple MacBook Air 13" M5 16GB 1TB Starlight NOVO',
+  displayName: 'Apple MacBook Air 13" M5 16GB 1TB Starlight NOVO',
+  sourceUrl:
+    'https://www.apple.com/shop/buy-mac/macbook-air/13-inch-starlight-m5-chip-10-core-cpu-10-core-gpu-16gb-memory-1tb-storage',
+  supplier: 'Apple Store USA',
+  retailer: 'Apple Store USA',
+  category: 'Mac',
+  model: 'MacBook Air',
+  capacity: '1TB',
+  ram: '16GB',
+  chip: 'M5',
+  screenSize: '13"',
+  color: 'Starlight',
+  priceUsd: 1599,
+  offerKind: 'CONFIGURED_PRODUCT',
+};
+
 const settings = {
   importation: {
     dollarQuote: 5.35,
@@ -116,6 +137,51 @@ function setup(
 
 describe('UsaCostExecutionService', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    { redirector: 'RED_DELAWARE' as const, shippingMode: 'EXPRESS' as const },
+    { redirector: 'REI_DO_IMPORTADO' as const },
+    { redirector: 'SASPY_EXPRESS' as const },
+  ])(
+    'produces cent-safe FinalCost for the same Apple MacBook with $redirector',
+    async (selection) => {
+      const configuredSettings = structuredClone(settings);
+      configuredSettings.importation.redirectRules.push({
+        productType: 'MacBook / Notebook',
+        matchTerms: ['macbook'],
+        redirectCost: 200,
+        priority: 40,
+      });
+      const { service, input } = setup(
+        ready(selection, { shippingWeightLbs: 3.95 }),
+        appleMacBook,
+        configuredSettings,
+      );
+
+      const result = await service.execute(input);
+
+      expect(result.preflight.status).toBe('READY_FOR_COST');
+      expect(result.calculation).toMatchObject({
+        sourceProductId: appleMacBook.sourceProductId,
+        redirector: selection,
+        finalCost: { currency: 'BRL' },
+      });
+      expect(result.calculation!.finalCost.amountBrl).toBeGreaterThan(0);
+      expect(roundMoneyToCents(result.calculation!.finalCost.amountBrl)).toBe(
+        result.calculation!.finalCost.amountBrl,
+      );
+      if (selection.redirector === 'SASPY_EXPRESS') {
+        expect(result.calculation!.breakdown).toMatchObject({
+          shippingWeightLbs: 3.95,
+          weightKg: 3.95 * 0.45359237,
+          shippingUsdPerKg: settings.usaImport.saspyExpress.shippingUsdPerKg,
+          freightUsdBrlQuote: settings.usaImport.saspyExpress.freightUsdBrlQuote,
+          usdBrlQuote: settings.usaImport.usdBrlQuote,
+          redirectCostBrl: 200,
+        });
+      }
+    },
+  );
 
   it.each([
     [0.5, 1],
