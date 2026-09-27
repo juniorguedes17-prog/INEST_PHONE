@@ -147,6 +147,15 @@ export class SettingsService {
             defaultSettings.usaImport.reiDoImportado.airFreightDiscountPercent,
           ),
         },
+        saspyExpress: {
+          shippingUsdPerKg: this.getNonNegativeSystemNumber(
+            system.usaSaspyExpressShippingUsdPerKg,
+            defaultSettings.usaImport.saspyExpress.shippingUsdPerKg,
+          ),
+          freightUsdBrlQuote: this.parseOptionalPositiveNumber(
+            system.usaSaspyExpressFreightUsdBrlQuote,
+          ),
+        },
       },
       offers: {
         ...defaultSettings.offers,
@@ -325,6 +334,11 @@ export class SettingsService {
         String(settings.usaImport.reiDoImportado.airFreightDiscountPercent),
         'percentual',
       ],
+      [
+        'usaSaspyExpressShippingUsdPerKg',
+        String(settings.usaImport.saspyExpress.shippingUsdPerKg),
+        'moeda',
+      ],
     ];
 
     await Promise.all(
@@ -333,16 +347,22 @@ export class SettingsService {
       ),
     );
 
-    if (settings.usaImport.usdBrlQuote === null) {
-      await this.settingsRepository.deleteSystemConfiguration('usaImportUsdBrlQuote');
-      return;
-    }
-
-    await this.settingsRepository.upsertSystemConfiguration(
-      'usaImportUsdBrlQuote',
-      String(settings.usaImport.usdBrlQuote),
-      'moeda',
-    );
+    await Promise.all([
+      settings.usaImport.usdBrlQuote === null
+        ? this.settingsRepository.deleteSystemConfiguration('usaImportUsdBrlQuote')
+        : this.settingsRepository.upsertSystemConfiguration(
+            'usaImportUsdBrlQuote',
+            String(settings.usaImport.usdBrlQuote),
+            'moeda',
+          ),
+      settings.usaImport.saspyExpress.freightUsdBrlQuote === null
+        ? this.settingsRepository.deleteSystemConfiguration('usaSaspyExpressFreightUsdBrlQuote')
+        : this.settingsRepository.upsertSystemConfiguration(
+            'usaSaspyExpressFreightUsdBrlQuote',
+            String(settings.usaImport.saspyExpress.freightUsdBrlQuote),
+            'moeda',
+          ),
+    ]);
   }
 
   private getPricingSettings(pricingConfigurations: Array<{ key: string; value: string }>) {
@@ -423,6 +443,10 @@ export class SettingsService {
         ...settings.redDelaware,
         shippingMode: 'EXPRESS' as const,
       },
+      saspyExpress: {
+        ...settings.saspyExpress,
+        freightUsdBrlQuote: settings.saspyExpress.freightUsdBrlQuote ?? null,
+      },
     };
   }
 
@@ -439,6 +463,7 @@ export class SettingsService {
       settings.redDelaware.additionalLbUsd,
       settings.reiDoImportado.phoneShippingUsd,
       settings.reiDoImportado.otherProductsShippingUsdPerHalfKg,
+      settings.saspyExpress.shippingUsdPerKg,
     ];
     if (monetaryValues.some((value) => !Number.isFinite(value) || value < 0)) {
       throw new BadRequestException('Os valores USA devem ser numeros finitos nao negativos.');
@@ -451,6 +476,17 @@ export class SettingsService {
     ];
     if (percentages.some((value) => !Number.isFinite(value) || value < 0 || value > 100)) {
       throw new BadRequestException('Os percentuais USA devem estar entre zero e cem.');
+    }
+
+    const freightQuote = settings.saspyExpress.freightUsdBrlQuote;
+    if (
+      freightQuote !== null &&
+      freightQuote !== undefined &&
+      (!Number.isFinite(freightQuote) || freightQuote <= 0)
+    ) {
+      throw new BadRequestException(
+        'A cotacao USD/BRL do frete Saspy deve ser um numero finito maior que zero.',
+      );
     }
 
     if (settings.redDelaware.shippingMode !== 'EXPRESS') {

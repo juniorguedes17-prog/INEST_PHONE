@@ -170,4 +170,42 @@ describe('ImportRadarController manufacturer confirmation permissions', () => {
       }),
     );
   });
+
+  it('forwards Saspy Express through the existing USA endpoints without a shipping mode', async () => {
+    const preflight = { preflight: vi.fn().mockResolvedValue({ status: 'READY_FOR_COST' }) };
+    const costExecution = { execute: vi.fn().mockResolvedValue({ calculation: {} }) };
+    const controller = new ImportRadarController(
+      {} as ImportRadarService,
+      {} as never,
+      undefined,
+      preflight as never,
+      costExecution as never,
+    );
+    const dto = {
+      sourceProduct: {
+        source: 'US' as const,
+        providerName: 'amazon_us',
+        sourceProductId: 'amazon-us:macbook',
+        sourceName: 'Apple MacBook Air',
+        displayName: 'Apple MacBook Air',
+        sourceUrl: 'https://example.test/macbook',
+        supplier: 'Amazon',
+        retailer: 'Amazon',
+        category: 'Notebook',
+        priceUsd: 999,
+      },
+      redirector: { redirector: 'SASPY_EXPRESS' as const },
+      composition: { kind: 'SINGLE_ITEM' as const },
+    };
+
+    await controller.preflightUsaCost(dto);
+    await controller.executeUsaCost(dto);
+
+    expect(preflight.preflight).toHaveBeenCalledWith(
+      expect.objectContaining({ redirector: { redirector: 'SASPY_EXPRESS' } }),
+    );
+    expect(costExecution.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ redirector: { redirector: 'SASPY_EXPRESS' } }),
+    );
+  });
 });

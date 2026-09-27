@@ -15,6 +15,7 @@ import type {
 import { ResolveShippingWeightDto } from '../shipping-weights/shipping-weight-registration.dto';
 import { ShippingWeightRegistrationService } from '../shipping-weights/shipping-weight-registration.service';
 import { normalizeShippingWeightLbs } from '../shipping-weights/shipping-weight.service';
+import { identifyRedirectRule } from '../validators/import-radar.validators';
 import {
   UsaEnrichmentInputDecisionService,
   type UsaEnrichmentDecision,
@@ -33,6 +34,7 @@ export type UsaCostPreflightReason =
   | 'RETAILER_UNRESOLVED'
   | 'LOGISTIC_CLASSIFICATION_UNRESOLVED'
   | 'USD_BRL_QUOTE_NOT_CONFIGURED'
+  | 'FREIGHT_USD_BRL_QUOTE_NOT_CONFIGURED'
   | 'REDIRECTOR_UNSUPPORTED'
   | 'SHIPPING_MODE_UNSUPPORTED'
   | 'QUANTITY_UNRESOLVED'
@@ -193,7 +195,7 @@ export class UsaCostPreflightService {
           shippingWeightLbs: null,
         };
       }
-    } else {
+    } else if (input.redirector.redirector === 'RED_DELAWARE') {
       if (input.redirector.shippingMode !== 'EXPRESS') {
         return {
           status: 'BLOCKED',
@@ -205,6 +207,21 @@ export class UsaCostPreflightService {
       if (settingsReason) {
         return { status: 'BLOCKED', reason: settingsReason, redirector: input.redirector };
       }
+    } else {
+      const settingsReason = validateSaspySettings(settings.usaImport.saspyExpress);
+      if (settingsReason) {
+        return { status: 'BLOCKED', reason: settingsReason, redirector: input.redirector };
+      }
+      // The shared PY contract intentionally allows no match (redirect cost zero).
+      // Running the same resolver here proves the configured rules are consumable
+      // without introducing a Saspy-specific category source.
+      identifyRedirectRule(
+        {
+          name: input.sourceProduct.sourceName,
+          category: input.sourceProduct.category ?? '',
+        },
+        settings.importation,
+      );
     }
 
     const weight = await this.resolveWeight(input.sourceProduct, input.composition);
@@ -252,7 +269,7 @@ export class UsaCostPreflightService {
     if (isTechnicalNormalizationFailure(decision.reason)) return null;
     if (
       decision.reason === 'LOGISTIC_CLASSIFICATION_UNRESOLVED' &&
-      redirector.redirector === 'RED_DELAWARE'
+      redirector.redirector !== 'REI_DO_IMPORTADO'
     ) {
       return null;
     }
@@ -357,7 +374,11 @@ function isValidSourceProduct(product: UsaSourceProduct) {
 }
 
 function isSupportedRedirector(value: UsaRedirectorSelection): value is UsaRedirectorSelection {
-  return value?.redirector === 'REI_DO_IMPORTADO' || value?.redirector === 'RED_DELAWARE';
+  return (
+    value?.redirector === 'REI_DO_IMPORTADO' ||
+    value?.redirector === 'RED_DELAWARE' ||
+    value?.redirector === 'SASPY_EXPRESS'
+  );
 }
 
 function resolveOperationalQuantity(composition: ShippingWeightComposition): number | null {
@@ -418,4 +439,18 @@ function validateReiSettings(settings: {
     rates.slice(2).every((value) => value >= 0 && value <= 100)
     ? null
     : ('SETTINGS_UNAVAILABLE' as const);
+}
+
+function validateSaspySettings(settings: {
+  shippingUsdPerKg: number;
+  freightUsdBrlQuote?: number | null;
+}) {
+  if (!Number.isFinite(settings.shippingUsdPerKg) || settings.shippingUsdPerKg < 0) {
+    return 'SETTINGS_UNAVAILABLE' as const;
+  }
+  return typeof settings.freightUsdBrlQuote === 'number' &&
+    Number.isFinite(settings.freightUsdBrlQuote) &&
+    settings.freightUsdBrlQuote > 0
+    ? null
+    : ('FREIGHT_USD_BRL_QUOTE_NOT_CONFIGURED' as const);
 }

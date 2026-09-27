@@ -2,15 +2,18 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { SettingsService } from '../../settings/service/settings.service';
 import * as redDelawareCalculator from '../calculators/red-delaware-cost.calculator';
 import * as reiDoImportadoCalculator from '../calculators/rei-do-importado-cost.calculator';
+import * as saspyExpressCalculator from '../calculators/saspy-express-cost.calculator';
 import type { UsaRedirectorSelection, UsaCostCalculationResult } from '../usa-cost.contract';
 import { createUsaCostCalculationResult } from '../usa-cost.contract';
 import type { ShippingWeightComposition } from '../shipping-weights/shipping-weight.contract';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
+import { identifyRedirectRule } from '../validators/import-radar.validators';
 import { UsaCostPreflightService, type UsaCostPreflightResult } from './usa-cost-preflight.service';
 
 type UsaCalculatorBreakdown =
   | redDelawareCalculator.RedDelawareCostBreakdown
-  | reiDoImportadoCalculator.ReiDoImportadoCostBreakdown;
+  | reiDoImportadoCalculator.ReiDoImportadoCostBreakdown
+  | saspyExpressCalculator.SaspyExpressCostBreakdown;
 
 export interface UsaCostExecutionInput {
   sourceProduct: UsaSourceProduct;
@@ -54,8 +57,8 @@ export class UsaCostExecutionService {
     // Preflight is the authority that allows this read and has already
     // validated configuration availability. This service does not supply a
     // quote, rate, weight, quantity, TAX, or other fallback.
-    const usaImport = (await this.settingsService.getSettings()).usaImport;
-    const calculation = this.calculate(input.sourceProduct, preflight, usaImport);
+    const settings = await this.settingsService.getSettings();
+    const calculation = this.calculate(input.sourceProduct, preflight, settings);
 
     this.logExecution(
       input.sourceProduct,
@@ -69,8 +72,9 @@ export class UsaCostExecutionService {
   private calculate(
     sourceProduct: UsaSourceProduct,
     preflight: Extract<UsaCostPreflightResult, { status: 'READY_FOR_COST' }>,
-    usaImport: Awaited<ReturnType<SettingsService['getSettings']>>['usaImport'],
+    settings: Awaited<ReturnType<SettingsService['getSettings']>>,
   ): UsaCostCalculationResult<UsaCalculatorBreakdown> {
+    const usaImport = settings.usaImport;
     if (preflight.redirector.redirector === 'RED_DELAWARE') {
       const calculation = redDelawareCalculator.calculateRedDelawareExpressCost({
         productPriceUsd: sourceProduct.priceUsd,
@@ -89,14 +93,39 @@ export class UsaCostExecutionService {
       });
     }
 
-    const calculation = reiDoImportadoCalculator.calculateReiDoImportadoCost({
+    if (preflight.redirector.redirector === 'REI_DO_IMPORTADO') {
+      const calculation = reiDoImportadoCalculator.calculateReiDoImportadoCost({
+        productPriceUsd: sourceProduct.priceUsd,
+        usdBrlQuote: usaImport.usdBrlQuote,
+        shippingWeightLbs: preflight.shippingWeightLbs,
+        logisticsClassification: preflight.logisticClassification as 'CELULAR' | 'OTHER',
+        quantity: preflight.quantity,
+        taxTreatment: preflight.taxTreatment,
+        ...usaImport.reiDoImportado,
+      });
+      return createUsaCostCalculationResult({
+        sourceCommercialIdentity: sourceProduct,
+        redirector: preflight.redirector,
+        productPriceUsd: sourceProduct.priceUsd,
+        finalCost: calculation.finalCost,
+        breakdown: calculation.breakdown,
+      });
+    }
+
+    const redirectRule = identifyRedirectRule(
+      {
+        name: sourceProduct.sourceName,
+        category: sourceProduct.category ?? '',
+      },
+      settings.importation,
+    );
+    const calculation = saspyExpressCalculator.calculateSaspyExpressCost({
       productPriceUsd: sourceProduct.priceUsd,
       usdBrlQuote: usaImport.usdBrlQuote,
       shippingWeightLbs: preflight.shippingWeightLbs,
-      logisticsClassification: preflight.logisticClassification as 'CELULAR' | 'OTHER',
-      quantity: preflight.quantity,
-      taxTreatment: preflight.taxTreatment,
-      ...usaImport.reiDoImportado,
+      shippingUsdPerKg: usaImport.saspyExpress.shippingUsdPerKg,
+      freightUsdBrlQuote: usaImport.saspyExpress.freightUsdBrlQuote,
+      redirectCostBrl: redirectRule?.redirectCost ?? 0,
     });
     return createUsaCostCalculationResult({
       sourceCommercialIdentity: sourceProduct,

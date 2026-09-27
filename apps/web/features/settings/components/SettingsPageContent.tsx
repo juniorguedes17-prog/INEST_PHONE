@@ -49,6 +49,7 @@ const nonAppleFixedCostBandLabels = ['Custo até R$500', 'Custo acima de R$500']
 export function SettingsPageContent() {
   const [activeSection, setActiveSection] = useState<SettingsSection>('general');
   const [usaQuoteText, setUsaQuoteText] = useState('');
+  const [saspyFreightQuoteText, setSaspyFreightQuoteText] = useState('');
   const [pyQuoteText, setPyQuoteText] = useState('');
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const {
@@ -72,10 +73,17 @@ export function SettingsPageContent() {
   useEffect(() => {
     if (settings) {
       setUsaQuoteText(formatQuoteInput(settings.usaImport.usdBrlQuote));
+      setSaspyFreightQuoteText(
+        formatQuoteInput(settings.usaImport.saspyExpress.freightUsdBrlQuote),
+      );
       setPyQuoteText(formatQuoteInput(settings.importation.dollarQuote));
       setQuoteError(null);
     }
-  }, [settings?.usaImport.usdBrlQuote, settings?.importation.dollarQuote]);
+  }, [
+    settings?.usaImport.usdBrlQuote,
+    settings?.usaImport.saspyExpress.freightUsdBrlQuote,
+    settings?.importation.dollarQuote,
+  ]);
 
   useEffect(() => {
     function handleThemeChange(event: Event) {
@@ -177,6 +185,11 @@ export function SettingsPageContent() {
     setQuoteError(null);
   }
 
+  function updateSaspyFreightQuote(value: string) {
+    setSaspyFreightQuoteText(value);
+    setQuoteError(null);
+  }
+
   function saveSettings() {
     if (!settings) {
       return;
@@ -184,10 +197,13 @@ export function SettingsPageContent() {
 
     const currentSettings = settings;
     const usaQuote = parseQuoteInput(usaQuoteText);
+    const saspyFreightQuote = parseQuoteInput(saspyFreightQuoteText);
     const pyQuote = parseQuoteInput(pyQuoteText);
     const usaInvalid = usaQuote !== null && (Number.isNaN(usaQuote) || usaQuote <= 0);
+    const saspyFreightInvalid =
+      saspyFreightQuote !== null && (Number.isNaN(saspyFreightQuote) || saspyFreightQuote <= 0);
     const pyInvalid = Number.isNaN(pyQuote) || (pyQuote !== null && pyQuote < 0);
-    if (usaInvalid || pyInvalid) {
+    if (usaInvalid || saspyFreightInvalid || pyInvalid) {
       setQuoteError('Informe uma cotação válida usando vírgula ou ponto decimal.');
       return;
     }
@@ -199,7 +215,14 @@ export function SettingsPageContent() {
         ...currentSettings.importation,
         dollarQuote: pyQuote ?? 0,
       },
-      usaImport: { ...currentSettings.usaImport, usdBrlQuote: usaQuote },
+      usaImport: {
+        ...currentSettings.usaImport,
+        usdBrlQuote: usaQuote,
+        saspyExpress: {
+          ...currentSettings.usaImport.saspyExpress,
+          freightUsdBrlQuote: saspyFreightQuote,
+        },
+      },
     });
   }
 
@@ -232,6 +255,19 @@ export function SettingsPageContent() {
         reiDoImportado: {
           ...current.usaImport.reiDoImportado,
           [field]: value,
+        },
+      },
+    }));
+  }
+
+  function updateSaspyShippingRate(value: string) {
+    updateSettings((current) => ({
+      ...current,
+      usaImport: {
+        ...current.usaImport,
+        saspyExpress: {
+          ...current.usaImport.saspyExpress,
+          shippingUsdPerKg: parseNumber(value),
         },
       },
     }));
@@ -987,6 +1023,44 @@ export function SettingsPageContent() {
               disabled={saving}
             >
               {saving ? 'Salvando...' : 'Salvar Rei do Importado'}
+            </ActionButton>
+          </div>
+        </SettingsCard>
+
+        <SettingsCard
+          eyebrow="Importação USA"
+          title="Saspy Express"
+          description="Parâmetros do frete internacional com cotação independente do produto."
+        >
+          <div className="grid min-w-0 gap-4 md:grid-cols-2">
+            <UsdInput
+              label="Valor por kg (US$/kg)"
+              value={settings.usaImport.saspyExpress.shippingUsdPerKg}
+              onChange={updateSaspyShippingRate}
+            />
+            <UsdInput
+              label="Cotação USD/BRL do frete"
+              value={saspyFreightQuoteText}
+              onChange={updateSaspyFreightQuote}
+              placeholder="Não configurada"
+            />
+          </div>
+
+          <div className="mt-6 grid gap-2 border-t border-inest-line pt-4 sm:flex sm:justify-end">
+            <ActionButton
+              variant="secondary"
+              className="min-h-11 w-full sm:w-auto"
+              onClick={() => void resetDefaults()}
+              disabled={saving}
+            >
+              Restaurar padrões
+            </ActionButton>
+            <ActionButton
+              className="min-h-11 w-full sm:w-auto"
+              onClick={saveSettings}
+              disabled={saving}
+            >
+              {saving ? 'Salvando...' : 'Salvar Saspy Express'}
             </ActionButton>
           </div>
         </SettingsCard>

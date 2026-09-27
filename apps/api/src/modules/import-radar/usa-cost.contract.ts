@@ -1,7 +1,7 @@
 import type { SourceCommercialIdentity } from './interfaces/source-commercial-identity.interface';
 
 /** Identifies the future USA origin-cost strategy without carrying its rates. */
-export type UsaRedirector = 'RED_DELAWARE' | 'REI_DO_IMPORTADO';
+export type UsaRedirector = 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS';
 
 /** Red Delaware is the only redirector with a homologated shipping mode in P1. */
 export type RedirectorShippingMode = 'EXPRESS';
@@ -17,6 +17,9 @@ export type UsaRedirectorSelection =
     }
   | {
       redirector: 'REI_DO_IMPORTADO';
+    }
+  | {
+      redirector: 'SASPY_EXPRESS';
     };
 
 /**

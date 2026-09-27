@@ -25,6 +25,21 @@ const product: UsaSourceProduct = {
 };
 
 const baseSettings = {
+  importation: {
+    dollarQuote: 5.35,
+    cdeExitPerBox: 110,
+    brazilDispatchPerBox: 50,
+    correiosLabel: 120,
+    invoiceTaxPercent: 3,
+    redirectRules: [
+      {
+        productType: 'MacBook / Notebook',
+        matchTerms: ['macbook', 'notebook'],
+        redirectCost: 200,
+        priority: 40,
+      },
+    ],
+  },
   usaImport: {
     usdBrlQuote: 5.35,
     redDelaware: { firstLbUsd: 27.89, additionalLbUsd: 11.5, shippingMode: 'EXPRESS' as const },
@@ -35,14 +50,20 @@ const baseSettings = {
       usTaxPercent: 7,
       airFreightDiscountPercent: 10,
     },
+    saspyExpress: {
+      shippingUsdPerKg: 23.5,
+      freightUsdBrlQuote: 5.8 as number | null,
+    },
   },
 };
 
 type TestSettings = {
+  importation: typeof baseSettings.importation;
   usaImport: {
     usdBrlQuote: number | null;
     redDelaware: typeof baseSettings.usaImport.redDelaware;
     reiDoImportado: typeof baseSettings.usaImport.reiDoImportado;
+    saspyExpress: typeof baseSettings.usaImport.saspyExpress;
   };
 };
 
@@ -105,7 +126,9 @@ function createService(
   };
 }
 
-function redirector(value: 'RED_DELAWARE' | 'REI_DO_IMPORTADO'): UsaRedirectorSelection {
+function redirector(
+  value: 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS',
+): UsaRedirectorSelection {
   return value === 'RED_DELAWARE'
     ? { redirector: value, shippingMode: 'EXPRESS' }
     : { redirector: value };
@@ -122,7 +145,7 @@ const readyDecision = {
 };
 
 describe('UsaCostPreflightService', () => {
-  it.each(['RED_DELAWARE', 'REI_DO_IMPORTADO'] as const)(
+  it.each(['RED_DELAWARE', 'REI_DO_IMPORTADO', 'SASPY_EXPRESS'] as const)(
     'blocks family starting prices before any operational processing for %s',
     async (selection) => {
       const { service, enrichmentDecisions, shippingWeights } = createService(
@@ -139,6 +162,76 @@ describe('UsaCostPreflightService', () => {
       expect(shippingWeights.resolve).not.toHaveBeenCalled();
     },
   );
+  it('returns READY_FOR_COST for Saspy with its independent freight quote and weight', async () => {
+    const { service } = createService(readyDecision, createContext('UNRESOLVED'));
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('SASPY_EXPRESS'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({
+      status: 'READY_FOR_COST',
+      redirector: { redirector: 'SASPY_EXPRESS' },
+      taxTreatment: 'EXEMPT',
+      shippingWeightLbs: 2,
+    });
+  });
+
+  it.each([null, 0, Number.NaN, Number.POSITIVE_INFINITY])(
+    'blocks Saspy when its freight quote is unavailable or invalid: %s',
+    async (freightUsdBrlQuote) => {
+      const { service, shippingWeights } = createService(
+        readyDecision,
+        createContext('OTHER'),
+        undefined,
+        {
+          importation: baseSettings.importation,
+          usaImport: {
+            ...baseSettings.usaImport,
+            saspyExpress: { shippingUsdPerKg: 23.5, freightUsdBrlQuote },
+          },
+        },
+      );
+
+      await expect(
+        service.preflight({
+          sourceProduct: product,
+          redirector: redirector('SASPY_EXPRESS'),
+          composition: { kind: 'SINGLE_ITEM' },
+        }),
+      ).resolves.toMatchObject({
+        status: 'BLOCKED',
+        reason: 'FREIGHT_USD_BRL_QUOTE_NOT_CONFIGURED',
+      });
+      expect(shippingWeights.resolve).not.toHaveBeenCalled();
+    },
+  );
+
+  it('blocks Saspy when the configured USD/kg rate is invalid', async () => {
+    const { service, shippingWeights } = createService(
+      readyDecision,
+      createContext('OTHER'),
+      undefined,
+      {
+        importation: baseSettings.importation,
+        usaImport: {
+          ...baseSettings.usaImport,
+          saspyExpress: { shippingUsdPerKg: -1, freightUsdBrlQuote: 5.8 },
+        },
+      },
+    );
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('SASPY_EXPRESS'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({ status: 'BLOCKED', reason: 'SETTINGS_UNAVAILABLE' });
+    expect(shippingWeights.resolve).not.toHaveBeenCalled();
+  });
   it('returns READY_FOR_COST for Red Delaware without requiring logistics classification', async () => {
     const { service } = createService(readyDecision, createContext('UNRESOLVED', null));
 
@@ -247,7 +340,8 @@ describe('UsaCostPreflightService', () => {
       service.preflight({
         sourceProduct: {
           ...product,
-          sourceName: 'MacBook Pro, 14-inch, M4 Pro Chip, Space Black, 24GB unified memory, 1TB storage',
+          sourceName:
+            'MacBook Pro, 14-inch, M4 Pro Chip, Space Black, 24GB unified memory, 1TB storage',
           category: 'Mac',
           model: 'MacBook Pro',
           capacity: '1TB',

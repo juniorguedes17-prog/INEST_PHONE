@@ -137,13 +137,13 @@ test('settings keep editing behavior and omit the obsolete offer settings card',
       ? children.map((child) => find(child, predicate)).find(Boolean)
       : find(children, predicate);
   };
-  const usaInput = () => {
+  const usdInput = (label: string) => {
     const component = find(
       render(),
       (node) =>
         typeof node.type === 'function' &&
         node.type.name === 'UsdInput' &&
-        node.props.label === 'Cotação USD/BRL',
+        node.props.label === label,
     );
     assert.ok(component);
     const resolved = (component.type as (props: Props) => Element)(component.props);
@@ -151,15 +151,21 @@ test('settings keep editing behavior and omit the obsolete offer settings card',
     assert.ok(input);
     return input;
   };
+  const usaInput = () => usdInput('Cotação USD/BRL');
+  const saspyFreightInput = () => usdInput('Cotação USD/BRL do frete');
 
   render(); // hydration effect loads 520 into the draft
   assert.equal(usaInput().props.value, '520');
+  assert.equal(saspyFreightInput().props.value, '');
   for (const draft of ['5', '5,', '5,3', '5,35']) {
     (usaInput().props.onChange as (event: { target: { value: string } }) => void)({
       target: { value: draft },
     });
     assert.equal(usaInput().props.value, draft);
   }
+  (saspyFreightInput().props.onChange as (event: { target: { value: string } }) => void)({
+    target: { value: '5,87' },
+  });
   const saveButton = find(
     render(),
     (node) => node.type === 'ActionButton' && node.props.children === 'Salvar Red Delaware',
@@ -171,8 +177,24 @@ test('settings keep editing behavior and omit the obsolete offer settings card',
     (saved as unknown as { usaImport: { usdBrlQuote: number } }).usaImport.usdBrlQuote,
     5.35,
   );
+  assert.equal(
+    (saved as unknown as { usaImport: { saspyExpress: { freightUsdBrlQuote: number } } }).usaImport
+      .saspyExpress.freightUsdBrlQuote,
+    5.87,
+  );
   render(); // confirmed settings hydration
   assert.equal(usaInput().props.value, '5,35');
+  assert.equal(saspyFreightInput().props.value, '5,87');
+  assert.ok(
+    find(
+      render(),
+      (node) =>
+        typeof node.type === 'function' &&
+        node.type.name === 'UsdInput' &&
+        node.props.label === 'Valor por kg (US$/kg)' &&
+        node.props.value === 23.5,
+    ),
+  );
 
   const offersTab = find(
     render(),
@@ -252,6 +274,7 @@ function settings(quote: number) {
         usTaxPercent: 0,
         airFreightDiscountPercent: 0,
       },
+      saspyExpress: { shippingUsdPerKg: 23.5, freightUsdBrlQuote: null },
     },
     offers: {
       defaultWarranty: '',

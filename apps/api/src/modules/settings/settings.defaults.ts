@@ -98,6 +98,10 @@ export const defaultSettings: Required<UpdateSettingsDto> = {
       usTaxPercent: 7,
       airFreightDiscountPercent: 10,
     },
+    saspyExpress: {
+      shippingUsdPerKg: 23.5,
+      freightUsdBrlQuote: null,
+    },
   },
   offers: {
     defaultWarranty: 'Garantia padrao iNest Phone',

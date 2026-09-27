@@ -5,9 +5,9 @@ import { ShippingWeightCompositionDto } from '../shipping-weights/shipping-weigh
 import { UsaEnrichmentSourceProductDto } from './usa-enrichment.dto';
 
 export class UsaCostPreflightRedirectorDto {
-  @ApiProperty({ enum: ['RED_DELAWARE', 'REI_DO_IMPORTADO'] })
-  @IsIn(['RED_DELAWARE', 'REI_DO_IMPORTADO'])
-  redirector!: 'RED_DELAWARE' | 'REI_DO_IMPORTADO';
+  @ApiProperty({ enum: ['RED_DELAWARE', 'REI_DO_IMPORTADO', 'SASPY_EXPRESS'] })
+  @IsIn(['RED_DELAWARE', 'REI_DO_IMPORTADO', 'SASPY_EXPRESS'])
+  redirector!: 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS';
 
   @ApiPropertyOptional({ enum: ['EXPRESS'] })
   @IsOptional()

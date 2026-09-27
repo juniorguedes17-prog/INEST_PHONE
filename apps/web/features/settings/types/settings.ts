@@ -85,6 +85,10 @@ export interface UsaImportSettings {
     usTaxPercent: number;
     airFreightDiscountPercent: number;
   };
+  saspyExpress: {
+    shippingUsdPerKg: number;
+    freightUsdBrlQuote: number | null;
+  };
 }
 
 export interface OfferSettings {

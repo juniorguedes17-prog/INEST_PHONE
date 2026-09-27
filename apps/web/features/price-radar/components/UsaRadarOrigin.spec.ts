@@ -286,14 +286,16 @@ function setup(
 test('renders Apple Mac source attributes as the title and badges without reparsing', () => {
   const h = setup();
   assert.deepEqual(
-    [...h.usaProductBadges({
-      ...secondProduct,
-      screenSize: '14"',
-      chip: 'M4 Pro',
-      ram: '24GB',
-      capacity: '1TB',
-      color: 'Space Black',
-    })],
+    [
+      ...h.usaProductBadges({
+        ...secondProduct,
+        screenSize: '14"',
+        chip: 'M4 Pro',
+        ram: '24GB',
+        capacity: '1TB',
+        color: 'Space Black',
+      }),
+    ],
     ['MacBook Air', '14"', 'M4 Pro', '24GB', '1TB', 'Space Black', 'NOVO'],
   );
 });
@@ -956,6 +958,46 @@ test('sends only the FinalCost through the existing temporary pricing handoff', 
   assert.equal(payload.connectivity, '5G');
   assert.equal(h.router.push.mock.calls[0]!.arguments[0], '/pricing?temporaryImport=usa');
   assert.ok(h.storage.has('inest.temporary-import-pricing'));
+});
+
+test('shows Saspy and reuses the USA preflight, cost, and Pricing handoff', async () => {
+  assert.match(componentSource, /<option value="SASPY_EXPRESS">Saspy Express<\/option>/);
+  const saspyReady = {
+    ...ready,
+    redirector: { redirector: 'SASPY_EXPRESS' as const },
+    shippingWeightLbs: 3.95,
+  };
+  const h = setup(saspyReady, [product]);
+
+  await h.select();
+  await h.call('UsaProductCard', 'onCalculate');
+  await h.call('UsaRedirectorPanel', 'onChange', 'SASPY_EXPRESS');
+
+  assert.equal(
+    (h.services.preflightUsaCost.mock.calls[0]!.arguments[1] as Props).redirector,
+    'SASPY_EXPRESS',
+  );
+  assert.equal(h.nodes('UsaRedirectorPanel')[0]!.props.ready, true);
+
+  await h.call('UsaRedirectorPanel', 'onSubmit');
+  assert.equal(
+    (h.services.executeUsaCost.mock.calls[0]!.arguments[1] as Props).redirector,
+    'SASPY_EXPRESS',
+  );
+  assert.equal(
+    (
+      ((h.nodes('CalculationModal')[0]!.props.usaCostExecution as Props).calculation as Props)
+        .redirector as Props
+    ).redirector,
+    'SASPY_EXPRESS',
+  );
+
+  await h.call('CalculationModal', 'onSendToPricing');
+  const pricingPayload = h.pricing.calculateTemporaryImportPricing.mock.calls[0]!
+    .arguments[0] as Props;
+  assert.equal(pricingPayload.origin, 'US');
+  assert.equal(pricingPayload.totalCost, 5500);
+  assert.equal(h.router.push.mock.calls[0]!.arguments[0], '/pricing?temporaryImport=usa');
 });
 
 test('stores a pending temporary pricing response and navigates to Pricing', async () => {

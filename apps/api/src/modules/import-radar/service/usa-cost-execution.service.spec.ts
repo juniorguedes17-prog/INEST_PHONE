@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsService } from '../../settings/service/settings.service';
 import * as redDelawareCalculator from '../calculators/red-delaware-cost.calculator';
 import * as reiDoImportadoCalculator from '../calculators/rei-do-importado-cost.calculator';
+import * as saspyExpressCalculator from '../calculators/saspy-express-cost.calculator';
 import type { UsaRedirectorSelection } from '../usa-cost.contract';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
 import { roundMoneyToCents } from '../validators/import-radar.validators';
@@ -27,6 +28,21 @@ const sourceProduct: UsaSourceProduct = {
 };
 
 const settings = {
+  importation: {
+    dollarQuote: 5.35,
+    cdeExitPerBox: 110,
+    brazilDispatchPerBox: 50,
+    correiosLabel: 120,
+    invoiceTaxPercent: 3,
+    redirectRules: [
+      {
+        productType: 'iPhone 15 ao 17 Pro Max',
+        matchTerms: ['iphone 17', 'pro max'],
+        redirectCost: 100,
+        priority: 20,
+      },
+    ],
+  },
   usaImport: {
     usdBrlQuote: 5.35,
     redDelaware: { firstLbUsd: 27.89, additionalLbUsd: 11.5, shippingMode: 'EXPRESS' as const },
@@ -36,6 +52,10 @@ const settings = {
       insurancePercent: 15,
       usTaxPercent: 7,
       airFreightDiscountPercent: 10,
+    },
+    saspyExpress: {
+      shippingUsdPerKg: 23.5,
+      freightUsdBrlQuote: 5.8,
     },
   },
 };
@@ -72,9 +92,13 @@ function ready(
   };
 }
 
-function setup(preflightResult: UsaCostPreflightResult, source = sourceProduct) {
+function setup(
+  preflightResult: UsaCostPreflightResult,
+  source = sourceProduct,
+  configuredSettings = settings,
+) {
   const preflight = { preflight: vi.fn().mockResolvedValue(preflightResult) };
-  const settingsService = { getSettings: vi.fn().mockResolvedValue(settings) };
+  const settingsService = { getSettings: vi.fn().mockResolvedValue(configuredSettings) };
   return {
     service: new UsaCostExecutionService(
       preflight as unknown as UsaCostPreflightService,
@@ -117,6 +141,57 @@ describe('UsaCostExecutionService', () => {
       breakdown: { shippingWeightLbs, chargedLbs },
     });
     expect(reiCalculator).not.toHaveBeenCalled();
+  });
+
+  it('dispatches Saspy only and composes product, freight, and shared redirect cost', async () => {
+    const saspy = { redirector: 'SASPY_EXPRESS' as const };
+    const { service, input } = setup(ready(saspy, { shippingWeightLbs: 2.2 }));
+    const calculator = vi.spyOn(saspyExpressCalculator, 'calculateSaspyExpressCost');
+    const redCalculator = vi.spyOn(redDelawareCalculator, 'calculateRedDelawareExpressCost');
+    const reiCalculator = vi.spyOn(reiDoImportadoCalculator, 'calculateReiDoImportadoCost');
+
+    const result = await service.execute(input);
+
+    expect(calculator).toHaveBeenCalledTimes(1);
+    expect(calculator).toHaveBeenCalledWith({
+      productPriceUsd: 1199,
+      usdBrlQuote: 5.35,
+      shippingWeightLbs: 2.2,
+      shippingUsdPerKg: 23.5,
+      freightUsdBrlQuote: 5.8,
+      redirectCostBrl: 100,
+    });
+    expect(result.calculation).toMatchObject({
+      redirector: saspy,
+      finalCost: { currency: 'BRL' },
+      breakdown: {
+        usdBrlQuote: 5.35,
+        freightUsdBrlQuote: 5.8,
+        redirectCostBrl: 100,
+      },
+    });
+    expect(redCalculator).not.toHaveBeenCalled();
+    expect(reiCalculator).not.toHaveBeenCalled();
+  });
+
+  it('reflects an updated ImportRedirectRule in Saspy without a duplicated rule source', async () => {
+    const configuredSettings = structuredClone(settings);
+    const saspy = { redirector: 'SASPY_EXPRESS' as const };
+    const { service, input } = setup(
+      ready(saspy, { shippingWeightLbs: 2.2 }),
+      sourceProduct,
+      configuredSettings,
+    );
+
+    const first = await service.execute(input);
+    configuredSettings.importation.redirectRules[0]!.redirectCost = 275;
+    const second = await service.execute(input);
+
+    expect(first.calculation?.breakdown).toMatchObject({ redirectCostBrl: 100 });
+    expect(second.calculation?.breakdown).toMatchObject({ redirectCostBrl: 275 });
+    expect(second.calculation!.finalCost.amountBrl - first.calculation!.finalCost.amountBrl).toBe(
+      175,
+    );
   });
 
   it('revalidates and forwards the same transient weight through preflight to Red', async () => {
@@ -270,12 +345,14 @@ describe('UsaCostExecutionService', () => {
     const { service, input, settingsService } = setup(preflightResult);
     const red = vi.spyOn(redDelawareCalculator, 'calculateRedDelawareExpressCost');
     const rei = vi.spyOn(reiDoImportadoCalculator, 'calculateReiDoImportadoCost');
+    const saspy = vi.spyOn(saspyExpressCalculator, 'calculateSaspyExpressCost');
 
     const result = await service.execute(input);
 
     expect(result).toEqual({ preflight: preflightResult, calculation: null });
     expect(red).not.toHaveBeenCalled();
     expect(rei).not.toHaveBeenCalled();
+    expect(saspy).not.toHaveBeenCalled();
     expect(settingsService.getSettings).not.toHaveBeenCalled();
   });
 

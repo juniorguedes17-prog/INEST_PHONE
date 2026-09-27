@@ -267,6 +267,19 @@ export class UsaReiDoImportadoSettingsDto {
   airFreightDiscountPercent!: number;
 }
 
+export class UsaSaspyExpressSettingsDto {
+  @ApiProperty()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(0)
+  shippingUsdPerKg!: number;
+
+  @ApiProperty({ required: false, nullable: true })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  @Min(Number.EPSILON)
+  freightUsdBrlQuote?: number | null;
+}
+
 /**
  * USA origin-cost parameters only. A missing quote is represented by null,
  * never by zero or by the Paraguay import quote.
@@ -287,6 +300,11 @@ export class UsaImportSettingsDto {
   @ValidateNested()
   @Type(() => UsaReiDoImportadoSettingsDto)
   reiDoImportado!: UsaReiDoImportadoSettingsDto;
+
+  @ApiProperty({ type: UsaSaspyExpressSettingsDto })
+  @ValidateNested()
+  @Type(() => UsaSaspyExpressSettingsDto)
+  saspyExpress!: UsaSaspyExpressSettingsDto;
 }
 
 export class OfferSettingsDto {

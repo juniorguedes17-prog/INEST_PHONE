@@ -18,7 +18,7 @@ const sourceCommercialIdentity: SourceCommercialIdentity<'US'> = {
 };
 
 describe('USA cost contracts', () => {
-  it('keeps Red Delaware and Rei do Importado as distinct strategy selections', () => {
+  it('keeps each USA redirector as a distinct strategy selection', () => {
     const redDelaware: UsaRedirectorSelection = {
       redirector: 'RED_DELAWARE',
       shippingMode: 'EXPRESS',
@@ -26,9 +26,13 @@ describe('USA cost contracts', () => {
     const reiDoImportado: UsaRedirectorSelection = {
       redirector: 'REI_DO_IMPORTADO',
     };
+    const saspyExpress: UsaRedirectorSelection = {
+      redirector: 'SASPY_EXPRESS',
+    };
 
     expect(redDelaware).toEqual({ redirector: 'RED_DELAWARE', shippingMode: 'EXPRESS' });
     expect(reiDoImportado).toEqual({ redirector: 'REI_DO_IMPORTADO' });
+    expect(saspyExpress).toEqual({ redirector: 'SASPY_EXPRESS' });
   });
 
   it('projects finalCost in BRL without deriving it from the strategy breakdown', () => {

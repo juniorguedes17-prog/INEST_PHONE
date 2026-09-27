@@ -124,7 +124,7 @@ export function resolveUsaRetailerTaxTreatment(
   }
 
   const retailer = retailers[0]!;
-  if (input.redirector === 'RED_DELAWARE') {
+  if (input.redirector === 'RED_DELAWARE' || input.redirector === 'SASPY_EXPRESS') {
     return { taxTreatment: 'EXEMPT', retailer, provenance };
   }
 
@@ -140,7 +140,7 @@ export function resolveUsaRetailerTaxTreatment(
 }
 
 function isUsaRedirector(value: unknown): value is UsaRedirector {
-  return value === 'RED_DELAWARE' || value === 'REI_DO_IMPORTADO';
+  return value === 'RED_DELAWARE' || value === 'REI_DO_IMPORTADO' || value === 'SASPY_EXPRESS';
 }
 
 function toNormalizedRetailer(evidence: UsaRetailerEvidence): NormalizedUsaRetailer | null {

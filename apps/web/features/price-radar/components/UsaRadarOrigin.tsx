@@ -113,7 +113,9 @@ export function UsaRadarOrigin() {
   const [manufacturerInput, setManufacturerInput] = useState('');
   const [manufacturerLoading, setManufacturerLoading] = useState(false);
   const [manufacturerError, setManufacturerError] = useState<string | null>(null);
-  const [redirector, setRedirector] = useState<'' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO'>('');
+  const [redirector, setRedirector] = useState<
+    '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS'
+  >('');
   const [preflight, setPreflight] = useState<UsaCostPreflightResponse | null>(null);
   const [preflightLoading, setPreflightLoading] = useState(false);
   const [preflightError, setPreflightError] = useState<string | null>(null);
@@ -191,7 +193,7 @@ export function UsaRadarOrigin() {
   const resolvePreflight = useCallback(
     async (
       product: UsaSourceProduct,
-      choice: 'RED_DELAWARE' | 'REI_DO_IMPORTADO',
+      choice: 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS',
       runtimeWeightLbs?: number,
     ) => {
       const requestId = ++preflightRequestRef.current;
@@ -249,7 +251,7 @@ export function UsaRadarOrigin() {
   );
 
   const selectRedirector = useCallback(
-    (choice: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO') => {
+    (choice: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS') => {
       setRedirector(choice);
       preflightRequestRef.current += 1;
       setPreflight(null);
@@ -1160,10 +1162,10 @@ function UsaRedirectorPanel({
   onChange,
   onSubmit,
 }: {
-  value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO';
+  value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS';
   loading: boolean;
   ready: boolean;
-  onChange: (value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO') => void;
+  onChange: (value: '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS') => void;
   onSubmit: () => void;
 }) {
   return (
@@ -1174,13 +1176,16 @@ function UsaRedirectorPanel({
           className="min-h-11 rounded-xl border border-inest-line bg-white px-3 text-sm font-semibold outline-none focus:border-inest-blue"
           value={value}
           onChange={(event) =>
-            onChange(event.target.value as '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO')
+            onChange(
+              event.target.value as '' | 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS',
+            )
           }
           disabled={loading}
         >
           <option value="">Selecione para continuar</option>
           <option value="RED_DELAWARE">Red Delaware</option>
           <option value="REI_DO_IMPORTADO">Rei do Importado</option>
+          <option value="SASPY_EXPRESS">Saspy Express</option>
         </select>
       </label>
       <ActionButton

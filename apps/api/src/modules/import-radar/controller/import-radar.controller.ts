@@ -29,6 +29,7 @@ import {
 } from '../dto/usa-enrichment.dto';
 import { UsaCostPreflightDto } from '../dto/usa-cost-preflight.dto';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
+import type { UsaRedirectorSelection } from '../usa-cost.contract';
 import {
   RegisterShippingWeightDto,
   ResolveShippingWeightDto,
@@ -150,13 +151,7 @@ export class ImportRadarController {
     }
     return this.usaCostPreflightService.preflight({
       sourceProduct: dto.sourceProduct as UsaSourceProduct,
-      redirector:
-        dto.redirector.redirector === 'RED_DELAWARE'
-          ? {
-              redirector: 'RED_DELAWARE',
-              shippingMode: dto.redirector.shippingMode as 'EXPRESS',
-            }
-          : { redirector: 'REI_DO_IMPORTADO' },
+      redirector: toUsaRedirectorSelection(dto),
       composition: dto.composition,
       runtimeShippingWeightLbs: dto.runtimeShippingWeightLbs,
     });
@@ -170,13 +165,7 @@ export class ImportRadarController {
     }
     return this.usaCostExecutionService.execute({
       sourceProduct: dto.sourceProduct as UsaSourceProduct,
-      redirector:
-        dto.redirector.redirector === 'RED_DELAWARE'
-          ? {
-              redirector: 'RED_DELAWARE',
-              shippingMode: dto.redirector.shippingMode as 'EXPRESS',
-            }
-          : { redirector: 'REI_DO_IMPORTADO' },
+      redirector: toUsaRedirectorSelection(dto),
       composition: dto.composition,
       runtimeShippingWeightLbs: dto.runtimeShippingWeightLbs,
     });
@@ -190,13 +179,7 @@ export class ImportRadarController {
     }
     return this.usaPricedOfferService.execute({
       sourceProduct: dto.sourceProduct as UsaSourceProduct,
-      redirector:
-        dto.redirector.redirector === 'RED_DELAWARE'
-          ? {
-              redirector: 'RED_DELAWARE',
-              shippingMode: dto.redirector.shippingMode as 'EXPRESS',
-            }
-          : { redirector: 'REI_DO_IMPORTADO' },
+      redirector: toUsaRedirectorSelection(dto),
       composition: dto.composition,
       user,
     });
@@ -230,4 +213,17 @@ export class ImportRadarController {
   updateDollarQuote(@Body() dto: UpdateDollarQuoteDto, @CurrentUser() user: AuthenticatedUser) {
     return this.importRadarService.updateDollarQuote(dto, user);
   }
+}
+
+function toUsaRedirectorSelection(dto: UsaCostPreflightDto): UsaRedirectorSelection {
+  if (dto.redirector.redirector === 'RED_DELAWARE') {
+    return {
+      redirector: 'RED_DELAWARE',
+      shippingMode: dto.redirector.shippingMode as 'EXPRESS',
+    };
+  }
+  if (dto.redirector.redirector === 'REI_DO_IMPORTADO') {
+    return { redirector: 'REI_DO_IMPORTADO' };
+  }
+  return { redirector: 'SASPY_EXPRESS' };
 }

@@ -364,6 +364,10 @@ describe('SettingsService USA import configuration', () => {
           usTaxPercent: 7,
           airFreightDiscountPercent: 10,
         },
+        saspyExpress: {
+          shippingUsdPerKg: 23.5,
+          freightUsdBrlQuote: null,
+        },
       },
     });
   });
@@ -414,6 +418,11 @@ describe('SettingsService USA import configuration', () => {
       'usaReiDoImportadoAirFreightDiscountPercent',
       '10',
       'percentual',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaSaspyExpressShippingUsdPerKg',
+      '23.5',
+      'moeda',
     );
     expect(repository.createAuditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -498,6 +507,88 @@ describe('SettingsService USA import configuration', () => {
       usaImport: { usdBrlQuote: null },
     });
   });
+
+  it('persists and reads the Saspy freight quote independently from the product quote', async () => {
+    const repository = createRepository();
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+    const usaImport = usaImportSettings({
+      usdBrlQuote: 5.1,
+      saspyExpress: {
+        shippingUsdPerKg: 24.75,
+        freightUsdBrlQuote: 5.87,
+      },
+    });
+
+    await service.updateSettings({ usaImport });
+
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaSaspyExpressShippingUsdPerKg',
+      '24.75',
+      'moeda',
+    );
+    expect(repository.upsertSystemConfiguration).toHaveBeenCalledWith(
+      'usaSaspyExpressFreightUsdBrlQuote',
+      '5.87',
+      'moeda',
+    );
+    await expect(service.getSettings()).resolves.toMatchObject({
+      usaImport: {
+        usdBrlQuote: 5.1,
+        saspyExpress: {
+          shippingUsdPerKg: 24.75,
+          freightUsdBrlQuote: 5.87,
+        },
+      },
+    });
+  });
+
+  it('clears a missing Saspy freight quote without falling back to the product quote', async () => {
+    const repository = createRepository(
+      [],
+      [
+        { key: 'usaImportUsdBrlQuote', value: '5.1' },
+        { key: 'usaSaspyExpressFreightUsdBrlQuote', value: '5.87' },
+      ],
+    );
+    const service = new SettingsService(repository as unknown as SettingsRepository);
+
+    await service.updateSettings({
+      usaImport: usaImportSettings({
+        usdBrlQuote: 5.1,
+        saspyExpress: {
+          shippingUsdPerKg: 23.5,
+          freightUsdBrlQuote: null,
+        },
+      }),
+    });
+
+    expect(repository.deleteSystemConfiguration).toHaveBeenCalledWith(
+      'usaSaspyExpressFreightUsdBrlQuote',
+    );
+    await expect(service.getSettings()).resolves.toMatchObject({
+      usaImport: {
+        usdBrlQuote: 5.1,
+        saspyExpress: { freightUsdBrlQuote: null },
+      },
+    });
+  });
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'rejects invalid Saspy freight quote %s before writing',
+    async (freightUsdBrlQuote) => {
+      const repository = createRepository();
+      const service = new SettingsService(repository as unknown as SettingsRepository);
+
+      await expect(
+        service.updateSettings({
+          usaImport: usaImportSettings({
+            saspyExpress: { shippingUsdPerKg: 23.5, freightUsdBrlQuote },
+          }),
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(repository.upsertSystemConfiguration).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('SettingsService non-Apple electronics policy', () => {

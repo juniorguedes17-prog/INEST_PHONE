@@ -1,7 +1,18 @@
 import { ImportSettingsDto } from '../../settings/dto/settings.dto';
 import { ImportProductDto } from '../dto/import-radar.dto';
 
-export function identifyRedirectRule(product: ImportProductDto, settings: ImportSettingsDto) {
+export function identifyRedirectRule(
+  product: ImportProductDto,
+  settings: ImportSettingsDto,
+): ImportSettingsDto['redirectRules'][number] | undefined;
+export function identifyRedirectRule(
+  product: Pick<ImportProductDto, 'name' | 'category'>,
+  settings: ImportSettingsDto,
+): ImportSettingsDto['redirectRules'][number] | undefined;
+export function identifyRedirectRule(
+  product: Pick<ImportProductDto, 'name' | 'category'>,
+  settings: ImportSettingsDto,
+) {
   const content = normalize(`${product.name} ${product.category}`);
 
   return [...settings.redirectRules]

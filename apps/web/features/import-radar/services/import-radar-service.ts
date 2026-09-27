@@ -165,7 +165,9 @@ export async function confirmUsaManufacturer(
 }
 
 export type UsaRedirectorSelection =
-  { redirector: 'RED_DELAWARE'; shippingMode: 'EXPRESS' } | { redirector: 'REI_DO_IMPORTADO' };
+  | { redirector: 'RED_DELAWARE'; shippingMode: 'EXPRESS' }
+  | { redirector: 'REI_DO_IMPORTADO' }
+  | { redirector: 'SASPY_EXPRESS' };
 
 export type UsaCostPreflightResponse =
   | {

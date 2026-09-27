@@ -64,6 +64,22 @@ describe('import radar validators', () => {
     expect(toNumber(null)).toBe(0);
   });
 
+  it('resolves from the minimal name/category input and reflects changes in the same rule source', () => {
+    const mutableSettings = structuredClone(settings);
+    const product = { name: 'Apple MacBook Air', category: 'Notebook' };
+    mutableSettings.redirectRules.push({
+      id: 'notebook',
+      productType: 'MacBook / Notebook',
+      redirectCost: 200,
+      matchTerms: ['macbook', 'notebook'],
+      priority: 3,
+    });
+
+    expect(identifyRedirectRule(product, mutableSettings)?.redirectCost).toBe(200);
+    mutableSettings.redirectRules[2]!.redirectCost = 275;
+    expect(identifyRedirectRule(product, mutableSettings)?.redirectCost).toBe(275);
+  });
+
   it.each([
     [69.8175, 69.82],
     [1.005, 1.01],

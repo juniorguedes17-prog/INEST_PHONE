@@ -9,13 +9,19 @@ function trustedStore(retailer: string): UsaRetailerEvidence {
 }
 
 function resolve(
-  redirector: 'RED_DELAWARE' | 'REI_DO_IMPORTADO',
+  redirector: 'RED_DELAWARE' | 'REI_DO_IMPORTADO' | 'SASPY_EXPRESS',
   retailerEvidence: readonly UsaRetailerEvidence[],
 ) {
   return resolveUsaRetailerTaxTreatment({ redirector, retailerEvidence });
 }
 
 describe('resolveUsaRetailerTaxTreatment', () => {
+  it('keeps Saspy outside the Rei TAX policy', () => {
+    expect(resolve('SASPY_EXPRESS', [trustedStore('Amazon')])).toMatchObject({
+      taxTreatment: 'EXEMPT',
+    });
+  });
+
   it.each([
     ['Amazon', 'amazon', 'Amazon'],
     ['eBay', 'ebay', 'eBay'],
