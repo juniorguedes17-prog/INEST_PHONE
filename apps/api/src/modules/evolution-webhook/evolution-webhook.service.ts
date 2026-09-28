@@ -33,16 +33,19 @@ type SupplierListUpdateClassification = {
 };
 
 type SnapshotWriteItemGroup = 'ALL' | 'PRIMARY' | 'USED';
+type SnapshotWriteOperation = 'FULL_SNAPSHOT' | 'PARTIAL_UPDATE';
 
 type SnapshotWriteTarget = {
   scopeKey: 'catalog:used' | 'catalog:primary' | 'catalog:general';
   itemGroup: SnapshotWriteItemGroup;
+  operation: SnapshotWriteOperation;
 };
 
 type SnapshotWritePlan =
   | { authority: 'NONE'; targets: [] }
   | { authority: 'FULL_SNAPSHOT'; targets: SnapshotWriteTarget[] }
-  | { authority: 'PARTIAL_UPDATE'; targets: [SnapshotWriteTarget] };
+  | { authority: 'PARTIAL_UPDATE'; targets: [SnapshotWriteTarget] }
+  | { authority: 'COMPOSITE'; targets: [SnapshotWriteTarget, SnapshotWriteTarget] };
 
 const PARTIAL_UPDATE_MARKER =
   /\b(?:promo(?:c|ç)(?:[aã]o|ões)|ofertas?|baix(?:ou|amos)|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar|reposi(?:c|ç)(?:[aã]o|ões)|chegou\s+lacrad[oa]s?|remessas?)\b/i;
@@ -339,54 +342,28 @@ export class EvolutionWebhookService {
 
         if (writePlan.authority === 'NONE') return;
 
-        if (writePlan.authority === 'PARTIAL_UPDATE') {
-          const partialSnapshotScope = writePlan.targets[0].scopeKey;
-
-          const currentList = await transaction.supplierCurrentList.findUnique({
-            where: {
-              supplierContactId_snapshotScope: {
-                supplierContactId: supplier.id,
-                snapshotScope: partialSnapshotScope,
-              },
-            },
-            include: { items: true },
-          });
-
-          if (!currentList) {
-            this.logger.debug(
-              JSON.stringify({
-                event: 'evolution.snapshot_scope.partial_scope_not_found',
-                supplierContactId: supplier.id,
-                externalMessageId: message.messageId,
-                snapshotScope: partialSnapshotScope,
-              }),
-            );
-            return;
-          }
-
-          await transaction.supplierCurrentList.update({
-            where: { id: currentList.id },
-            data: {
-              sourceMessageId: message.messageId,
-              sourceType: 'text',
-              rawContent: text,
-              receivedAt: message.receivedAt,
-            },
-          });
-          await this.applyPartialUpdate(
-            transaction,
-            currentList.id,
-            currentList.items,
-            itemsWithResolvedProductId,
-          );
-          return;
-        }
-
         for (const target of writePlan.targets) {
           const scopedItems = selectSnapshotWriteItems(
             itemsWithResolvedProductId,
             target.itemGroup,
           );
+
+          if (target.operation === 'PARTIAL_UPDATE') {
+            await this.applyPartialSnapshotUpdate(
+              transaction,
+              supplier.id,
+              target.scopeKey,
+              scopedItems,
+              {
+                externalMessageId: message.messageId,
+                rawContent: text,
+                receivedAt: message.receivedAt,
+                createWhenMissing: writePlan.authority === 'COMPOSITE',
+              },
+            );
+            continue;
+          }
+
           await transaction.supplierCurrentList.upsert({
             where: {
               supplierContactId_snapshotScope: {
@@ -488,6 +465,67 @@ export class EvolutionWebhookService {
         },
       });
     }
+  }
+
+  private async applyPartialSnapshotUpdate(
+    transaction: Prisma.TransactionClient,
+    supplierContactId: string,
+    snapshotScope: SnapshotWriteTarget['scopeKey'],
+    incomingItems: readonly PersistedSupplierListItem[],
+    source: {
+      externalMessageId: string;
+      rawContent: string;
+      receivedAt: Date;
+      createWhenMissing: boolean;
+    },
+  ) {
+    const currentList = await transaction.supplierCurrentList.findUnique({
+      where: {
+        supplierContactId_snapshotScope: {
+          supplierContactId,
+          snapshotScope,
+        },
+      },
+      include: { items: true },
+    });
+
+    if (!currentList) {
+      if (!source.createWhenMissing) {
+        this.logger.debug(
+          JSON.stringify({
+            event: 'evolution.snapshot_scope.partial_scope_not_found',
+            supplierContactId,
+            externalMessageId: source.externalMessageId,
+            snapshotScope,
+          }),
+        );
+        return;
+      }
+
+      await transaction.supplierCurrentList.create({
+        data: {
+          supplierContactId,
+          snapshotScope,
+          sourceMessageId: source.externalMessageId,
+          sourceType: 'text',
+          rawContent: source.rawContent,
+          receivedAt: source.receivedAt,
+          items: { create: [...incomingItems] },
+        },
+      });
+      return;
+    }
+
+    await transaction.supplierCurrentList.update({
+      where: { id: currentList.id },
+      data: {
+        sourceMessageId: source.externalMessageId,
+        sourceType: 'text',
+        rawContent: source.rawContent,
+        receivedAt: source.receivedAt,
+      },
+    });
+    await this.applyPartialUpdate(transaction, currentList.id, currentList.items, incomingItems);
   }
 
   private assertValidSecret(providedSecret: string) {
@@ -877,7 +915,20 @@ function resolveSnapshotWritePlan(
     if (!resolvedScope || hasMixedSegments) return { authority: 'NONE', targets: [] };
     return {
       authority: 'PARTIAL_UPDATE',
-      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL' }],
+      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL', operation: 'PARTIAL_UPDATE' }],
+    };
+  }
+
+  if (
+    updateClassification.mode === 'FULL_SNAPSHOT' &&
+    hasPrimaryFullSnapshotWithIsolatedUsedItems(resolution, hasPrimaryItems, hasUsedItems)
+  ) {
+    return {
+      authority: 'COMPOSITE',
+      targets: [
+        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'FULL_SNAPSHOT' },
+        { scopeKey: 'catalog:used', itemGroup: 'USED', operation: 'PARTIAL_UPDATE' },
+      ],
     };
   }
 
@@ -888,8 +939,8 @@ function resolveSnapshotWritePlan(
     return {
       authority: 'FULL_SNAPSHOT',
       targets: [
-        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY' },
-        { scopeKey: 'catalog:used', itemGroup: 'USED' },
+        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'FULL_SNAPSHOT' },
+        { scopeKey: 'catalog:used', itemGroup: 'USED', operation: 'FULL_SNAPSHOT' },
       ],
     };
   }
@@ -897,7 +948,7 @@ function resolveSnapshotWritePlan(
   if (updateClassification.mode === 'FULL_SNAPSHOT' && resolvedScope) {
     return {
       authority: 'FULL_SNAPSHOT',
-      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL' }],
+      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL', operation: 'FULL_SNAPSHOT' }],
     };
   }
 
@@ -908,8 +959,8 @@ function resolveSnapshotWritePlan(
     return {
       authority: 'FULL_SNAPSHOT',
       targets: [
-        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY' },
-        { scopeKey: 'catalog:used', itemGroup: 'USED' },
+        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'FULL_SNAPSHOT' },
+        { scopeKey: 'catalog:used', itemGroup: 'USED', operation: 'FULL_SNAPSHOT' },
       ],
     };
   }
@@ -922,11 +973,24 @@ function resolveSnapshotWritePlan(
   ) {
     return {
       authority: 'FULL_SNAPSHOT',
-      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL' }],
+      targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL', operation: 'FULL_SNAPSHOT' }],
     };
   }
 
   return { authority: 'NONE', targets: [] };
+}
+
+function hasPrimaryFullSnapshotWithIsolatedUsedItems(
+  resolution: SupplierSnapshotScopeResolution,
+  hasPrimaryItems: boolean,
+  hasUsedItems: boolean,
+) {
+  return (
+    hasPrimaryItems &&
+    hasUsedItems &&
+    resolution.segmentAuthorities.primary === 'FULL_SNAPSHOT' &&
+    resolution.segmentAuthorities.used === 'ISOLATED_EXPLICIT_ITEMS'
+  );
 }
 
 function hasExplicitMixedSnapshotAuthority(

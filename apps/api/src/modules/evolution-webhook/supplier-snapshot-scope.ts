@@ -6,6 +6,10 @@ import { getSupplierListPolicy } from './supplier-list-policy';
 
 export type SupplierSnapshotScopeKey = 'catalog:used' | 'catalog:primary' | 'catalog:general';
 export type SupplierSnapshotScopeStatus = 'RESOLVED' | 'AMBIGUOUS' | 'UNKNOWN';
+export type SupplierSnapshotSegmentAuthority =
+  | 'FULL_SNAPSHOT'
+  | 'ISOLATED_EXPLICIT_ITEMS'
+  | 'NONE';
 export type SupplierSnapshotScopeReason =
   | 'explicit_used_preamble'
   | 'explicit_primary_preamble'
@@ -34,12 +38,18 @@ export interface SupplierSnapshotScopeEvidence {
   categoryCount: number;
 }
 
+export interface SupplierSnapshotSegmentAuthorities {
+  primary: SupplierSnapshotSegmentAuthority;
+  used: SupplierSnapshotSegmentAuthority;
+}
+
 export interface SupplierSnapshotScopeResolution {
   status: SupplierSnapshotScopeStatus;
   scopeKey?: SupplierSnapshotScopeKey;
   identity?: SupplierDocumentIdentity;
   reason: SupplierSnapshotScopeReason;
   evidence: SupplierSnapshotScopeEvidence;
+  segmentAuthorities: SupplierSnapshotSegmentAuthorities;
 }
 
 const USED_MARKER = /\b(?:lista[-\s]*)?swap\b|\bsemi\s*novos?\b|\bseminovos?\b/i;
@@ -106,6 +116,11 @@ export function resolveSupplierSnapshotScope(
   const hasPrimaryItems =
     conditions.some((condition) => condition === 'NOVO' || condition === 'CPO') ||
     hasPrimarySegmentBeforeUsedSection(rawText);
+  const hasOnlyExplicitUsedItems =
+    hasUsedItems &&
+    items
+      .filter((item) => item.condition === 'SEMINOVO')
+      .every((item) => item.conditionProvenance === 'EXPLICIT_PRODUCT');
   const isBroadMixedDocument = categoryCount >= 2 && hasUsedItems && hasPrimaryItems;
 
   if (hasUsedPreamble && hasPrimaryPreamble) return ambiguous(evidence);
@@ -149,9 +164,27 @@ export function resolveSupplierSnapshotScope(
     if (conditions.every((condition) => condition === 'NOVO' || condition === 'CPO')) {
       return resolved('primary', 'supplier_policy_content', evidence);
     }
+    if (hasPrimaryItems && hasOnlyExplicitUsedItems) {
+      return {
+        status: 'RESOLVED',
+        scopeKey: 'catalog:primary',
+        identity: { kind: 'catalog', segment: 'primary' },
+        reason: 'supplier_policy_content',
+        evidence,
+        segmentAuthorities: {
+          primary: 'FULL_SNAPSHOT',
+          used: 'ISOLATED_EXPLICIT_ITEMS',
+        },
+      };
+    }
   }
 
-  return { status: 'UNKNOWN', reason: 'insufficient_document_evidence', evidence };
+  return {
+    status: 'UNKNOWN',
+    reason: 'insufficient_document_evidence',
+    evidence,
+    segmentAuthorities: noSegmentAuthorities(),
+  };
 }
 
 function resolved(
@@ -165,11 +198,33 @@ function resolved(
     identity: { kind: 'catalog', segment },
     reason,
     evidence,
+    segmentAuthorities: segmentAuthoritiesFor(segment, reason),
   };
 }
 
 function ambiguous(evidence: SupplierSnapshotScopeEvidence): SupplierSnapshotScopeResolution {
-  return { status: 'AMBIGUOUS', reason: 'conflicting_document_evidence', evidence };
+  return {
+    status: 'AMBIGUOUS',
+    reason: 'conflicting_document_evidence',
+    evidence,
+    segmentAuthorities: noSegmentAuthorities(),
+  };
+}
+
+function segmentAuthoritiesFor(
+  segment: SupplierDocumentIdentity['segment'],
+  reason: SupplierSnapshotScopeReason,
+): SupplierSnapshotSegmentAuthorities {
+  if (segment === 'primary') return { primary: 'FULL_SNAPSHOT', used: 'NONE' };
+  if (segment === 'used') return { primary: 'NONE', used: 'FULL_SNAPSHOT' };
+  if (reason === 'broad_mixed_document') {
+    return { primary: 'FULL_SNAPSHOT', used: 'FULL_SNAPSHOT' };
+  }
+  return noSegmentAuthorities();
+}
+
+function noSegmentAuthorities(): SupplierSnapshotSegmentAuthorities {
+  return { primary: 'NONE', used: 'NONE' };
 }
 
 function isBroadDocument(items: readonly ParsedSupplierListItem[], categoryCount: number) {

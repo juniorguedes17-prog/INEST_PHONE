@@ -24,6 +24,7 @@ describe('supplier list parser', () => {
     const [item] = parseSupplierListText(`${heading}\niPhone 17 Pro 256GB\nPreto R$ 4.500`);
 
     expect(item?.condition).toBe(condition);
+    expect(item?.conditionProvenance).toBe('SECTION_CONTEXT');
   });
 
   it('nao assume NOVO sem evidencia de condition', () => {
@@ -57,6 +58,7 @@ describe('supplier list parser', () => {
         productName: 'iPhone 14 (256G)',
         normalizedName: 'iphone 14 256g',
         condition: 'CPO',
+        conditionProvenance: 'EXPLICIT_PRODUCT',
         price: 3200,
       }),
     ]);
@@ -72,6 +74,7 @@ describe('supplier list parser', () => {
 
     expect(items).toHaveLength(2);
     expect(items.every((item) => item.condition === 'CPO')).toBe(true);
+    expect(items.every((item) => item.conditionProvenance === 'EXPLICIT_PRODUCT')).toBe(true);
     expect(items.every((item) => item.productName === 'iPhone 13 Pro (128G)')).toBe(true);
     expect(items.every((item) => item.normalizedName === 'iphone 13 pro 128g')).toBe(true);
   });
@@ -88,12 +91,14 @@ describe('supplier list parser', () => {
       expect.objectContaining({
         productName: 'iPhone 13 Pro (128G)',
         condition: 'CPO',
+        conditionProvenance: 'EXPLICIT_PRODUCT',
         price: 2900,
       }),
       expect.objectContaining({
         productName: 'iPhone 15',
         normalizedName: 'iphone 15',
         condition: 'SEMINOVO',
+        conditionProvenance: 'EXPLICIT_PRODUCT',
         color: 'black',
         price: 2650,
       }),
@@ -115,6 +120,11 @@ describe('supplier list parser', () => {
     );
 
     expect(policyItems.map((item) => item.condition)).toEqual(['NOVO', 'CPO', 'SEMINOVO']);
+    expect(policyItems.map((item) => item.conditionProvenance)).toEqual([
+      'POLICY_DEFAULT',
+      'EXPLICIT_PRODUCT',
+      'EXPLICIT_PRODUCT',
+    ]);
   });
 
   it('processa uma lista textual com produto, cor e preco em linhas separadas', () => {
@@ -601,6 +611,7 @@ describe('supplier list parser', () => {
         expect.objectContaining({
           normalizedName: 'iphone 15 pro 256gb',
           condition: 'SEMINOVO',
+          conditionProvenance: 'INFERRED_GRADE',
           qualityGrade: 'A',
           color: 'natural',
           price: 3800,
@@ -608,6 +619,7 @@ describe('supplier list parser', () => {
         expect.objectContaining({
           normalizedName: 'iphone 16 pro max 256gb',
           condition: 'SEMINOVO',
+          conditionProvenance: 'INFERRED_GRADE',
           qualityGrade: 'A+',
           color: 'desert',
           price: 4900,

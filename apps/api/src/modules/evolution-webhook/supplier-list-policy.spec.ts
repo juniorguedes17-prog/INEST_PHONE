@@ -66,23 +66,28 @@ describe('supplier list policy', () => {
   it.each(GOVERNED_SUPPLIER_CONTACT_IDS)(
     'aplica NOVO somente quando a condição não possui evidência explícita para %s',
     (supplierContactId) => {
-      expect(applySupplierListConditionPolicy([item], supplierContactId)[0]?.condition).toBe(
-        'NOVO',
-      );
+      expect(applySupplierListConditionPolicy([item], supplierContactId)[0]).toMatchObject({
+        condition: 'NOVO',
+        conditionProvenance: 'POLICY_DEFAULT',
+      });
       expect(
-        applySupplierListConditionPolicy([{ ...item, condition: 'SEMINOVO' }], supplierContactId)[0]
-          ?.condition,
-      ).toBe('SEMINOVO');
+        applySupplierListConditionPolicy(
+          [{ ...item, condition: 'SEMINOVO', conditionProvenance: 'EXPLICIT_PRODUCT' }],
+          supplierContactId,
+        )[0],
+      ).toMatchObject({ condition: 'SEMINOVO', conditionProvenance: 'EXPLICIT_PRODUCT' });
       expect(
-        applySupplierListConditionPolicy([{ ...item, condition: 'CPO' }], supplierContactId)[0]
-          ?.condition,
-      ).toBe('CPO');
+        applySupplierListConditionPolicy(
+          [{ ...item, condition: 'CPO', conditionProvenance: 'SECTION_CONTEXT' }],
+          supplierContactId,
+        )[0],
+      ).toMatchObject({ condition: 'CPO', conditionProvenance: 'SECTION_CONTEXT' });
       expect(
         applySupplierListConditionPolicy(
           [{ ...item, condition: null, rawLine: 'SWAP — Preto R$ 4.600' }],
           supplierContactId,
-        )[0]?.condition,
-      ).toBe('SEMINOVO');
+        )[0],
+      ).toMatchObject({ condition: 'SEMINOVO', conditionProvenance: 'EXPLICIT_PRODUCT' });
     },
   );
 

@@ -24,6 +24,46 @@ Azul R$ 3.000`);
     expect(boundary.sectionLines.join('\n')).toContain('SWAP');
   });
 
+  it('transporta provenance de contexto de secao sem alterar o scope', () => {
+    const rawText = `LISTA SWAP
+iPhone 15 128GB
+Preto R$ 3.000`;
+
+    expect(resolveSupplierSnapshotScope(rawText, parseSupplierListText(rawText))).toMatchObject({
+      status: 'RESOLVED',
+      scopeKey: 'catalog:used',
+      reason: 'explicit_used_preamble',
+      evidence: { conditionProvenances: ['SECTION_CONTEXT'] },
+    });
+  });
+
+  it('autoriza primary pela policy sem transformar seminovo explícito isolado em snapshot used', () => {
+    const items = [
+      ...parseSupplierListText(`iPhone 16 128GB\nPreto R$ 4.000`).map((item) => ({
+        ...item,
+        condition: 'NOVO' as const,
+        conditionProvenance: 'POLICY_DEFAULT' as const,
+      })),
+      ...parseSupplierListText(`iPhone 15 AS IS 128GB\nBlack R$ 2.500`),
+    ];
+
+    expect(
+      resolveSupplierSnapshotScope(
+        'Produtos disponíveis no estoque\niPhone 16 128GB\nPreto R$ 4.000\niPhone 15 AS IS 128GB\nBlack R$ 2.500',
+        items,
+        'd8782850-f5de-14cc-1406-ae1a0ee70b06',
+      ),
+    ).toMatchObject({
+      status: 'RESOLVED',
+      scopeKey: 'catalog:primary',
+      reason: 'supplier_policy_content',
+      segmentAuthorities: {
+        primary: 'FULL_SNAPSHOT',
+        used: 'ISOLATED_EXPLICIT_ITEMS',
+      },
+    });
+  });
+
   it.each([
     ['Lote 9821 ABC', 'iPhone 17 256GB\nPreto R$ 4.600\nAirPods Pro 3\nR$ 1.100'],
     ['Lote 55 XYZ', 'iPhone 17 Pro 256GB\nAzul R$ 6.200\niPad 11 128GB\nPrata R$ 2.450'],

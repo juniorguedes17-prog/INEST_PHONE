@@ -378,12 +378,14 @@ describe('EvolutionWebhookService', () => {
           productName: 'iPhone 14 (256G)',
           normalizedName: 'iphone 14 256g',
           condition: 'CPO',
+          conditionProvenance: 'EXPLICIT_PRODUCT',
           price: 3200,
         }),
         expect.objectContaining({
           productName: 'iPhone 15 (128GB)',
           normalizedName: 'iphone 15 128gb',
           condition: 'SEMINOVO',
+          conditionProvenance: 'EXPLICIT_PRODUCT',
           price: 2650,
         }),
       ]),
@@ -398,6 +400,9 @@ describe('EvolutionWebhookService', () => {
     expect(policyItems.filter((item) => item.condition === 'NOVO')).toHaveLength(118);
     expect(policyItems.filter((item) => item.condition === 'CPO')).toHaveLength(4);
     expect(policyItems.filter((item) => item.condition === 'SEMINOVO')).toHaveLength(1);
+    expect(
+      policyItems.filter((item) => item.conditionProvenance === 'POLICY_DEFAULT'),
+    ).toHaveLength(30);
     expect(resolveSupplierSnapshotScope(mohamadNasserList20260926, parsed)).toMatchObject({
       status: 'UNKNOWN',
       reason: 'insufficient_document_evidence',
@@ -426,6 +431,13 @@ describe('EvolutionWebhookService', () => {
       status: 'RESOLVED',
       scopeKey: 'catalog:primary',
       reason: 'supplier_policy_content',
+      evidence: {
+        conditionProvenances: expect.arrayContaining(['EXPLICIT_PRODUCT', 'POLICY_DEFAULT']),
+      },
+      segmentAuthorities: {
+        primary: 'FULL_SNAPSHOT',
+        used: 'ISOLATED_EXPLICIT_ITEMS',
+      },
     });
 
     const { service, transaction } = createService(
@@ -450,17 +462,156 @@ describe('EvolutionWebhookService', () => {
       supplierId: MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
       items: 123,
     });
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(1);
     expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          supplierContactId: MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
           snapshotScope: 'catalog:primary',
-          items: { create: expect.arrayContaining([]) },
+          items: {
+            create: expect.arrayContaining([
+              expect.objectContaining({ condition: 'NOVO' }),
+              expect.objectContaining({ condition: 'CPO' }),
+            ]),
+          },
         }),
       }),
     );
-    const write = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0];
-    expect(write.create.items.create).toHaveLength(123);
+    const primaryWrite = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0];
+    expect(primaryWrite.create.items.create).toHaveLength(122);
+    expect(primaryWrite.create.items.create.filter((item: { condition: string }) => item.condition === 'NOVO')).toHaveLength(118);
+    expect(primaryWrite.create.items.create.filter((item: { condition: string }) => item.condition === 'CPO')).toHaveLength(4);
+    expect(transaction.supplierCurrentList.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshotScope: 'catalog:used',
+          items: { create: [expect.objectContaining({ condition: 'SEMINOVO' })] },
+        }),
+      }),
+    );
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('mescla somente o seminovo explícito da lista Mohamad e preserva os demais itens used', async () => {
+    const policyItems = applySupplierListConditionPolicy(
+      parseSupplierListText(mohamadNasserList20260926),
+      MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+    );
+    const incomingUsed = policyItems.find((item) => item.condition === 'SEMINOVO');
+    expect(incomingUsed).toBeDefined();
+
+    const { service, transaction } = createService(
+      [],
+      undefined,
+      MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+    );
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'mohamad-used-list',
+      items: [
+        { ...incomingUsed!, id: 'used-iphone-15', productId: null, price: 2700 },
+        currentItem('preserved-used-item', 'iPhone 14 128GB', 2300, {
+          condition: 'SEMINOVO',
+          color: 'azul',
+        }),
+      ],
+    });
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-mohamad-nasser-existing-used-20260926',
+          remoteJid: '5511994430333@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: mohamadNasserList20260926 },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(1);
+    expect(transaction.supplierCurrentList.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'used-iphone-15' },
+        data: expect.objectContaining({ condition: 'SEMINOVO', price: 2650 }),
+      }),
+    );
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('reverte FULL primary e merge used isolado quando a segunda operacao falha', async () => {
+    const { service, prisma, transaction } = createService(
+      [],
+      undefined,
+      MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+    );
+    const state = { primaryWritten: false, usedCreated: false };
+    transaction.supplierCurrentList.upsert.mockImplementation(async () => {
+      state.primaryWritten = true;
+      return {};
+    });
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({ id: 'used-list', items: [] });
+    transaction.supplierCurrentListItem.create.mockImplementation(async () => {
+      state.usedCreated = true;
+      throw new Error('isolated used merge failed');
+    });
+    prisma.$transaction.mockImplementation(async (callback) => {
+      const before = { ...state };
+      try {
+        return await callback(transaction);
+      } catch (error) {
+        Object.assign(state, before);
+        throw error;
+      }
+    });
+
+    await expect(
+      service.receive(webhookSecret, {
+        event: 'MESSAGES_UPSERT',
+        data: {
+          key: {
+            id: 'message-mohamad-nasser-rollback-20260926',
+            remoteJid: '5511994430333@s.whatsapp.net',
+            fromMe: false,
+          },
+          message: { conversation: mohamadNasserList20260926 },
+        },
+      }),
+    ).rejects.toThrow('isolated used merge failed');
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledOnce();
+    expect(state).toEqual({ primaryWritten: false, usedCreated: false });
+  });
+
+  it('mantem o receipt Mohamad idempotente para o plano composto', async () => {
+    const { service, transaction } = createService(
+      [],
+      undefined,
+      MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+    );
+    const payload = {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'message-mohamad-nasser-duplicate-20260926',
+          remoteJid: '5511994430333@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: mohamadNasserList20260926 },
+      },
+    };
+
+    await service.receive(webhookSecret, payload);
+    transaction.evolutionWebhookReceipt.create.mockRejectedValueOnce({ code: 'P2002' });
+
+    await expect(service.receive(webhookSecret, payload)).resolves.toEqual({
+      accepted: true,
+      duplicate: true,
+    });
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.create).toHaveBeenCalledOnce();
   });
 
   it.each(pronineFixtures)(
