@@ -1,10 +1,14 @@
 import type { FinalCost } from '../usa-cost.contract';
+import {
+  calculateUsaRetailerTax,
+  type ResolvedUsaTaxTreatment,
+} from '../usa-retailer-tax.calculation';
 import { roundMoneyToCents } from '../validators/import-radar.validators';
 
 const LBS_TO_KG = 0.45359237;
 
 export type ReiDoImportadoLogisticsClassification = 'CELULAR' | 'OTHER';
-export type ReiDoImportadoTaxTreatment = 'EXEMPT' | 'TAXABLE';
+export type ReiDoImportadoTaxTreatment = ResolvedUsaTaxTreatment;
 
 export type ReiDoImportadoCalculationErrorCode =
   | 'USD_BRL_QUOTE_NOT_CONFIGURED'
@@ -92,9 +96,12 @@ export function calculateReiDoImportadoCost(
   const productValueBrl = roundMoneyToCents(input.productPriceUsd * usdBrlQuote);
   const shipping = calculateShipping(input);
   const insuranceBrl = roundMoneyToCents((productValueBrl * input.insurancePercent) / 100);
-  const taxUsd =
-    input.taxTreatment === 'TAXABLE' ? (input.productPriceUsd * input.usTaxPercent) / 100 : 0;
-  const taxBrl = roundMoneyToCents(taxUsd * usdBrlQuote);
+  const { taxUsd, taxBrl } = calculateUsaRetailerTax({
+    productPriceUsd: input.productPriceUsd,
+    taxTreatment: input.taxTreatment,
+    usTaxPercent: input.usTaxPercent,
+    usdBrlQuote,
+  });
   const shippingBrl = roundMoneyToCents(shipping.shippingUsd * usdBrlQuote);
   const finalCost: FinalCost = {
     currency: 'BRL',

@@ -126,6 +126,8 @@ export class UsaCostExecutionService {
       shippingUsdPerKg: usaImport.saspyExpress.shippingUsdPerKg,
       freightUsdBrlQuote: usaImport.saspyExpress.freightUsdBrlQuote,
       redirectCostBrl: redirectRule?.redirectCost ?? 0,
+      taxTreatment: preflight.taxTreatment,
+      usTaxPercent: usaImport.reiDoImportado.usTaxPercent,
     });
     return createUsaCostCalculationResult({
       sourceCommercialIdentity: sourceProduct,

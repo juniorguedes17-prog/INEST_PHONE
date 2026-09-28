@@ -208,7 +208,10 @@ export class UsaCostPreflightService {
         return { status: 'BLOCKED', reason: settingsReason, redirector: input.redirector };
       }
     } else {
-      const settingsReason = validateSaspySettings(settings.usaImport.saspyExpress);
+      const settingsReason = validateSaspySettings(
+        settings.usaImport.saspyExpress,
+        settings.usaImport.reiDoImportado.usTaxPercent,
+      );
       if (settingsReason) {
         return { status: 'BLOCKED', reason: settingsReason, redirector: input.redirector };
       }
@@ -444,8 +447,11 @@ function validateReiSettings(settings: {
 function validateSaspySettings(settings: {
   shippingUsdPerKg: number;
   freightUsdBrlQuote?: number | null;
-}) {
+}, usTaxPercent: number) {
   if (!Number.isFinite(settings.shippingUsdPerKg) || settings.shippingUsdPerKg < 0) {
+    return 'SETTINGS_UNAVAILABLE' as const;
+  }
+  if (!Number.isFinite(usTaxPercent) || usTaxPercent < 0 || usTaxPercent > 100) {
     return 'SETTINGS_UNAVAILABLE' as const;
   }
   return typeof settings.freightUsdBrlQuote === 'number' &&

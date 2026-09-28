@@ -1,4 +1,7 @@
-import type { ParsedSupplierListItem } from './evolution-webhook.types';
+import type {
+  ParsedSupplierListItem,
+  SupplierConditionProvenance,
+} from './evolution-webhook.types';
 import { getSupplierListPolicy } from './supplier-list-policy';
 
 export type SupplierSnapshotScopeKey = 'catalog:used' | 'catalog:primary' | 'catalog:general';
@@ -27,6 +30,7 @@ export interface SupplierSnapshotScopeEvidence {
   preambleMarkers: string[];
   sectionMarkers: string[];
   conditions: string[];
+  conditionProvenances: SupplierConditionProvenance[];
   categoryCount: number;
 }
 
@@ -82,11 +86,15 @@ export function resolveSupplierSnapshotScope(
   );
   const sectionMarkers = markersIn(sectionText);
   const conditions = [...new Set(items.map((item) => item.condition).filter(isKnownCondition))];
+  const conditionProvenances = [
+    ...new Set(items.map((item) => item.conditionProvenance).filter(isConditionProvenance)),
+  ];
   const categoryCount = new Set(items.map((item) => item.category).filter(Boolean)).size;
   const evidence: SupplierSnapshotScopeEvidence = {
     preambleMarkers,
     sectionMarkers,
     conditions,
+    conditionProvenances,
     categoryCount,
   };
   const hasUsedPreamble = preambleMarkers.includes('used');
@@ -193,4 +201,10 @@ function cleanLine(value: string) {
 
 function isKnownCondition(value: string | null): value is 'NOVO' | 'CPO' | 'SEMINOVO' {
   return value === 'NOVO' || value === 'CPO' || value === 'SEMINOVO';
+}
+
+function isConditionProvenance(
+  value: SupplierConditionProvenance | null | undefined,
+): value is SupplierConditionProvenance {
+  return Boolean(value);
 }

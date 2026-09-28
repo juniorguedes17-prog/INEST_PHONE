@@ -319,6 +319,30 @@ describe('UsaCostPreflightService', () => {
     ).resolves.toMatchObject({ status: 'BLOCKED', reason: 'SETTINGS_UNAVAILABLE' });
     expect(shippingWeights.resolve).not.toHaveBeenCalled();
   });
+
+  it('requires the same Rei TAX percentage configuration before Saspy cost calculation', async () => {
+    const { service, shippingWeights } = createService(
+      readyDecision,
+      createContext('OTHER'),
+      undefined,
+      {
+        importation: baseSettings.importation,
+        usaImport: {
+          ...baseSettings.usaImport,
+          reiDoImportado: { ...baseSettings.usaImport.reiDoImportado, usTaxPercent: 100.01 },
+        },
+      },
+    );
+
+    await expect(
+      service.preflight({
+        sourceProduct: product,
+        redirector: redirector('SASPY_EXPRESS'),
+        composition: { kind: 'SINGLE_ITEM' },
+      }),
+    ).resolves.toMatchObject({ status: 'BLOCKED', reason: 'SETTINGS_UNAVAILABLE' });
+    expect(shippingWeights.resolve).not.toHaveBeenCalled();
+  });
   it('returns READY_FOR_COST for Red Delaware without requiring logistics classification', async () => {
     const { service } = createService(readyDecision, createContext('UNRESOLVED', null));
 
@@ -895,6 +919,18 @@ describe('UsaCostPreflightService', () => {
     const result = await service.preflight({
       sourceProduct: { ...product, retailer: null },
       redirector: redirector('REI_DO_IMPORTADO'),
+      composition: { kind: 'SINGLE_ITEM' },
+    });
+
+    expect(result).toMatchObject({ status: 'BLOCKED', reason: 'RETAILER_UNRESOLVED' });
+  });
+
+  it('blocks Saspy for an unresolved retailer with the same fiscal safety gate as Rei', async () => {
+    const { service } = createService(readyDecision, createContext('OTHER'));
+
+    const result = await service.preflight({
+      sourceProduct: { ...product, retailer: null },
+      redirector: redirector('SASPY_EXPRESS'),
       composition: { kind: 'SINGLE_ITEM' },
     });
 

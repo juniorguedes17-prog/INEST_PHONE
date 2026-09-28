@@ -1,4 +1,7 @@
-import { ParsedSupplierListItem } from './evolution-webhook.types';
+import {
+  ParsedSupplierListItem,
+  type SupplierConditionProvenance,
+} from './evolution-webhook.types';
 import {
   normalizeProductCondition,
   type ProductCondition,
@@ -85,7 +88,9 @@ export function parseSupplierListText(
   let activeCategory: string | null = null;
   let lastProductCategory: string | null = null;
   let activeCondition: ProductCondition | null = null;
+  let activeConditionProvenance: SupplierConditionProvenance | null = null;
   let currentCondition: ProductCondition | null = null;
+  let currentConditionProvenance: SupplierConditionProvenance | null = null;
   let activeGrade: ProductGrade | null = null;
   let currentGrade: ProductGrade | null = null;
   let pendingColors: string[] = [];
@@ -118,6 +123,7 @@ export function parseSupplierListText(
       currentGrade = null;
       pendingColors = [];
       currentCondition = activeCondition;
+      currentConditionProvenance = activeConditionProvenance;
       continue;
     }
     const sectionCategory = detectCategory(line);
@@ -126,18 +132,23 @@ export function parseSupplierListText(
         lastProductCategory !== null && lastProductCategory !== sectionCategory;
       activeCategory = sectionCategory;
       const sectionCondition = detectCondition(line);
-      if (sectionCondition.status === 'RESOLVED') activeCondition = sectionCondition.condition;
+      if (sectionCondition.status === 'RESOLVED') {
+        activeCondition = sectionCondition.condition;
+        activeConditionProvenance = 'SECTION_CONTEXT';
+      }
       if (
         sectionCondition.status === 'UNRESOLVED' &&
         (sectionCondition.reason === 'conflicting' || changesCategory)
       ) {
         activeCondition = null;
+        activeConditionProvenance = null;
       }
       currentProduct = null;
       activeGrade = null;
       currentGrade = null;
       pendingColors = [];
       currentCondition = activeCondition;
+      currentConditionProvenance = activeConditionProvenance;
       continue;
     }
 
@@ -147,7 +158,10 @@ export function parseSupplierListText(
       isOfferContinuationLine(nextLine)
     ) {
       const detectedCondition = detectCondition(line);
-      if (detectedCondition.status === 'RESOLVED') currentCondition = detectedCondition.condition;
+      if (detectedCondition.status === 'RESOLVED') {
+        currentCondition = detectedCondition.condition;
+        currentConditionProvenance = 'EXPLICIT_PRODUCT';
+      }
       pendingColors = [];
       continue;
     }
@@ -156,12 +170,15 @@ export function parseSupplierListText(
       const sectionCondition = detectCondition(line);
       if (sectionCondition.status === 'RESOLVED') {
         activeCondition = sectionCondition.condition;
+        activeConditionProvenance = 'SECTION_CONTEXT';
       } else if (sectionCondition.reason === 'conflicting') {
         activeCondition = null;
+        activeConditionProvenance = null;
       } else {
         continue;
       }
       currentCondition = activeCondition;
+      currentConditionProvenance = activeConditionProvenance;
       activeCategory = null;
       lastProductCategory = null;
       currentProduct = null;
@@ -175,9 +192,11 @@ export function parseSupplierListText(
       const detectedCondition = detectCondition(line);
       if (detectedCondition.status !== 'RESOLVED') continue;
       currentCondition = detectedCondition.condition;
+      currentConditionProvenance = currentProduct ? 'EXPLICIT_PRODUCT' : 'SECTION_CONTEXT';
       pendingColors = [];
       if (!currentProduct) {
         activeCondition = currentCondition;
+        activeConditionProvenance = currentConditionProvenance;
         activeCategory = null;
         lastProductCategory = null;
         activeGrade = null;
@@ -225,7 +244,13 @@ export function parseSupplierListText(
       lastProductCategory = detectCategory(currentProduct) ?? lastProductCategory;
       pendingColors = [];
       currentGrade = lineGrade ?? activeGrade;
-      currentCondition = resolveProductCondition(currentProduct, activeCondition);
+      const resolvedCondition = resolveProductCondition(
+        currentProduct,
+        activeCondition,
+        activeConditionProvenance,
+      );
+      currentCondition = resolvedCondition.condition;
+      currentConditionProvenance = resolvedCondition.provenance;
     } else if (lineGrade && currentProduct) {
       currentGrade = lineGrade;
     }
@@ -293,7 +318,7 @@ export function parseSupplierListText(
         model: extractModel(productName),
         capacity: extractCapacity(productName),
         color,
-        condition: resolveOfferCondition(currentCondition, currentGrade),
+        ...resolveOfferCondition(currentCondition, currentConditionProvenance, currentGrade),
         qualityGrade: currentGrade,
         price,
         availability: null,
@@ -357,9 +382,14 @@ function isEligibleGrade(grade: ProductGrade) {
 
 function resolveOfferCondition(
   currentCondition: ProductCondition | null,
+  currentConditionProvenance: SupplierConditionProvenance | null,
   grade: ProductGrade | null,
 ) {
-  return grade && isEligibleGrade(grade) ? 'SEMINOVO' : currentCondition;
+  if (grade && isEligibleGrade(grade)) {
+    return { condition: 'SEMINOVO', conditionProvenance: 'INFERRED_GRADE' as const };
+  }
+
+  return { condition: currentCondition, conditionProvenance: currentConditionProvenance };
 }
 
 export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[]) {
@@ -379,6 +409,7 @@ export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[
 
 function isCategoryHeading(value: string, category: string | null) {
   if (!category) return false;
+  if (isCompactAppleProductHeading(value)) return false;
   if (category === 'Garmin' && !/^\s*garmin\s*$/i.test(value)) return false;
   if (category === 'Eletronicos' && !/^\s*eletronicos?\s*$/i.test(value)) return false;
   if (/\b(?:pencil|airtag|magic\s?mouse|earpods)\b/i.test(value)) return false;
@@ -426,9 +457,14 @@ function isProductHeading(
 }
 
 function isCompactAppleProductHeading(value: string) {
-  return /^[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F\s]*(?:iphone\s*)?(?:1[2-7]|17e)\b[\s\S]*\b(?:pro|max|air|plus|e|128|256|512|1tb|2tb)\b/iu.test(
-    value,
-  );
+  const compactCandidate = value.replace(/^\s*[^\p{L}\p{N}]*/u, '');
+  const hasCompactIPhoneModel =
+    /^(?:iphone\s*)?(?:17e|1[2-7])\b/iu.test(compactCandidate);
+  const hasProductQualifier =
+    /\b(?:pro|max|air|plus|e|cpo|as[-\s]?is|no\s?active|not\s?active|never\s?activ(?:e|ated)|nunca\s?(?:active|ativado)|nao\s?ativado)\b|\b\d+\s*(?:gb|g|tb)\b/iu.test(
+      value,
+    );
+  return hasCompactIPhoneModel && hasProductQualifier;
 }
 
 function isStandaloneColorLine(value: string) {
@@ -655,9 +691,10 @@ function canonicalizeProductName(value: string) {
     .replace(/\(\s*\)/g, ' ')
     .replace(/\b(?:oferta|promocao|promocao|disponivel|estoque|lista atualizada)\b/gi, ' ')
     .replace(
-      /\b(?:cpo|refurbished|pre[-\s]?owned|seminovo|semi\s?novo|usado|vitrine|open box)\b/gi,
+      /\b(?:cpo|refurbished|pre[-\s]?owned|seminovo|semi\s?novo|usado|vitrine|open box|as[-\s]?is|no\s?active|not\s?active|never\s?activ(?:e|ated)|nunca\s?(?:active|ativado)|nao\s?ativado)\b|\b(?:bateria|battery)\s*\d{1,3}\s*%?/gi,
       ' ',
     )
+    .replace(/\(\s*\)/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/^[\s:;,.\-–—]+|[\s:;,.\-–—]+$/g, '')
     .replace(/\biph(?:one)?\s*(?=\d)/gi, 'iPhone ')
@@ -864,15 +901,23 @@ function detectCondition(value: string): ProductConditionResolution {
   return normalizeProductCondition(value);
 }
 
-function resolveProductCondition(value: string, activeCondition: ProductCondition | null) {
+function resolveProductCondition(
+  value: string,
+  activeCondition: ProductCondition | null,
+  activeConditionProvenance: SupplierConditionProvenance | null,
+) {
   const detectedCondition = detectCondition(value);
   if (detectedCondition.status === 'UNRESOLVED') {
-    return detectedCondition.reason === 'conflicting' ? null : activeCondition;
+    return detectedCondition.reason === 'conflicting'
+      ? { condition: null, provenance: null }
+      : { condition: activeCondition, provenance: activeConditionProvenance };
   }
-  if (detectedCondition.condition !== 'NOVO') return detectedCondition.condition;
+  if (detectedCondition.condition !== 'NOVO') {
+    return { condition: detectedCondition.condition, provenance: 'EXPLICIT_PRODUCT' as const };
+  }
   return isDescriptiveNewLineWithinCpo(value, activeCondition)
-    ? activeCondition
-    : detectedCondition.condition;
+    ? { condition: activeCondition, provenance: activeConditionProvenance }
+    : { condition: detectedCondition.condition, provenance: 'EXPLICIT_PRODUCT' as const };
 }
 
 function deduplicateItems(items: ParsedSupplierListItem[]) {

@@ -1,3 +1,9 @@
+export type SupplierConditionProvenance =
+  | 'EXPLICIT_PRODUCT'
+  | 'SECTION_CONTEXT'
+  | 'POLICY_DEFAULT'
+  | 'INFERRED_GRADE';
+
 export interface ParsedSupplierListItem {
   productName: string;
   normalizedName: string;
@@ -6,6 +12,7 @@ export interface ParsedSupplierListItem {
   capacity: string | null;
   color: string | null;
   condition: string | null;
+  conditionProvenance?: SupplierConditionProvenance | null;
   qualityGrade: string | null;
   price: number;
   availability: string | null;

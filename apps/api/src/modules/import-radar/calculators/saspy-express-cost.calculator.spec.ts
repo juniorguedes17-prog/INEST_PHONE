@@ -14,6 +14,8 @@ const input: SaspyExpressCostCalculatorInput = {
   shippingUsdPerKg: 23.5,
   freightUsdBrlQuote: 5.8,
   redirectCostBrl: 200,
+  taxTreatment: 'TAXABLE',
+  usTaxPercent: 7,
 };
 
 describe('calculateSaspyExpressCost', () => {
@@ -24,7 +26,7 @@ describe('calculateSaspyExpressCost', () => {
     expect(result.breakdown.shippingUsd).toBeCloseTo(2.2 * 0.45359237 * 23.5, 12);
   });
 
-  it('keeps product and freight quotes independent in the final BRL composition', () => {
+  it('uses the Rei TAX configuration and general USD quote without changing the freight quote', () => {
     const result = calculateSaspyExpressCost(input);
 
     expect(result.breakdown.usdBrlQuote).toBe(5.1);
@@ -32,14 +34,36 @@ describe('calculateSaspyExpressCost', () => {
     expect(result.breakdown.productValueBrl).toBe(5100);
     expect(result.breakdown.shippingBrl).toBe(roundMoneyToCents(2.2 * 0.45359237 * 23.5 * 5.8));
     expect(result.breakdown.redirectCostBrl).toBe(200);
+    expect(result.breakdown).toMatchObject({
+      taxTreatment: 'TAXABLE',
+      taxPercent: 7,
+      taxUsd: 70,
+      taxBrl: 357,
+    });
     expect(result.finalCost).toEqual({
       currency: 'BRL',
       amountBrl: roundMoneyToCents(
         result.breakdown.productValueBrl +
           result.breakdown.shippingBrl +
-          result.breakdown.redirectCostBrl,
+          result.breakdown.redirectCostBrl +
+          result.breakdown.taxBrl,
       ),
     });
+  });
+
+  it('keeps TAX at zero and outside FinalCost for an EXEMPT retailer', () => {
+    const taxable = calculateSaspyExpressCost(input);
+    const exempt = calculateSaspyExpressCost({ ...input, taxTreatment: 'EXEMPT' });
+
+    expect(exempt.breakdown).toMatchObject({ taxPercent: 7, taxUsd: 0, taxBrl: 0 });
+    expect(exempt.finalCost.amountBrl).toBe(
+      roundMoneyToCents(
+        exempt.breakdown.productValueBrl +
+          exempt.breakdown.shippingBrl +
+          exempt.breakdown.redirectCostBrl,
+      ),
+    );
+    expect(taxable.finalCost.amountBrl - exempt.finalCost.amountBrl).toBe(taxable.breakdown.taxBrl);
   });
 
   it('rounds each BRL component and FinalCost safely to cents', () => {
@@ -73,6 +97,8 @@ describe('calculateSaspyExpressCost', () => {
     ['product price', { productPriceUsd: -1 }, 'INVALID_PRODUCT_PRICE'],
     ['USD/kg rate', { shippingUsdPerKg: -1 }, 'INVALID_SASPY_SHIPPING_RATE'],
     ['redirect cost', { redirectCostBrl: Number.POSITIVE_INFINITY }, 'INVALID_REDIRECT_COST'],
+    ['TAX percent', { usTaxPercent: 100.01 }, 'INVALID_US_TAX_PERCENT'],
+    ['TAX treatment', { taxTreatment: 'UNRESOLVED' as never }, 'UNSUPPORTED_TAX_TREATMENT'],
   ] as const)('rejects invalid %s', (_label, overrides, code) => {
     expectSaspyError(() => calculateSaspyExpressCost({ ...input, ...overrides }), code);
   });

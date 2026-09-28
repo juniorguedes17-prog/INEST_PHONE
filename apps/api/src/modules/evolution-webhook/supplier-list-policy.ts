@@ -75,10 +75,10 @@ export function applySupplierListConditionPolicy(
       [item.productName, item.rawLine, item.qualityGrade].filter(Boolean).join(' '),
     );
     if (evidence.status === 'RESOLVED') {
-      return { ...item, condition: evidence.condition };
+      return { ...item, condition: evidence.condition, conditionProvenance: 'EXPLICIT_PRODUCT' };
     }
     if (evidence.reason === 'conflicting') return item;
 
-    return { ...item, condition: defaultCondition };
+    return { ...item, condition: defaultCondition, conditionProvenance: 'POLICY_DEFAULT' };
   });
 }

@@ -226,6 +226,8 @@ describe('UsaCostExecutionService', () => {
       shippingUsdPerKg: 23.5,
       freightUsdBrlQuote: 5.8,
       redirectCostBrl: 100,
+      taxTreatment: 'EXEMPT',
+      usTaxPercent: 7,
     });
     expect(result.calculation).toMatchObject({
       redirector: saspy,
@@ -234,10 +236,39 @@ describe('UsaCostExecutionService', () => {
         usdBrlQuote: 5.35,
         freightUsdBrlQuote: 5.8,
         redirectCostBrl: 100,
+        taxTreatment: 'EXEMPT',
+        taxBrl: 0,
       },
     });
     expect(redCalculator).not.toHaveBeenCalled();
     expect(reiCalculator).not.toHaveBeenCalled();
+  });
+
+  it('passes Rei TAX treatment, percentage, and general quote to Saspy exactly once', async () => {
+    const saspy = { redirector: 'SASPY_EXPRESS' as const };
+    const { service, input } = setup(
+      ready(saspy, { shippingWeightLbs: 2.2, taxTreatment: 'TAXABLE' }),
+    );
+
+    const result = await service.execute(input);
+
+    expect(result.calculation?.breakdown).toMatchObject({
+      taxTreatment: 'TAXABLE',
+      taxPercent: 7,
+      taxUsd: 83.93,
+      taxBrl: roundMoneyToCents(83.93 * 5.35),
+      usdBrlQuote: 5.35,
+      freightUsdBrlQuote: 5.8,
+    });
+    const breakdown = result.calculation!.breakdown as saspyExpressCalculator.SaspyExpressCostBreakdown;
+    expect(result.calculation!.finalCost.amountBrl).toBe(
+      roundMoneyToCents(
+        breakdown.productValueBrl +
+          breakdown.shippingBrl +
+          breakdown.redirectCostBrl +
+          breakdown.taxBrl,
+      ),
+    );
   });
 
   it('reflects an updated ImportRedirectRule in Saspy without a duplicated rule source', async () => {

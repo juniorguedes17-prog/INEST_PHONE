@@ -16,12 +16,6 @@ function resolve(
 }
 
 describe('resolveUsaRetailerTaxTreatment', () => {
-  it('keeps Saspy outside the Rei TAX policy', () => {
-    expect(resolve('SASPY_EXPRESS', [trustedStore('Amazon')])).toMatchObject({
-      taxTreatment: 'EXEMPT',
-    });
-  });
-
   it.each([
     ['Amazon', 'amazon', 'Amazon'],
     ['eBay', 'ebay', 'eBay'],
@@ -30,13 +24,15 @@ describe('resolveUsaRetailerTaxTreatment', () => {
     ['B & H Photo', 'bh-photo-video', 'B&H Photo Video'],
     ['Adorama', 'adorama', 'Adorama'],
   ])(
-    'keeps Rei whitelist retailer %s exempt through explicit safe normalization',
+    'keeps the Rei policy whitelist retailer %s exempt for Saspy too',
     (retailer, key, name) => {
-      expect(resolve('REI_DO_IMPORTADO', [trustedStore(retailer)])).toEqual({
-        taxTreatment: 'EXEMPT',
-        retailer: { retailerKey: key, canonicalName: name },
-        provenance: ['SOURCE_STORE'],
-      });
+      for (const redirector of ['REI_DO_IMPORTADO', 'SASPY_EXPRESS'] as const) {
+        expect(resolve(redirector, [trustedStore(retailer)])).toEqual({
+          taxTreatment: 'EXEMPT',
+          retailer: { retailerKey: key, canonicalName: name },
+          provenance: ['SOURCE_STORE'],
+        });
+      }
     },
   );
 
@@ -50,13 +46,15 @@ describe('resolveUsaRetailerTaxTreatment', () => {
   );
 
   it.each(['Apple Store USA', 'Apple Store', 'Apple US Store'])(
-    'makes Apple Store USA alias %s TAXABLE only for Rei do Importado',
+    'makes Apple Store USA alias %s TAXABLE for the shared Rei/Saspy policy',
     (retailer) => {
-      expect(resolve('REI_DO_IMPORTADO', [trustedStore(retailer)])).toEqual({
-        taxTreatment: 'TAXABLE',
-        retailer: { retailerKey: 'apple-store-usa', canonicalName: 'Apple Store USA' },
-        provenance: ['SOURCE_STORE'],
-      });
+      for (const redirector of ['REI_DO_IMPORTADO', 'SASPY_EXPRESS'] as const) {
+        expect(resolve(redirector, [trustedStore(retailer)])).toEqual({
+          taxTreatment: 'TAXABLE',
+          retailer: { retailerKey: 'apple-store-usa', canonicalName: 'Apple Store USA' },
+          provenance: ['SOURCE_STORE'],
+        });
+      }
       expect(resolve('RED_DELAWARE', [trustedStore(retailer)])).toMatchObject({
         taxTreatment: 'EXEMPT',
       });
@@ -72,14 +70,23 @@ describe('resolveUsaRetailerTaxTreatment', () => {
       taxTreatment: 'TAXABLE',
       retailer: { retailerKey: 'newegg' },
     });
+    expect(resolve('SASPY_EXPRESS', [trustedStore('Newegg')])).toMatchObject({
+      taxTreatment: 'TAXABLE',
+      retailer: { retailerKey: 'newegg' },
+    });
   });
 
   it.each([
     ['RED_DELAWARE', []],
     ['REI_DO_IMPORTADO', []],
+    ['SASPY_EXPRESS', []],
     ['RED_DELAWARE', [{ retailer: null, provenance: 'SOURCE_STORE', isTrustedRetailer: true }]],
     [
       'REI_DO_IMPORTADO',
+      [{ retailer: 'Marketplace', provenance: 'SOURCE_STORE', isTrustedRetailer: false }],
+    ],
+    [
+      'SASPY_EXPRESS',
       [{ retailer: 'Marketplace', provenance: 'SOURCE_STORE', isTrustedRetailer: false }],
     ],
   ] as const)(
@@ -92,7 +99,7 @@ describe('resolveUsaRetailerTaxTreatment', () => {
   );
 
   it('fails closed when trusted retailer evidence conflicts for either redirector', () => {
-    for (const redirector of ['RED_DELAWARE', 'REI_DO_IMPORTADO'] as const) {
+    for (const redirector of ['RED_DELAWARE', 'REI_DO_IMPORTADO', 'SASPY_EXPRESS'] as const) {
       expect(
         resolve(redirector, [
           trustedStore('Amazon'),

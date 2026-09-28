@@ -1,4 +1,8 @@
 import type { FinalCost } from '../usa-cost.contract';
+import {
+  calculateUsaRetailerTax,
+  type ResolvedUsaTaxTreatment,
+} from '../usa-retailer-tax.calculation';
 import { roundMoneyToCents } from '../validators/import-radar.validators';
 
 const LBS_TO_KG = 0.45359237;
@@ -12,7 +16,9 @@ export type SaspyExpressCalculationErrorCode =
   | 'INVALID_SHIPPING_WEIGHT'
   | 'INVALID_PRODUCT_PRICE'
   | 'INVALID_SASPY_SHIPPING_RATE'
-  | 'INVALID_REDIRECT_COST';
+  | 'INVALID_REDIRECT_COST'
+  | 'INVALID_US_TAX_PERCENT'
+  | 'UNSUPPORTED_TAX_TREATMENT';
 
 export class SaspyExpressCalculationError extends Error {
   constructor(readonly code: SaspyExpressCalculationErrorCode) {
@@ -32,6 +38,10 @@ export interface SaspyExpressCostCalculatorInput {
   freightUsdBrlQuote: number | null | undefined;
   /** BRL value resolved from the existing ImportRedirectRule source. */
   redirectCostBrl: number;
+  /** Resolved by the shared retailer policy before composition. */
+  taxTreatment: ResolvedUsaTaxTreatment;
+  /** Same USA TAX configuration used by Rei do Importado. */
+  usTaxPercent: number;
 }
 
 export interface SaspyExpressCostBreakdown {
@@ -45,6 +55,10 @@ export interface SaspyExpressCostBreakdown {
   productValueBrl: number;
   shippingBrl: number;
   redirectCostBrl: number;
+  taxTreatment: ResolvedUsaTaxTreatment;
+  taxPercent: number;
+  taxUsd: number;
+  taxBrl: number;
 }
 
 export interface SaspyExpressCostCalculation {
@@ -71,15 +85,23 @@ export function calculateSaspyExpressCost(
   assertNonNegativeFinite(input.productPriceUsd, 'INVALID_PRODUCT_PRICE');
   assertNonNegativeFinite(input.shippingUsdPerKg, 'INVALID_SASPY_SHIPPING_RATE');
   assertNonNegativeFinite(input.redirectCostBrl, 'INVALID_REDIRECT_COST');
+  assertTaxTreatment(input.taxTreatment);
+  assertPercentage(input.usTaxPercent);
 
   const weightKg = shippingWeightLbs * LBS_TO_KG;
   const shippingUsd = weightKg * input.shippingUsdPerKg;
   const productValueBrl = roundMoneyToCents(input.productPriceUsd * usdBrlQuote);
   const shippingBrl = roundMoneyToCents(shippingUsd * freightUsdBrlQuote);
   const redirectCostBrl = roundMoneyToCents(input.redirectCostBrl);
+  const { taxUsd, taxBrl } = calculateUsaRetailerTax({
+    productPriceUsd: input.productPriceUsd,
+    taxTreatment: input.taxTreatment,
+    usTaxPercent: input.usTaxPercent,
+    usdBrlQuote,
+  });
   const finalCost: FinalCost = {
     currency: 'BRL',
-    amountBrl: roundMoneyToCents(productValueBrl + shippingBrl + redirectCostBrl),
+    amountBrl: roundMoneyToCents(productValueBrl + shippingBrl + redirectCostBrl + taxBrl),
   };
 
   return {
@@ -95,6 +117,10 @@ export function calculateSaspyExpressCost(
       productValueBrl,
       shippingBrl,
       redirectCostBrl,
+      taxTreatment: input.taxTreatment,
+      taxPercent: input.usTaxPercent,
+      taxUsd,
+      taxBrl,
     },
     finalCost,
   };
@@ -127,5 +153,17 @@ function assertShippingWeight(value: number | null | undefined): number {
 function assertNonNegativeFinite(value: number, code: SaspyExpressCalculationErrorCode) {
   if (!Number.isFinite(value) || value < 0) {
     throw new SaspyExpressCalculationError(code);
+  }
+}
+
+function assertTaxTreatment(value: ResolvedUsaTaxTreatment) {
+  if (value !== 'EXEMPT' && value !== 'TAXABLE') {
+    throw new SaspyExpressCalculationError('UNSUPPORTED_TAX_TREATMENT');
+  }
+}
+
+function assertPercentage(value: number) {
+  if (!Number.isFinite(value) || value < 0 || value > 100) {
+    throw new SaspyExpressCalculationError('INVALID_US_TAX_PERCENT');
   }
 }

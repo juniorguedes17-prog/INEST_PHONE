@@ -124,15 +124,16 @@ export function resolveUsaRetailerTaxTreatment(
   }
 
   const retailer = retailers[0]!;
-  if (input.redirector === 'RED_DELAWARE' || input.redirector === 'SASPY_EXPRESS') {
+  if (input.redirector === 'RED_DELAWARE') {
     return { taxTreatment: 'EXEMPT', retailer, provenance };
   }
 
   const policy = retailerTaxPolicy.find((entry) => entry.retailerKey === retailer.retailerKey);
   return {
-    // For Rei do Importado, a reliably identified retailer outside the
-    // operational whitelist is TAXABLE. Unknown identity remains blocked
-    // above; this never upgrades absence into a fiscal conclusion.
+    // Rei do Importado and Saspy Express share this policy. A reliably
+    // identified retailer outside the operational whitelist is TAXABLE.
+    // Unknown identity remains blocked above; this never upgrades absence
+    // into a fiscal conclusion.
     taxTreatment: policy?.reiTaxTreatment ?? 'TAXABLE',
     retailer,
     provenance,

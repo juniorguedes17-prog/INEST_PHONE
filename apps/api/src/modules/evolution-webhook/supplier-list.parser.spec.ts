@@ -5,6 +5,10 @@ import {
   parseSupplierListText,
   type SupplierLineRejection,
 } from './supplier-list.parser';
+import {
+  applySupplierListConditionPolicy,
+  MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+} from './supplier-list-policy';
 
 describe('supplier list parser', () => {
   it.each([
@@ -32,6 +36,85 @@ describe('supplier list parser', () => {
     const [item] = parseSupplierListText('SEMINOVO\niPhone 17 Pro 256GB NEW USED\nPreto R$ 4.500');
 
     expect(item?.condition).toBeNull();
+  });
+
+  it('reconhece um heading compacto CPO como novo produto sem contaminar o anterior', () => {
+    const items = parseSupplierListText(`
+      16 (128G)
+      Rosa $4.300
+      14 CPO (256G)
+      Midnight $3.200
+    `);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        productName: 'iPhone 16 (128G)',
+        normalizedName: 'iphone 16 128g',
+        condition: null,
+        price: 4300,
+      }),
+      expect.objectContaining({
+        productName: 'iPhone 14 (256G)',
+        normalizedName: 'iphone 14 256g',
+        condition: 'CPO',
+        price: 3200,
+      }),
+    ]);
+    expect(items[1]?.productName).not.toContain('CPO');
+  });
+
+  it('mantem CPO fora da descricao normalizada de headings compactos', () => {
+    const items = parseSupplierListText(`
+      13 Pro CPO (128G)
+      Grafite $2.900
+      Silver $3.000
+    `);
+
+    expect(items).toHaveLength(2);
+    expect(items.every((item) => item.condition === 'CPO')).toBe(true);
+    expect(items.every((item) => item.productName === 'iPhone 13 Pro (128G)')).toBe(true);
+    expect(items.every((item) => item.normalizedName === 'iphone 13 pro 128g')).toBe(true);
+  });
+
+  it('reconhece AS IS como novo produto SEMINOVO sem herdar CPO', () => {
+    const items = parseSupplierListText(`
+      13 Pro CPO (128G)
+      Grafite $2.900
+      15 As is (nunca active)(bateria 100%)
+      128GB Black $2.650
+    `);
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        productName: 'iPhone 13 Pro (128G)',
+        condition: 'CPO',
+        price: 2900,
+      }),
+      expect.objectContaining({
+        productName: 'iPhone 15',
+        normalizedName: 'iphone 15',
+        condition: 'SEMINOVO',
+        color: 'black',
+        price: 2650,
+      }),
+    ]);
+  });
+
+  it('mantem condicoes explicitas acima do fallback NOVO de supplier policy', () => {
+    const items = parseSupplierListText(`
+      17 Pro 256GB
+      Preto $4.500
+      14 CPO (256G)
+      Midnight $3.200
+      15 As is
+      128GB Black $2.650
+    `);
+    const policyItems = applySupplierListConditionPolicy(
+      items,
+      MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+    );
+
+    expect(policyItems.map((item) => item.condition)).toEqual(['NOVO', 'CPO', 'SEMINOVO']);
   });
 
   it('processa uma lista textual com produto, cor e preco em linhas separadas', () => {
@@ -1003,7 +1086,7 @@ describe('supplier list parser', () => {
       Capa R$ 15
     `);
 
-    const iphone17 = items.filter((item) => item.normalizedName.includes('iphone 17 256gb as is'));
+    const iphone17 = items.filter((item) => item.normalizedName.includes('iphone 17 256gb'));
     expect(iphone17).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ color: 'azul', price: 4489, condition: 'SEMINOVO' }),
@@ -1013,6 +1096,7 @@ describe('supplier list parser', () => {
       ]),
     );
     expect(iphone17).toHaveLength(4);
+    expect(iphone17.every((item) => !item.normalizedName.includes('as is'))).toBe(true);
     expect(items).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ normalizedName: 'iphone 16 128gb', color: 'preto', price: 3350 }),

@@ -369,7 +369,25 @@ describe('EvolutionWebhookService', () => {
     const parsed = parseSupplierListText(mohamadNasserList20260926);
     expect(parsed).toHaveLength(123);
     expect(isValidParsedSupplierListSnapshot(parsed)).toBe(true);
-    expect(parsed.filter((item) => item.condition === null)).toHaveLength(31);
+    expect(parsed.filter((item) => item.condition === null)).toHaveLength(30);
+    expect(parsed.filter((item) => item.condition === 'CPO')).toHaveLength(4);
+    expect(parsed.filter((item) => item.condition === 'SEMINOVO')).toHaveLength(1);
+    expect(parsed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          productName: 'iPhone 14 (256G)',
+          normalizedName: 'iphone 14 256g',
+          condition: 'CPO',
+          price: 3200,
+        }),
+        expect.objectContaining({
+          productName: 'iPhone 15 (128GB)',
+          normalizedName: 'iphone 15 128gb',
+          condition: 'SEMINOVO',
+          price: 2650,
+        }),
+      ]),
+    );
 
     const policyItems = applySupplierListConditionPolicy(
       parsed,
@@ -377,6 +395,9 @@ describe('EvolutionWebhookService', () => {
     );
     expect(policyItems).toHaveLength(123);
     expect(policyItems.filter((item) => item.condition === null)).toHaveLength(0);
+    expect(policyItems.filter((item) => item.condition === 'NOVO')).toHaveLength(118);
+    expect(policyItems.filter((item) => item.condition === 'CPO')).toHaveLength(4);
+    expect(policyItems.filter((item) => item.condition === 'SEMINOVO')).toHaveLength(1);
     expect(resolveSupplierSnapshotScope(mohamadNasserList20260926, parsed)).toMatchObject({
       status: 'UNKNOWN',
       reason: 'insufficient_document_evidence',
