@@ -186,6 +186,121 @@ const brockTechPromotionP3 = `🔥 PROMOÇÕES DO DIA 🔥
 🟦 AZUL/GLACIER
 🔥 *R$ 9.700.00*`;
 
+const pointCellFullList20260929 = `🗓️ Atualizado 29/09/2026
+📍 PointCellSP – Lista de Preços
+🔴 ATENÇÃO:
+*Compras via Correios* (SEDEX/PAC) são por conta e risco do cliente.
+*Nota Fiscal:* Acrescenta 5% sobre o valor do produto.
+*Garantia:* Todos os produtos Apple lacrados, com 1 ano de garantia direto pela Apple.
+⚠️ *Problemas são tratados diretamente com a Apple, ok?*
+⸻⸻
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+••••••🎧 *Fones & Acessórios*••••••
+
+📲iPad 11 128gb.  Wi-Fi.
+✅silver 2740 R$
+✅azul  2680 R$
+✅pink  2680 R$
+
+⌚️  Apple Watch S11 42 mm
+✅ jet black   R$ 1980
+✅rose gold   R$ 1970
+✅space grey  R$ 1990
+
+⌚️apple Watch s11 46 mm
+✅jet black. 2190 R$
+✅space gray 2170R$
+----------
+⌚️✅ garmin   forerunner  165
+✅  preto    R$  1250
+
+--------
+✅🎧air pods  3   R$ 540
+
+✅🎧airpods 4  R$ 700
+
+✅air pods pro 3.  1280 R$
+
+✅🎧airpods 4 ANC  R$  1000
+
+🎧✅AIRPODS MAX 2
+✅ AZUL R$ 2800
+
+✅AIRTAG 1 PACK   R$  150
+
+••••••••••📲IPHONES 📲••••••••••
+
+📲iphone 18 pro max 512 Gb.   13000R$
+✅preto
+
+📲iphone 18 pro max 256 Gb.  🇺🇸
+✅preto 9300 R$
+✅silver 9300 R$
+✅azul   9400  R$
+✅bordô 11000   R$
+
+📲iphone 17 pro max 1 tb.   9600R$
+✅Laranja
+
+📲iphone 17 pro Max 2tb.  11200R$
+✅laranja
+
+📲iPhone 17 pro Max 512 GB.
+✅laranja  R$8700
+
+📲iphone 17 pro max  256 Gb. 🇺🇸
+✅laranja 6850 R$
+✅silver  7100  R$
+✅azul 6850   R$
+
+📲iphone 17 pro 256 GB
+✅laranja  R$ 6600
+✅silver   R$ 6800
+✅azul R$ 6750
+
+📲iphone 17 pro 1tb     9000R$
+✅silver
+
+📲iphone 17  256 GB
+✅preto  R$ 5200
+✅branco R$ 5250
+✅lilas    R$  5250
+✅azul  R$  5180
+
+📲iphone 16 128 GB
+✅verde  R$ 4100
+✅rosa  R$  4250
+✅azul  R$   4150
+✅preto R$ 4200
+✅branco R$  4250
+
+📲iphone 15  128 GB
+✅preto   R$ 3500
+
+~~~~~~~~~~~~~~~~~~~~~~~~
+•••🔌 *Carregadores & Cabos*🔌•••
+
+🔌•Tomada Tipo-C Original 100R$
+   Cabo Tipo-C para Tipo-C – 50R$
+   Cabo Tipo-C Padrão – 50R$
+    Cabo UsbC.   Padrão - 50 R$
+⸻
+📌 *Hoje só temos o que está na lista!*
+A
+💬 Obrigado e boas vendas!j`;
+
+const pointCellLastPieces20260929 = `ultimas pecas do dia bora
+
+IPHONE 18 PROMAX 256GB
+PRETO AMERICANO R$ 9050
+
+IPHONE 18 PROMAX 256GB
+AZUL AMERICANO R$ 9100
+
+IPHONE 18 PROMAX 256GB SILVER AMERICANO R$ 9100`;
+
+const POINT_CELL_SUPPLIER_CONTACT_ID = '4a9f56fc-5b6c-2e74-1af7-05c310292acf';
+
 function catalogProduct(
   id: string,
   productDescription: string,
@@ -305,10 +420,137 @@ describe('EvolutionWebhookService', () => {
     ['REPOSIÇÃO CHEGOU\nProduto B 256GB\nAzul R$ 5.500', 'PARTIAL_UPDATE'],
     ['CHEGOU LACRADO\nProduto B 256GB\nAzul R$ 5.500', 'PARTIAL_UPDATE'],
     ['OFERTA\nProduto B 256GB\nAzul R$ 5.500', 'PARTIAL_UPDATE'],
+    ['Últimas peças do dia\nProduto B 256GB\nAzul R$ 5.500', 'PARTIAL_UPDATE'],
     ['Produto B 256GB\nAzul R$ 5.500', 'INCONCLUSIVE'],
     ['Produto A 128GB\nAzul R$ 5.500\nProduto B 256GB\nPreto R$ 6.000', 'INCONCLUSIVE'],
   ])('classifica mensagens de atualização (%s)', (text, expected) => {
     expect(classifySupplierListUpdateMode(text)).toBe(expected);
+  });
+
+  it('persiste a lista completa real da Point Cell como FULL_SNAPSHOT legítimo', async () => {
+    const parsed = parseSupplierListText(pointCellFullList20260929);
+    expect(parsed).toHaveLength(44);
+    expect(isValidParsedSupplierListSnapshot(parsed)).toBe(true);
+
+    const { service, transaction } = createService([], undefined, POINT_CELL_SUPPLIER_CONTACT_ID);
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'point-cell-full-20260929-1131',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: pointCellFullList20260929 },
+      },
+    });
+
+    expect(result).toEqual({
+      accepted: true,
+      supplierId: POINT_CELL_SUPPLIER_CONTACT_ID,
+      items: 44,
+    });
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ snapshotScope: 'catalog:primary' }),
+        update: expect.objectContaining({ items: expect.objectContaining({ deleteMany: {} }) }),
+      }),
+    );
+  });
+
+  it('mescla as últimas peças não segmentadas no catalog:primary sem substituir a lista existente', async () => {
+    const incoming = parseSupplierListText(pointCellLastPieces20260929);
+    expect(incoming).toHaveLength(3);
+    expect(incoming.every((item) => item.condition === null)).toBe(true);
+
+    const [black, blue] = incoming;
+    const preserved = currentItem('preserved-item', 'iPhone 17 256GB', 5200, {
+      category: 'iPhone',
+      model: 'iPhone 17 256GB',
+      capacity: '256GB',
+      color: 'preto',
+      condition: null,
+    });
+    const currentList = {
+      id: 'point-cell-primary-list',
+      items: [
+        { ...black!, id: 'point-black', productId: null, price: 9300 },
+        { ...blue!, id: 'point-blue', productId: null, price: 9400 },
+        preserved,
+      ],
+    };
+    const { service, transaction } = createService([], undefined, POINT_CELL_SUPPLIER_CONTACT_ID);
+    transaction.supplierCurrentList.findUnique.mockResolvedValue(currentList);
+
+    const result = await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'point-cell-last-pieces-20260929-1623',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: pointCellLastPieces20260929 },
+      },
+    });
+
+    expect(result).toEqual({
+      accepted: true,
+      supplierId: POINT_CELL_SUPPLIER_CONTACT_ID,
+      items: 3,
+    });
+    expect(transaction.supplierCurrentList.findUnique).toHaveBeenCalledWith({
+      where: {
+        supplierContactId_snapshotScope: {
+          supplierContactId: POINT_CELL_SUPPLIER_CONTACT_ID,
+          snapshotScope: 'catalog:primary',
+        },
+      },
+      include: { items: true },
+    });
+    expect(transaction.supplierCurrentList.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'point-cell-primary-list' } }),
+    );
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'point-black' },
+        data: expect.objectContaining({ price: 9050 }),
+      }),
+    );
+    expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'point-blue' },
+        data: expect.objectContaining({ price: 9100 }),
+      }),
+    );
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+    expect(preserved).toEqual(expect.objectContaining({ price: 5200 }));
+  });
+
+  it('não cria nem substitui catálogo quando últimas peças não segmentadas não têm lista primary prévia', async () => {
+    const { service, transaction } = createService([], undefined, POINT_CELL_SUPPLIER_CONTACT_ID);
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'point-cell-last-pieces-without-primary-20260929-1623',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: pointCellLastPieces20260929 },
+      },
+    });
+
+    expect(transaction.evolutionWebhookReceipt.create).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
   });
 
   it.each(lotDocumentFixtures)(
@@ -365,7 +607,7 @@ describe('EvolutionWebhookService', () => {
     },
   );
 
-  it('persiste a lista real de 26/09/2026 de Mohamad Nasser pela policy do contato', async () => {
+  it('contem a lista mista governada de Mohamad no used sem substituir primary', async () => {
     const parsed = parseSupplierListText(mohamadNasserList20260926);
     expect(parsed).toHaveLength(123);
     expect(isValidParsedSupplierListSnapshot(parsed)).toBe(true);
@@ -445,6 +687,14 @@ describe('EvolutionWebhookService', () => {
       undefined,
       MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
     );
+    const primaryItems = Array.from({ length: 1000 }, (_, index) =>
+      currentItem(`primary-${index}`, `Primary ${index}`, 1000 + index),
+    );
+    transaction.supplierCurrentList.findUnique.mockImplementation(async ({ where }) => {
+      const scope = where.supplierContactId_snapshotScope.snapshotScope;
+      if (scope === 'catalog:primary') return { id: 'mohamad-primary-list', items: primaryItems };
+      return null;
+    });
     const result = await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
@@ -462,24 +712,17 @@ describe('EvolutionWebhookService', () => {
       supplierId: MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
       items: 123,
     });
-    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(1);
-    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({
-          snapshotScope: 'catalog:primary',
-          items: {
-            create: expect.arrayContaining([
-              expect.objectContaining({ condition: 'NOVO' }),
-              expect.objectContaining({ condition: 'CPO' }),
-            ]),
-          },
-        }),
-      }),
-    );
-    const primaryWrite = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0];
-    expect(primaryWrite.create.items.create).toHaveLength(122);
-    expect(primaryWrite.create.items.create.filter((item: { condition: string }) => item.condition === 'NOVO')).toHaveLength(118);
-    expect(primaryWrite.create.items.create.filter((item: { condition: string }) => item.condition === 'CPO')).toHaveLength(4);
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.findUnique).toHaveBeenCalledWith({
+      where: {
+        supplierContactId_snapshotScope: {
+          supplierContactId: MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+          snapshotScope: 'catalog:used',
+        },
+      },
+      include: { items: true },
+    });
+    expect(primaryItems).toHaveLength(1000);
     expect(transaction.supplierCurrentList.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -491,7 +734,7 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
   });
 
-  it('mescla somente o seminovo explícito da lista Mohamad e preserva os demais itens used', async () => {
+  it('preserva o primary existente de 1.000 itens e mescla somente o seminovo explícito no used', async () => {
     const policyItems = applySupplierListConditionPolicy(
       parseSupplierListText(mohamadNasserList20260926),
       MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
@@ -504,7 +747,10 @@ describe('EvolutionWebhookService', () => {
       undefined,
       MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
     );
-    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+    const primaryItems = Array.from({ length: 1000 }, (_, index) =>
+      currentItem(`primary-${index}`, `Primary ${index}`, 1000 + index),
+    );
+    const usedList = {
       id: 'mohamad-used-list',
       items: [
         { ...incomingUsed!, id: 'used-iphone-15', productId: null, price: 2700 },
@@ -513,6 +759,11 @@ describe('EvolutionWebhookService', () => {
           color: 'azul',
         }),
       ],
+    };
+    transaction.supplierCurrentList.findUnique.mockImplementation(async ({ where }) => {
+      const scope = where.supplierContactId_snapshotScope.snapshotScope;
+      if (scope === 'catalog:used') return usedList;
+      return { id: 'mohamad-primary-list', items: primaryItems };
     });
 
     await service.receive(webhookSecret, {
@@ -527,7 +778,17 @@ describe('EvolutionWebhookService', () => {
       },
     });
 
-    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(1);
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.findUnique).not.toHaveBeenCalledWith({
+      where: {
+        supplierContactId_snapshotScope: {
+          supplierContactId: MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
+          snapshotScope: 'catalog:primary',
+        },
+      },
+      include: { items: true },
+    });
+    expect(primaryItems).toHaveLength(1000);
     expect(transaction.supplierCurrentList.create).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentListItem.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -539,17 +800,13 @@ describe('EvolutionWebhookService', () => {
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
   });
 
-  it('reverte FULL primary e merge used isolado quando a segunda operacao falha', async () => {
+  it('reverte o merge used isolado quando a operacao falha', async () => {
     const { service, prisma, transaction } = createService(
       [],
       undefined,
       MOHAMAD_NASSER_SUPPLIER_CONTACT_ID,
     );
-    const state = { primaryWritten: false, usedCreated: false };
-    transaction.supplierCurrentList.upsert.mockImplementation(async () => {
-      state.primaryWritten = true;
-      return {};
-    });
+    const state = { usedCreated: false };
     transaction.supplierCurrentList.findUnique.mockResolvedValue({ id: 'used-list', items: [] });
     transaction.supplierCurrentListItem.create.mockImplementation(async () => {
       state.usedCreated = true;
@@ -580,12 +837,12 @@ describe('EvolutionWebhookService', () => {
     ).rejects.toThrow('isolated used merge failed');
 
     expect(prisma.$transaction).toHaveBeenCalledOnce();
-    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledOnce();
-    expect(state).toEqual({ primaryWritten: false, usedCreated: false });
+    expect(state).toEqual({ usedCreated: false });
   });
 
-  it('mantem o receipt Mohamad idempotente para o plano composto', async () => {
+  it('mantem o receipt Mohamad idempotente para o merge used isolado', async () => {
     const { service, transaction } = createService(
       [],
       undefined,
@@ -610,7 +867,7 @@ describe('EvolutionWebhookService', () => {
       accepted: true,
       duplicate: true,
     });
-    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentList.create).toHaveBeenCalledOnce();
   });
 

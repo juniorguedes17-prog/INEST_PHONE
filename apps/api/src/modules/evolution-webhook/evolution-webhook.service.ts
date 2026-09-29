@@ -29,6 +29,7 @@ export type SupplierListUpdateMode = 'FULL_SNAPSHOT' | 'PARTIAL_UPDATE' | 'INCON
 type SupplierListUpdateClassification = {
   mode: SupplierListUpdateMode;
   hasPartialMarker: boolean;
+  hasUnsegmentedPartialMarker: boolean;
   hasFullMarker: boolean;
 };
 
@@ -39,16 +40,17 @@ type SnapshotWriteTarget = {
   scopeKey: 'catalog:used' | 'catalog:primary' | 'catalog:general';
   itemGroup: SnapshotWriteItemGroup;
   operation: SnapshotWriteOperation;
+  createWhenMissing?: boolean;
 };
 
 type SnapshotWritePlan =
   | { authority: 'NONE'; targets: [] }
   | { authority: 'FULL_SNAPSHOT'; targets: SnapshotWriteTarget[] }
-  | { authority: 'PARTIAL_UPDATE'; targets: [SnapshotWriteTarget] }
-  | { authority: 'COMPOSITE'; targets: [SnapshotWriteTarget, SnapshotWriteTarget] };
+  | { authority: 'PARTIAL_UPDATE'; targets: [SnapshotWriteTarget] };
 
 const PARTIAL_UPDATE_MARKER =
   /\b(?:promo(?:c|ç)(?:[aã]o|ões)|ofertas?|baix(?:ou|amos)|pre[cç]o\s+promocional|s[oó]\s+hoje|acabou\s+de\s+chegar|reposi(?:c|ç)(?:[aã]o|ões)|chegou\s+lacrad[oa]s?|remessas?)\b/i;
+const UNSEGMENTED_PARTIAL_UPDATE_MARKER = /[uú]ltimas?\s+pe[cç]as?/i;
 const FULL_SNAPSHOT_MARKER =
   /\b(?:lista(?:\s+(?:completa|geral|atual(?:izada)?|unificada|di[aá]ria|de\s+pre[cç]os?))?|tabela\s+(?:completa|geral)|todos?\s+os\s+produtos|apple\s+lacrad[oa]s?|(?:aparelhos?|produtos?)\s+(?:dispon[ií]veis?|lacrad[oa]s?|novos?\s+lacrad[oa]s?|semi[-\s]?novos?)|(?:iphone|iphones|xiaomis?)\s+(?:lacrad[oa]s?|semi[-\s]?novos?|swap\s+americanos?))\b/i;
 const GENERAL_REPLACED_SEGMENTED_SCOPES = ['catalog:primary', 'catalog:used'] as const;
@@ -64,7 +66,8 @@ function classifySupplierListUpdate(
   supplierContactId?: string,
   hasValidCommercialSnapshot = false,
 ): SupplierListUpdateClassification {
-  const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text);
+  const hasUnsegmentedPartialMarker = UNSEGMENTED_PARTIAL_UPDATE_MARKER.test(text);
+  const hasPartialMarker = PARTIAL_UPDATE_MARKER.test(text) || hasUnsegmentedPartialMarker;
   const supplierPolicy = supplierContactId ? getSupplierListPolicy(supplierContactId) : undefined;
   const hasFullMarker =
     FULL_SNAPSHOT_MARKER.test(text) ||
@@ -74,11 +77,15 @@ function classifySupplierListUpdate(
       !hasPartialMarker);
 
   if (hasPartialMarker && hasFullMarker) {
-    return { mode: 'INCONCLUSIVE', hasPartialMarker, hasFullMarker };
+    return { mode: 'INCONCLUSIVE', hasPartialMarker, hasUnsegmentedPartialMarker, hasFullMarker };
   }
-  if (hasPartialMarker) return { mode: 'PARTIAL_UPDATE', hasPartialMarker, hasFullMarker };
-  if (hasFullMarker) return { mode: 'FULL_SNAPSHOT', hasPartialMarker, hasFullMarker };
-  return { mode: 'INCONCLUSIVE', hasPartialMarker, hasFullMarker };
+  if (hasPartialMarker) {
+    return { mode: 'PARTIAL_UPDATE', hasPartialMarker, hasUnsegmentedPartialMarker, hasFullMarker };
+  }
+  if (hasFullMarker) {
+    return { mode: 'FULL_SNAPSHOT', hasPartialMarker, hasUnsegmentedPartialMarker, hasFullMarker };
+  }
+  return { mode: 'INCONCLUSIVE', hasPartialMarker, hasUnsegmentedPartialMarker, hasFullMarker };
 }
 
 type SupplierListItemForMerge = {
@@ -358,7 +365,7 @@ export class EvolutionWebhookService {
                 externalMessageId: message.messageId,
                 rawContent: text,
                 receivedAt: message.receivedAt,
-                createWhenMissing: writePlan.authority === 'COMPOSITE',
+                createWhenMissing: target.createWhenMissing ?? false,
               },
             );
             continue;
@@ -909,10 +916,22 @@ function resolveSnapshotWritePlan(
   const hasPrimaryItems = conditions.has('NOVO') || conditions.has('CPO');
   const hasUsedItems = conditions.has('SEMINOVO');
   const hasMixedSegments = hasPrimaryItems && hasUsedItems;
+  const hasOnlyUnsegmentedItems = conditions.size === 1 && conditions.has(null);
   const resolvedScope = resolution.status === 'RESOLVED' ? resolution.scopeKey : undefined;
 
   if (updateClassification.mode === 'PARTIAL_UPDATE') {
-    if (!resolvedScope || hasMixedSegments) return { authority: 'NONE', targets: [] };
+    if (hasMixedSegments) return { authority: 'NONE', targets: [] };
+    if (
+      !resolvedScope &&
+      updateClassification.hasUnsegmentedPartialMarker &&
+      hasOnlyUnsegmentedItems
+    ) {
+      return {
+        authority: 'PARTIAL_UPDATE',
+        targets: [{ scopeKey: 'catalog:primary', itemGroup: 'ALL', operation: 'PARTIAL_UPDATE' }],
+      };
+    }
+    if (!resolvedScope) return { authority: 'NONE', targets: [] };
     return {
       authority: 'PARTIAL_UPDATE',
       targets: [{ scopeKey: resolvedScope, itemGroup: 'ALL', operation: 'PARTIAL_UPDATE' }],
@@ -924,10 +943,14 @@ function resolveSnapshotWritePlan(
     hasPrimaryFullSnapshotWithIsolatedUsedItems(resolution, hasPrimaryItems, hasUsedItems)
   ) {
     return {
-      authority: 'COMPOSITE',
+      authority: 'PARTIAL_UPDATE',
       targets: [
-        { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'FULL_SNAPSHOT' },
-        { scopeKey: 'catalog:used', itemGroup: 'USED', operation: 'PARTIAL_UPDATE' },
+        {
+          scopeKey: 'catalog:used',
+          itemGroup: 'USED',
+          operation: 'PARTIAL_UPDATE',
+          createWhenMissing: true,
+        },
       ],
     };
   }
