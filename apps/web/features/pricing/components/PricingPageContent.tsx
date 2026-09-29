@@ -42,6 +42,10 @@ type ManufacturerItem =
   | { kind: 'brazil'; item: BrazilRadarQuotePricing }
   | { kind: 'temporary-import'; item: TemporaryImportPricing };
 
+type ConditionItem =
+  | { kind: 'brazil'; item: BrazilRadarQuotePricing }
+  | { kind: 'temporary-import'; item: TemporaryImportPricing };
+
 type ProfitCondition = 'NOVO' | 'SEMINOVO' | 'CPO';
 
 const sortOptions = [
@@ -82,7 +86,7 @@ export function PricingPageContent() {
   const [manufacturerItem, setManufacturerItem] = useState<ManufacturerItem | null>(null);
   const [manufacturerName, setManufacturerName] = useState('');
   const [manufacturerError, setManufacturerError] = useState<string | null>(null);
-  const [conditionItem, setConditionItem] = useState<TemporaryImportPricing | null>(null);
+  const [conditionItem, setConditionItem] = useState<ConditionItem | null>(null);
   const [conditionValue, setConditionValue] = useState<ProfitCondition | ''>('');
   const [conditionError, setConditionError] = useState<string | null>(null);
   const categories = useUnique(pricing.items.map((item) => getCanonicalCategory(item)));
@@ -258,7 +262,11 @@ export function PricingPageContent() {
     if (!conditionItem || !conditionValue) return;
     setConditionError(null);
     try {
-      await pricing.confirmTemporaryCondition(conditionItem, conditionValue);
+      if (conditionItem.kind === 'brazil') {
+        await pricing.confirmBrazilCondition(conditionItem.item, conditionValue);
+      } else {
+        await pricing.confirmTemporaryCondition(conditionItem.item, conditionValue);
+      }
       setConditionItem(null);
       setConditionValue('');
     } catch (confirmationError) {
@@ -414,6 +422,11 @@ export function PricingPageContent() {
                       setManufacturerName('');
                       setManufacturerError(null);
                     }}
+                    onConfirmCondition={() => {
+                      setConditionItem({ kind: 'brazil', item });
+                      setConditionValue('');
+                      setConditionError(null);
+                    }}
                   />
                 ))}
                 {pricing.temporaryImportPricing ? (
@@ -436,7 +449,10 @@ export function PricingPageContent() {
                       setManufacturerError(null);
                     }}
                     onConfirmCondition={() => {
-                      setConditionItem(pricing.temporaryImportPricing!);
+                      setConditionItem({
+                        kind: 'temporary-import',
+                        item: pricing.temporaryImportPricing!,
+                      });
                       setConditionValue('');
                       setConditionError(null);
                     }}
@@ -579,6 +595,7 @@ function BrazilRadarQuotePricingCard({
   onGenerateOffer,
   onRegisterProfit,
   onConfirmManufacturer,
+  onConfirmCondition,
 }: {
   item: ReturnType<typeof usePricing>['brazilRadarPricings'][number];
   generating: boolean;
@@ -587,6 +604,7 @@ function BrazilRadarQuotePricingCard({
   onGenerateOffer: () => void;
   onRegisterProfit: () => void;
   onConfirmManufacturer: () => void;
+  onConfirmCondition: () => void;
 }) {
   const presentation = getProductCardPresentation({
     canonicalDescription: item.profit.productDescription,
@@ -686,6 +704,16 @@ function BrazilRadarQuotePricingCard({
             Confirmar fabricante
           </ActionButton>
         ) : null}
+        {item.calculationStatus === 'condition_unresolved' ? (
+          <ActionButton
+            variant="primary"
+            className="mt-1 h-9 w-full px-3 text-xs md:w-auto"
+            disabled={generating}
+            onClick={onConfirmCondition}
+          >
+            Confirmar condicao
+          </ActionButton>
+        ) : null}
       </div>
     </article>
   );
@@ -763,7 +791,7 @@ function ConditionConfirmationModal({
   onClose,
   onSave,
 }: {
-  item: TemporaryImportPricing | null;
+  item: ConditionItem | null;
   value: ProfitCondition | '';
   error: string | null;
   saving: boolean;
@@ -801,7 +829,8 @@ function ConditionConfirmationModal({
         }}
       >
         <p className="text-sm text-inest-muted">
-          Selecione a condicao de <strong>{item.product.name}</strong> somente para esta execucao.
+          Selecione a condicao de <strong>{item.item.product.name}</strong>
+          {item.kind === 'temporary-import' ? ' somente para esta execucao.' : '.'}
         </p>
         <label className="grid gap-2 text-sm font-bold text-inest-text">
           Condicao

@@ -110,6 +110,12 @@ export class ConfirmBrazilRadarManufacturerDto extends BrazilRadarQuotePricingDt
   alias?: string;
 }
 
+export class ConfirmBrazilRadarConditionDto extends BrazilRadarQuotePricingDto {
+  @ApiProperty({ enum: ['NOVO', 'SEMINOVO', 'CPO'] })
+  @IsIn(['NOVO', 'SEMINOVO', 'CPO'])
+  condition!: 'NOVO' | 'SEMINOVO' | 'CPO';
+}
+
 export class ReplaceBrazilRadarWorkSnapshotDto {
   @ApiProperty({ type: [String] })
   @IsArray()

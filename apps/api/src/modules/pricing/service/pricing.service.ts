@@ -3,6 +3,7 @@ import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.inte
 import { SettingsService } from '../../settings/service/settings.service';
 import {
   BrazilRadarQuotePricingDto,
+  ConfirmBrazilRadarConditionDto,
   ConfirmBrazilRadarManufacturerDto,
   ConfirmTemporaryImportConditionDto,
   ConfirmTemporaryImportManufacturerDto,
@@ -1346,6 +1347,38 @@ export class PricingService {
         sourceName: current.product.name,
       },
     });
+    return this.calculateBrazilRadarQuote({ sourceQuoteId: dto.sourceQuoteId });
+  }
+
+  async confirmBrazilRadarCondition(dto: ConfirmBrazilRadarConditionDto) {
+    const current = await this.calculateBrazilRadarQuote({ sourceQuoteId: dto.sourceQuoteId });
+    if (current.calculationStatus !== 'condition_unresolved') {
+      throw new BadRequestException(
+        'A confirmacao de condicao nao e necessaria para esta cotacao.',
+      );
+    }
+
+    const quote = await this.pricingRepository.findBrazilRadarQuote(dto.sourceQuoteId);
+    if (!quote) {
+      throw new NotFoundException('Cotacao do Radar Brasil nao encontrada.');
+    }
+    if (this.resolveBrazilRadarProfitCondition(quote.condition)) {
+      throw new BadRequestException('A condicao da cotacao ja esta preenchida.');
+    }
+
+    const catalogProduct = quote.productId
+      ? await this.pricingRepository.findActiveCatalogProductById(quote.productId)
+      : null;
+    const catalogCondition = catalogProduct
+      ? this.resolveBrazilRadarProfitCondition(catalogProduct.profitCondition)
+      : null;
+    if (catalogCondition && catalogCondition !== dto.condition) {
+      throw new BadRequestException(
+        'A condicao confirmada diverge da condicao do produto mestre associado.',
+      );
+    }
+
+    await this.pricingRepository.updateBrazilRadarQuoteCondition(dto.sourceQuoteId, dto.condition);
     return this.calculateBrazilRadarQuote({ sourceQuoteId: dto.sourceQuoteId });
   }
 

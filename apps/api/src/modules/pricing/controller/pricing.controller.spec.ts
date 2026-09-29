@@ -5,7 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { PricingService } from '../service/pricing.service';
 import { PricingWorkSnapshotService } from '../service/pricing-work-snapshot.service';
-import { ConfirmTemporaryImportConditionDto } from '../dto/pricing.dto';
+import {
+  ConfirmBrazilRadarConditionDto,
+  ConfirmTemporaryImportConditionDto,
+} from '../dto/pricing.dto';
 import { PricingController } from './pricing.controller';
 
 function contextFor(
@@ -40,6 +43,14 @@ describe('PricingController manufacturer confirmation permissions', () => {
     expect(guard.canActivate(contextFor([], handler))).toBe(false);
   });
 
+  it('keeps Brazil Radar condition confirmation behind settings:configure', () => {
+    const guard = new PermissionsGuard(new Reflector());
+    const handler = PricingController.prototype.confirmBrazilRadarCondition;
+
+    expect(guard.canActivate(contextFor(['settings:configure'], handler))).toBe(true);
+    expect(guard.canActivate(contextFor([], handler))).toBe(false);
+  });
+
   it('delegates condition confirmation to the canonical recalculation service', async () => {
     const pricingService = {
       confirmTemporaryImportCondition: vi.fn().mockResolvedValue({ calculationStatus: 'ready' }),
@@ -66,6 +77,27 @@ describe('PricingController manufacturer confirmation permissions', () => {
     expect(pricingService.confirmTemporaryImportCondition).toHaveBeenCalledWith(dto);
   });
 
+  it('delegates Brazil Radar condition confirmation to the canonical recalculation service', async () => {
+    const pricingService = {
+      confirmBrazilRadarCondition: vi
+        .fn()
+        .mockResolvedValue({ calculationStatus: 'missing_profit' }),
+    };
+    const controller = new PricingController(
+      pricingService as unknown as PricingService,
+      {} as PricingWorkSnapshotService,
+    );
+    const dto = {
+      sourceQuoteId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      condition: 'CPO' as const,
+    };
+
+    await expect(controller.confirmBrazilRadarCondition(dto)).resolves.toEqual({
+      calculationStatus: 'missing_profit',
+    });
+    expect(pricingService.confirmBrazilRadarCondition).toHaveBeenCalledWith(dto);
+  });
+
   it.each([undefined, 'USADO'])(
     'rejects an absent or unsupported condition: %s',
     async (condition) => {
@@ -75,6 +107,20 @@ describe('PricingController manufacturer confirmation permissions', () => {
         category: 'Mac Mini',
         priceUsd: 600,
         totalCost: 3418.93,
+        condition,
+      });
+
+      const errors = await validate(dto);
+
+      expect(errors.some((error) => error.property === 'condition')).toBe(true);
+    },
+  );
+
+  it.each([undefined, 'USADO'])(
+    'rejects an unsupported Brazil Radar condition: %s',
+    async (condition) => {
+      const dto = Object.assign(new ConfirmBrazilRadarConditionDto(), {
+        sourceQuoteId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
         condition,
       });
 

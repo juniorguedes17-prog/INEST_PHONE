@@ -11,13 +11,14 @@ type Element = { type: string | ((props: Props) => Element); props: Props };
 const componentDirectory = dirname(fileURLToPath(import.meta.url));
 const source = readFileSync(`${componentDirectory}/PricingPageContent.tsx`, 'utf8');
 const code = ts.transpileModule(
-  `${source}\nexport { TemporaryImportPricingCard as __testCard, ConditionConfirmationModal as __testModal };`,
+  `${source}\nexport { BrazilRadarQuotePricingCard as __testBrazilCard, TemporaryImportPricingCard as __testCard, ConditionConfirmationModal as __testModal };`,
   { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } },
 ).outputText;
 
 function setup() {
   const exports: {
     __testCard?: (props: Props) => Element;
+    __testBrazilCard?: (props: Props) => Element;
     __testModal?: (props: Props) => Element;
   } = {};
   const jsx = (type: Element['type'], props: Props) => ({ type, props });
@@ -121,11 +122,44 @@ test('offers a specific condition action only for condition_unresolved', () => {
   );
 });
 
+test('offers Brazil Radar condition confirmation while keeping the offer blocked', () => {
+  const card = setup().__testBrazilCard;
+  assert.ok(card);
+  const onConfirmCondition = mock.fn();
+  const tree = card({
+    item: {
+      ...pendingItem,
+      origin: 'BR',
+      sourceQuoteId: 'quote-1',
+      pricingEligibility: { status: 'ELIGIBLE' },
+      costProduct: 5250,
+    },
+    generating: false,
+    selected: false,
+    onSelect: mock.fn(),
+    onGenerateOffer: mock.fn(),
+    onRegisterProfit: mock.fn(),
+    onConfirmManufacturer: mock.fn(),
+    onConfirmCondition,
+  });
+  const action = nodes(tree, 'ActionButton').find(
+    (node) => node.props.children === 'Confirmar condicao',
+  );
+
+  assert.ok(action);
+  (action.props.onClick as () => void)();
+  assert.equal(onConfirmCondition.mock.callCount(), 1);
+  assert.equal(
+    nodes(tree, 'ActionButton').some((node) => node.props.children === 'Gerar Oferta'),
+    false,
+  );
+});
+
 test('condition modal exposes only the existing enum and starts without a default', () => {
   const modal = setup().__testModal;
   assert.ok(modal);
   const tree = modal({
-    item: pendingItem,
+    item: { kind: 'temporary-import', item: pendingItem },
     value: '',
     error: null,
     saving: false,

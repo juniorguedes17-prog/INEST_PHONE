@@ -81,6 +81,7 @@ export interface PricingPrismaClient {
   };
   supplierCurrentListItem: {
     findUnique(args: unknown): Promise<PricingBrazilRadarQuoteRecord | null>;
+    update(args: unknown): Promise<PricingBrazilRadarQuoteRecord>;
   };
   product: {
     findFirst(args: unknown): Promise<PricingCatalogProductRecord | null>;

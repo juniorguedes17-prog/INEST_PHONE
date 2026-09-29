@@ -18,6 +18,7 @@ import { PermissionsGuard } from '../../auth/guards/permissions.guard';
 import { AuthenticatedUser } from '../../auth/interfaces/authenticated-user.interface';
 import {
   BrazilRadarQuotePricingDto,
+  ConfirmBrazilRadarConditionDto,
   ConfirmBrazilRadarManufacturerDto,
   ConfirmTemporaryImportConditionDto,
   ConfirmTemporaryImportManufacturerDto,
@@ -115,6 +116,14 @@ export class PricingController {
   @ApiOperation({ summary: 'Prepara uma cotacao do Radar Brasil para Precificacao.' })
   calculateBrazilRadarQuote(@Body() dto: BrazilRadarQuotePricingDto) {
     return this.pricingService.calculateBrazilRadarQuote(dto);
+  }
+
+  @Post('radar-quote/confirm-condition')
+  @UseGuards(PermissionsGuard)
+  @Permissions('settings:configure')
+  @ApiOperation({ summary: 'Confirma a condicao da cotacao BR e recalcula.' })
+  confirmBrazilRadarCondition(@Body() dto: ConfirmBrazilRadarConditionDto) {
+    return this.pricingService.confirmBrazilRadarCondition(dto);
   }
 
   @Post('radar-quote/confirm-manufacturer')

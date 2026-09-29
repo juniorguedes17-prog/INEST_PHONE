@@ -480,8 +480,7 @@ describe('PricingService native product profit integration', () => {
 
   it('keeps an Apple family match pending when the generation is not cataloged', async () => {
     const service = createTemporaryPyPricingService([]);
-    const title =
-      'Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 24GB memory, 512GB storage';
+    const title = 'Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 24GB memory, 512GB storage';
 
     const result = await service.calculateTemporaryImport(
       temporaryPyPricingDto({
@@ -1426,6 +1425,143 @@ describe('PricingService native product profit integration', () => {
       });
     },
   );
+
+  it.each(['NOVO', 'SEMINOVO', 'CPO'] as const)(
+    'persists a confirmed Brazil Radar %s condition and recalculates the same quote',
+    async (condition) => {
+      let persistedCondition: string | null = null;
+      const repository = {
+        findBrazilRadarQuote: vi
+          .fn()
+          .mockImplementation(async () =>
+            brazilRadarQuote({ productId: CATALOG_PRODUCT_ID, condition: persistedCondition }),
+          ),
+        findActiveCatalogProductById: vi.fn().mockResolvedValue({
+          id: CATALOG_PRODUCT_ID,
+          profitProductId: 901,
+          productDescription: 'iPhone 17 Pro Max 256GB',
+          productType: 'IPHONE_SEALED',
+          isAppleOriginal: true,
+          profitCondition: condition,
+        }),
+        listPricingConfigurations: vi.fn().mockResolvedValue([]),
+        updateBrazilRadarQuoteCondition: vi
+          .fn()
+          .mockImplementation(async (_sourceQuoteId, value) => {
+            persistedCondition = value;
+            return brazilRadarQuote({ productId: CATALOG_PRODUCT_ID, condition: value });
+          }),
+      };
+      const settingsService = { getSettings: vi.fn().mockResolvedValue(pricingSettings()) };
+      const profitProvider = {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: '901',
+              condition,
+              productDescription: 'iPhone 17 Pro Max 256GB',
+              normalizedDescription: 'iphone 17 pro max 256gb',
+              netProfit: 800,
+            },
+          ],
+          fetchedAt: '2026-08-21T00:00:00.000Z',
+        }),
+      };
+      const service = new PricingService(
+        repository as unknown as PricingRepository,
+        settingsService as unknown as SettingsService,
+        profitProvider as unknown as ProductProfitProvider,
+      );
+
+      await expect(
+        service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID }),
+      ).resolves.toMatchObject({ calculationStatus: 'condition_unresolved', costProduct: 5000 });
+
+      await expect(
+        service.confirmBrazilRadarCondition({ sourceQuoteId: BRAZIL_QUOTE_ID, condition }),
+      ).resolves.toMatchObject({
+        calculationStatus: 'ready',
+        product: { condition },
+        costProduct: 5000,
+        desiredNetProfit: 800,
+        offerDraft: expect.any(Object),
+      });
+      expect(repository.updateBrazilRadarQuoteCondition).toHaveBeenCalledWith(
+        BRAZIL_QUOTE_ID,
+        condition,
+      );
+    },
+  );
+
+  it('rejects a confirmed Brazil Radar condition that conflicts with its master Product', async () => {
+    const repository = {
+      findBrazilRadarQuote: vi
+        .fn()
+        .mockResolvedValue(brazilRadarQuote({ productId: CATALOG_PRODUCT_ID, condition: null })),
+      findActiveCatalogProductById: vi.fn().mockResolvedValue({
+        id: CATALOG_PRODUCT_ID,
+        profitProductId: 901,
+        productDescription: 'iPhone 17 Pro Max 256GB',
+        productType: 'IPHONE_SEALED',
+        isAppleOriginal: true,
+        profitCondition: 'NOVO',
+      }),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+      updateBrazilRadarQuoteCondition: vi.fn(),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '' }),
+      } as unknown as ProductProfitProvider,
+    );
+
+    await expect(
+      service.confirmBrazilRadarCondition({ sourceQuoteId: BRAZIL_QUOTE_ID, condition: 'CPO' }),
+    ).rejects.toThrow('diverge da condicao do produto mestre');
+    expect(repository.updateBrazilRadarQuoteCondition).not.toHaveBeenCalled();
+  });
+
+  it('returns missing_profit after a valid Brazil Radar condition confirmation without a profit record', async () => {
+    let persistedCondition: string | null = null;
+    const repository = {
+      findBrazilRadarQuote: vi
+        .fn()
+        .mockImplementation(async () =>
+          brazilRadarQuote({ productId: CATALOG_PRODUCT_ID, condition: persistedCondition }),
+        ),
+      findActiveCatalogProductById: vi.fn().mockResolvedValue({
+        id: CATALOG_PRODUCT_ID,
+        profitProductId: 901,
+        productDescription: 'iPhone 17 Pro Max 256GB',
+        productType: 'IPHONE_SEALED',
+        isAppleOriginal: true,
+        profitCondition: 'NOVO',
+      }),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+      updateBrazilRadarQuoteCondition: vi.fn().mockImplementation(async (_sourceQuoteId, value) => {
+        persistedCondition = value;
+        return brazilRadarQuote({ productId: CATALOG_PRODUCT_ID, condition: value });
+      }),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi.fn().mockResolvedValue({ records: [], fetchedAt: '' }),
+      } as unknown as ProductProfitProvider,
+    );
+
+    await expect(
+      service.confirmBrazilRadarCondition({ sourceQuoteId: BRAZIL_QUOTE_ID, condition: 'NOVO' }),
+    ).resolves.toMatchObject({
+      calculationStatus: 'missing_profit',
+      desiredNetProfit: null,
+      salePrice: null,
+      offerDraft: null,
+    });
+  });
 
   it.each(['soft-deleted', 'inactive', 'non-active status', 'missing'] as const)(
     'fails closed without profit registration or fallback when a linked Product is %s',

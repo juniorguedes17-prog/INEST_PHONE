@@ -46,6 +46,18 @@ export class PricingRepository {
     });
   }
 
+  updateBrazilRadarQuoteCondition(sourceQuoteId: string, condition: ProductCondition) {
+    return this.prisma.supplierCurrentListItem.update({
+      where: { id: sourceQuoteId },
+      data: { condition },
+      include: {
+        currentList: {
+          include: { supplierContact: true },
+        },
+      },
+    });
+  }
+
   findActiveCatalogProduct(condition: string, normalizedDescription: string) {
     return this.prisma.product.findFirst({
       where: {

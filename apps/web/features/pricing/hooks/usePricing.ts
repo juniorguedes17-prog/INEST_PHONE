@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   calculateBrazilRadarQuotePricing,
+  confirmBrazilRadarCondition,
   confirmBrazilRadarManufacturer,
   confirmTemporaryImportCondition,
   confirmTemporaryImportManufacturer,
@@ -397,6 +398,29 @@ export function usePricing({
     }
   }
 
+  async function confirmBrazilCondition(
+    item: BrazilRadarQuotePricing,
+    condition: 'NOVO' | 'SEMINOVO' | 'CPO',
+  ) {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const recalculated = await confirmBrazilRadarCondition({
+        sourceQuoteId: item.sourceQuoteId,
+        condition,
+      });
+      setBrazilRadarPricings((current) =>
+        current.map((currentItem) =>
+          currentItem.sourceQuoteId === recalculated.sourceQuoteId ? recalculated : currentItem,
+        ),
+      );
+      setSuccess('Condicao confirmada e cotacao recalculada.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function confirmTemporaryManufacturer(item: TemporaryImportPricing, canonicalName: string) {
     setSaving(true);
     setError(null);
@@ -505,6 +529,7 @@ export function usePricing({
     prepareOfferBatch,
     sendOfferDraftBatch,
     registerBrazilRadarProfit,
+    confirmBrazilCondition,
     confirmBrazilManufacturer,
     confirmTemporaryManufacturer,
     confirmTemporaryCondition,

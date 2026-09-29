@@ -84,6 +84,10 @@ export interface ConfirmBrazilRadarManufacturerRequest extends BrazilRadarQuoteP
   alias?: string;
 }
 
+export interface ConfirmBrazilRadarConditionRequest extends BrazilRadarQuotePricingRequest {
+  condition: 'NOVO' | 'SEMINOVO' | 'CPO';
+}
+
 export interface BrazilRadarQuotePricing {
   temporary: true;
   origin: 'BR';
