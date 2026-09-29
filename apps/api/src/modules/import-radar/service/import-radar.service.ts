@@ -9,11 +9,8 @@ import {
 } from '../dto/import-radar.dto';
 import { ImportProvider } from '../interfaces/import-provider.interface';
 import { ImportRadarRepository } from '../repository/import-radar.repository';
-import {
-  identifyRedirectRule,
-  roundMoneyToCents,
-  toNumber,
-} from '../validators/import-radar.validators';
+import { calculateImportOperationalCosts } from '../import-operational-cost.composition';
+import { roundMoneyToCents } from '../validators/import-radar.validators';
 import { ComprasParaguaiProvider } from '../providers/compras-paraguai.provider';
 import { MockImportProvider } from '../providers/mock-import.provider';
 import { processParsedSupplierItemsShadow } from '../../evolution-webhook/product-identity-shadow';
@@ -30,10 +27,7 @@ import {
   type PricingEligibilityDecision,
 } from '../financial-classification';
 import { formatSourceDisplayName } from '../source-display-name';
-import {
-  deriveProfitLookupIdentity,
-  resolveCatalogModelLookupKey,
-} from '@inest/product-identity';
+import { deriveProfitLookupIdentity, resolveCatalogModelLookupKey } from '@inest/product-identity';
 import {
   isReservedAppleManufacturerAlias,
   normalizeManufacturerAlias,
@@ -107,17 +101,12 @@ export class ImportRadarService {
     const importSettings = settings.importation;
     const convertedPriceRaw = dto.priceUsd * importSettings.dollarQuote;
     const convertedPrice = roundMoneyToCents(convertedPriceRaw);
-    const redirectRule = identifyRedirectRule(dto, importSettings);
-    const cdeExit = roundMoneyToCents(toNumber(importSettings.cdeExitPerBox));
-    const redirectCost = roundMoneyToCents(toNumber(redirectRule?.redirectCost));
-    const brazilDispatch = roundMoneyToCents(toNumber(importSettings.brazilDispatchPerBox));
-    const invoiceTax = roundMoneyToCents(
-      convertedPriceRaw * (toNumber(importSettings.invoiceTaxPercent) / 100),
+    const operationalCosts = calculateImportOperationalCosts(
+      dto,
+      convertedPriceRaw,
+      importSettings,
     );
-    const correiosLabel = roundMoneyToCents(toNumber(importSettings.correiosLabel));
-    const total = roundMoneyToCents(
-      convertedPrice + cdeExit + redirectCost + brazilDispatch + invoiceTax + correiosLabel,
-    );
+    const total = roundMoneyToCents(convertedPrice + operationalCosts.operationalSubtotal);
 
     const sourceCondition = normalizeProductCondition(semanticDto.condition ?? '');
     const catalogModelKey = resolveCatalogModelLookupKey({
@@ -235,15 +224,15 @@ export class ImportRadarService {
             : ({ status: 'BLOCKED', reason: 'financial_identity_insufficient' } as const)),
         status: 'ELIGIBLE' as const,
       },
-      matchedProductType: redirectRule?.productType ?? 'Nao identificado',
+      matchedProductType: operationalCosts.matchedProductType,
       dollarQuote: importSettings.dollarQuote,
       breakdown: {
         convertedPrice,
-        cdeExit,
-        redirectCost,
-        brazilDispatch,
-        invoiceTax,
-        correiosLabel,
+        cdeExit: operationalCosts.cdeExit,
+        redirectCost: operationalCosts.redirectCost,
+        brazilDispatch: operationalCosts.brazilDispatch,
+        invoiceTax: operationalCosts.invoiceTax,
+        correiosLabel: operationalCosts.correiosLabel,
       },
       total,
     };

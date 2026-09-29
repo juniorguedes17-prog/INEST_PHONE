@@ -957,17 +957,45 @@ test('keeps KEY_AMBIGUOUS blocked without exposing a weight input', async () => 
   assert.equal(h.services.executeUsaCost.mock.callCount(), 0);
 });
 
-test('sends only the FinalCost through the existing temporary pricing handoff', async () => {
+test('preserves the Red Delaware operational breakdown through the existing temporary pricing handoff', async () => {
   const h = setup();
+  const breakdown = {
+    productValueBrl: 5000,
+    shippingBrl: 500,
+    redDelawareSubtotalBrl: 5500,
+    cdeExit: 110,
+    redirectCost: 100,
+    brazilDispatch: 50,
+    invoiceTax: 150,
+    correiosLabel: 120,
+    pyOperationalSubtotalBrl: 530,
+  };
+  h.services.executeUsaCost.mock.mockImplementationOnce(async (...args: unknown[]) => ({
+    preflight: ready,
+    calculation: {
+      sourceProductId: product.sourceProductId,
+      sourceCommercialIdentity: {
+        sourceName: product.sourceName,
+        sourceUrl: product.sourceUrl,
+        retailer: product.retailer,
+        provider: product.providerName,
+      },
+      redirector: args[1] as Props,
+      productPriceUsd: product.priceUsd,
+      finalCost: { currency: 'BRL', amountBrl: 6030 },
+      breakdown,
+    },
+  }));
   await h.select();
   await h.call('UsaProductCard', 'onCalculate');
-  await h.call('UsaRedirectorPanel', 'onChange', 'REI_DO_IMPORTADO');
+  await h.call('UsaRedirectorPanel', 'onChange', 'RED_DELAWARE');
   await h.call('UsaRedirectorPanel', 'onSubmit');
   await h.call('CalculationModal', 'onSendToPricing');
   assert.equal(h.pricing.calculateTemporaryImportPricing.mock.callCount(), 1);
   const payload = h.pricing.calculateTemporaryImportPricing.mock.calls[0]!.arguments[0] as Props;
   assert.equal(payload.origin, 'US');
-  assert.equal(payload.totalCost, 5500);
+  assert.equal(payload.totalCost, 6030);
+  assert.deepEqual(payload.usaCostBreakdown, breakdown);
   assert.equal(payload.provider, 'amazon_us');
   assert.equal(payload.ram, '8GB');
   assert.equal(payload.chip, 'A19 Pro');

@@ -374,8 +374,16 @@ test('renders Red Delaware breakdown labels without changing its values', () => 
             shippingUsd: 175,
             productValueBrl: 5000,
             shippingBrl: 875,
+            redDelawareSubtotalBrl: 5875,
+            matchedProductType: 'iPhone 15 ao 17 Pro Max',
+            cdeExit: 110,
+            redirectCost: 100,
+            brazilDispatch: 50,
+            invoiceTax: 150,
+            correiosLabel: 120,
+            pyOperationalSubtotalBrl: 530,
           },
-          finalCost: { amountBrl: 5875 },
+          finalCost: { amountBrl: 6405 },
         },
       },
       sending: false,
@@ -389,6 +397,14 @@ test('renders Red Delaware breakdown labels without changing its values', () => 
   assert.match(rendered, /Custo do Primeiro lb \(USD\)/);
   assert.match(rendered, /Custo por lb Adicional \(USD\)/);
   assert.match(rendered, /Frete \(USD\)/);
+  assert.match(rendered, /Trecho 1 - Red Delaware/);
+  assert.match(rendered, /Trecho 2: iPhone 15 ao 17 Pro Max/);
+  assert.match(rendered, /Trecho 2 - Saída CDE/);
+  assert.match(rendered, /Trecho 2 - Redirecionamento/);
+  assert.match(rendered, /Trecho 2 - Despacho Brasil/);
+  assert.match(rendered, /Trecho 2 - Nota Fiscal/);
+  assert.match(rendered, /Trecho 2 - Etiqueta Correios/);
+  assert.match(rendered, /Trecho 2 - Subtotal Operacional PY/);
   assert.ok(rendered.includes('"children":175'));
   assert.ok(rendered.includes('"children":"R$ 875,00"'));
   assert.doesNotMatch(rendered, /shippingWeightLbs|firstLbUsd|additionalLbUsd/);

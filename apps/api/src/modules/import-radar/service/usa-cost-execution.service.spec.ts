@@ -209,6 +209,44 @@ describe('UsaCostExecutionService', () => {
     expect(reiCalculator).not.toHaveBeenCalled();
   });
 
+  it('adds the shared PY operational segment to Red Delaware without replacing its USA quote', async () => {
+    const red = { redirector: 'RED_DELAWARE' as const, shippingMode: 'EXPRESS' as const };
+    const configuredSettings = structuredClone(settings);
+    configuredSettings.importation.dollarQuote = 9.99;
+    const { service, input } = setup(
+      ready(red, { shippingWeightLbs: 2 }),
+      sourceProduct,
+      configuredSettings,
+    );
+
+    const result = await service.execute(input);
+    const calculation = result.calculation!;
+    const originalRedDelaware = redDelawareCalculator.calculateRedDelawareExpressCost({
+      productPriceUsd: sourceProduct.priceUsd,
+      usdBrlQuote: configuredSettings.usaImport.usdBrlQuote,
+      shippingWeightLbs: 2,
+      firstLbUsd: configuredSettings.usaImport.redDelaware.firstLbUsd,
+      additionalLbUsd: configuredSettings.usaImport.redDelaware.additionalLbUsd,
+      shippingMode: 'EXPRESS',
+    });
+
+    expect(calculation.breakdown).toMatchObject({
+      ...originalRedDelaware.breakdown,
+      redDelawareSubtotalBrl: originalRedDelaware.finalCost.amountBrl,
+      matchedProductType: 'iPhone 15 ao 17 Pro Max',
+      cdeExit: 110,
+      redirectCost: 100,
+      brazilDispatch: 50,
+      invoiceTax: 192.44,
+      correiosLabel: 120,
+      pyOperationalSubtotalBrl: 572.44,
+    });
+    expect(calculation.finalCost.amountBrl).toBe(
+      roundMoneyToCents(originalRedDelaware.finalCost.amountBrl + 572.44),
+    );
+    expect(calculation.finalCost.amountBrl).toBe(7197.83);
+  });
+
   it('dispatches Saspy only and composes product, freight, and shared redirect cost', async () => {
     const saspy = { redirector: 'SASPY_EXPRESS' as const };
     const { service, input } = setup(ready(saspy, { shippingWeightLbs: 2.2 }));
@@ -260,7 +298,8 @@ describe('UsaCostExecutionService', () => {
       usdBrlQuote: 5.35,
       freightUsdBrlQuote: 5.8,
     });
-    const breakdown = result.calculation!.breakdown as saspyExpressCalculator.SaspyExpressCostBreakdown;
+    const breakdown = result.calculation!
+      .breakdown as saspyExpressCalculator.SaspyExpressCostBreakdown;
     expect(result.calculation!.finalCost.amountBrl).toBe(
       roundMoneyToCents(
         breakdown.productValueBrl +
@@ -551,7 +590,7 @@ describe('UsaCostExecutionService', () => {
     },
   );
 
-  it('preserves calculator cent-safe FinalCost for a PY 2677.0675-like fraction', async () => {
+  it('preserves calculator cent-safe Red Delaware subtotal before adding PY operations', async () => {
     const red = { redirector: 'RED_DELAWARE' as const, shippingMode: 'EXPRESS' as const };
     const fractionalPrice = { ...sourceProduct, priceUsd: 500.39 };
     const { service, input } = setup(ready(red, { shippingWeightLbs: 3.95 }), fractionalPrice);
@@ -560,15 +599,23 @@ describe('UsaCostExecutionService', () => {
 
     expect(result.calculation).not.toBeNull();
     const calculation = result.calculation!;
-    expect(calculation.breakdown).toMatchObject({ productValueBrl: 2677.09 });
+    expect(calculation.breakdown).toMatchObject({
+      productValueBrl: 2677.09,
+      redDelawareSubtotalBrl: expect.any(Number),
+      pyOperationalSubtotalBrl: expect.any(Number),
+    });
     expect(calculation.finalCost.amountBrl).toBe(
       roundMoneyToCents(calculation.finalCost.amountBrl),
     );
-    expect(
-      roundMoneyToCents(
-        (calculation.breakdown as redDelawareCalculator.RedDelawareCostBreakdown).productValueBrl +
-          (calculation.breakdown as redDelawareCalculator.RedDelawareCostBreakdown).shippingBrl,
-      ),
-    ).toBe(calculation.finalCost.amountBrl);
+    const breakdown = calculation.breakdown as redDelawareCalculator.RedDelawareCostBreakdown & {
+      redDelawareSubtotalBrl: number;
+      pyOperationalSubtotalBrl: number;
+    };
+    expect(breakdown.redDelawareSubtotalBrl).toBe(
+      roundMoneyToCents(breakdown.productValueBrl + breakdown.shippingBrl),
+    );
+    expect(calculation.finalCost.amountBrl).toBe(
+      roundMoneyToCents(breakdown.redDelawareSubtotalBrl + breakdown.pyOperationalSubtotalBrl),
+    );
   });
 });

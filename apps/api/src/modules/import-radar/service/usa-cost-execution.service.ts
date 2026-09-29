@@ -7,7 +7,8 @@ import type { UsaRedirectorSelection, UsaCostCalculationResult } from '../usa-co
 import { createUsaCostCalculationResult } from '../usa-cost.contract';
 import type { ShippingWeightComposition } from '../shipping-weights/shipping-weight.contract';
 import type { UsaSourceProduct } from '../usa-source-product.adapter';
-import { identifyRedirectRule } from '../validators/import-radar.validators';
+import { calculateImportOperationalCosts } from '../import-operational-cost.composition';
+import { identifyRedirectRule, roundMoneyToCents } from '../validators/import-radar.validators';
 import { UsaCostPreflightService, type UsaCostPreflightResult } from './usa-cost-preflight.service';
 
 type UsaCalculatorBreakdown =
@@ -76,7 +77,7 @@ export class UsaCostExecutionService {
   ): UsaCostCalculationResult<UsaCalculatorBreakdown> {
     const usaImport = settings.usaImport;
     if (preflight.redirector.redirector === 'RED_DELAWARE') {
-      const calculation = redDelawareCalculator.calculateRedDelawareExpressCost({
+      const redDelawareCalculation = redDelawareCalculator.calculateRedDelawareExpressCost({
         productPriceUsd: sourceProduct.priceUsd,
         usdBrlQuote: usaImport.usdBrlQuote,
         shippingWeightLbs: preflight.shippingWeightLbs,
@@ -84,12 +85,36 @@ export class UsaCostExecutionService {
         additionalLbUsd: usaImport.redDelaware.additionalLbUsd,
         shippingMode: preflight.redirector.shippingMode,
       });
+      const operationalCosts = calculateImportOperationalCosts(
+        {
+          name: sourceProduct.sourceName,
+          category: sourceProduct.category ?? '',
+        },
+        sourceProduct.priceUsd * redDelawareCalculation.breakdown.usdBrlQuote,
+        settings.importation,
+      );
+      const finalCost = {
+        currency: 'BRL' as const,
+        amountBrl: roundMoneyToCents(
+          redDelawareCalculation.finalCost.amountBrl + operationalCosts.operationalSubtotal,
+        ),
+      };
       return createUsaCostCalculationResult({
         sourceCommercialIdentity: sourceProduct,
         redirector: preflight.redirector,
         productPriceUsd: sourceProduct.priceUsd,
-        finalCost: calculation.finalCost,
-        breakdown: calculation.breakdown,
+        finalCost,
+        breakdown: {
+          ...redDelawareCalculation.breakdown,
+          redDelawareSubtotalBrl: redDelawareCalculation.finalCost.amountBrl,
+          matchedProductType: operationalCosts.matchedProductType,
+          cdeExit: operationalCosts.cdeExit,
+          redirectCost: operationalCosts.redirectCost,
+          brazilDispatch: operationalCosts.brazilDispatch,
+          invoiceTax: operationalCosts.invoiceTax,
+          correiosLabel: operationalCosts.correiosLabel,
+          pyOperationalSubtotalBrl: operationalCosts.operationalSubtotal,
+        },
       });
     }
 
