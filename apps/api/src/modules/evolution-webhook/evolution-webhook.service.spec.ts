@@ -326,6 +326,7 @@ function createService(
   supplierContactId = 'supplier-contact-id',
 ) {
   const transaction = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
     evolutionWebhookReceipt: { create: vi.fn().mockResolvedValue({}) },
     supplierCurrentList: {
       upsert: vi.fn().mockResolvedValue({}),
@@ -1342,6 +1343,92 @@ PRETO - 93%`;
     expect(resultWith).toEqual(resultWithout);
     expect(recovery.observeCandidates).toHaveBeenCalledTimes(1);
     expect(withRecovery.transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it('promove somente candidato FOUND de linha rejeitada e apenas por create aditivo', async () => {
+    const { service, transaction } = createService();
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'primary-list',
+      sourceMessageId: 'message-recovery',
+      items: [],
+    });
+    const candidate = {
+      productName: 'iPhone 17 Pro 256GB',
+      normalizedName: 'iphone 17 pro 256gb',
+      category: 'iPhone',
+      model: 'iPhone 17 Pro',
+      capacity: '256GB',
+      color: 'azul',
+      condition: 'NOVO',
+      qualityGrade: null,
+      price: 6900,
+      availability: null,
+      rawLine: 'iPhone 17 Pro 256GB azul R$ 6900',
+    };
+    await (service as any).promoteRecoveredCandidates(
+      'supplier-contact-id',
+      'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
+      [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }],
+      [{ normalizationStatus: 'FOUND', identityStatus: 'FOUND', resolvedProductId: 'product-1', candidate }],
+    );
+
+    expect(transaction.$queryRaw).toHaveBeenCalledOnce();
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ supplierCurrentListId: 'primary-list', productId: 'product-1', price: 6900 }),
+    });
+    expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+  });
+
+  it('bloqueia promocao quando o snapshot ficou mais recente ou a chave ja existe', async () => {
+    const { service, transaction } = createService();
+    const candidate = {
+      productName: 'iPhone 17 Pro 256GB', normalizedName: 'iphone 17 pro 256gb', category: 'iPhone',
+      model: 'iPhone 17 Pro', capacity: '256GB', color: 'azul', condition: 'NOVO', qualityGrade: null,
+      price: 6900, availability: null, rawLine: 'iPhone 17 Pro 256GB azul R$ 6900',
+    };
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'primary-list', sourceMessageId: 'newer-message', items: [currentItem('existing', candidate.normalizedName, 6800, candidate)],
+    });
+    const input = { originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 };
+    await (service as any).promoteRecoveredCandidates(
+      'supplier-contact-id', 'old-message',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
+      [input], [{ normalizationStatus: 'FOUND', identityStatus: 'FOUND', resolvedProductId: 'product-1', candidate }],
+    );
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+  });
+
+  it('aceita somente equivalencias de proveniencia resolvidas deterministicamente', async () => {
+    const { service, transaction } = createService();
+    const candidate = {
+      productName: 'iPhone 17 Pro 256GB', normalizedName: 'iphone 17 pro 256gb', category: 'iPhone',
+      model: 'iPhone 17 Pro', capacity: '256GB', color: 'azul', condition: 'NOVO', qualityGrade: null,
+      price: 6900, availability: null, rawLine: 'iPhone 17 Pro 256GB blue R$ 6900',
+    };
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'primary-list', sourceMessageId: 'message-recovery', items: [],
+    });
+    const promote = (rawLine: string, overrides: Partial<typeof candidate> = {}) =>
+      (service as any).promoteRecoveredCandidates(
+        'supplier-contact-id', 'message-recovery',
+        [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
+        [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine, previousLines: [], nextLines: [], activeProductHeading: rawLine.replace(/ R\$.*/, ''), activeCategory: 'iPhone', activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }],
+        [{ normalizationStatus: 'FOUND', identityStatus: 'FOUND', resolvedProductId: 'product-1', candidate: { ...candidate, ...overrides } }],
+      );
+
+    await promote(candidate.rawLine);
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledTimes(1);
+
+    transaction.supplierCurrentListItem.create.mockClear();
+    await promote('iPhone 17 Pro 256G AZ R$ 6900');
+    await promote('iPhone 17 Pro 128GB azul R$ 6900');
+    await promote('iPhone 17 Pro 256GB preto R$ 6900');
+    await promote('iPhone 17 Pro 256GB R$ 6900');
+    await promote('iPhone 18 Pro 256GB azul R$ 6900');
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
   });
 
   it('mantem dimensoes estruturais distintas na chave de merge', () => {

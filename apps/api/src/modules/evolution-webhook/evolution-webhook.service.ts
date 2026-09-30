@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, ProductStatus } from '@prisma/client';
+import { normalizeCanonicalProductIdentity, normalizeProductCondition } from '@inest/product-identity';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
@@ -11,6 +12,7 @@ import { applySupplierListConditionPolicy, getSupplierListPolicy } from './suppl
 import {
   ProductNormalizationService,
   type ProductNormalizationInput,
+  type ProductNormalizationResult,
 } from './product-normalization.service';
 import {
   hasLotDocumentHeader,
@@ -325,6 +327,7 @@ export class EvolutionWebhookService {
     const catalog = await this.loadProductShadowCatalog();
     const aiRecoveryCandidates: ProductNormalizationInput[] = rejections.map((rejection) => ({
       ...rejection,
+      sourceText: text,
       originalReason: rejection.reason,
     }));
     const itemsWithResolvedProductId = await this.processParsedSupplierItemsShadow(
@@ -334,7 +337,7 @@ export class EvolutionWebhookService {
         sourceMessageId: message.messageId,
       },
       catalog,
-      (candidate) => aiRecoveryCandidates.push(candidate),
+      (candidate) => aiRecoveryCandidates.push({ ...candidate, sourceText: text }),
     );
 
     try {
@@ -433,14 +436,185 @@ export class EvolutionWebhookService {
         ? `Lista preservada: fornecedor=${supplier.id} itens=${items.length} modo inconclusivo.`
         : `Lista atualizada: fornecedor=${supplier.id} itens=${items.length}`,
     );
-    const recoveryObservation = this.productNormalization?.observeCandidates(
-      aiRecoveryCandidates,
-      catalog,
-    );
-    if (recoveryObservation) {
-      void recoveryObservation.catch(() => undefined);
+    if (this.productNormalization) {
+      try {
+        const recoveryResults = await this.productNormalization.observeCandidates(
+          aiRecoveryCandidates,
+          catalog,
+        );
+        if (writePlan.authority !== 'NONE') {
+          await this.promoteRecoveredCandidates(
+            supplier.id,
+            message.messageId,
+            writePlan.targets,
+            aiRecoveryCandidates,
+            recoveryResults,
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          JSON.stringify({
+            event: 'evolution.ai_recovery.promotion_blocked',
+            supplierContactId: supplier.id,
+            sourceMessageId: message.messageId,
+            reason: 'recovery_failed_closed',
+            error: error instanceof Error ? error.message : 'unknown_error',
+          }),
+        );
+      }
     }
     return { accepted: true, supplierId: supplier.id, items: items.length };
+  }
+
+  private async promoteRecoveredCandidates(
+    supplierContactId: string,
+    sourceMessageId: string,
+    targets: readonly SnapshotWriteTarget[],
+    inputs: readonly ProductNormalizationInput[],
+    results: readonly ProductNormalizationResult[],
+  ) {
+    const promotable = results.flatMap((result, index) => {
+      const input = inputs[index];
+      if (!input || !this.isSafeRecoveredCandidate(input, result)) return [];
+      const candidate = result.candidate!;
+      const target = targets.find((value) => this.targetAcceptsCondition(value, candidate.condition));
+      return target ? [{ candidate: { ...candidate, productId: result.resolvedProductId! }, target }] : [];
+    });
+    if (promotable.length === 0) return;
+
+    await this.prisma.$transaction(
+      async (transaction) => {
+        const byScope = new Map<string, typeof promotable>();
+        for (const entry of promotable) {
+          const scope = entry.target.scopeKey;
+          const entries = byScope.get(scope) ?? [];
+          entries.push(entry);
+          byScope.set(scope, entries);
+        }
+        for (const [scopeKey, entries] of byScope) {
+          if (typeof transaction.$queryRaw !== 'function') {
+            throw new Error('recovery_promotion_lock_unavailable');
+          }
+          await transaction.$queryRaw`
+            SELECT pg_advisory_xact_lock(hashtextextended(${`${supplierContactId}:${scopeKey}`}, 0))
+          `;
+          const currentList = await transaction.supplierCurrentList.findUnique({
+            where: {
+              supplierContactId_snapshotScope: { supplierContactId, snapshotScope: scopeKey },
+            },
+            include: { items: true },
+          });
+          if (!currentList || currentList.sourceMessageId !== sourceMessageId) continue;
+
+          const existingKeys = new Set(currentList.items.map((item) => supplierListItemMergeKey(item)));
+          for (const { candidate } of entries) {
+            const mergeKey = supplierListItemMergeKey(candidate);
+            if (existingKeys.has(mergeKey)) continue;
+            await transaction.supplierCurrentListItem.create({
+              data: {
+                supplierCurrentListId: currentList.id,
+                productId: candidate.productId,
+                productName: candidate.productName,
+                normalizedName: candidate.normalizedName,
+                category: candidate.category,
+                model: candidate.model,
+                capacity: candidate.capacity,
+                color: candidate.color,
+                condition: candidate.condition,
+                qualityGrade: candidate.qualityGrade,
+                price: candidate.price,
+                availability: candidate.availability,
+                rawLine: candidate.rawLine,
+              },
+            });
+            existingKeys.add(mergeKey);
+            this.logger.log(
+              JSON.stringify({
+                event: 'evolution.ai_recovery.promoted',
+                supplierContactId,
+                sourceMessageId,
+                scopeKey,
+                productId: candidate.productId,
+              }),
+            );
+          }
+        }
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  private isSafeRecoveredCandidate(
+    input: ProductNormalizationInput,
+    result: ProductNormalizationResult,
+  ): result is ProductNormalizationResult & {
+    candidate: ParsedSupplierListItem;
+    resolvedProductId: string;
+  } {
+    if (input.originalReason === 'identity_insufficient') return false;
+    if (result.normalizationStatus !== 'FOUND' || result.identityStatus !== 'FOUND') return false;
+    if (!result.resolvedProductId || !result.candidate) return false;
+    if (input.detectedPrice === null || result.candidate.price !== input.detectedPrice) return false;
+    if (!result.candidate.condition || result.candidate.condition !== input.activeCondition) return false;
+    const sourceEvidence = [
+      input.rawLine,
+      input.activeProductHeading,
+      input.activeCategory,
+      ...input.previousLines,
+      ...input.nextLines,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('pt-BR');
+    const conditionEvidence = [input.sourceText, sourceEvidence].filter(Boolean).join(' ');
+    const sourceCondition = normalizeProductCondition(conditionEvidence);
+    if (
+      sourceCondition.status !== 'RESOLVED' ||
+      sourceCondition.condition !== result.candidate.condition
+    ) {
+      return false;
+    }
+    const localPriceEvidence = [input.rawLine, ...input.previousLines, ...input.nextLines].join(' ');
+    if (!/(?:r\$|us\$|\$|€|£)/i.test(localPriceEvidence)) return false;
+    const sourceIdentity = normalizeCanonicalProductIdentity(sourceEvidence);
+    const candidateIdentity = normalizeCanonicalProductIdentity({
+      productName: result.candidate.productName,
+      category: result.candidate.category,
+      model: result.candidate.model,
+      capacity: result.candidate.capacity,
+      color: result.candidate.color,
+    });
+    if (
+      !sourceIdentity.canonicalModelMatched ||
+      !candidateIdentity.canonicalModelMatched ||
+      sourceIdentity.canonicalModelKey !== candidateIdentity.canonicalModelKey
+    ) {
+      return false;
+    }
+    if (
+      result.candidate.capacity &&
+      (!sourceIdentity.canonicalStorage ||
+        !candidateIdentity.canonicalStorage ||
+        sourceIdentity.canonicalStorage !== candidateIdentity.canonicalStorage)
+    ) {
+      return false;
+    }
+    if (
+      result.candidate.color &&
+      (!sourceIdentity.canonicalColor ||
+        !candidateIdentity.canonicalColor ||
+        sourceIdentity.canonicalColor !== candidateIdentity.canonicalColor)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private targetAcceptsCondition(target: SnapshotWriteTarget, condition: string | null) {
+    if (!condition) return false;
+    if (target.itemGroup === 'PRIMARY') return condition === 'NOVO' || condition === 'CPO';
+    if (target.itemGroup === 'USED') return condition === 'SEMINOVO';
+    return true;
   }
 
   private async applyPartialUpdate(
