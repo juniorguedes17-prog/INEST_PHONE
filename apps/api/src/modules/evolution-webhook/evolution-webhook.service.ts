@@ -1,12 +1,22 @@
 import { Inject, Injectable, Logger, Optional, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, ProductStatus } from '@prisma/client';
-import { normalizeCanonicalProductIdentity, normalizeProductCondition } from '@inest/product-identity';
+import { Prisma, ProductCondition, ProductStatus, ProductType } from '@prisma/client';
+import {
+  normalizeCanonicalProductIdentity,
+  normalizeCanonicalText,
+  normalizeProductCondition,
+  resolveCatalogModelLookupKey,
+} from '@inest/product-identity';
 import { timingSafeEqual } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SupplierContactsService } from '../suppliers/service/supplier-contacts.service';
 import { normalizeWhatsappNumber } from '../suppliers/validators/supplier-contacts.validators';
-import { processParsedSupplierItemsShadow } from './product-identity-shadow';
+import {
+  processParsedSupplierItemsShadow,
+  resolveCatalogCategorySlug,
+  resolveCatalogProductType,
+  type ProductIdShadowCandidate,
+} from './product-identity-shadow';
 import { vm2ShadowResultStore } from './product-identity-shadow-store';
 import { applySupplierListConditionPolicy, getSupplierListPolicy } from './supplier-list-policy';
 import {
@@ -25,6 +35,8 @@ import {
   SupplierLineRejection,
 } from './supplier-list.parser';
 import { EvolutionMessage, ParsedSupplierListItem } from './evolution-webhook.types';
+import { buildProductModelNormalizedName } from '../products/product-model-normalizer';
+import { normalizeProfitProductDescription } from '../pricing/providers/google-sheets-profit.provider';
 
 export type SupplierListUpdateMode = 'FULL_SNAPSHOT' | 'PARTIAL_UPDATE' | 'INCONCLUSIVE';
 
@@ -108,6 +120,40 @@ type SupplierListItemForMerge = {
 
 type PersistedSupplierListItem = ParsedSupplierListItem & { productId: string | null };
 
+type SupplierCurrentListItemPersistenceData = {
+  productId: string | null;
+  productName: string;
+  normalizedName: string;
+  category: string | null;
+  model: string | null;
+  capacity: string | null;
+  color: string | null;
+  condition: string | null;
+  qualityGrade: string | null;
+  price: number;
+  availability: string | null;
+  rawLine: string;
+};
+
+function toSupplierCurrentListItemPersistenceData(
+  item: ParsedSupplierListItem | PersistedSupplierListItem,
+): SupplierCurrentListItemPersistenceData {
+  return {
+    productId: ('productId' in item ? item.productId : null) ?? null,
+    productName: item.productName,
+    normalizedName: item.normalizedName,
+    category: item.category,
+    model: item.model,
+    capacity: item.capacity,
+    color: item.color,
+    condition: item.condition,
+    qualityGrade: item.qualityGrade,
+    price: item.price,
+    availability: item.availability,
+    rawLine: item.rawLine,
+  };
+}
+
 @Injectable()
 export class EvolutionWebhookService {
   private readonly logger = new Logger(EvolutionWebhookService.name);
@@ -187,7 +233,7 @@ export class EvolutionWebhookService {
             data: {
               items: {
                 deleteMany: {},
-                create: scopedParsedItems,
+                create: scopedParsedItems.map(toSupplierCurrentListItemPersistenceData),
               },
             },
           });
@@ -388,7 +434,7 @@ export class EvolutionWebhookService {
               sourceType: 'text',
               rawContent: text,
               receivedAt: message.receivedAt,
-              items: { create: scopedItems },
+              items: { create: scopedItems.map(toSupplierCurrentListItemPersistenceData) },
             },
             update: {
               sourceMessageId: message.messageId,
@@ -397,7 +443,7 @@ export class EvolutionWebhookService {
               receivedAt: message.receivedAt,
               items: {
                 deleteMany: {},
-                create: scopedItems,
+                create: scopedItems.map(toSupplierCurrentListItemPersistenceData),
               },
               attachments: { deleteMany: {} },
             },
@@ -478,7 +524,7 @@ export class EvolutionWebhookService {
       if (!input || !this.isSafeRecoveredCandidate(input, result)) return [];
       const candidate = result.candidate!;
       const target = targets.find((value) => this.targetAcceptsCondition(value, candidate.condition));
-      return target ? [{ candidate: { ...candidate, productId: result.resolvedProductId! }, target }] : [];
+      return target ? [{ candidate, target }] : [];
     });
     if (promotable.length === 0) return;
 
@@ -510,21 +556,12 @@ export class EvolutionWebhookService {
           for (const { candidate } of entries) {
             const mergeKey = supplierListItemMergeKey(candidate);
             if (existingKeys.has(mergeKey)) continue;
+            const productId = await this.resolveOrCreateRecoveredProduct(transaction, candidate);
+            if (!productId) continue;
             await transaction.supplierCurrentListItem.create({
               data: {
                 supplierCurrentListId: currentList.id,
-                productId: candidate.productId,
-                productName: candidate.productName,
-                normalizedName: candidate.normalizedName,
-                category: candidate.category,
-                model: candidate.model,
-                capacity: candidate.capacity,
-                color: candidate.color,
-                condition: candidate.condition,
-                qualityGrade: candidate.qualityGrade,
-                price: candidate.price,
-                availability: candidate.availability,
-                rawLine: candidate.rawLine,
+                ...toSupplierCurrentListItemPersistenceData({ ...candidate, productId }),
               },
             });
             existingKeys.add(mergeKey);
@@ -534,7 +571,7 @@ export class EvolutionWebhookService {
                 supplierContactId,
                 sourceMessageId,
                 scopeKey,
-                productId: candidate.productId,
+                productId,
               }),
             );
           }
@@ -547,13 +584,21 @@ export class EvolutionWebhookService {
   private isSafeRecoveredCandidate(
     input: ProductNormalizationInput,
     result: ProductNormalizationResult,
-  ): result is ProductNormalizationResult & {
-    candidate: ParsedSupplierListItem;
-    resolvedProductId: string;
-  } {
+  ): result is ProductNormalizationResult & { candidate: ParsedSupplierListItem } {
     if (input.originalReason === 'identity_insufficient') return false;
-    if (result.normalizationStatus !== 'FOUND' || result.identityStatus !== 'FOUND') return false;
-    if (!result.resolvedProductId || !result.candidate) return false;
+    if (!result.candidate) return false;
+    if (
+      !(
+        (result.normalizationStatus === 'FOUND' &&
+          result.identityStatus === 'FOUND' &&
+          Boolean(result.resolvedProductId)) ||
+        (result.normalizationStatus === 'MISSING' &&
+          result.identityStatus === 'MISSING' &&
+          result.resolvedProductId === null)
+      )
+    ) {
+      return false;
+    }
     if (input.detectedPrice === null || result.candidate.price !== input.detectedPrice) return false;
     if (!result.candidate.condition || result.candidate.condition !== input.activeCondition) return false;
     const sourceEvidence = [
@@ -584,11 +629,18 @@ export class EvolutionWebhookService {
       capacity: result.candidate.capacity,
       color: result.candidate.color,
     });
-    if (
-      !sourceIdentity.canonicalModelMatched ||
-      !candidateIdentity.canonicalModelMatched ||
-      sourceIdentity.canonicalModelKey !== candidateIdentity.canonicalModelKey
-    ) {
+    const sameRegisteredModel =
+      sourceIdentity.canonicalModelMatched &&
+      candidateIdentity.canonicalModelMatched &&
+      sourceIdentity.canonicalModelKey === candidateIdentity.canonicalModelKey;
+    const sameExplicitDynamicModel =
+      !sourceIdentity.canonicalModelMatched &&
+      !candidateIdentity.canonicalModelMatched &&
+      sourceIdentity.canonicalFamilyStatus === 'matched' &&
+      sourceIdentity.canonicalFamily === candidateIdentity.canonicalFamily &&
+      Boolean(result.candidate.model) &&
+      this.containsCanonicalPhrase(sourceEvidence, result.candidate.model!);
+    if (!sameRegisteredModel && !sameExplicitDynamicModel) {
       return false;
     }
     if (
@@ -608,6 +660,153 @@ export class EvolutionWebhookService {
       return false;
     }
     return true;
+  }
+
+  private containsCanonicalPhrase(evidence: string, phrase: string) {
+    const normalizedEvidence = normalizeCanonicalText(evidence);
+    const normalizedPhrase = normalizeCanonicalText(phrase);
+    if (!normalizedEvidence || !normalizedPhrase) return false;
+    return (` ${normalizedEvidence} `).includes(` ${normalizedPhrase} `);
+  }
+
+  private async resolveOrCreateRecoveredProduct(
+    transaction: Prisma.TransactionClient,
+    candidate: ParsedSupplierListItem,
+  ) {
+    const catalog = await this.loadProductShadowCatalogFrom(transaction);
+    const [observation] = processParsedSupplierItemsShadow([candidate], catalog);
+    if (observation?.productResolution.status === 'FOUND') {
+      return observation.productResolution.productId!;
+    }
+    if (
+      !observation ||
+      observation.productResolution.status !== 'MISSING' ||
+      observation.productResolution.reason !== 'catalog_no_match'
+    ) {
+      return null;
+    }
+
+    const condition = candidate.condition as ProductCondition | null;
+    const productType = resolveCatalogProductType(observation.identity.canonical.canonicalFamily, condition);
+    const categorySlug = productType && condition ? resolveCatalogCategorySlug(productType, condition) : null;
+    const modelName = candidate.model?.trim();
+    if (!condition || !productType || !categorySlug || !modelName) return null;
+
+    const category = await transaction.productCategory.findUnique({ where: { slug: categorySlug } });
+    if (
+      !category ||
+      category.deletedAt !== null ||
+      category.status !== 'ACTIVE' ||
+      category.type !== productType
+    ) {
+      return null;
+    }
+
+    const model = await this.resolveOrCreateRecoveredProductModel(
+      transaction,
+      category.id,
+      modelName,
+      productType,
+    );
+    if (!model) return null;
+
+    const storageId = await this.resolveRecoveredStorageId(
+      transaction,
+      candidate.capacity,
+      observation.identity.canonical.canonicalStorage,
+    );
+    if (candidate.capacity && !storageId) return null;
+    const colorId = await this.resolveRecoveredColorId(
+      transaction,
+      candidate.color,
+      observation.identity.canonical.canonicalColor,
+    );
+    if (candidate.color && !colorId) return null;
+
+    const productDescription = [modelName, observation.identity.canonical.canonicalStorage]
+      .filter(Boolean)
+      .join(' ');
+    try {
+      const created = await transaction.product.create({
+        data: {
+          categoryId: category.id,
+          modelId: model.id,
+          colorId,
+          storageId,
+          productType: productType as ProductType,
+          status: ProductStatus.ACTIVE,
+          productDescription,
+          normalizedDescription: normalizeProfitProductDescription(productDescription),
+          profitCondition: condition,
+          netProfit: null,
+          active: true,
+        },
+        select: { id: true },
+      });
+      return created.id;
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) throw error;
+      const refreshedCatalog = await this.loadProductShadowCatalogFrom(transaction);
+      const [refreshed] = processParsedSupplierItemsShadow([candidate], refreshedCatalog);
+      return refreshed?.productResolution.status === 'FOUND'
+        ? (refreshed.productResolution.productId ?? null)
+        : null;
+    }
+  }
+
+  private async resolveOrCreateRecoveredProductModel(
+    transaction: Prisma.TransactionClient,
+    categoryId: string,
+    name: string,
+    productType: string,
+  ) {
+    const normalizedName = buildProductModelNormalizedName({ categoryId, modelName: name });
+    const legacyCanonicalName = resolveCatalogModelLookupKey({ productName: name, model: name });
+    let model = legacyCanonicalName
+      ? await transaction.productModel.findUnique({ where: { normalizedName: legacyCanonicalName } })
+      : null;
+    if (!model && legacyCanonicalName !== normalizedName) {
+      model = await transaction.productModel.findUnique({ where: { normalizedName } });
+    }
+    if (!model) {
+      try {
+        model = await transaction.productModel.create({
+          data: { categoryId, name, normalizedName, productType: productType as ProductType },
+        });
+      } catch (error) {
+        if (!isUniqueConstraintError(error)) throw error;
+        model = await transaction.productModel.findUnique({ where: { normalizedName } });
+      }
+    }
+    if (!model || model.categoryId !== categoryId || model.productType !== productType) return null;
+    return model;
+  }
+
+  private async resolveRecoveredStorageId(
+    transaction: Prisma.TransactionClient,
+    suppliedCapacity: string | null,
+    canonicalStorage: string | null,
+  ) {
+    if (!suppliedCapacity) return null;
+    const match = canonicalStorage?.match(/^(\d+(?:\.\d+)?)(GB|TB)$/i);
+    if (!match) return null;
+    const storage = await transaction.productStorage.findUnique({
+      where: { value_unit: { value: match[1]!, unit: match[2]!.toUpperCase() } },
+    });
+    return storage?.id ?? null;
+  }
+
+  private async resolveRecoveredColorId(
+    transaction: Prisma.TransactionClient,
+    suppliedColor: string | null,
+    canonicalColor: string | null,
+  ) {
+    if (!suppliedColor) return null;
+    if (!canonicalColor) return null;
+    const color = await transaction.productColor.findUnique({
+      where: { normalizedName: canonicalColor },
+    });
+    return color?.id ?? null;
   }
 
   private targetAcceptsCondition(target: SnapshotWriteTarget, condition: string | null) {
@@ -634,14 +833,14 @@ export class EvolutionWebhookService {
       if (existingItem) {
         await transaction.supplierCurrentListItem.update({
           where: { id: existingItem.id },
-          data: item,
+          data: toSupplierCurrentListItemPersistenceData(item),
         });
         continue;
       }
 
       await transaction.supplierCurrentListItem.create({
         data: {
-          ...item,
+          ...toSupplierCurrentListItemPersistenceData(item),
           supplierCurrentListId: currentListId,
         },
       });
@@ -691,7 +890,7 @@ export class EvolutionWebhookService {
           sourceType: 'text',
           rawContent: source.rawContent,
           receivedAt: source.receivedAt,
-          items: { create: [...incomingItems] },
+          items: { create: incomingItems.map(toSupplierCurrentListItemPersistenceData) },
         },
       });
       return;
@@ -789,7 +988,13 @@ export class EvolutionWebhookService {
   }
 
   private loadProductShadowCatalog() {
-    return this.prisma.product.findMany({
+    return this.loadProductShadowCatalogFrom(this.prisma);
+  }
+
+  private loadProductShadowCatalogFrom(
+    client: Pick<Prisma.TransactionClient, 'product'> | PrismaService,
+  ): Promise<ProductIdShadowCandidate[]> {
+    return client.product.findMany({
       where: { active: true, status: ProductStatus.ACTIVE, deletedAt: null },
       select: {
         id: true,
@@ -1273,4 +1478,13 @@ interface EvolutionExtraction {
     | 'missing_remote_jid'
     | 'missing_sender_jid'
     | null;
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'P2002',
+  );
 }

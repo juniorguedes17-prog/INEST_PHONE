@@ -320,6 +320,20 @@ function catalogProduct(
   };
 }
 
+function dynamicCatalogProduct(id = 'product-99-ultra') {
+  return {
+    id,
+    productDescription: 'iPhone 99 Ultra 256GB',
+    productType: 'IPHONE_SEALED',
+    profitCondition: 'NOVO',
+    variantAttributes: null,
+    category: { name: 'iPhone Lacrado' },
+    model: { name: 'iPhone 99 Ultra' },
+    color: { name: 'Azul' },
+    storage: { displayName: '256 GB', value: '256', unit: 'GB' },
+  };
+}
+
 function createService(
   catalog: unknown[] = [],
   productNormalization?: unknown,
@@ -327,6 +341,33 @@ function createService(
 ) {
   const transaction = {
     $queryRaw: vi.fn().mockResolvedValue([]),
+    product: {
+      findMany: vi.fn().mockResolvedValue(catalog),
+      create: vi.fn().mockResolvedValue({ id: 'created-product-id' }),
+    },
+    productCategory: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'category-iphone',
+        slug: 'iphone-lacrado',
+        type: 'IPHONE_SEALED',
+        status: 'ACTIVE',
+        deletedAt: null,
+      }),
+    },
+    productModel: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'model-iphone-19',
+        categoryId: 'category-iphone',
+        productType: 'IPHONE_SEALED',
+      }),
+      create: vi.fn().mockResolvedValue({
+        id: 'model-iphone-19',
+        categoryId: 'category-iphone',
+        productType: 'IPHONE_SEALED',
+      }),
+    },
+    productColor: { findUnique: vi.fn().mockResolvedValue({ id: 'color-azul' }) },
+    productStorage: { findUnique: vi.fn().mockResolvedValue({ id: 'storage-256' }) },
     evolutionWebhookReceipt: { create: vi.fn().mockResolvedValue({}) },
     supplierCurrentList: {
       upsert: vi.fn().mockResolvedValue({}),
@@ -408,6 +449,10 @@ function persistedItem(
   return { ...item, id, productId: null, condition, price };
 }
 
+function expectPersistencePayloadWithoutConditionProvenance(payload: unknown) {
+  expect(payload).not.toHaveProperty('conditionProvenance');
+}
+
 describe('EvolutionWebhookService', () => {
   it.each([
     ['BAIXOU\nProduto B 256GB\nAzul R$ 5.500', 'PARTIAL_UPDATE'],
@@ -457,6 +502,33 @@ describe('EvolutionWebhookService', () => {
         update: expect.objectContaining({ items: expect.objectContaining({ deleteMany: {} }) }),
       }),
     );
+    const write = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0];
+    for (const item of [...write.create.items.create, ...write.update.items.create]) {
+      expectPersistencePayloadWithoutConditionProvenance(item);
+    }
+  });
+
+  it('preserva provenance de policy para o escopo, mas não a envia ao Prisma no FULL_SNAPSHOT', async () => {
+    const fixture = lotDocumentFixtures[0];
+    const parsed = parseSupplierListText(fixture.rawText);
+    const policyItems = applySupplierListConditionPolicy(parsed, TARGET_SUPPLIER_CONTACT_ID);
+    expect(policyItems).toHaveLength(fixture.parsedItems);
+    expect(policyItems.every((item) => item.conditionProvenance === 'POLICY_DEFAULT')).toBe(true);
+
+    const { service, transaction } = createService([], undefined, TARGET_SUPPLIER_CONTACT_ID);
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: { id: 'persisted-policy-default-full', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        message: { conversation: fixture.rawText },
+      },
+    });
+
+    const write = transaction.supplierCurrentList.upsert.mock.calls[0]?.[0];
+    expect(write).toBeDefined();
+    for (const item of [...write.create.items.create, ...write.update.items.create]) {
+      expectPersistencePayloadWithoutConditionProvenance(item);
+    }
   });
 
   it('mescla as últimas peças não segmentadas no catalog:primary sem substituir a lista existente', async () => {
@@ -525,6 +597,12 @@ describe('EvolutionWebhookService', () => {
       }),
     );
     expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledOnce();
+    for (const [{ data }] of transaction.supplierCurrentListItem.update.mock.calls) {
+      expectPersistencePayloadWithoutConditionProvenance(data);
+    }
+    for (const [{ data }] of transaction.supplierCurrentListItem.create.mock.calls) {
+      expectPersistencePayloadWithoutConditionProvenance(data);
+    }
     expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
     expect(preserved).toEqual(expect.objectContaining({ price: 5200 }));
@@ -732,6 +810,9 @@ describe('EvolutionWebhookService', () => {
         }),
       }),
     );
+    const usedCreate = transaction.supplierCurrentList.create.mock.calls[0]?.[0].data.items.create[0];
+    expect(usedCreate.condition).toBe('SEMINOVO');
+    expectPersistencePayloadWithoutConditionProvenance(usedCreate);
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
   });
 
@@ -797,6 +878,8 @@ describe('EvolutionWebhookService', () => {
         data: expect.objectContaining({ condition: 'SEMINOVO', price: 2650 }),
       }),
     );
+    const usedUpdate = transaction.supplierCurrentListItem.update.mock.calls[0]?.[0].data;
+    expectPersistencePayloadWithoutConditionProvenance(usedUpdate);
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
   });
@@ -1346,7 +1429,9 @@ PRETO - 93%`;
   });
 
   it('promove somente candidato FOUND de linha rejeitada e apenas por create aditivo', async () => {
-    const { service, transaction } = createService();
+    const { service, transaction } = createService([
+      catalogProduct('product-1', 'iPhone 17 Pro 256GB'),
+    ]);
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
       id: 'primary-list',
       sourceMessageId: 'message-recovery',
@@ -1377,6 +1462,8 @@ PRETO - 93%`;
     expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ supplierCurrentListId: 'primary-list', productId: 'product-1', price: 6900 }),
     });
+    const recoveredCreate = transaction.supplierCurrentListItem.create.mock.calls[0]?.[0].data;
+    expectPersistencePayloadWithoutConditionProvenance(recoveredCreate);
     expect(transaction.supplierCurrentListItem.update).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
@@ -1429,6 +1516,101 @@ PRETO - 93%`;
     await promote('iPhone 17 Pro 256GB R$ 6900');
     await promote('iPhone 18 Pro 256GB azul R$ 6900');
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+  });
+
+  it('cadastra de forma canônica e acrescenta o Product Luna desconhecido sem reescrever a lista', async () => {
+    const { service, transaction } = createService();
+    const candidate = {
+      productName: 'iPhone 99 Ultra 256GB',
+      normalizedName: 'iphone 99 ultra 256gb',
+      category: 'iPhone',
+      model: 'iPhone 99 Ultra',
+      capacity: '256GB',
+      color: 'azul',
+      condition: 'NOVO',
+      qualityGrade: null,
+      price: 6900,
+      availability: null,
+      rawLine: 'iPhone 99 Ultra 256GB azul R$ 6900',
+    };
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'primary-list', sourceMessageId: 'message-recovery', items: [currentItem('existing', 'iPhone 17 128GB', 5000)],
+    });
+    transaction.productModel.findUnique.mockResolvedValue(null);
+
+    await (service as any).promoteRecoveredCandidates(
+      'supplier-contact-id',
+      'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
+      [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }],
+      [{ normalizationStatus: 'MISSING', identityStatus: 'MISSING', resolvedProductId: null, candidate }],
+    );
+
+    expect(transaction.productModel.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ categoryId: 'category-iphone', name: 'iPhone 99 Ultra', productType: 'IPHONE_SEALED' }),
+    });
+    expect(transaction.product.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        categoryId: 'category-iphone',
+        modelId: 'model-iphone-19',
+        colorId: 'color-azul',
+        storageId: 'storage-256',
+        productType: 'IPHONE_SEALED',
+        profitCondition: 'NOVO',
+        netProfit: null,
+      }),
+      select: { id: true },
+    });
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ productId: 'created-product-id', supplierCurrentListId: 'primary-list' }),
+    });
+    expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('reutiliza o Product dinâmico, falha fechado em ambiguidade e converge após conflito concorrente', async () => {
+    const { service, transaction } = createService([dynamicCatalogProduct()]);
+    const candidate = {
+      productName: 'iPhone 99 Ultra 256GB', normalizedName: 'iphone 99 ultra 256gb', category: 'iPhone',
+      model: 'iPhone 99 Ultra', capacity: '256GB', color: 'azul', condition: 'NOVO', qualityGrade: null,
+      price: 6900, availability: null, rawLine: 'iPhone 99 Ultra 256GB azul R$ 6900',
+    };
+    transaction.supplierCurrentList.findUnique.mockResolvedValue({
+      id: 'primary-list', sourceMessageId: 'message-recovery', items: [],
+    });
+    const input = [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }];
+    const result = [{ normalizationStatus: 'MISSING', identityStatus: 'MISSING', resolvedProductId: null, candidate }];
+
+    await (service as any).promoteRecoveredCandidates(
+      'supplier-contact-id', 'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }], input, result,
+    );
+    expect(transaction.product.create).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ productId: 'product-99-ultra' }),
+    });
+
+    transaction.supplierCurrentListItem.create.mockClear();
+    transaction.product.findMany.mockResolvedValue([dynamicCatalogProduct(), { ...dynamicCatalogProduct(), id: 'duplicate-product' }]);
+    await (service as any).promoteRecoveredCandidates(
+      'supplier-contact-id', 'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }], input, result,
+    );
+    expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
+    expect(transaction.product.create).not.toHaveBeenCalled();
+
+    transaction.product.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([dynamicCatalogProduct('concurrent-product')]);
+    transaction.product.create.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }));
+    await (service as any).promoteRecoveredCandidates(
+      'supplier-contact-id', 'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }], input, result,
+    );
+    expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ productId: 'concurrent-product' }),
+    });
   });
 
   it('mantem dimensoes estruturais distintas na chave de merge', () => {

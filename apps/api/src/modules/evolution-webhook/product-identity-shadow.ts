@@ -52,27 +52,78 @@ export function processParsedSupplierItemsShadow(
       notes: item.rawLine,
     });
 
-    return { item, identity, productResolution: resolveProductIdShadow(identity, catalog) };
+    return { item, identity, productResolution: resolveProductIdShadow(identity, catalog, item) };
   });
 }
 
 export function resolveProductIdShadow(
   identity: ExtendedProductIdentity,
   catalog: readonly ProductIdShadowCandidate[],
+  source?: Pick<ParsedSupplierListItem, 'model' | 'capacity' | 'color' | 'condition'>,
 ): ProductIdShadowResolution {
   const policy = profitIdentityPolicies.find((item) => item.family === identity.variant.family);
-  if (identity.variant.status !== 'valid' || !identity.variant.key || !policy) {
+  if (identity.variant.status === 'ambiguous_identity') {
     return { status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 };
   }
 
-  const targetDimensions = identityDimensions(identity);
-  if (!targetDimensions.condition) {
+  if (identity.variant.status === 'valid' && identity.variant.key && policy) {
+    const targetDimensions = identityDimensions(identity);
+    if (!targetDimensions.condition) {
+      return { status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 };
+    }
+    const candidates = catalog.filter((product) =>
+      matchesCatalogProduct(product, identity, targetDimensions),
+    );
+
+    if (candidates.length === 1) {
+      return { status: 'FOUND', productId: candidates[0]!.id, candidateCount: 1 };
+    }
+    if (candidates.length > 1) {
+      return {
+        status: 'AMBIGUOUS',
+        candidates: candidates.map((product) => product.id),
+        reason: 'multiple_catalog_candidates',
+        candidateCount: candidates.length,
+      };
+    }
+    if (!source) {
+      return { status: 'MISSING', reason: 'catalog_no_match', candidateCount: 0 };
+    }
+  }
+
+  if (!source) {
     return { status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 };
   }
+  return resolveDynamicCatalogProductId(identity, catalog, source);
+}
+
+/**
+ * The static registry remains the first authority. This fallback only serves
+ * a product model that is explicitly structured by the parser and already
+ * exists in the cadastral catalog. It never attempts a fuzzy model match.
+ */
+function resolveDynamicCatalogProductId(
+  identity: ExtendedProductIdentity,
+  catalog: readonly ProductIdShadowCandidate[],
+  source?: Pick<ParsedSupplierListItem, 'model' | 'capacity' | 'color' | 'condition'>,
+): ProductIdShadowResolution {
+  if (!source || !source.model || !source.condition) {
+    return { status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 };
+  }
+  const policy = profitIdentityPolicies.find((item) => item.family === identity.canonical.canonicalFamily);
+  const expectedProductType = resolveCatalogProductType(identity.canonical.canonicalFamily, source.condition);
+  const targetDimensions = dynamicIdentityDimensions(identity, source);
+  if (
+    !policy ||
+    !expectedProductType ||
+    policy.required.some((dimension) => !targetDimensions[dimension])
+  ) {
+    return { status: 'MISSING', reason: 'identity_insufficient', candidateCount: 0 };
+  }
+
   const candidates = catalog.filter((product) =>
-    matchesCatalogProduct(product, identity, targetDimensions),
+    matchesDynamicCatalogProduct(product, identity, targetDimensions, expectedProductType),
   );
-
   if (candidates.length === 1) {
     return { status: 'FOUND', productId: candidates[0]!.id, candidateCount: 1 };
   }
@@ -85,6 +136,109 @@ export function resolveProductIdShadow(
     reason: 'multiple_catalog_candidates',
     candidateCount: candidates.length,
   };
+}
+
+function matchesDynamicCatalogProduct(
+  product: ProductIdShadowCandidate,
+  target: Readonly<ExtendedProductIdentity>,
+  targetDimensions: Readonly<Record<string, string>>,
+  expectedProductType: string,
+) {
+  if (product.productType !== expectedProductType) return false;
+  const policy = profitIdentityPolicies.find((item) => item.family === target.canonical.canonicalFamily);
+  if (!policy) return false;
+  const candidateIdentity = deriveExtendedProductIdentity({
+    productDescription: product.productDescription,
+    category: product.category?.name,
+    model: product.model?.name,
+    color: product.color?.name,
+    capacity: product.storage?.displayName ?? product.storage?.value,
+    quality: product.profitCondition,
+    productType: product.productType,
+  });
+  const candidateDimensions = {
+    ...dynamicIdentityDimensions(candidateIdentity, {
+      model: product.model?.name ?? null,
+      capacity: product.storage?.displayName ?? product.storage?.value ?? null,
+      color: product.color?.name ?? null,
+      condition: product.profitCondition,
+    }),
+    ...identityDimensions(candidateIdentity, product),
+  };
+  const dimensions = [...policy.required, ...policy.optional];
+  if (
+    !dimensions.every((dimension) => {
+      const targetValue = targetDimensions[dimension];
+      if (!targetValue) return true;
+      return candidateDimensions[dimension] === targetValue;
+    })
+  ) {
+    return false;
+  }
+  return !targetDimensions.color || candidateDimensions.color === targetDimensions.color;
+}
+
+function dynamicIdentityDimensions(
+  identity: ExtendedProductIdentity,
+  source: Pick<ParsedSupplierListItem, 'model' | 'capacity' | 'color' | 'condition'>,
+) {
+  const canonical = identity.canonical;
+  return compactDimensions({
+    model: source.model ? normalizeDimension(source.model) : null,
+    condition: source.condition ? normalizeDimension(source.condition) : null,
+    ram: canonical.canonicalRam,
+    storage: canonical.canonicalStorage,
+    screen: canonical.canonicalScreen,
+    connectivity: canonical.canonicalConnectivity,
+    chip: canonical.canonicalChip,
+    chipVariant: canonical.canonicalChip?.toLocaleLowerCase('en-US').includes('pro')
+      ? 'pro'
+      : null,
+    color: canonical.canonicalColor,
+  });
+}
+
+function compactDimensions(values: Record<string, string | null>) {
+  return Object.fromEntries(
+    Object.entries(values)
+      .filter((entry) => Boolean(entry[1]))
+      .map(([key, value]) => [
+        key,
+        key === 'storage'
+          ? normalizeStorageDimension(value!)
+          : normalizeDimension(value!),
+      ]),
+  );
+}
+
+export function resolveCatalogProductType(family: string, condition: string | null) {
+  if (!condition) return null;
+  if (condition === 'SEMINOVO') return 'IPHONE_USED';
+  if (family === 'iphone') return condition === 'CPO' ? 'APPLE_CPO' : 'IPHONE_SEALED';
+  if (family === 'macbook' || family === 'mac-mini' || family === 'imac' || family === 'mac-studio') {
+    return 'MACBOOK';
+  }
+  if (family === 'ipad') return 'IPAD';
+  if (family === 'apple-watch') return 'APPLE_WATCH';
+  if (family === 'airpods') return 'AIRPODS';
+  if (family === 'accessory') return 'ACCESSORY';
+  return null;
+}
+
+export function resolveCatalogCategorySlug(productType: string, condition: string) {
+  if (condition === 'SEMINOVO') return 'iphone-seminovo';
+  if (productType === 'APPLE_CPO') return 'apple-certified-pre-owned';
+  const byType: Record<string, string> = {
+    IPHONE_SEALED: 'iphone-lacrado',
+    IPHONE_USED: 'iphone-seminovo',
+    APPLE_CPO: 'apple-certified-pre-owned',
+    MACBOOK: 'macbook',
+    IPAD: 'ipad',
+    APPLE_WATCH: 'apple-watch',
+    AIRPODS: 'airpods',
+    ACCESSORY: 'acessorios',
+  };
+  return byType[productType] ?? null;
 }
 
 function matchesCatalogProduct(

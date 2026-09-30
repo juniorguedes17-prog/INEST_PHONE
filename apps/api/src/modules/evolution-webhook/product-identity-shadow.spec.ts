@@ -277,6 +277,45 @@ describe('product identity ingestion shadow', () => {
     });
   });
 
+  it('resolves a uniquely structured cadastral Product when its model is outside the static registry', () => {
+    const item = {
+      productName: 'iPhone 99 Ultra 256GB',
+      normalizedName: 'iphone 99 ultra 256gb',
+      category: 'iPhone',
+      model: 'iPhone 99 Ultra',
+      capacity: '256GB',
+      color: 'azul',
+      condition: 'NOVO' as const,
+      qualityGrade: null,
+      price: 6900,
+      availability: null,
+      rawLine: 'iPhone 99 Ultra 256GB azul R$ 6900',
+    };
+    const catalog: ProductIdShadowCandidate[] = [
+      {
+        id: 'iphone-99-ultra-256-azul',
+        productDescription: 'iPhone 99 Ultra 256GB',
+        productType: 'IPHONE_SEALED',
+        profitCondition: 'NOVO',
+        variantAttributes: null,
+        category: { name: 'iPhone Lacrado' },
+        model: { name: 'iPhone 99 Ultra' },
+        color: { name: 'Azul' },
+        storage: { displayName: '256 GB', value: '256', unit: 'GB' },
+      },
+    ];
+
+    expect(processParsedSupplierItemsShadow([item], catalog)[0]?.productResolution).toMatchObject({
+      status: 'FOUND',
+      productId: 'iphone-99-ultra-256-azul',
+      candidateCount: 1,
+    });
+    expect(processParsedSupplierItemsShadow([item], [...catalog, { ...catalog[0]!, id: 'duplicate' }])[0]?.productResolution).toMatchObject({
+      status: 'AMBIGUOUS',
+      candidateCount: 2,
+    });
+  });
+
   it.each([
     ['128', 'GB'],
     ['256', 'GB'],
