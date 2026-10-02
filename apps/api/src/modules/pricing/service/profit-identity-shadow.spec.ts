@@ -28,6 +28,19 @@ function record(
 }
 
 describe('ProfitLookupIdentity shadow resolution', () => {
+  it('encaminha Mac Mini M6 novo ao lucro e reencontra o cadastro no recálculo', () => {
+    const source = { productDescription: 'Mac Mini M6 16GB 512GB', condition: 'NOVO' as const };
+    const missing = resolveProfitIdentityShadow(catalog([]), source);
+    const found = resolveProfitIdentityShadow(
+      catalog([record('m6-product', 'Mac mini M6, 16 GB, 512 GB SSD', 'NOVO', 900)]),
+      source,
+    );
+    expect(missing.status).toBe('missing');
+    expect(missing.identity.attributes.model).toBe('mac-mini-m6');
+    expect(found.status).toBe('found');
+    if (found.status === 'found') expect(found.record.productId).toBe('m6-product');
+  });
+
   it('separa iPhone base, Pro e Pro Max sem selecao cruzada', () => {
     const profitCatalog = catalog([
       record('34', 'iPhone 17 256GB'),

@@ -306,6 +306,58 @@ test('Mac Mini protege chip, RAM, armazenamento e unidades de compute', () => {
   assert.notEqual(m4.key, m4Gpu.key);
 });
 
+test('modelo Apple explicito ainda nao catalogado so e valido no fluxo financeiro opt-in', () => {
+  const input = { productDescription: 'Mac Mini M6 16GB 512GB', quality: 'NOVO' };
+  const base = deriveProfitLookupIdentity(input);
+  const newModel = deriveProfitLookupIdentity(input, { allowUncatalogedModel: true });
+  const equivalent = deriveProfitLookupIdentity(
+    { productDescription: 'Mac mini M6, 16 GB, 512 GB SSD', quality: 'NOVO' },
+    { allowUncatalogedModel: true },
+  );
+  assert.equal(base.status, 'insufficient_identity');
+  assert.equal(newModel.status, 'valid');
+  assert.equal(newModel.canonicalModelKey, null);
+  assert.equal(newModel.attributes.model, 'mac-mini-m6');
+  assert.equal(newModel.key, equivalent.key);
+
+  for (const description of [
+    'Mac Mini M6 24GB 512GB',
+    'Mac Mini M6 16GB 256GB',
+    'Mac Mini M6 16GB 512GB GPU 12',
+    'Mac Mini M7 16GB 512GB',
+  ]) {
+    const variant = deriveProfitLookupIdentity(
+      { productDescription: description, quality: 'NOVO' },
+      { allowUncatalogedModel: true },
+    );
+    assert.equal(variant.status, 'valid', description);
+    assert.notEqual(variant.key, newModel.key, description);
+  }
+  assert.equal(
+    deriveProfitLookupIdentity(
+      { productDescription: 'Mac Mini M6 16GB 512GB', quality: 'CPO' },
+      { allowUncatalogedModel: true },
+    ).key === newModel.key,
+    false,
+  );
+  for (const description of ['Mac Mini 16GB 512GB', 'Mac Mini M6 512GB']) {
+    assert.equal(
+      deriveProfitLookupIdentity(
+        { productDescription: description, quality: 'NOVO' },
+        { allowUncatalogedModel: true },
+      ).status,
+      'insufficient_identity',
+    );
+  }
+  assert.equal(
+    deriveProfitLookupIdentity(
+      { productDescription: 'Mac Mini M6 M7 16GB 512GB', quality: 'NOVO' },
+      { allowUncatalogedModel: true },
+    ).status,
+    'ambiguous_identity',
+  );
+});
+
 test('iMac protege chip, tela, RAM, armazenamento e unidades de compute', () => {
   const equivalentForms = [
     'iMac M4 24" 16GB/256GB',

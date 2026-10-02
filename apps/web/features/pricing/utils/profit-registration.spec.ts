@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { deriveProfitLookupIdentity } from '@inest/product-identity';
 
 import { resolveProfitRegistration } from './profit-registration';
 import type { BrazilRadarQuotePricing } from '../types/pricing';
@@ -833,4 +834,192 @@ test('categoria textual desconhecida nao usa ACCESSORY como fallback', () => {
   assert.equal(result.action, 'create');
   if (result.action !== 'create') return;
   assert.equal(result.payload.productType, 'AIRPODS');
+});
+
+const macMiniReferences = {
+  categories: [{ id: 'category-mac', name: 'MacBook', type: 'MACBOOK' }],
+  models: [
+    {
+      id: 'model-mini',
+      categoryId: 'category-mac',
+      name: 'Mac Mini',
+      normalizedName: 'mac-mini',
+      productType: 'MACBOOK',
+    },
+  ],
+  colors: [],
+  storages: [
+    { id: 'storage-256', displayName: '256GB' },
+    { id: 'storage-512', displayName: '512GB' },
+  ],
+};
+
+function macMiniItem(description: string, condition: 'NOVO' | 'CPO' | 'SEMINOVO' = 'NOVO') {
+  return {
+    ...item,
+    product: {
+      ...item.product,
+      name: description,
+      category: 'Mac Mini',
+      model: 'Mac Mini M4',
+      capacity: '512GB',
+      color: '',
+      condition,
+    },
+    profit: { productDescription: description },
+  };
+}
+
+function uncatalogedMacMiniItem(description: string) {
+  const source = macMiniItem(description);
+  return { ...source, product: { ...source.product, model: 'Mac Mini' } };
+}
+
+function macMiniProduct(description: string, condition: 'NOVO' | 'CPO' | 'SEMINOVO' = 'NOVO') {
+  return {
+    id: 'product-mini',
+    categoryId: 'category-mac',
+    modelId: 'model-mini',
+    storageId: 'storage-512',
+    productType: 'MACBOOK',
+    status: 'ACTIVE',
+    active: true,
+    productDescription: description,
+    profitCondition: condition,
+    netProfit: null,
+    model: { id: 'model-mini', name: 'Mac Mini' },
+    storage: { id: 'storage-512', displayName: '512GB' },
+  };
+}
+
+test('matching Apple reutiliza Product para descricoes semanticamente equivalentes', () => {
+  const result = resolveProfitRegistration({
+    item: macMiniItem('Mac Mini M4, 16 GB, 512 GB SSD'),
+    netProfit: '500',
+    products: [macMiniProduct('Mac mini M4 16GB 512GB')],
+    references: macMiniReferences,
+  });
+  assert.equal(result.action, 'update');
+  if (result.action === 'update') assert.equal(result.productId, 'product-mini');
+});
+
+test('matching Apple nao reutiliza Product de RAM, storage, condicao ou compute distintos', () => {
+  const cases = [
+    ['Mac Mini M4 24GB 512GB', 'Mac Mini M4 16GB 512GB', 'NOVO'],
+    ['Mac Mini M4 16GB 256GB', 'Mac Mini M4 16GB 512GB', 'NOVO'],
+    ['Mac Mini M4 16GB 512GB', 'Mac Mini M4 16GB 512GB', 'CPO'],
+    ['Mac Mini M4 16GB 512GB', 'Mac Mini M4 16GB 512GB', 'SEMINOVO'],
+    ['Mac Mini M4 16GB 512GB GPU 12', 'Mac Mini M4 16GB 512GB GPU 10', 'NOVO'],
+    ['Mac Mini M4 16GB 512GB GPU 12', 'Mac Mini M4 16GB 512GB', 'NOVO'],
+    ['Mac Mini M4 16GB 512GB CPU 12', 'Mac Mini M4 16GB 512GB CPU 10', 'NOVO'],
+    ['Mac Mini M4 Pro 24GB 512GB', 'Mac Mini M4 24GB 512GB', 'NOVO'],
+  ] as const;
+
+  cases.forEach(([candidate, source, condition]) => {
+    assert.equal(
+      deriveProfitLookupIdentity({ productDescription: source, quality: 'NOVO' }).status,
+      'valid',
+    );
+    assert.equal(
+      deriveProfitLookupIdentity({ productDescription: candidate, quality: condition }).status,
+      'valid',
+    );
+    const result = resolveProfitRegistration({
+      item: macMiniItem(source),
+      netProfit: '500',
+      products: [macMiniProduct(candidate, condition)],
+      references: macMiniReferences,
+    });
+    assert.notEqual(result.action, 'update', `${source} matched ${candidate} (${condition})`);
+  });
+});
+
+test('matching Non-Apple mantem o comparator anterior para Product existente', () => {
+  const product = macMiniProduct('Mac Mini M4 16GB 512GB');
+  const result = resolveProfitRegistration({
+    item: { ...macMiniItem('Mac Mini M4 16GB 512GB'), financialClassification: 'NON_APPLE' },
+    netProfit: '500',
+    products: [product],
+    references: macMiniReferences,
+  });
+  assert.equal(result.action, 'update');
+  if (result.action === 'update') assert.equal(result.productId, product.id);
+});
+
+test('matching Apple nao escolhe o primeiro de dois Products com a mesma identidade financeira', () => {
+  const product = macMiniProduct('Mac Mini M4 16GB 512GB');
+  const result = resolveProfitRegistration({
+    item: macMiniItem('Mac Mini M4 16GB 512GB'),
+    netProfit: '500',
+    products: [product, { ...product, id: 'product-mini-duplicate' }],
+    references: macMiniReferences,
+  });
+  assert.equal(result.action, 'incomplete');
+  if (result.action === 'incomplete') assert.equal(result.reason, 'MULTIPLE_CANONICAL_MODELS');
+});
+
+test('matching Apple nao vincula identidade insuficiente ou ambigua a Product existente', () => {
+  for (const description of ['Mac Mini M4 512GB', 'iPhone 17 Pro 256GB Apple Watch S11 46mm']) {
+    const result = resolveProfitRegistration({
+      item: macMiniItem(description),
+      netProfit: '500',
+      products: [macMiniProduct(description)],
+      references: macMiniReferences,
+    });
+    assert.notEqual(result.action, 'update', description);
+  }
+});
+
+test('Mac Mini M6 usa o cadastro existente de ProductModel e Product sem chave canonica estatica', () => {
+  const created = resolveProfitRegistration({
+    item: uncatalogedMacMiniItem('Mac Mini M6 16GB 512GB'),
+    netProfit: '500',
+    products: [],
+    references: macMiniReferences,
+  });
+  assert.equal(created.action, 'create-model-and-product');
+  if (created.action === 'create-model-and-product') {
+    assert.deepEqual(created.model, { name: 'Mac Mini M6', productType: 'MACBOOK' });
+    assert.equal(created.payload.netProfit, '500');
+  }
+
+  const existingModel = resolveProfitRegistration({
+    item: uncatalogedMacMiniItem('Mac Mini M6 16GB 512GB'),
+    netProfit: '500',
+    products: [],
+    references: {
+      ...macMiniReferences,
+      models: [
+        ...macMiniReferences.models,
+        { id: 'model-m6', categoryId: 'category-mac', name: 'Mac Mini M6', productType: 'MACBOOK' },
+      ],
+    },
+  });
+  assert.equal(existingModel.action, 'create');
+  if (existingModel.action === 'create') assert.equal(existingModel.payload.modelId, 'model-m6');
+
+  const result = resolveProfitRegistration({
+    item: uncatalogedMacMiniItem('Mac Mini M6 16GB 512GB'),
+    netProfit: '500',
+    products: [macMiniProduct('Mac Mini M6 16GB 512GB')],
+    references: macMiniReferences,
+  });
+  assert.equal(result.action, 'update');
+  if (result.action === 'update') assert.equal(result.productId, 'product-mini');
+});
+
+test('modelo Apple novo sem geracao, RAM ou com geracoes conflitantes continua fechado', () => {
+  for (const description of [
+    'Mac Mini 16GB 512GB',
+    'Mac Mini M6 512GB',
+    'Mac Mini M6 M7 16GB 512GB',
+  ]) {
+    const result = resolveProfitRegistration({
+      item: uncatalogedMacMiniItem(description),
+      netProfit: '500',
+      products: [],
+      references: macMiniReferences,
+    });
+    assert.equal(result.action, 'incomplete', description);
+  }
 });

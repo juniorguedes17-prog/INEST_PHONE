@@ -90,7 +90,7 @@ describe('product identity ingestion shadow', () => {
     expect(items).toEqual(before);
     expect(observations.map(({ item }) => [item.normalizedName, item.price, item.rawLine])).toEqual(
       [
-        ['iphone 17 256gb as is', 4389, 'PRETO R$ 4.389'],
+        ['iphone 17 256gb', 4389, 'PRETO R$ 4.389'],
         ['iphone 16 128gb', 3350, 'PRETO R$ 3.350'],
       ],
     );

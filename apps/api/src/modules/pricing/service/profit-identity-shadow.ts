@@ -49,7 +49,7 @@ export function resolveProfitIdentity(
     category: source.category,
     color: source.color,
     quality: source.condition,
-  });
+  }, { allowUncatalogedModel: true });
 
   if (identity.status === 'insufficient_identity') {
     return { status: 'insufficient_identity', identity };
@@ -62,7 +62,7 @@ export function resolveProfitIdentity(
     const candidate = deriveProfitLookupIdentity({
       productDescription: record.productDescription,
       quality: record.condition,
-    });
+    }, { allowUncatalogedModel: true });
     return candidate.status === 'valid' && candidate.key === identity.key;
   });
 

@@ -1,4 +1,9 @@
 import {
+  deriveProfitLookupIdentity,
+  resolveExplicitUncatalogedModel,
+  type ProfitLookupIdentity,
+} from '@inest/product-identity';
+import {
   canonicalColorAliases,
   normalizeCanonicalProductIdentity,
   normalizeCanonicalText,
@@ -102,9 +107,26 @@ export function resolveProfitRegistration({
   const source = toCanonicalSource(item);
   const identity = normalizeCanonicalProductIdentity(source);
   const catalogModelKey = resolveCatalogModelLookupKey(source);
-  const matchingProduct = products.find((product) =>
-    matchesCatalogProduct(product, item, identity),
+  const financialIdentity =
+    item.financialClassification === 'APPLE'
+      ? deriveProfitLookupIdentity({
+          productDescription: item.profit.productDescription,
+          category: item.product.category,
+          color: item.product.color,
+          quality: item.product.condition,
+        }, { allowUncatalogedModel: true })
+      : null;
+  const matchingProducts = products.filter((product) =>
+    matchesCatalogProduct(product, item, identity, financialIdentity),
   );
+  if (financialIdentity && matchingProducts.length > 1) {
+    return {
+      action: 'incomplete',
+      reason: 'MULTIPLE_CANONICAL_MODELS',
+      message: incompleteRegistrationMessage('MULTIPLE_CANONICAL_MODELS'),
+    };
+  }
+  const matchingProduct = matchingProducts[0];
 
   if (matchingProduct) {
     return {
@@ -128,7 +150,17 @@ export function resolveProfitRegistration({
     };
   }
 
-  if (!identity.canonicalModelMatched || !identity.canonicalModelKey || !catalogModelKey) {
+  const uncatalogedModel =
+    isAppleOriginal && !identity.canonicalModelMatched
+      ? resolveExplicitUncatalogedModel(source)
+      : null;
+  if (
+    (!identity.canonicalModelMatched &&
+      (uncatalogedModel?.status !== 'valid' ||
+        financialIdentity?.status !== 'valid' ||
+        financialIdentity.attributes.model !== uncatalogedModel.key)) ||
+    (identity.canonicalModelMatched && (!identity.canonicalModelKey || !catalogModelKey))
+  ) {
     return {
       action: 'incomplete',
       reason: 'NO_CANONICAL_MODEL',
@@ -137,23 +169,23 @@ export function resolveProfitRegistration({
     };
   }
 
-  const canonicalModelCandidates = references.models.filter(
-    (candidate) =>
-      candidate.normalizedName === catalogModelKey ||
-      (candidate.name &&
-        normalizeCanonicalProductIdentity({
-          productName: candidate.name,
-          category: identity.canonicalCategory,
-        }).canonicalModelKey === identity.canonicalModelKey),
-  );
-
-  const catalogType = resolveCatalogProductType(
-    canonicalModelCandidates,
-    references,
-    catalogModelKey,
-    identity.canonicalModelKey,
-    identity.canonicalCategory,
-  );
+  const catalogType = uncatalogedModel?.status === 'valid'
+    ? resolveUncatalogedCatalogType(references, uncatalogedModel, financialIdentity!, item.product.condition)
+    : resolveCatalogProductType(
+        references.models.filter(
+          (candidate) =>
+            candidate.normalizedName === catalogModelKey ||
+            (candidate.name &&
+              normalizeCanonicalProductIdentity({
+                productName: candidate.name,
+                category: identity.canonicalCategory,
+              }).canonicalModelKey === identity.canonicalModelKey),
+        ),
+        references,
+        catalogModelKey!,
+        identity.canonicalModelKey,
+        identity.canonicalCategory,
+      );
   if (catalogType.action === 'incomplete') {
     return {
       action: 'incomplete',
@@ -183,8 +215,8 @@ export function resolveProfitRegistration({
       action: 'create-model-and-product',
       payload: productPayload,
       model: {
-        name: identity.canonicalModelLabel,
-        canonicalModelKey: identity.canonicalModelKey,
+        name: uncatalogedModel?.status === 'valid' ? uncatalogedModel.label : identity.canonicalModelLabel,
+        ...(uncatalogedModel?.status === 'valid' ? {} : { canonicalModelKey: identity.canonicalModelKey }),
         productType,
       },
     };
@@ -194,6 +226,48 @@ export function resolveProfitRegistration({
     action: 'create',
     payload: { ...productPayload, modelId: catalogType.model.id },
   };
+}
+
+function resolveUncatalogedCatalogType(
+  references: ProductReferences,
+  model: { key: string; label: string },
+  financialIdentity: ProfitLookupIdentity,
+  condition: ProfitRegistrationItem['product']['condition'],
+): CatalogProductTypeResolution {
+  const iphoneType =
+    financialIdentity.family === 'iphone'
+      ? condition === 'NOVO' ? 'IPHONE_SEALED' : condition === 'CPO' ? 'APPLE_CPO' : 'IPHONE_USED'
+      : null;
+  const familyModels = references.models.filter((candidate) =>
+    candidate.name &&
+    normalizeCanonicalProductIdentity({ productName: candidate.name }).canonicalFamily === financialIdentity.family &&
+    (!iphoneType || candidate.productType === iphoneType),
+  );
+  const matches = familyModels.map((candidate) => {
+    const category = references.categories.find((item) => item.id === candidate.categoryId);
+    return category && candidate.id && isCatalogProductType(candidate.productType) &&
+      category.type === candidate.productType
+      ? { category, model: candidate, productType: candidate.productType }
+      : null;
+  });
+  if (matches.some((match) => match === null)) {
+    return { action: 'incomplete', reason: 'INCOMPATIBLE_PRODUCT_TYPE' };
+  }
+  const compatible = matches.filter((match): match is NonNullable<typeof match> => match !== null);
+  if (!compatible.length) return { action: 'incomplete', reason: 'NO_CANONICAL_MODEL' };
+  const scopes = new Set(compatible.map((match) => `${match.category.id}|${match.productType}`));
+  if (scopes.size !== 1) return { action: 'incomplete', reason: 'MULTIPLE_CANONICAL_MODELS' };
+
+  const existing = compatible.filter((match) => {
+    if (normalizeCanonicalText(match.model.name) === normalizeCanonicalText(model.label)) return true;
+    const candidateModel = resolveExplicitUncatalogedModel({ productName: match.model.name });
+    return candidateModel?.status === 'valid' && candidateModel.key === model.key;
+  });
+  if (existing.length > 1) return { action: 'incomplete', reason: 'MULTIPLE_CANONICAL_MODELS' };
+  const match = compatible[0]!;
+  return existing[0]
+    ? { action: 'existing-model', ...existing[0] }
+    : { action: 'create-canonical-model', category: match.category, productType: match.productType };
 }
 
 function resolveCatalogProductType(
@@ -357,8 +431,18 @@ function matchesCatalogProduct(
   product: ProductItem,
   item: ProfitRegistrationItem,
   sourceIdentity: ReturnType<typeof normalizeCanonicalProductIdentity>,
+  financialIdentity: ProfitLookupIdentity | null,
 ) {
   if (product.active === false || product.profitCondition !== item.product.condition) return false;
+
+  if (financialIdentity) {
+    if (financialIdentity.status !== 'valid') return false;
+    const candidate = deriveProfitLookupIdentity({
+      productDescription: product.productDescription ?? '',
+      quality: product.profitCondition,
+    }, { allowUncatalogedModel: true });
+    return candidate.status === 'valid' && candidate.key === financialIdentity.key;
+  }
 
   const productIdentity = normalizeCanonicalProductIdentity({
     productDescription: product.productDescription,

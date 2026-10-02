@@ -1,6 +1,7 @@
 import {
   normalizeCanonicalProductIdentity,
   normalizeCanonicalText,
+  resolveExplicitUncatalogedModel,
   type CanonicalProductIdentity,
   type CanonicalProductSource,
 } from './canonical-product-identity';
@@ -155,8 +156,9 @@ export function deriveExtendedProductIdentity(
 
 export function deriveProfitLookupIdentity(
   input: CanonicalProductSource | string,
+  options: { allowUncatalogedModel?: boolean } = {},
 ): ProfitLookupIdentity {
-  return deriveProfitFromContext(createIdentityContext(input));
+  return deriveProfitFromContext(createIdentityContext(input, options.allowUncatalogedModel));
 }
 
 export function deriveCanonicalVariantIdentity(
@@ -199,9 +201,10 @@ export function auditProfitIdentityCatalog(
   return { total: records.length, valid, insufficient, ambiguous, collisions };
 }
 
-function createIdentityContext(input: CanonicalProductSource | string): IdentityContext {
+function createIdentityContext(input: CanonicalProductSource | string, allowUncatalogedModel = false): IdentityContext {
   const source = typeof input === 'string' ? { productName: input } : input;
   const canonical = normalizeCanonicalProductIdentity(source);
+  const uncataloged = allowUncatalogedModel ? resolveExplicitUncatalogedModel(source) : null;
   const text = normalizeCanonicalText(
     [
       source.productDescription,
@@ -228,9 +231,10 @@ function createIdentityContext(input: CanonicalProductSource | string): Identity
     ignoredDescriptors: resolveIgnoredDescriptors(text, family),
     ambiguity:
       canonical.canonicalFamilyStatus === 'ambiguous' ||
+      uncataloged?.status === 'ambiguous' ||
       (!canonical.canonicalModelMatched && hasConflictingRegistryMatches(text)),
     values: {
-      model: canonical.canonicalModelKey || null,
+      model: canonical.canonicalModelKey || (uncataloged?.status === 'valid' ? uncataloged.key : null),
       condition: resolveExplicitCondition(text),
       ram: canonical.canonicalRam ?? resolveSlashRam(text),
       storage: canonical.canonicalStorage ?? resolveSlashStorage(text),
@@ -263,7 +267,7 @@ function deriveProfitFromContext(context: IdentityContext): ProfitLookupIdentity
     status,
     key: status === 'valid' ? buildIdentityKey(context.family, dimensions) : null,
     family: context.family,
-    canonicalModelKey: context.values.model,
+    canonicalModelKey: context.canonical.canonicalModelKey || null,
     canonicalCondition: context.values.condition,
     attributes: dimensions,
     missingAttributes,
@@ -288,7 +292,7 @@ function deriveVariantFromContext(
     status: profit.status,
     key: profit.status === 'valid' ? buildIdentityKey(context.family, dimensions) : null,
     family: context.family,
-    canonicalModelKey: context.values.model,
+    canonicalModelKey: context.canonical.canonicalModelKey || null,
     canonicalCondition: context.values.condition,
     canonicalRam: context.values.ram,
     canonicalStorage: context.values.storage,
@@ -324,7 +328,7 @@ function resolveStatus(
   missingAttributes: readonly string[],
 ): ProductIdentityResolutionStatus {
   if (context.ambiguity) return 'ambiguous_identity';
-  if (!hasPolicy || !context.canonical.canonicalModelMatched || missingAttributes.length) {
+  if (!hasPolicy || missingAttributes.length) {
     return 'insufficient_identity';
   }
   return 'valid';

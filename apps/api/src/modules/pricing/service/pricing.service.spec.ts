@@ -478,7 +478,7 @@ describe('PricingService native product profit integration', () => {
     });
   });
 
-  it('keeps an Apple family match pending when the generation is not cataloged', async () => {
+  it('allows a fully identified uncataloged Apple generation to request profit', async () => {
     const service = createTemporaryPyPricingService([]);
     const title = 'Mac mini, M6 Chip, 12-core CPU, 12-core GPU, 24GB memory, 512GB storage';
 
@@ -497,7 +497,7 @@ describe('PricingService native product profit integration', () => {
 
     expect(result).toMatchObject({
       financialClassification: 'APPLE',
-      calculationStatus: 'insufficient_identity',
+      calculationStatus: 'missing_profit',
       catalogProductId: null,
       importCosts: { totalCost: 5000 },
       product: { chip: 'M6', ram: '24GB', capacity: '512GB' },
@@ -506,6 +506,30 @@ describe('PricingService native product profit integration', () => {
       offerPrice: null,
       offerDraft: null,
     });
+
+    const afterProfit = await createTemporaryPyPricingService([
+      {
+        productId: 'm6-profit',
+        condition: 'NOVO',
+        productDescription: title,
+        normalizedDescription: title.toLowerCase(),
+        netProfit: 900,
+      },
+    ]).calculateTemporaryImport(
+      temporaryPyPricingDto({
+        productName: title,
+        displayName: title,
+        category: 'Mac Mini',
+        model: title,
+        chip: 'M6',
+        ram: '24GB',
+        capacity: '512GB',
+        condition: 'NOVO',
+      }),
+    );
+    expect(afterProfit.calculationStatus).toBe('ready');
+    expect(afterProfit.desiredNetProfit).toBe(900);
+    expect(afterProfit.salePrice).not.toBeNull();
   });
 
   it('confirms a Temporary Import condition for one execution and reaches ready with existing profit', async () => {
