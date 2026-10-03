@@ -61,6 +61,7 @@ import type {
   UsaFinalCostPricingResult,
 } from '../usa-final-cost-pricing.contract';
 import {
+  deriveProfitLookupIdentity,
   normalizeCanonicalProductIdentity,
   profitIdentityPolicies,
   resolveCatalogModelLookupKey,
@@ -1122,9 +1123,14 @@ export class PricingService {
           )
         : null;
     const profitCondition = quoteProfitCondition ?? quote.condition?.trim() ?? '';
-    const profitProductDescription = catalogProduct?.productDescription?.trim() || quoteDescription;
     const shouldResolveAppleProfit =
       canResolveAppleProfit && financialClassification.classification === 'APPLE';
+    const financialQuoteDescription =
+      shouldResolveAppleProfit && !catalogProduct
+        ? this.getBrazilRadarFinancialDescription(quote, quoteDescription, quoteProfitCondition!)
+        : quoteDescription;
+    const profitProductDescription =
+      catalogProduct?.productDescription?.trim() || financialQuoteDescription;
     const legacyProfitLookup = !shouldResolveAppleProfit
       ? { status: 'not_found' as const }
       : this.findProfit(
@@ -1136,7 +1142,7 @@ export class PricingService {
     const profitIdentityResolution =
       shouldResolveAppleProfit && pricingResolutionSource === 'LEGACY_FALLBACK'
         ? resolveProfitIdentity(profitCatalog, {
-            productDescription: quoteDescription,
+            productDescription: financialQuoteDescription,
             condition: quoteProfitCondition!,
             category: quote.category,
             color: quote.color,
@@ -1588,6 +1594,34 @@ export class PricingService {
     const normalizedBase = normalizeProfitProductDescription(base);
     const normalizedCapacity = normalizeProfitProductDescription(capacity);
     return normalizedBase.includes(normalizedCapacity) ? base : `${base} ${capacity}`;
+  }
+
+  private getBrazilRadarFinancialDescription(
+    quote: PricingBrazilRadarQuoteRecord,
+    projected: string,
+    condition: ProfitCondition,
+  ) {
+    const source = { quality: condition, category: quote.category, color: quote.color };
+    const projectedIdentity = deriveProfitLookupIdentity(
+      { ...source, productDescription: projected },
+      { allowUncatalogedModel: true },
+    );
+    if (projectedIdentity.status !== 'insufficient_identity') return projected;
+
+    const fullDescription = quote.productName.trim();
+    const fullIdentity = deriveProfitLookupIdentity(
+      { ...source, productDescription: fullDescription },
+      { allowUncatalogedModel: true },
+    );
+    const combinedIdentity = deriveProfitLookupIdentity(
+      { ...source, productDescription: `${fullDescription} ${quote.model ?? ''}` },
+      { allowUncatalogedModel: true },
+    );
+    return fullIdentity.status === 'valid' &&
+      combinedIdentity.status === 'valid' &&
+      fullIdentity.key === combinedIdentity.key
+      ? fullDescription
+      : projected;
   }
 
   private findProfit(

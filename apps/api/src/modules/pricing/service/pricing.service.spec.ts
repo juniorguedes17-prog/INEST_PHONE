@@ -530,6 +530,35 @@ describe('PricingService native product profit integration', () => {
     expect(afterProfit.calculationStatus).toBe('ready');
     expect(afterProfit.desiredNetProfit).toBe(900);
     expect(afterProfit.salePrice).not.toBeNull();
+    expect(afterProfit.offerDraft).not.toBeNull();
+  });
+
+  it('keeps a new Apple Store USA model on the existing condition and profit path', async () => {
+    const title = 'Mac Mini M6 16GB 512GB';
+    const service = createTemporaryPyPricingService([]);
+    const result = await service.calculateTemporaryImport(
+      temporaryPyPricingDto({
+        origin: 'US',
+        sourceProductId: 'apple-store-usa:mac-mini-m6',
+        productName: title,
+        displayName: title,
+        category: 'Mac Mini',
+        model: 'Mac Mini M6',
+        capacity: '512GB',
+        ram: '16GB',
+        chip: 'M6',
+        condition: 'NOVO',
+        provider: 'apple_store_usa',
+        retailer: 'Apple Store USA',
+      }),
+    );
+    expect(result).toMatchObject({
+      origin: 'US',
+      calculationStatus: 'missing_profit',
+      importCosts: { totalCost: 5000 },
+      salePrice: null,
+      offerDraft: null,
+    });
   });
 
   it('confirms a Temporary Import condition for one execution and reaches ready with existing profit', async () => {
@@ -601,6 +630,33 @@ describe('PricingService native product profit integration', () => {
       desiredNetProfit: null,
       offerDraft: null,
     });
+  });
+
+  it('does not use a full Brazil Radar description when it conflicts with the projected model', async () => {
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          productName: 'Mac Mini M6 16GB 512GB',
+          category: 'Mac Mini',
+          model: 'Mac Mini M7',
+          capacity: '512GB',
+        }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi
+          .fn()
+          .mockResolvedValue({ records: [], fetchedAt: '2026-08-16T10:00:00.000Z' }),
+      } as unknown as ProductProfitProvider,
+    );
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+    expect(result.calculationStatus).toBe('insufficient_identity');
+    expect(result.offerDraft).toBeNull();
   });
 
   it('exposes the next insufficient identity after condition confirmation', async () => {
@@ -1694,6 +1750,67 @@ describe('PricingService native product profit integration', () => {
       calculationError: 'Lucro Liquido nao cadastrado para este produto e condicao.',
       offerDraft: null,
     });
+  });
+
+  it('keeps an identified new Mac Mini on the Brazil Radar profit path', async () => {
+    const description = 'Mac Mini M6 16GB 512GB';
+    const repository = {
+      findBrazilRadarQuote: vi.fn().mockResolvedValue(
+        brazilRadarQuote({
+          productName: description,
+          category: 'Mac Mini',
+          model: 'Mac Mini M6',
+          capacity: '512GB',
+          price: 5000,
+        }),
+      ),
+      findActiveCatalogProduct: vi.fn().mockResolvedValue(null),
+      listPricingConfigurations: vi.fn().mockResolvedValue([]),
+    };
+    const service = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi
+          .fn()
+          .mockResolvedValue({ records: [], fetchedAt: '2026-08-16T10:00:00.000Z' }),
+      } as unknown as ProductProfitProvider,
+    );
+    const result = await service.calculateBrazilRadarQuote({ sourceQuoteId: BRAZIL_QUOTE_ID });
+    expect(result).toMatchObject({
+      sourceQuoteId: BRAZIL_QUOTE_ID,
+      calculationStatus: 'missing_profit',
+      costProduct: 5000,
+      desiredNetProfit: null,
+      offerDraft: null,
+      profit: { productDescription: description },
+    });
+
+    const afterProfit = new PricingService(
+      repository as unknown as PricingRepository,
+      { getSettings: vi.fn().mockResolvedValue(pricingSettings()) } as unknown as SettingsService,
+      {
+        getCatalog: vi.fn().mockResolvedValue({
+          records: [
+            {
+              productId: 'm6-br',
+              condition: 'NOVO',
+              productDescription: description,
+              normalizedDescription: description.toLowerCase(),
+              netProfit: 900,
+            },
+          ],
+          fetchedAt: '2026-08-16T10:00:00.000Z',
+        }),
+      } as unknown as ProductProfitProvider,
+    );
+    const recalculated = await afterProfit.calculateBrazilRadarQuote({
+      sourceQuoteId: BRAZIL_QUOTE_ID,
+    });
+    expect(recalculated.calculationStatus).toBe('ready');
+    expect(recalculated.desiredNetProfit).toBe(900);
+    expect(recalculated.salePrice).not.toBeNull();
+    expect(recalculated.offerDraft).not.toBeNull();
   });
 
   it('uses canonical profit identity for iPhone 17 Pro instead of the legacy duplicate', async () => {

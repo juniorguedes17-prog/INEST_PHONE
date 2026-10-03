@@ -109,12 +109,15 @@ export function resolveProfitRegistration({
   const catalogModelKey = resolveCatalogModelLookupKey(source);
   const financialIdentity =
     item.financialClassification === 'APPLE'
-      ? deriveProfitLookupIdentity({
-          productDescription: item.profit.productDescription,
-          category: item.product.category,
-          color: item.product.color,
-          quality: item.product.condition,
-        }, { allowUncatalogedModel: true })
+      ? deriveProfitLookupIdentity(
+          {
+            productDescription: item.profit.productDescription,
+            category: item.product.category,
+            color: item.product.color,
+            quality: item.product.condition,
+          },
+          { allowUncatalogedModel: true },
+        )
       : null;
   const matchingProducts = products.filter((product) =>
     matchesCatalogProduct(product, item, identity, financialIdentity),
@@ -150,16 +153,17 @@ export function resolveProfitRegistration({
     };
   }
 
-  const uncatalogedModel =
-    isAppleOriginal && !identity.canonicalModelMatched
-      ? resolveExplicitUncatalogedModel(source)
-      : null;
+  const uncatalogedModel = isAppleOriginal ? resolveExplicitUncatalogedModel(source) : null;
   if (
-    (!identity.canonicalModelMatched &&
-      (uncatalogedModel?.status !== 'valid' ||
-        financialIdentity?.status !== 'valid' ||
+    uncatalogedModel?.status === 'unsupported' ||
+    uncatalogedModel?.status === 'ambiguous' ||
+    (uncatalogedModel?.status === 'valid' &&
+      (financialIdentity?.status !== 'valid' ||
         financialIdentity.attributes.model !== uncatalogedModel.key)) ||
-    (identity.canonicalModelMatched && (!identity.canonicalModelKey || !catalogModelKey))
+    (!identity.canonicalModelMatched && uncatalogedModel?.status !== 'valid') ||
+    (uncatalogedModel?.status !== 'valid' &&
+      identity.canonicalModelMatched &&
+      (!identity.canonicalModelKey || !catalogModelKey))
   ) {
     return {
       action: 'incomplete',
@@ -169,23 +173,29 @@ export function resolveProfitRegistration({
     };
   }
 
-  const catalogType = uncatalogedModel?.status === 'valid'
-    ? resolveUncatalogedCatalogType(references, uncatalogedModel, financialIdentity!, item.product.condition)
-    : resolveCatalogProductType(
-        references.models.filter(
-          (candidate) =>
-            candidate.normalizedName === catalogModelKey ||
-            (candidate.name &&
-              normalizeCanonicalProductIdentity({
-                productName: candidate.name,
-                category: identity.canonicalCategory,
-              }).canonicalModelKey === identity.canonicalModelKey),
-        ),
-        references,
-        catalogModelKey!,
-        identity.canonicalModelKey,
-        identity.canonicalCategory,
-      );
+  const catalogType =
+    uncatalogedModel?.status === 'valid'
+      ? resolveUncatalogedCatalogType(
+          references,
+          uncatalogedModel,
+          financialIdentity!,
+          item.product.condition,
+        )
+      : resolveCatalogProductType(
+          references.models.filter(
+            (candidate) =>
+              candidate.normalizedName === catalogModelKey ||
+              (candidate.name &&
+                normalizeCanonicalProductIdentity({
+                  productName: candidate.name,
+                  category: identity.canonicalCategory,
+                }).canonicalModelKey === identity.canonicalModelKey),
+          ),
+          references,
+          catalogModelKey!,
+          identity.canonicalModelKey,
+          identity.canonicalCategory,
+        );
   if (catalogType.action === 'incomplete') {
     return {
       action: 'incomplete',
@@ -215,8 +225,13 @@ export function resolveProfitRegistration({
       action: 'create-model-and-product',
       payload: productPayload,
       model: {
-        name: uncatalogedModel?.status === 'valid' ? uncatalogedModel.label : identity.canonicalModelLabel,
-        ...(uncatalogedModel?.status === 'valid' ? {} : { canonicalModelKey: identity.canonicalModelKey }),
+        name:
+          uncatalogedModel?.status === 'valid'
+            ? uncatalogedModel.label
+            : identity.canonicalModelLabel,
+        ...(uncatalogedModel?.status === 'valid'
+          ? {}
+          : { canonicalModelKey: identity.canonicalModelKey }),
         productType,
       },
     };
@@ -236,16 +251,24 @@ function resolveUncatalogedCatalogType(
 ): CatalogProductTypeResolution {
   const iphoneType =
     financialIdentity.family === 'iphone'
-      ? condition === 'NOVO' ? 'IPHONE_SEALED' : condition === 'CPO' ? 'APPLE_CPO' : 'IPHONE_USED'
+      ? condition === 'NOVO'
+        ? 'IPHONE_SEALED'
+        : condition === 'CPO'
+          ? 'APPLE_CPO'
+          : 'IPHONE_USED'
       : null;
-  const familyModels = references.models.filter((candidate) =>
-    candidate.name &&
-    normalizeCanonicalProductIdentity({ productName: candidate.name }).canonicalFamily === financialIdentity.family &&
-    (!iphoneType || candidate.productType === iphoneType),
+  const familyModels = references.models.filter(
+    (candidate) =>
+      candidate.name &&
+      normalizeCanonicalProductIdentity({ productName: candidate.name }).canonicalFamily ===
+        financialIdentity.family &&
+      (!iphoneType || candidate.productType === iphoneType),
   );
   const matches = familyModels.map((candidate) => {
     const category = references.categories.find((item) => item.id === candidate.categoryId);
-    return category && candidate.id && isCatalogProductType(candidate.productType) &&
+    return category &&
+      candidate.id &&
+      isCatalogProductType(candidate.productType) &&
       category.type === candidate.productType
       ? { category, model: candidate, productType: candidate.productType }
       : null;
@@ -259,7 +282,8 @@ function resolveUncatalogedCatalogType(
   if (scopes.size !== 1) return { action: 'incomplete', reason: 'MULTIPLE_CANONICAL_MODELS' };
 
   const existing = compatible.filter((match) => {
-    if (normalizeCanonicalText(match.model.name) === normalizeCanonicalText(model.label)) return true;
+    if (normalizeCanonicalText(match.model.name) === normalizeCanonicalText(model.label))
+      return true;
     const candidateModel = resolveExplicitUncatalogedModel({ productName: match.model.name });
     return candidateModel?.status === 'valid' && candidateModel.key === model.key;
   });
@@ -267,7 +291,11 @@ function resolveUncatalogedCatalogType(
   const match = compatible[0]!;
   return existing[0]
     ? { action: 'existing-model', ...existing[0] }
-    : { action: 'create-canonical-model', category: match.category, productType: match.productType };
+    : {
+        action: 'create-canonical-model',
+        category: match.category,
+        productType: match.productType,
+      };
 }
 
 function resolveCatalogProductType(
@@ -437,10 +465,13 @@ function matchesCatalogProduct(
 
   if (financialIdentity) {
     if (financialIdentity.status !== 'valid') return false;
-    const candidate = deriveProfitLookupIdentity({
-      productDescription: product.productDescription ?? '',
-      quality: product.profitCondition,
-    }, { allowUncatalogedModel: true });
+    const candidate = deriveProfitLookupIdentity(
+      {
+        productDescription: product.productDescription ?? '',
+        quality: product.profitCondition,
+      },
+      { allowUncatalogedModel: true },
+    );
     return candidate.status === 'valid' && candidate.key === financialIdentity.key;
   }
 

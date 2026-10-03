@@ -69,6 +69,60 @@ function setup() {
 }
 
 describe('PricingService USA FinalCost entrypoint', () => {
+  it('prices a new Apple Store USA Mac Mini only after the existing profit is registered', async () => {
+    const { service, profits } = setup();
+    const request = {
+      sourceProduct: usaSource({
+        sourceProductId: 'apple-mac-mini-m6',
+        sourceName: 'Mac Mini M6 16GB 512GB',
+        displayName: 'Mac Mini M6 16GB 512GB',
+        category: 'Mac Mini',
+        model: 'Mac Mini M6',
+        capacity: '512GB',
+      }),
+      finalCost: { currency: 'BRL' as const, amountBrl: 2677.09 },
+      condition: 'NOVO' as const,
+      normalizedPricing: {
+        category: 'Mac Mini',
+        model: 'Mac Mini M6',
+        capacity: '512GB',
+        color: null,
+        ram: '16GB',
+        chip: 'M6',
+        screenSize: null,
+        connectivity: null,
+      },
+    };
+    profits.getCatalog.mockResolvedValue({ records: [], fetchedAt: profitCatalog.fetchedAt });
+    const missing = await service.calculateUsaFinalCost(request);
+    expect(missing).toMatchObject({
+      acquisitionCost: 2677.09,
+      financialClassification: 'APPLE',
+      calculationStatus: 'missing_profit',
+      desiredNetProfit: null,
+      salePrice: null,
+    });
+    expect(missing).not.toHaveProperty('offerDraft');
+
+    profits.getCatalog.mockResolvedValue({
+      fetchedAt: profitCatalog.fetchedAt,
+      records: [
+        {
+          productId: 'mac-mini-m6',
+          condition: 'NOVO',
+          productDescription: 'Mac mini M6, 16 GB, 512 GB SSD',
+          normalizedDescription: 'mac mini m6 16 gb 512 gb ssd',
+          netProfit: 900,
+        },
+      ],
+    });
+    const ready = await service.calculateUsaFinalCost(request);
+    expect(ready.calculationStatus).toBe('ready');
+    expect(ready.acquisitionCost).toBe(2677.09);
+    expect(ready.desiredNetProfit).toBe(900);
+    expect(ready.salePrice).not.toBeNull();
+  });
+
   it('routes an Apple FinalCost through the existing financial identity and pricing path', async () => {
     const { service, manufacturers } = setup();
 

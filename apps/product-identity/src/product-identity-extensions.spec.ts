@@ -358,6 +358,23 @@ test('modelo Apple explicito ainda nao catalogado so e valido no fluxo financeir
   );
 });
 
+test('aliases genericos nao compartilham lucro com geracoes futuras explicitas', () => {
+  const financial = (productDescription: string) =>
+    deriveProfitLookupIdentity(
+      { productDescription, quality: 'NOVO' },
+      { allowUncatalogedModel: true },
+    );
+  assert.notEqual(financial('AirPods 5 Regular').key, financial('AirPods 4 Regular').key);
+  assert.equal(financial('AirPods 5 Regular').attributes.model, 'airpods-5');
+  assert.notEqual(financial('Apple Pencil 4').key, financial('Apple Pencil Pro').key);
+  assert.equal(financial('Apple Pencil 4').attributes.model, 'apple-pencil-4');
+  assert.equal(financial('Magic Keyboard 2 com teclado numerico').status, 'insufficient_identity');
+  assert.equal(
+    financial('AirPods 4 Regular').key,
+    deriveProfitLookupIdentity({ productDescription: 'AirPods 4 Regular', quality: 'NOVO' }).key,
+  );
+});
+
 test('iMac protege chip, tela, RAM, armazenamento e unidades de compute', () => {
   const equivalentForms = [
     'iMac M4 24" 16GB/256GB',

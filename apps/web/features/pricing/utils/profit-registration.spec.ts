@@ -1023,3 +1023,82 @@ test('modelo Apple novo sem geracao, RAM ou com geracoes conflitantes continua f
     assert.equal(result.action, 'incomplete', description);
   }
 });
+
+test('alias generico AirPods nao reutiliza lucro da geracao anterior', () => {
+  const result = resolveProfitRegistration({
+    item: {
+      ...item,
+      product: {
+        ...item.product,
+        name: 'AirPods 5 Regular',
+        model: 'AirPods 5',
+        category: 'AirPods',
+        capacity: '',
+        color: '',
+      },
+      profit: { productDescription: 'AirPods 5 Regular' },
+    },
+    netProfit: '500',
+    products: [],
+    references: {
+      categories: [{ id: 'category-airpods', name: 'AirPods', type: 'AIRPODS' }],
+      models: [
+        {
+          id: 'model-airpods-4',
+          categoryId: 'category-airpods',
+          name: 'AirPods 4',
+          productType: 'AIRPODS',
+        },
+      ],
+      colors: [],
+      storages: [],
+    },
+  });
+  assert.equal(result.action, 'create-model-and-product');
+  if (result.action === 'create-model-and-product') {
+    assert.deepEqual(result.model, { name: 'AirPods 5', productType: 'AIRPODS' });
+  }
+});
+
+test('iPhone novo conserva o tipo comercial por condicao existente', () => {
+  const conditions = [
+    ['NOVO', 'IPHONE_SEALED'],
+    ['CPO', 'APPLE_CPO'],
+    ['SEMINOVO', 'IPHONE_USED'],
+  ] as const;
+  const references = {
+    categories: conditions.map(([condition, type]) => ({
+      id: `category-${condition}`,
+      name: type,
+      type,
+    })),
+    models: conditions.map(([condition, type]) => ({
+      id: `model-${condition}`,
+      categoryId: `category-${condition}`,
+      name: 'iPhone 17 Pro 256GB',
+      productType: type,
+    })),
+    colors: [],
+    storages: [{ id: 'storage-256', displayName: '256GB' }],
+  };
+  conditions.forEach(([condition, type]) => {
+    const result = resolveProfitRegistration({
+      item: {
+        ...item,
+        product: {
+          ...item.product,
+          name: 'iPhone 19 Pro 256GB',
+          model: 'iPhone 19 Pro',
+          capacity: '256GB',
+          condition,
+        },
+        profit: { productDescription: 'iPhone 19 Pro 256GB' },
+      },
+      netProfit: '500',
+      products: [],
+      references,
+    });
+    assert.equal(result.action, 'create-model-and-product', condition);
+    if (result.action === 'create-model-and-product') assert.equal(result.model.productType, type);
+  });
+});

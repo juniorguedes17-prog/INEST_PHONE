@@ -201,7 +201,10 @@ export function auditProfitIdentityCatalog(
   return { total: records.length, valid, insufficient, ambiguous, collisions };
 }
 
-function createIdentityContext(input: CanonicalProductSource | string, allowUncatalogedModel = false): IdentityContext {
+function createIdentityContext(
+  input: CanonicalProductSource | string,
+  allowUncatalogedModel = false,
+): IdentityContext {
   const source = typeof input === 'string' ? { productName: input } : input;
   const canonical = normalizeCanonicalProductIdentity(source);
   const uncataloged = allowUncatalogedModel ? resolveExplicitUncatalogedModel(source) : null;
@@ -234,7 +237,12 @@ function createIdentityContext(input: CanonicalProductSource | string, allowUnca
       uncataloged?.status === 'ambiguous' ||
       (!canonical.canonicalModelMatched && hasConflictingRegistryMatches(text)),
     values: {
-      model: canonical.canonicalModelKey || (uncataloged?.status === 'valid' ? uncataloged.key : null),
+      model:
+        uncataloged?.status === 'valid'
+          ? uncataloged.key
+          : uncataloged?.status === 'unsupported'
+            ? null
+            : canonical.canonicalModelKey || null,
       condition: resolveExplicitCondition(text),
       ram: canonical.canonicalRam ?? resolveSlashRam(text),
       storage: canonical.canonicalStorage ?? resolveSlashStorage(text),

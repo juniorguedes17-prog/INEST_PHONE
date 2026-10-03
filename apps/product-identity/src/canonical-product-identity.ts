@@ -108,7 +108,9 @@ export function normalizeCanonicalProductIdentity(
   const identityText = normalizeCanonicalText(
     [preferredText, source.category, source.model].filter(Boolean).join(' '),
   );
-  const familyText = normalizeCanonicalText([preferredText, source.model].filter(Boolean).join(' '));
+  const familyText = normalizeCanonicalText(
+    [preferredText, source.model].filter(Boolean).join(' '),
+  );
   const attributeText = normalizeCanonicalText(
     [
       source.productDescription,
@@ -208,7 +210,8 @@ export function resolveExplicitUncatalogedModel(input: CanonicalProductSource | 
   if (
     canonical.canonicalFamilyStatus !== 'matched' ||
     canonical.canonicalFamilyClassification !== 'APPLE'
-  ) return null;
+  )
+    return null;
 
   const text = normalizeCanonicalText(
     [source.productDescription, source.productName, source.model].filter(Boolean).join(' '),
@@ -218,15 +221,25 @@ export function resolveExplicitUncatalogedModel(input: CanonicalProductSource | 
     family === 'macbook' || family === 'mac-mini' || family === 'imac' || family === 'mac-studio'
       ? [...text.matchAll(/\b[ma]\d+(?:\s+(?:pro|max|ultra))?\b/g)].map((match) => match[0])
       : family === 'iphone'
-        ? [...text.matchAll(/\b(?:iphone|iph)\s*\d{1,2}\s*(?:pro\s*max|promax|pm|pro|plus|air|e)?\b/g)].map((match) => match[0])
+        ? [
+            ...text.matchAll(
+              /\b(?:iphone|iph)\s*\d{1,2}\s*(?:pro\s*max|promax|pm|pro|plus|air|e)?\b/g,
+            ),
+          ].map((match) => match[0])
         : family === 'ipad'
-          ? [...text.matchAll(/\bipad\s*(?:pro|air|mini)?\s*(?:[ma]\d+|\d{1,2})\b/g)].map((match) => match[0])
+          ? [...text.matchAll(/\bipad\s*(?:pro|air|mini)?\s*(?:[ma]\d+|\d{1,2})\b/g)].map(
+              (match) => match[0],
+            )
           : family === 'apple-watch'
             ? [...text.matchAll(/\b(?:series|se|ultra|s)\s*\d+\b/g)].map((match) => match[0])
             : family === 'airpods'
               ? [...text.matchAll(/\bair\s*pods?\s*(?:pro|max)?\s*\d+\b/g)].map((match) => match[0])
               : family === 'accessory'
-                ? [...text.matchAll(/\b(?:apple\s*)?pencil\s*\d+\b|\bmagic\s*(?:mouse|keyboard)\s*\d+\b/g)].map((match) => match[0])
+                ? [
+                    ...text.matchAll(
+                      /\b(?:apple\s*)?pencil\s*\d+\b|\bmagic\s*(?:mouse|keyboard)\s*\d+\b/g,
+                    ),
+                  ].map((match) => match[0])
                 : [];
   if (new Set(signals.map((signal) => signal.replace(/\s+/g, ''))).size > 1) {
     return { status: 'ambiguous' as const };
@@ -240,7 +253,9 @@ export function resolveExplicitUncatalogedModel(input: CanonicalProductSource | 
     chip: canonical.canonicalChip,
   });
   const labelNumbers = new Set(label.match(/\d+/g) ?? []);
-  if (signals.some((signal) => (signal.match(/\d+/g) ?? []).some((value) => !labelNumbers.has(value)))) {
+  if (
+    signals.some((signal) => (signal.match(/\d+/g) ?? []).some((value) => !labelNumbers.has(value)))
+  ) {
     return { status: 'unsupported' as const };
   }
   if (canonical.canonicalModelMatched) {
