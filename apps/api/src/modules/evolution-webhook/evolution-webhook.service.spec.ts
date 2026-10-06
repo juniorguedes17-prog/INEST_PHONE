@@ -473,6 +473,115 @@ describe('EvolutionWebhookService', () => {
     expect(classifySupplierListUpdateMode(text)).toBe(expected);
   });
 
+  it('persiste primary e mescla somente a excecao usada de heading lacrado universal', async () => {
+    const rawText = `APARELHOS LACRADOS
+iPhone 17 Pro 256GB
+Preto R$ 6.000
+MacBook Air M5 16GB/512GB OPEN BOX
+Prata R$ 7.000`;
+    const { service, transaction } = createService([], undefined, 'neutral-supplier');
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'universal-primary-with-open-box',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          supplierContactId: 'neutral-supplier',
+          snapshotScope: 'catalog:primary',
+          items: { create: [expect.objectContaining({ condition: 'NOVO' })] },
+        }),
+      }),
+    );
+    expect(transaction.supplierCurrentList.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshotScope: 'catalog:used',
+          items: { create: [expect.objectContaining({ condition: 'SEMINOVO' })] },
+        }),
+      }),
+    );
+  });
+
+  it('mescla somente seminovos quando garantia Apple nao prova condicao primaria', async () => {
+    const rawText = `APARELHOS GARANTIA APPLE
+iPhone 17 Pro 512GB
+Preto R$ 7.000
+IPHONE SEMINOVOS
+iPhone 16 Pro 256GB
+Azul R$ 5.000`;
+    const { service, transaction } = createService([], undefined, 'neutral-supplier');
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'universal-warranty-used',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
+    expect(transaction.supplierCurrentList.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          snapshotScope: 'catalog:used',
+          items: { create: [expect.objectContaining({ condition: 'SEMINOVO' })] },
+        }),
+      }),
+    );
+  });
+
+  it('substitui ambos os segmentos quando headings usados e primarios cobrem o documento', async () => {
+    const rawText = `MACBOOK SEMINOVOS
+MacBook Pro M3 16GB/512GB
+Prata R$ 6.000
+IPADS SEMINOVOS
+iPad Air M2 128GB
+Azul R$ 3.500
+DIVERSOS NOVOS
+DJI Mini 4 Pro R$ 4.000
+DJI Mini 4 Pro OPEN BOX R$ 3.500`;
+    const { service, transaction } = createService([], undefined, 'neutral-supplier');
+
+    await service.receive(webhookSecret, {
+      event: 'MESSAGES_UPSERT',
+      data: {
+        key: {
+          id: 'universal-mixed-segments',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
+        message: { conversation: rawText },
+      },
+    });
+
+    expect(transaction.supplierCurrentList.upsert).toHaveBeenCalledTimes(2);
+    const writes = transaction.supplierCurrentList.upsert.mock.calls.map(([value]) => value);
+    expect(writes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          create: expect.objectContaining({ snapshotScope: 'catalog:primary' }),
+        }),
+        expect.objectContaining({
+          create: expect.objectContaining({ snapshotScope: 'catalog:used' }),
+        }),
+      ]),
+    );
+  });
+
   it('persiste a lista completa real da Point Cell como FULL_SNAPSHOT legítimo', async () => {
     const parsed = parseSupplierListText(pointCellFullList20260929);
     expect(parsed).toHaveLength(44);
@@ -519,7 +628,11 @@ describe('EvolutionWebhookService', () => {
     await service.receive(webhookSecret, {
       event: 'MESSAGES_UPSERT',
       data: {
-        key: { id: 'persisted-policy-default-full', remoteJid: '5511999999999@s.whatsapp.net', fromMe: false },
+        key: {
+          id: 'persisted-policy-default-full',
+          remoteJid: '5511999999999@s.whatsapp.net',
+          fromMe: false,
+        },
         message: { conversation: fixture.rawText },
       },
     });
@@ -810,7 +923,8 @@ describe('EvolutionWebhookService', () => {
         }),
       }),
     );
-    const usedCreate = transaction.supplierCurrentList.create.mock.calls[0]?.[0].data.items.create[0];
+    const usedCreate =
+      transaction.supplierCurrentList.create.mock.calls[0]?.[0].data.items.create[0];
     expect(usedCreate.condition).toBe('SEMINOVO');
     expectPersistencePayloadWithoutConditionProvenance(usedCreate);
     expect(transaction.supplierCurrentList.deleteMany).not.toHaveBeenCalled();
@@ -1454,13 +1568,37 @@ PRETO - 93%`;
       'supplier-contact-id',
       'message-recovery',
       [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
-      [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }],
-      [{ normalizationStatus: 'FOUND', identityStatus: 'FOUND', resolvedProductId: 'product-1', candidate }],
+      [
+        {
+          originalReason: 'missing_product_context',
+          sourceText: 'IPHONES NOVOS',
+          rawLine: candidate.rawLine,
+          previousLines: [],
+          nextLines: [],
+          activeProductHeading: candidate.productName,
+          activeCategory: candidate.category,
+          activeCondition: 'NOVO',
+          qualityGrade: null,
+          detectedPrice: 6900,
+        },
+      ],
+      [
+        {
+          normalizationStatus: 'FOUND',
+          identityStatus: 'FOUND',
+          resolvedProductId: 'product-1',
+          candidate,
+        },
+      ],
     );
 
     expect(transaction.$queryRaw).toHaveBeenCalledOnce();
     expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ supplierCurrentListId: 'primary-list', productId: 'product-1', price: 6900 }),
+      data: expect.objectContaining({
+        supplierCurrentListId: 'primary-list',
+        productId: 'product-1',
+        price: 6900,
+      }),
     });
     const recoveredCreate = transaction.supplierCurrentListItem.create.mock.calls[0]?.[0].data;
     expectPersistencePayloadWithoutConditionProvenance(recoveredCreate);
@@ -1472,18 +1610,48 @@ PRETO - 93%`;
   it('bloqueia promocao quando o snapshot ficou mais recente ou a chave ja existe', async () => {
     const { service, transaction } = createService();
     const candidate = {
-      productName: 'iPhone 17 Pro 256GB', normalizedName: 'iphone 17 pro 256gb', category: 'iPhone',
-      model: 'iPhone 17 Pro', capacity: '256GB', color: 'azul', condition: 'NOVO', qualityGrade: null,
-      price: 6900, availability: null, rawLine: 'iPhone 17 Pro 256GB azul R$ 6900',
+      productName: 'iPhone 17 Pro 256GB',
+      normalizedName: 'iphone 17 pro 256gb',
+      category: 'iPhone',
+      model: 'iPhone 17 Pro',
+      capacity: '256GB',
+      color: 'azul',
+      condition: 'NOVO',
+      qualityGrade: null,
+      price: 6900,
+      availability: null,
+      rawLine: 'iPhone 17 Pro 256GB azul R$ 6900',
     };
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
-      id: 'primary-list', sourceMessageId: 'newer-message', items: [currentItem('existing', candidate.normalizedName, 6800, candidate)],
+      id: 'primary-list',
+      sourceMessageId: 'newer-message',
+      items: [currentItem('existing', candidate.normalizedName, 6800, candidate)],
     });
-    const input = { originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 };
+    const input = {
+      originalReason: 'missing_product_context',
+      sourceText: 'IPHONES NOVOS',
+      rawLine: candidate.rawLine,
+      previousLines: [],
+      nextLines: [],
+      activeProductHeading: candidate.productName,
+      activeCategory: candidate.category,
+      activeCondition: 'NOVO',
+      qualityGrade: null,
+      detectedPrice: 6900,
+    };
     await (service as any).promoteRecoveredCandidates(
-      'supplier-contact-id', 'old-message',
+      'supplier-contact-id',
+      'old-message',
       [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
-      [input], [{ normalizationStatus: 'FOUND', identityStatus: 'FOUND', resolvedProductId: 'product-1', candidate }],
+      [input],
+      [
+        {
+          normalizationStatus: 'FOUND',
+          identityStatus: 'FOUND',
+          resolvedProductId: 'product-1',
+          candidate,
+        },
+      ],
     );
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
   });
@@ -1491,19 +1659,50 @@ PRETO - 93%`;
   it('aceita somente equivalencias de proveniencia resolvidas deterministicamente', async () => {
     const { service, transaction } = createService();
     const candidate = {
-      productName: 'iPhone 17 Pro 256GB', normalizedName: 'iphone 17 pro 256gb', category: 'iPhone',
-      model: 'iPhone 17 Pro', capacity: '256GB', color: 'azul', condition: 'NOVO', qualityGrade: null,
-      price: 6900, availability: null, rawLine: 'iPhone 17 Pro 256GB blue R$ 6900',
+      productName: 'iPhone 17 Pro 256GB',
+      normalizedName: 'iphone 17 pro 256gb',
+      category: 'iPhone',
+      model: 'iPhone 17 Pro',
+      capacity: '256GB',
+      color: 'azul',
+      condition: 'NOVO',
+      qualityGrade: null,
+      price: 6900,
+      availability: null,
+      rawLine: 'iPhone 17 Pro 256GB blue R$ 6900',
     };
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
-      id: 'primary-list', sourceMessageId: 'message-recovery', items: [],
+      id: 'primary-list',
+      sourceMessageId: 'message-recovery',
+      items: [],
     });
     const promote = (rawLine: string, overrides: Partial<typeof candidate> = {}) =>
       (service as any).promoteRecoveredCandidates(
-        'supplier-contact-id', 'message-recovery',
+        'supplier-contact-id',
+        'message-recovery',
         [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
-        [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine, previousLines: [], nextLines: [], activeProductHeading: rawLine.replace(/ R\$.*/, ''), activeCategory: 'iPhone', activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }],
-        [{ normalizationStatus: 'FOUND', identityStatus: 'FOUND', resolvedProductId: 'product-1', candidate: { ...candidate, ...overrides } }],
+        [
+          {
+            originalReason: 'missing_product_context',
+            sourceText: 'IPHONES NOVOS',
+            rawLine,
+            previousLines: [],
+            nextLines: [],
+            activeProductHeading: rawLine.replace(/ R\$.*/, ''),
+            activeCategory: 'iPhone',
+            activeCondition: 'NOVO',
+            qualityGrade: null,
+            detectedPrice: 6900,
+          },
+        ],
+        [
+          {
+            normalizationStatus: 'FOUND',
+            identityStatus: 'FOUND',
+            resolvedProductId: 'product-1',
+            candidate: { ...candidate, ...overrides },
+          },
+        ],
       );
 
     await promote(candidate.rawLine);
@@ -1534,7 +1733,9 @@ PRETO - 93%`;
       rawLine: 'iPhone 99 Ultra 256GB azul R$ 6900',
     };
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
-      id: 'primary-list', sourceMessageId: 'message-recovery', items: [currentItem('existing', 'iPhone 17 128GB', 5000)],
+      id: 'primary-list',
+      sourceMessageId: 'message-recovery',
+      items: [currentItem('existing', 'iPhone 17 128GB', 5000)],
     });
     transaction.productModel.findUnique.mockResolvedValue(null);
 
@@ -1542,12 +1743,36 @@ PRETO - 93%`;
       'supplier-contact-id',
       'message-recovery',
       [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
-      [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }],
-      [{ normalizationStatus: 'MISSING', identityStatus: 'MISSING', resolvedProductId: null, candidate }],
+      [
+        {
+          originalReason: 'missing_product_context',
+          sourceText: 'IPHONES NOVOS',
+          rawLine: candidate.rawLine,
+          previousLines: [],
+          nextLines: [],
+          activeProductHeading: candidate.productName,
+          activeCategory: candidate.category,
+          activeCondition: 'NOVO',
+          qualityGrade: null,
+          detectedPrice: 6900,
+        },
+      ],
+      [
+        {
+          normalizationStatus: 'MISSING',
+          identityStatus: 'MISSING',
+          resolvedProductId: null,
+          candidate,
+        },
+      ],
     );
 
     expect(transaction.productModel.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ categoryId: 'category-iphone', name: 'iPhone 99 Ultra', productType: 'IPHONE_SEALED' }),
+      data: expect.objectContaining({
+        categoryId: 'category-iphone',
+        name: 'iPhone 99 Ultra',
+        productType: 'IPHONE_SEALED',
+      }),
     });
     expect(transaction.product.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -1562,7 +1787,10 @@ PRETO - 93%`;
       select: { id: true },
     });
     expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({ productId: 'created-product-id', supplierCurrentListId: 'primary-list' }),
+      data: expect.objectContaining({
+        productId: 'created-product-id',
+        supplierCurrentListId: 'primary-list',
+      }),
     });
     expect(transaction.supplierCurrentList.update).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentList.upsert).not.toHaveBeenCalled();
@@ -1572,19 +1800,52 @@ PRETO - 93%`;
   it('reutiliza o Product dinâmico, falha fechado em ambiguidade e converge após conflito concorrente', async () => {
     const { service, transaction } = createService([dynamicCatalogProduct()]);
     const candidate = {
-      productName: 'iPhone 99 Ultra 256GB', normalizedName: 'iphone 99 ultra 256gb', category: 'iPhone',
-      model: 'iPhone 99 Ultra', capacity: '256GB', color: 'azul', condition: 'NOVO', qualityGrade: null,
-      price: 6900, availability: null, rawLine: 'iPhone 99 Ultra 256GB azul R$ 6900',
+      productName: 'iPhone 99 Ultra 256GB',
+      normalizedName: 'iphone 99 ultra 256gb',
+      category: 'iPhone',
+      model: 'iPhone 99 Ultra',
+      capacity: '256GB',
+      color: 'azul',
+      condition: 'NOVO',
+      qualityGrade: null,
+      price: 6900,
+      availability: null,
+      rawLine: 'iPhone 99 Ultra 256GB azul R$ 6900',
     };
     transaction.supplierCurrentList.findUnique.mockResolvedValue({
-      id: 'primary-list', sourceMessageId: 'message-recovery', items: [],
+      id: 'primary-list',
+      sourceMessageId: 'message-recovery',
+      items: [],
     });
-    const input = [{ originalReason: 'missing_product_context', sourceText: 'IPHONES NOVOS', rawLine: candidate.rawLine, previousLines: [], nextLines: [], activeProductHeading: candidate.productName, activeCategory: candidate.category, activeCondition: 'NOVO', qualityGrade: null, detectedPrice: 6900 }];
-    const result = [{ normalizationStatus: 'MISSING', identityStatus: 'MISSING', resolvedProductId: null, candidate }];
+    const input = [
+      {
+        originalReason: 'missing_product_context',
+        sourceText: 'IPHONES NOVOS',
+        rawLine: candidate.rawLine,
+        previousLines: [],
+        nextLines: [],
+        activeProductHeading: candidate.productName,
+        activeCategory: candidate.category,
+        activeCondition: 'NOVO',
+        qualityGrade: null,
+        detectedPrice: 6900,
+      },
+    ];
+    const result = [
+      {
+        normalizationStatus: 'MISSING',
+        identityStatus: 'MISSING',
+        resolvedProductId: null,
+        candidate,
+      },
+    ];
 
     await (service as any).promoteRecoveredCandidates(
-      'supplier-contact-id', 'message-recovery',
-      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }], input, result,
+      'supplier-contact-id',
+      'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
+      input,
+      result,
     );
     expect(transaction.product.create).not.toHaveBeenCalled();
     expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
@@ -1592,10 +1853,16 @@ PRETO - 93%`;
     });
 
     transaction.supplierCurrentListItem.create.mockClear();
-    transaction.product.findMany.mockResolvedValue([dynamicCatalogProduct(), { ...dynamicCatalogProduct(), id: 'duplicate-product' }]);
+    transaction.product.findMany.mockResolvedValue([
+      dynamicCatalogProduct(),
+      { ...dynamicCatalogProduct(), id: 'duplicate-product' },
+    ]);
     await (service as any).promoteRecoveredCandidates(
-      'supplier-contact-id', 'message-recovery',
-      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }], input, result,
+      'supplier-contact-id',
+      'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
+      input,
+      result,
     );
     expect(transaction.supplierCurrentListItem.create).not.toHaveBeenCalled();
     expect(transaction.product.create).not.toHaveBeenCalled();
@@ -1603,10 +1870,15 @@ PRETO - 93%`;
     transaction.product.findMany
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([dynamicCatalogProduct('concurrent-product')]);
-    transaction.product.create.mockRejectedValueOnce(Object.assign(new Error('unique'), { code: 'P2002' }));
+    transaction.product.create.mockRejectedValueOnce(
+      Object.assign(new Error('unique'), { code: 'P2002' }),
+    );
     await (service as any).promoteRecoveredCandidates(
-      'supplier-contact-id', 'message-recovery',
-      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }], input, result,
+      'supplier-contact-id',
+      'message-recovery',
+      [{ scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'PARTIAL_UPDATE' }],
+      input,
+      result,
     );
     expect(transaction.supplierCurrentListItem.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ productId: 'concurrent-product' }),

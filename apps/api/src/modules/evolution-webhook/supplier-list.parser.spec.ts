@@ -33,6 +33,27 @@ describe('supplier list parser', () => {
     expect(item?.condition).toBeNull();
   });
 
+  it('associa sem ativacao somente ao produto ativo e nunca como contexto de secao', () => {
+    const scoped = parseSupplierListText(`MACBOOK PRO M5 16GB 512GB
+BLACK
+SEM ATIVAÇÃO
+R$ 10.000`);
+    const administrative = parseSupplierListText(`AVISO: PRODUTOS SEM ATIVAÇÃO NÃO POSSUEM DEVOLUÇÃO
+
+IPHONE 17 256GB
+BLACK
+R$ 5.000`);
+    const detached = parseSupplierListText(`SEM ATIVAÇÃO
+
+IPHONE 17 256GB
+BLACK
+R$ 5.000`);
+
+    expect(scoped[0]).toMatchObject({ condition: 'SEMINOVO', conditionProvenance: 'EXPLICIT_PRODUCT' });
+    expect(administrative[0]).toMatchObject({ condition: null, conditionProvenance: null });
+    expect(detached[0]).toMatchObject({ condition: null, conditionProvenance: null });
+  });
+
   it('nao herda condition quando a linha do produto contem evidencia conflitante', () => {
     const [item] = parseSupplierListText('SEMINOVO\niPhone 17 Pro 256GB NEW USED\nPreto R$ 4.500');
 

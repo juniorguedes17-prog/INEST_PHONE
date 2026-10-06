@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { supplierSnapshotScopeCases } from './__fixtures__/snapshot-scope.cases';
 import {
   extractSupplierDocumentBoundary,
+  hasStructuredSupplierDocumentHeading,
   resolveSupplierSnapshotScope,
 } from './supplier-snapshot-scope';
 import { parseSupplierListText } from './supplier-list.parser';
@@ -10,6 +11,74 @@ describe('supplier snapshot scope shadow', () => {
   it.each(supplierSnapshotScopeCases)('[SCOPE] $id', ({ rawText, expected }) => {
     const resolution = resolveSupplierSnapshotScope(rawText, parseSupplierListText(rawText));
     expect(resolution).toMatchObject(expected);
+  });
+
+  it('reconhece headings universais completos sem vinculo a supplierContactId', () => {
+    expect(
+      hasStructuredSupplierDocumentHeading(`
+        APARELHOS LACRADOS
+        iPhone 17 Pro 256GB
+        Preto R$ 6.000
+      `),
+    ).toBe(true);
+    expect(hasStructuredSupplierDocumentHeading('iPhone 17 lacrado R$ 6.000')).toBe(false);
+    expect(hasStructuredSupplierDocumentHeading('Garantia Apple para todos os produtos')).toBe(
+      false,
+    );
+  });
+
+  it('autoriza primary e isola a excecao explicita seminova de heading lacrado', () => {
+    const rawText = `APARELHOS LACRADOS
+iPhone 17 Pro 256GB
+Preto R$ 6.000
+MacBook Air M5 16GB/512GB OPEN BOX
+Prata R$ 7.000`;
+    const resolution = resolveSupplierSnapshotScope(rawText, parseSupplierListText(rawText));
+
+    expect(resolution).toMatchObject({
+      status: 'RESOLVED',
+      scopeKey: 'catalog:primary',
+      reason: 'explicit_primary_preamble',
+      segmentAuthorities: { primary: 'FULL_SNAPSHOT', used: 'ISOLATED_EXPLICIT_ITEMS' },
+    });
+  });
+
+  it('autoriza somente o segmento usado apos heading documental de garantia', () => {
+    const rawText = `APARELHOS GARANTIA APPLE
+iPhone 17 Pro 512GB
+Preto R$ 7.000
+IPHONE SEMINOVOS
+iPhone 16 Pro 256GB
+Azul R$ 5.000`;
+    const items = parseSupplierListText(rawText);
+    const resolution = resolveSupplierSnapshotScope(rawText, items);
+
+    expect(items.map((item) => item.condition)).toEqual([null, 'SEMINOVO']);
+    expect(resolution).toMatchObject({
+      status: 'RESOLVED',
+      scopeKey: 'catalog:general',
+      reason: 'general_document_marker',
+      segmentAuthorities: { primary: 'NONE', used: 'ISOLATED_EXPLICIT_ITEMS' },
+    });
+  });
+
+  it('autoriza snapshots completos para secoes estruturais usadas e primarias', () => {
+    const rawText = `MACBOOK SEMINOVOS
+MacBook Pro M3 16GB/512GB
+Prata R$ 6.000
+IPADS SEMINOVOS
+iPad Air M2 128GB
+Azul R$ 3.500
+DIVERSOS NOVOS
+DJI Mini 4 Pro R$ 4.000`;
+    const resolution = resolveSupplierSnapshotScope(rawText, parseSupplierListText(rawText));
+
+    expect(resolution).toMatchObject({
+      status: 'RESOLVED',
+      scopeKey: 'catalog:general',
+      reason: 'broad_mixed_document',
+      segmentAuthorities: { primary: 'FULL_SNAPSHOT', used: 'FULL_SNAPSHOT' },
+    });
   });
 
   it('mantem SWAP posterior como marcador de secao, nao de preambulo', () => {

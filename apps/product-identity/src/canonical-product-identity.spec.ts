@@ -96,18 +96,8 @@ test('preserva a identidade homologada de iPhone Pro Max', () => {
 test('resolve modelos iPhone 18 homologados sem inferir geracoes nao cadastradas', () => {
   const expected = [
     ['iPhone 18 Pro 256GB', 'iphone-18-pro', 'iPhone 18 Pro', '256GB'],
-    [
-      'iPhone 18 Pro Max 256gb eSIM Anatel',
-      'iphone-18-pro-max',
-      'iPhone 18 Pro Max',
-      '256GB',
-    ],
-    [
-      'iPhone 18 Pro Max 512gb eSIM Anatel',
-      'iphone-18-pro-max',
-      'iPhone 18 Pro Max',
-      '512GB',
-    ],
+    ['iPhone 18 Pro Max 256gb eSIM Anatel', 'iphone-18-pro-max', 'iPhone 18 Pro Max', '256GB'],
+    ['iPhone 18 Pro Max 512gb eSIM Anatel', 'iphone-18-pro-max', 'iPhone 18 Pro Max', '512GB'],
     ['iPhone Duo', 'iphone-duo', 'iPhone Duo', null],
   ] as const;
 

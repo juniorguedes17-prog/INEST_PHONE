@@ -6,10 +6,7 @@ import { getSupplierListPolicy } from './supplier-list-policy';
 
 export type SupplierSnapshotScopeKey = 'catalog:used' | 'catalog:primary' | 'catalog:general';
 export type SupplierSnapshotScopeStatus = 'RESOLVED' | 'AMBIGUOUS' | 'UNKNOWN';
-export type SupplierSnapshotSegmentAuthority =
-  | 'FULL_SNAPSHOT'
-  | 'ISOLATED_EXPLICIT_ITEMS'
-  | 'NONE';
+export type SupplierSnapshotSegmentAuthority = 'FULL_SNAPSHOT' | 'ISOLATED_EXPLICIT_ITEMS' | 'NONE';
 export type SupplierSnapshotScopeReason =
   | 'explicit_used_preamble'
   | 'explicit_primary_preamble'
@@ -58,10 +55,22 @@ const GENERAL_MARKER =
   /\b(?:lista\s+(?:unificada|geral|diaria|de\s+precos|atualizada|completa)|tabela\s+de\s+precos|atualizacao)\b/i;
 const OFFER_MARKER = /(?:r\$|\$r|\$)\s*\d|\d[\d.,\s]*\s*(?:r\$|\$r)(?=\s|$)/i;
 const LOT_DOCUMENT_HEADER = /^lote\s+\d+(?:\s+\S(?:.*\S)?)?$/i;
+const STRUCTURED_PRIMARY_HEADINGS = new Set(['aparelhos lacrados', 'diversos novos']);
+const STRUCTURED_WARRANTY_DOCUMENT_HEADINGS = new Set(['aparelhos garantia apple']);
+const STRUCTURED_USED_HEADING = /^(?:iphones?|macbooks?|ipads?)\s+seminovos?$/i;
 
 export function hasLotDocumentHeader(rawText: string) {
   const firstLine = rawText.split(/\r?\n/).map(cleanLine).find(Boolean);
   return Boolean(firstLine && LOT_DOCUMENT_HEADER.test(firstLine));
+}
+
+/**
+ * Recognizes only complete, standalone list headings. This is deliberately
+ * narrower than a keyword search: a product line or a warranty note must not
+ * acquire document authority merely because it contains "novo" or "lacrado".
+ */
+export function hasStructuredSupplierDocumentHeading(rawText: string) {
+  return rawText.split(/\r?\n/).map(normalizeHeading).some(isStructuredDocumentHeading);
 }
 
 export function extractSupplierDocumentBoundary(rawText: string): SupplierDocumentBoundary {
@@ -90,6 +99,7 @@ export function resolveSupplierSnapshotScope(
   const boundary = extractSupplierDocumentBoundary(rawText);
   const preambleText = boundary.preambleLines.join('\n');
   const sectionText = boundary.sectionLines.join('\n');
+  const hasStructuredDocumentPreamble = hasStructuredSupplierDocumentHeading(preambleText);
   const preambleMarkers = markersIn(
     preambleText,
     supplierPolicy?.requireDocumentHeader !== false && hasLotDocumentHeader(rawText),
@@ -115,7 +125,8 @@ export function resolveSupplierSnapshotScope(
   const hasUsedItems = conditions.includes('SEMINOVO');
   const hasPrimaryItems =
     conditions.some((condition) => condition === 'NOVO' || condition === 'CPO') ||
-    hasPrimarySegmentBeforeUsedSection(rawText);
+    (hasPrimarySegmentBeforeUsedSection(rawText) &&
+      !hasStructuredWarrantyDocumentHeading(preambleText));
   const hasOnlyExplicitUsedItems =
     hasUsedItems &&
     items
@@ -134,10 +145,25 @@ export function resolveSupplierSnapshotScope(
 
   if (hasPrimaryPreamble) {
     if (!hasUsedItems) return resolved('primary', 'explicit_primary_preamble', evidence);
+    if (hasOnlyExplicitUsedItems) {
+      return resolvedPrimaryWithIsolatedUsedItems(evidence);
+    }
     if (isBroadMixedDocument && sectionMarkers.includes('used')) {
       return resolved('general', 'broad_mixed_document', evidence);
     }
     return ambiguous(evidence);
+  }
+
+  // A conditionless warranty section is not a primary segment. It can still
+  // prove that the following explicit used section belongs to a structured
+  // document, so only that used segment is safe to merge.
+  if (
+    hasStructuredDocumentPreamble &&
+    sectionMarkers.includes('used') &&
+    hasUsedItems &&
+    !hasPrimaryItems
+  ) {
+    return resolvedDocumentWithIsolatedUsedItems(evidence);
   }
 
   if (
@@ -202,6 +228,38 @@ function resolved(
   };
 }
 
+function resolvedPrimaryWithIsolatedUsedItems(
+  evidence: SupplierSnapshotScopeEvidence,
+): SupplierSnapshotScopeResolution {
+  return {
+    status: 'RESOLVED',
+    scopeKey: 'catalog:primary',
+    identity: { kind: 'catalog', segment: 'primary' },
+    reason: 'explicit_primary_preamble',
+    evidence,
+    segmentAuthorities: {
+      primary: 'FULL_SNAPSHOT',
+      used: 'ISOLATED_EXPLICIT_ITEMS',
+    },
+  };
+}
+
+function resolvedDocumentWithIsolatedUsedItems(
+  evidence: SupplierSnapshotScopeEvidence,
+): SupplierSnapshotScopeResolution {
+  return {
+    status: 'RESOLVED',
+    scopeKey: 'catalog:general',
+    identity: { kind: 'catalog', segment: 'general' },
+    reason: 'general_document_marker',
+    evidence,
+    segmentAuthorities: {
+      primary: 'NONE',
+      used: 'ISOLATED_EXPLICIT_ITEMS',
+    },
+  };
+}
+
 function ambiguous(evidence: SupplierSnapshotScopeEvidence): SupplierSnapshotScopeResolution {
   return {
     status: 'AMBIGUOUS',
@@ -236,9 +294,50 @@ function markersIn(text: string, hasLotHeader = false) {
   const normalized = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const markers: string[] = [];
   if (USED_MARKER.test(normalized)) markers.push('used');
-  if (PRIMARY_MARKER.test(normalized)) markers.push('primary');
-  if (GENERAL_MARKER.test(normalized) || hasLotHeader) markers.push('general');
+  if (PRIMARY_MARKER.test(normalized) || hasStructuredPrimaryHeading(normalized)) {
+    markers.push('primary');
+  }
+  if (
+    GENERAL_MARKER.test(normalized) ||
+    hasLotHeader ||
+    normalized.split(/\r?\n/).map(normalizeHeading).some(isStructuredDocumentHeading)
+  ) {
+    markers.push('general');
+  }
   return markers;
+}
+
+function hasStructuredPrimaryHeading(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map(normalizeHeading)
+    .some((line) => STRUCTURED_PRIMARY_HEADINGS.has(line));
+}
+
+function hasStructuredWarrantyDocumentHeading(text: string) {
+  return text
+    .split(/\r?\n/)
+    .map(normalizeHeading)
+    .some((line) => STRUCTURED_WARRANTY_DOCUMENT_HEADINGS.has(line));
+}
+
+function isStructuredDocumentHeading(value: string) {
+  return (
+    STRUCTURED_PRIMARY_HEADINGS.has(value) ||
+    STRUCTURED_WARRANTY_DOCUMENT_HEADINGS.has(value) ||
+    STRUCTURED_USED_HEADING.test(value)
+  );
+}
+
+function normalizeHeading(value: string) {
+  return cleanLine(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Presentation}\uFE0F]/gu, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('pt-BR');
 }
 
 function hasPrimarySegmentBeforeUsedSection(rawText: string) {

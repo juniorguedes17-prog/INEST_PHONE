@@ -126,6 +126,9 @@ export function parseSupplierListText(
       currentConditionProvenance = activeConditionProvenance;
       continue;
     }
+    if (!currentProduct && isProductScopedUnactivatedDescriptor(line)) {
+      continue;
+    }
     const sectionCategory = detectCategory(line);
     if (isCategoryHeading(line, sectionCategory)) {
       const changesCategory =
@@ -162,6 +165,20 @@ export function parseSupplierListText(
         currentCondition = detectedCondition.condition;
         currentConditionProvenance = 'EXPLICIT_PRODUCT';
       }
+      pendingColors = [];
+      continue;
+    }
+
+    // "Sem ativação" is a product-level descriptor only. Unlike the
+    // established section headings, it must never set a condition for a
+    // later product when it appears in an administrative notice.
+    if (
+      currentProduct &&
+      isProductScopedUnactivatedDescriptor(line) &&
+      hasPrice(nextLine ?? '')
+    ) {
+      currentCondition = 'SEMINOVO';
+      currentConditionProvenance = 'EXPLICIT_PRODUCT';
       pendingColors = [];
       continue;
     }
@@ -410,6 +427,7 @@ export function isValidParsedSupplierListSnapshot(items: ParsedSupplierListItem[
 function isCategoryHeading(value: string, category: string | null) {
   if (!category) return false;
   if (isCompactAppleProductHeading(value)) return false;
+  if (hasTechnicalSpecifier(value)) return false;
   if (category === 'Garmin' && !/^\s*garmin\s*$/i.test(value)) return false;
   if (category === 'Eletronicos' && !/^\s*eletronicos?\s*$/i.test(value)) return false;
   if (/\b(?:pencil|airtag|magic\s?mouse|earpods)\b/i.test(value)) return false;
@@ -580,6 +598,7 @@ function isConditionDescriptor(value: string, activeCondition: ProductCondition 
 }
 
 function isConditionSectionHeading(value: string, activeCondition: ProductCondition | null) {
+  if (isProductScopedUnactivatedDescriptor(value)) return false;
   const resolution = detectCondition(value);
   const hasCondition =
     resolution.status === 'RESOLVED' ||
@@ -899,6 +918,16 @@ function detectCondition(value: string): ProductConditionResolution {
     return { status: 'UNRESOLVED', condition: null, reason: 'unknown' };
   }
   return normalizeProductCondition(value);
+}
+
+function isProductScopedUnactivatedDescriptor(value: string) {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase('pt-BR');
+  return normalized === 'sem ativacao';
 }
 
 function resolveProductCondition(

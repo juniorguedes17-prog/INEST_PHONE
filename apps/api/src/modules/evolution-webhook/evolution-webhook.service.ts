@@ -26,6 +26,7 @@ import {
 } from './product-normalization.service';
 import {
   hasLotDocumentHeader,
+  hasStructuredSupplierDocumentHeading,
   resolveSupplierSnapshotScope,
   type SupplierSnapshotScopeResolution,
 } from './supplier-snapshot-scope';
@@ -86,6 +87,7 @@ function classifySupplierListUpdate(
   const hasFullMarker =
     FULL_SNAPSHOT_MARKER.test(text) ||
     (supplierPolicy?.requireDocumentHeader !== false && hasLotDocumentHeader(text)) ||
+    hasStructuredSupplierDocumentHeading(text) ||
     (supplierPolicy?.requireDocumentHeader === false &&
       hasValidCommercialSnapshot &&
       !hasPartialMarker);
@@ -1321,6 +1323,39 @@ function resolveSnapshotWritePlan(
     updateClassification.mode === 'FULL_SNAPSHOT' &&
     hasPrimaryFullSnapshotWithIsolatedUsedItems(resolution, hasPrimaryItems, hasUsedItems)
   ) {
+    if (resolution.reason === 'explicit_primary_preamble') {
+      return {
+        authority: 'FULL_SNAPSHOT',
+        targets: [
+          { scopeKey: 'catalog:primary', itemGroup: 'PRIMARY', operation: 'FULL_SNAPSHOT' },
+          {
+            scopeKey: 'catalog:used',
+            itemGroup: 'USED',
+            operation: 'PARTIAL_UPDATE',
+            createWhenMissing: true,
+          },
+        ],
+      };
+    }
+    return {
+      authority: 'PARTIAL_UPDATE',
+      targets: [
+        {
+          scopeKey: 'catalog:used',
+          itemGroup: 'USED',
+          operation: 'PARTIAL_UPDATE',
+          createWhenMissing: true,
+        },
+      ],
+    };
+  }
+
+  if (
+    updateClassification.mode === 'FULL_SNAPSHOT' &&
+    resolution.segmentAuthorities.primary === 'NONE' &&
+    resolution.segmentAuthorities.used === 'ISOLATED_EXPLICIT_ITEMS' &&
+    hasUsedItems
+  ) {
     return {
       authority: 'PARTIAL_UPDATE',
       targets: [
@@ -1425,8 +1460,10 @@ function hasMixedSnapshotAuthority(
     resolution.status === 'RESOLVED' &&
     resolution.scopeKey === 'catalog:general' &&
     resolution.reason === 'broad_mixed_document' &&
-    resolution.evidence.preambleMarkers.includes('primary') &&
-    resolution.evidence.sectionMarkers.includes('used')
+    ((resolution.evidence.preambleMarkers.includes('primary') &&
+      resolution.evidence.sectionMarkers.includes('used')) ||
+      (resolution.evidence.preambleMarkers.includes('used') &&
+        resolution.evidence.sectionMarkers.includes('primary')))
   );
 }
 
