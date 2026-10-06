@@ -1,3 +1,6 @@
+import type { ContractFillFlow } from "./contract-fill-flow";
+import type { ContractStatus } from "./contract-status";
+
 export type PersonType = "PF" | "PJ";
 
 export type ProductCondition = "NOVO" | "SEMINOVO";
@@ -19,11 +22,33 @@ export interface ContractClient {
   phone: string;
 }
 
+export interface PersistedContractClient {
+  fullName: string | null;
+  personType: PersonType | null;
+  documentNumber: string | null;
+  email: string | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressNeighborhood: string | null;
+  addressComplement: string | null;
+  postalCode: string | null;
+  city: string | null;
+  state: string | null;
+  phone: string | null;
+}
+
 export interface ContractProduct {
   model: string;
   capacity: string;
   condition: ProductCondition;
   color: string;
+}
+
+export interface PersistedContractProduct {
+  model: string | null;
+  capacity: string | null;
+  condition: ProductCondition | null;
+  color: string | null;
 }
 
 interface TradeInNegotiation {
@@ -39,6 +64,15 @@ export type ContractNegotiation = TradeInNegotiation &
     | { tradeInIncluded: true; tradeInValue: MonetaryAmount }
     | { tradeInIncluded: false; tradeInValue?: never }
   );
+
+export interface PersistedContractNegotiation {
+  totalAmount: MonetaryAmount | null;
+  entryAmount: MonetaryAmount | null;
+  commitmentDepositAmount: MonetaryAmount | null;
+  tradeInIncluded: boolean | null;
+  tradeInValue: MonetaryAmount | null;
+  deliveryDays: number | null;
+}
 
 export interface DerivedClientFields {
   addressLine: string;
@@ -85,4 +119,14 @@ export interface Contract {
   negotiation: ContractNegotiation;
   derived: ContractDerivedFields;
   template: ContractFixedContent;
+}
+
+export interface PersistedContract {
+  id: string;
+  status: ContractStatus;
+  fillFlow: ContractFillFlow;
+  client: PersistedContractClient;
+  product: PersistedContractProduct;
+  negotiation: PersistedContractNegotiation;
+  createdAt: Date;
 }

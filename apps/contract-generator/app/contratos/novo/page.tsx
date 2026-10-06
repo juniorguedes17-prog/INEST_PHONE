@@ -1,5 +1,5 @@
-import { RoutePlaceholder } from '../../_components/route-placeholder';
+import { NewContractFlow } from './new-contract-flow';
 
 export default function NewContractPage() {
-  return <RoutePlaceholder title="Novo contrato" route="/contratos/novo" />;
+  return <NewContractFlow />;
 }
