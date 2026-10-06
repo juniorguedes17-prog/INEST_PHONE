@@ -1,4 +1,5 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { createHash } from 'node:crypto';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
   CreatePriceQuoteDto,
   CsvImportDto,
@@ -25,17 +26,33 @@ type PriceRadarListItem =
 
 @Injectable()
 export class PriceRadarService {
+  private readonly logger = new Logger(PriceRadarService.name);
   private readonly inFlightLists = new Map<string, Promise<PriceRadarListItem[]>>();
 
   constructor(@Inject(PriceRadarRepository) private readonly repository: PriceRadarRepository) {}
 
   async list(query: PriceRadarQueryDto) {
     const requestKey = JSON.stringify(query);
+    const keyHash = this.hashRequestKey(requestKey);
     const inFlight = this.inFlightLists.get(requestKey);
-    if (inFlight) return inFlight;
+    if (inFlight) {
+      this.logger.log({
+        event: 'price_radar.performance.inflight',
+        pid: process.pid,
+        keyHash,
+        mode: 'join',
+      });
+      return inFlight;
+    }
 
     const request = this.loadList(query);
     this.inFlightLists.set(requestKey, request);
+    this.logger.log({
+      event: 'price_radar.performance.inflight',
+      pid: process.pid,
+      keyHash,
+      mode: 'owner',
+    });
     try {
       return await request;
     } finally {
@@ -46,17 +63,51 @@ export class PriceRadarService {
   }
 
   private async loadList(query: PriceRadarQueryDto): Promise<PriceRadarListItem[]> {
+    const startedAt = Date.now();
+    const keyHash = this.hashRequestKey(JSON.stringify(query));
+    const repositoriesStartedAt = Date.now();
+    const priceHistoryStartedAt = Date.now();
+    const priceHistoryRequest = this.repository.listQuotes(query).then((records) => ({
+      records,
+      durationMs: Date.now() - priceHistoryStartedAt,
+    }));
+    const automatedQuotesStartedAt = Date.now();
+    const automatedQuotesRequest = this.repository.listAutomatedQuotes(query).then((records) => ({
+      records,
+      durationMs: Date.now() - automatedQuotesStartedAt,
+    }));
     const [records, automatedRecords] = await Promise.all([
-      this.repository.listQuotes(query),
-      this.repository.listAutomatedQuotes(query),
+      priceHistoryRequest,
+      automatedQuotesRequest,
     ]);
-    return this.applyPostFilters(
+    const repositoriesTotalMs = Date.now() - repositoriesStartedAt;
+    const postProcessingStartedAt = Date.now();
+    const result = this.applyPostFilters(
       [
-        ...records.map((record) => this.toResponse(record)),
-        ...automatedRecords.map((record) => this.toAutomatedResponse(record)),
+        ...records.records.map((record) => this.toResponse(record)),
+        ...automatedRecords.records.map((record) => this.toAutomatedResponse(record)),
       ],
       query,
     );
+    const postProcessingMs = Date.now() - postProcessingStartedAt;
+    this.logger.log({
+      event: 'price_radar.performance.load_list',
+      pid: process.pid,
+      keyHash,
+      priceHistoryMs: records.durationMs,
+      automatedQuotesMs: automatedRecords.durationMs,
+      repositoriesTotalMs,
+      postProcessingMs,
+      priceHistoryCount: records.records.length,
+      automatedQuotesCount: automatedRecords.records.length,
+      returnedCount: result.length,
+      totalMs: Date.now() - startedAt,
+    });
+    return result;
+  }
+
+  private hashRequestKey(requestKey: string) {
+    return createHash('sha256').update(requestKey).digest('hex');
   }
 
   async findOne(id: string) {
