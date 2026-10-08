@@ -1,0 +1,158 @@
+name: f22-supabase-backup
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  backup-public-schema:
+    name: Backup encrypted public schema
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: f22-production-backup
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SUPABASE_BACKUP_HOST: ${{ secrets.SUPABASE_BACKUP_HOST }}
+          SUPABASE_BACKUP_PORT: ${{ secrets.SUPABASE_BACKUP_PORT }}
+          SUPABASE_BACKUP_USER: ${{ secrets.SUPABASE_BACKUP_USER }}
+          SUPABASE_BACKUP_PASSWORD: ${{ secrets.SUPABASE_BACKUP_PASSWORD }}
+          SUPABASE_SSLROOTCERT: ${{ secrets.SUPABASE_SSLROOTCERT }}
+          F22_BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.F22_BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+
+          for secret_name in \
+            SUPABASE_BACKUP_HOST \
+            SUPABASE_BACKUP_PORT \
+            SUPABASE_BACKUP_USER \
+            SUPABASE_BACKUP_PASSWORD \
+            SUPABASE_SSLROOTCERT \
+            F22_BACKUP_ENCRYPTION_PASSPHRASE; do
+            if [ -z "${!secret_name:-}" ]; then
+              echo "::error title=Missing required secret::${secret_name} is required."
+              exit 1
+            fi
+          done
+
+      - name: Prepare Supabase root certificate
+        shell: bash
+        env:
+          SUPABASE_SSLROOTCERT: ${{ secrets.SUPABASE_SSLROOTCERT }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          certificate_path="$RUNNER_TEMP/supabase-root.crt"
+          printf '%s\n' "$SUPABASE_SSLROOTCERT" > "$certificate_path"
+          test -s "$certificate_path"
+          grep -q 'BEGIN CERTIFICATE' "$certificate_path"
+
+      - name: Validate PostgreSQL 17 client and encryption tool
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          command -v docker >/dev/null
+          command -v gpg >/dev/null
+
+          docker pull postgres:17.11-bookworm >/dev/null
+          docker run --rm postgres:17.11-bookworm pg_dump --version | grep -Eq '^pg_dump \(PostgreSQL\) 17\.11$'
+          docker run --rm postgres:17.11-bookworm pg_restore --version | grep -Eq '^pg_restore \(PostgreSQL\) 17\.11$'
+
+      - name: Create and verify logical backup
+        shell: bash
+        env:
+          PGHOST: ${{ secrets.SUPABASE_BACKUP_HOST }}
+          PGPORT: ${{ secrets.SUPABASE_BACKUP_PORT }}
+          PGUSER: ${{ secrets.SUPABASE_BACKUP_USER }}
+          PGPASSWORD: ${{ secrets.SUPABASE_BACKUP_PASSWORD }}
+          PGDATABASE: postgres
+          PGSSLMODE: verify-full
+          PGSSLROOTCERT: ${{ runner.temp }}/supabase-root.crt
+        run: |
+          set -euo pipefail
+          umask 077
+
+          backup_path="$RUNNER_TEMP/inest-public-pre-f22.dump"
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP:$RUNNER_TEMP:rw" \
+            --env PGHOST \
+            --env PGPORT \
+            --env PGUSER \
+            --env PGPASSWORD \
+            --env PGDATABASE \
+            --env PGSSLMODE \
+            --env PGSSLROOTCERT \
+            postgres:17.11-bookworm \
+            pg_dump \
+              --format=custom \
+              --schema=public \
+              --no-owner \
+              --file="$backup_path"
+
+          docker run --rm \
+            --user "$(id -u):$(id -g)" \
+            --volume "$RUNNER_TEMP:$RUNNER_TEMP:rw" \
+            postgres:17.11-bookworm \
+            pg_restore --list "$backup_path" >/dev/null
+          sha256sum "$backup_path" > "$RUNNER_TEMP/inest-public-pre-f22.dump.sha256"
+
+      - name: Encrypt backup before upload
+        shell: bash
+        env:
+          F22_BACKUP_ENCRYPTION_PASSPHRASE: ${{ secrets.F22_BACKUP_ENCRYPTION_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          backup_path="$RUNNER_TEMP/inest-public-pre-f22.dump"
+          encrypted_path="$RUNNER_TEMP/inest-public-pre-f22.dump.gpg"
+
+          test -s "$backup_path"
+
+          printf '%s' "$F22_BACKUP_ENCRYPTION_PASSPHRASE" | gpg \
+            --batch \
+            --yes \
+            --pinentry-mode loopback \
+            --passphrase-fd 0 \
+            --symmetric \
+            --cipher-algo AES256 \
+            --output "$encrypted_path" \
+            "$backup_path"
+
+          test -s "$encrypted_path"
+
+          expected_sha256="$(cut -d ' ' -f 1 "$RUNNER_TEMP/inest-public-pre-f22.dump.sha256")"
+          actual_sha256="$(printf '%s' "$F22_BACKUP_ENCRYPTION_PASSPHRASE" | gpg \
+            --batch \
+            --quiet \
+            --pinentry-mode loopback \
+            --passphrase-fd 0 \
+            --decrypt "$encrypted_path" | sha256sum | cut -d ' ' -f 1)"
+          test "$actual_sha256" = "$expected_sha256"
+
+          rm -f "$backup_path" "$RUNNER_TEMP/inest-public-pre-f22.dump.sha256"
+
+      - name: Upload encrypted backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: inest-public-pre-f22-encrypted
+          path: ${{ runner.temp }}/inest-public-pre-f22.dump.gpg
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Remove encrypted backup from runner
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/inest-public-pre-f22.dump" \
+            "$RUNNER_TEMP/inest-public-pre-f22.dump.sha256" \
+            "$RUNNER_TEMP/inest-public-pre-f22.dump.gpg" \
+            "$RUNNER_TEMP/supabase-root.crt"
