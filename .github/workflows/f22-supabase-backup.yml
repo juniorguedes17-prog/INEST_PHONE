@@ -60,9 +60,16 @@ jobs:
           command -v docker >/dev/null
           command -v gpg >/dev/null
 
-          docker pull postgres:17.11-bookworm >/dev/null
-          docker run --rm postgres:17.11-bookworm pg_dump --version | grep -Eq '^pg_dump \(PostgreSQL\) 17\.11$'
-          docker run --rm postgres:17.11-bookworm pg_restore --version | grep -Eq '^pg_restore \(PostgreSQL\) 17\.11$'
+          docker pull postgres:17.11-bookworm
+
+          pg_dump_version="$(docker run --rm postgres:17.11-bookworm pg_dump --version)"
+          pg_restore_version="$(docker run --rm postgres:17.11-bookworm pg_restore --version)"
+
+          printf '%s\n' "$pg_dump_version"
+          printf '%s\n' "$pg_restore_version"
+
+          grep -Eq '^pg_dump \(PostgreSQL\) 17\.11$' <<< "$pg_dump_version"
+          grep -Eq '^pg_restore \(PostgreSQL\) 17\.11$' <<< "$pg_restore_version"
 
       - name: Create and verify logical backup
         shell: bash
