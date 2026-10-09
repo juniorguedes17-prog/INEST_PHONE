@@ -4,7 +4,9 @@ import {
   formatDocument,
   formatPhone,
   formatPostalCode,
+  isInternalBuyerRegistrationUpdated,
   isPublicBuyerSubmissionAccepted,
+  toInternalBuyerRegistrationUpdateParams,
   toPublicBuyerSubmissionParams,
   validatePublicBuyerForm,
 } from './public-buyer-form';
@@ -76,4 +78,38 @@ test('confirms receipt only after the database RPC succeeds', () => {
   assert.equal(isPublicBuyerSubmissionAccepted(true, null), true);
   assert.equal(isPublicBuyerSubmissionAccepted(false, null), false);
   assert.equal(isPublicBuyerSubmissionAccepted(true, new Error('persistence failed')), false);
+});
+
+test('maps the persisted registration to an optimistic-concurrency snapshot without commercial fields', () => {
+  const update = toInternalBuyerRegistrationUpdateParams(
+    'contract-id',
+    {
+      client_full_name: validPf.fullName,
+      client_person_type: 'PF',
+      client_document_number: validPf.documentNumber,
+      client_email: validPf.email,
+      client_address_street: validPf.addressStreet,
+      client_address_number: validPf.addressNumber,
+      client_address_neighborhood: validPf.addressNeighborhood,
+      client_address_complement: null,
+      client_postal_code: validPf.postalCode,
+      client_city: validPf.city,
+      client_state: validPf.state,
+      client_phone: validPf.phone,
+    },
+    validPf,
+  );
+  assert.equal(update.p_expected.fullName, validPf.fullName);
+  assert.equal(update.p_expected.addressComplement, null);
+  assert.equal('productModel' in update.p_expected, false);
+  assert.equal('negotiationTotalAmount' in update.p_expected, false);
+});
+
+test('recognizes only a completed internal registration update as successful', () => {
+  assert.equal(isInternalBuyerRegistrationUpdated('updated', null), true);
+  assert.equal(isInternalBuyerRegistrationUpdated('conflict', null), false);
+  assert.equal(
+    isInternalBuyerRegistrationUpdated('updated', new Error('persistence failed')),
+    false,
+  );
 });

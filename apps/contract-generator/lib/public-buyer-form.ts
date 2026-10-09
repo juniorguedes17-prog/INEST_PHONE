@@ -33,6 +33,42 @@ export type PublicBuyerSubmissionParams = {
   p_client_phone: string;
 };
 
+export type StoredBuyerRegistration = {
+  client_full_name: string | null;
+  client_person_type: PersonType | null;
+  client_document_number: string | null;
+  client_email: string | null;
+  client_address_street: string | null;
+  client_address_number: string | null;
+  client_address_neighborhood: string | null;
+  client_address_complement: string | null;
+  client_postal_code: string | null;
+  client_city: string | null;
+  client_state: string | null;
+  client_phone: string | null;
+};
+
+export type InternalBuyerRegistrationUpdateParams = {
+  p_contract_id: string;
+  p_expected: BuyerRegistrationSnapshot;
+  p_values: PublicBuyerFormValues;
+};
+
+export type BuyerRegistrationSnapshot = {
+  fullName: string | null;
+  personType: PersonType | null;
+  documentNumber: string | null;
+  email: string | null;
+  addressStreet: string | null;
+  addressNumber: string | null;
+  addressNeighborhood: string | null;
+  addressComplement: string | null;
+  postalCode: string | null;
+  city: string | null;
+  state: string | null;
+  phone: string | null;
+};
+
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 
 export function formatDocument(value: string, personType: PersonType) {
@@ -168,4 +204,52 @@ export function toPublicBuyerSubmissionParams(
 
 export function isPublicBuyerSubmissionAccepted(data: unknown, error: unknown) {
   return !error && data === true;
+}
+
+export function toPublicBuyerFormValues(
+  value: StoredBuyerRegistration | null,
+): PublicBuyerFormValues {
+  return {
+    fullName: value?.client_full_name ?? '',
+    personType: value?.client_person_type ?? 'PF',
+    documentNumber: value?.client_document_number ?? '',
+    email: value?.client_email ?? '',
+    addressStreet: value?.client_address_street ?? '',
+    addressNumber: value?.client_address_number ?? '',
+    addressNeighborhood: value?.client_address_neighborhood ?? '',
+    addressComplement: value?.client_address_complement ?? '',
+    postalCode: value?.client_postal_code ?? '',
+    city: value?.client_city ?? '',
+    state: value?.client_state ?? '',
+    phone: value?.client_phone ?? '',
+  };
+}
+
+export function toInternalBuyerRegistrationUpdateParams(
+  contractId: string,
+  expected: StoredBuyerRegistration,
+  values: PublicBuyerFormValues,
+): InternalBuyerRegistrationUpdateParams {
+  return {
+    p_contract_id: contractId,
+    p_expected: {
+      fullName: expected.client_full_name,
+      personType: expected.client_person_type,
+      documentNumber: expected.client_document_number,
+      email: expected.client_email,
+      addressStreet: expected.client_address_street,
+      addressNumber: expected.client_address_number,
+      addressNeighborhood: expected.client_address_neighborhood,
+      addressComplement: expected.client_address_complement,
+      postalCode: expected.client_postal_code,
+      city: expected.client_city,
+      state: expected.client_state,
+      phone: expected.client_phone,
+    },
+    p_values: values,
+  };
+}
+
+export function isInternalBuyerRegistrationUpdated(data: unknown, error: unknown) {
+  return !error && data === 'updated';
 }

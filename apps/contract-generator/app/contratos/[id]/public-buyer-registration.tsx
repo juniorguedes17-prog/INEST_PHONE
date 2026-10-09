@@ -1,50 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { StoredBuyerRegistration } from '../../../lib/public-buyer-form';
 import { createClient } from '../../../lib/supabase/client';
-
-type BuyerRegistration = {
-  client_full_name: string | null;
-  client_person_type: string | null;
-  client_document_number: string | null;
-  client_email: string | null;
-  client_address_street: string | null;
-  client_address_number: string | null;
-  client_address_neighborhood: string | null;
-  client_address_complement: string | null;
-  client_postal_code: string | null;
-  client_city: string | null;
-  client_state: string | null;
-  client_phone: string | null;
-};
+import { InternalBuyerRegistrationForm } from './internal-buyer-registration-form';
 
 export function PublicBuyerRegistration({ contractId }: { contractId: string }) {
-  const [registration, setRegistration] = useState<BuyerRegistration | null>(null);
+  const [registration, setRegistration] = useState<StoredBuyerRegistration | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  const loadRegistration = useCallback(async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc('get_contract_buyer_registration', {
+      p_contract_id: contractId,
+    });
+    setHasError(Boolean(error));
+    setRegistration(
+      !error && Array.isArray(data) && data.length === 1
+        ? (data[0] as StoredBuyerRegistration)
+        : null,
+    );
+    setHasLoaded(true);
+  }, [contractId]);
 
   useEffect(() => {
-    let isMounted = true;
-
-    async function loadRegistration() {
-      const supabase = createClient();
-      const { data, error } = await supabase.rpc('get_contract_buyer_registration', {
-        p_contract_id: contractId,
-      });
-
-      if (!isMounted) return;
-      setHasError(Boolean(error));
-      setRegistration(
-        !error && Array.isArray(data) && data.length === 1 ? (data[0] as BuyerRegistration) : null,
-      );
-      setHasLoaded(true);
-    }
-
     void loadRegistration();
-    return () => {
-      isMounted = false;
-    };
-  }, [contractId]);
+  }, [loadRegistration]);
 
   if (!hasLoaded) return null;
 
@@ -108,6 +91,23 @@ export function PublicBuyerRegistration({ contractId }: { contractId: string }) 
             </dd>
           </div>
         </dl>
+      ) : null}
+      {!hasError && !isEditing ? (
+        <button className="contract-choice" onClick={() => setIsEditing(true)} type="button">
+          {registration?.client_full_name
+            ? 'Editar dados cadastrais'
+            : 'Preencher dados cadastrais'}
+        </button>
+      ) : null}
+      {!hasError && isEditing ? (
+        <InternalBuyerRegistrationForm
+          contractId={contractId}
+          initialRegistration={registration}
+          key={JSON.stringify(registration)}
+          onSaved={() => {
+            void loadRegistration();
+          }}
+        />
       ) : null}
     </section>
   );
