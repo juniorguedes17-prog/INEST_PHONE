@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PublicContractLinkNotice } from './public-contract-link-notice';
 
 export default function ContractsPage() {
   return (
@@ -7,6 +8,7 @@ export default function ContractsPage() {
       <Link className="contract-action" href="/contratos/novo">
         Novo contrato
       </Link>
+      <PublicContractLinkNotice />
     </section>
   );
 }

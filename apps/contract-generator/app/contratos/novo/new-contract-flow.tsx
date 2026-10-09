@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { ContractFillFlow } from '../../../domain/contract-fill-flow';
 import type { ContractStatus } from '../../../domain/contract-status';
 import { createClient } from '../../../lib/supabase/client';
+import { toCreatedPublicContractLink } from '../../../lib/public-contract-link';
 
 type ContractStartOption = {
   fillFlow: ContractFillFlow;
@@ -33,6 +34,22 @@ export function NewContractFlow() {
     setIsSubmitting(true);
 
     const supabase = createClient();
+    if (option.fillFlow === 'Solicitar dados ao cliente') {
+      const { data, error } = await supabase.rpc('create_contract_with_public_link');
+      const createdLink = toCreatedPublicContractLink(data);
+
+      if (error || !createdLink) {
+        setErrorMessage('Não foi possível criar o contrato. Tente novamente.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      sessionStorage.setItem('inest-public-contract-link', JSON.stringify(createdLink));
+      router.replace('/contratos');
+      router.refresh();
+      return;
+    }
+
     const { error } = await supabase.from('contracts').insert({
       fill_flow: option.fillFlow,
       status: option.status,

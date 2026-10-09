@@ -182,5 +182,49 @@ body {
 .login-submit:hover:not(:disabled) { background: #6620de; }
 .login-submit:disabled { cursor: wait; opacity: 0.7; }
 .internal-header { display: flex; align-items: center; justify-content: flex-end; margin-bottom: 1rem; }
+
+.public-link-notice {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--inest-line);
+}
+
+.public-link-description {
+  margin: 0;
+  color: #515866;
+}
+
+.public-link-value {
+  overflow-wrap: anywhere;
+  color: var(--inest-black);
+  font-size: 0.875rem;
+}
+
+.public-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.public-buyer-card { width: min(100%, 48rem); padding: clamp(1.25rem, 4vw, 2.5rem); border: 1px solid var(--inest-line); border-radius: 0.75rem; background: var(--inest-white); box-shadow: 0 1.25rem 3.5rem rgb(5 5 5 / 0.06); }
+.public-buyer-form { display: grid; gap: 1.5rem; margin-top: 2rem; }
+.public-buyer-fieldset { display: grid; gap: 0.75rem; margin: 0; padding: 0; border: 0; }
+.public-buyer-fieldset legend, .public-buyer-field > span { color: #303744; font-size: 0.875rem; font-weight: 600; }
+.public-buyer-choice-group { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; }
+.public-buyer-choice-group label { display: inline-flex; gap: 0.5rem; align-items: center; color: #303744; }
+.public-buyer-choice-group input { accent-color: var(--inest-purple); }
+.public-buyer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.public-buyer-grid-full { grid-column: 1 / -1; }
+.public-buyer-field { display: grid; gap: 0.5rem; }
+.public-buyer-field input { width: 100%; min-height: 2.75rem; padding: 0.75rem; border: 1px solid var(--inest-line); border-radius: 0.5rem; background: var(--inest-white); color: var(--inest-black); font: inherit; }
+.public-buyer-field input:focus-visible, .public-buyer-choice-group input:focus-visible, .public-buyer-submit:focus-visible { outline: 3px solid rgb(95 124 255 / 0.35); outline-offset: 2px; }
+.public-buyer-field small { color: #b42318; font-size: 0.8125rem; line-height: 1.4; }
+.public-buyer-submit { justify-self: start; min-height: 2.75rem; padding: 0.75rem 1rem; border: 0; border-radius: 0.5rem; background: var(--inest-purple); color: var(--inest-white); cursor: pointer; font: inherit; font-weight: 700; }
+.public-buyer-submit:hover { background: #6620de; }
+.public-buyer-pending { margin: 0; color: #515866; font-size: 0.875rem; line-height: 1.5; }
+@media (max-width: 36rem) { .public-buyer-grid { grid-template-columns: 1fr; } .public-buyer-grid-full { grid-column: auto; } .public-buyer-submit { width: 100%; justify-content: center; } }
 .logout-button { padding: 0.5rem 0.75rem; background: transparent; color: #303744; }
 .logout-button:hover { background: var(--inest-white); }

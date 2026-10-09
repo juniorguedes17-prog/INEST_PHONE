@@ -1,5 +1,11 @@
-import { RoutePlaceholder } from '../../_components/route-placeholder';
+import { PublicContractLinkManager } from './public-contract-link-manager';
 
-export default function ContractDetailsPage() {
-  return <RoutePlaceholder title="Detalhes do contrato" route="/contratos/[id]" />;
+type ContractDetailsPageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function ContractDetailsPage({ params }: ContractDetailsPageProps) {
+  const { id } = await params;
+
+  return <PublicContractLinkManager contractId={id} />;
 }
