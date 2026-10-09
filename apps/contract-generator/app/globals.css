@@ -225,6 +225,11 @@ body {
 .public-buyer-submit { justify-self: start; min-height: 2.75rem; padding: 0.75rem 1rem; border: 0; border-radius: 0.5rem; background: var(--inest-purple); color: var(--inest-white); cursor: pointer; font: inherit; font-weight: 700; }
 .public-buyer-submit:hover { background: #6620de; }
 .public-buyer-pending { margin: 0; color: #515866; font-size: 0.875rem; line-height: 1.5; }
+.contract-buyer-data { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem 1rem; margin: 0; }
+.contract-buyer-data div { min-width: 0; }
+.contract-buyer-data dt { color: #515866; font-size: 0.8125rem; }
+.contract-buyer-data dd { margin: 0.25rem 0 0; overflow-wrap: anywhere; }
+@media (max-width: 36rem) { .contract-buyer-data { grid-template-columns: 1fr; } }
 @media (max-width: 36rem) { .public-buyer-grid { grid-template-columns: 1fr; } .public-buyer-grid-full { grid-column: auto; } .public-buyer-submit { width: 100%; justify-content: center; } }
 .logout-button { padding: 0.5rem 0.75rem; background: transparent; color: #303744; }
 .logout-button:hover { background: var(--inest-white); }

@@ -17,6 +17,22 @@ export type PublicBuyerFormValues = {
 
 export type PublicBuyerFormErrors = Partial<Record<keyof PublicBuyerFormValues, string>>;
 
+export type PublicBuyerSubmissionParams = {
+  p_public_token: string;
+  p_client_full_name: string;
+  p_client_person_type: PersonType;
+  p_client_document_number: string;
+  p_client_email: string;
+  p_client_address_street: string;
+  p_client_address_number: string;
+  p_client_address_neighborhood: string;
+  p_client_address_complement: string;
+  p_client_postal_code: string;
+  p_client_city: string;
+  p_client_state: string;
+  p_client_phone: string;
+};
+
 const onlyDigits = (value: string) => value.replace(/\D/g, '');
 
 export function formatDocument(value: string, personType: PersonType) {
@@ -109,13 +125,47 @@ export function validatePublicBuyerForm(values: PublicBuyerFormValues): PublicBu
     if (!values[field].trim()) errors[field] = 'Este campo é obrigatório.';
   });
 
-  if (values.documentNumber && !(values.personType === 'PF' ? isValidCpf(values.documentNumber) : isValidCnpj(values.documentNumber))) {
-    errors.documentNumber = values.personType === 'PF' ? 'Informe um CPF válido.' : 'Informe um CNPJ válido.';
+  if (
+    values.documentNumber &&
+    !(values.personType === 'PF'
+      ? isValidCpf(values.documentNumber)
+      : isValidCnpj(values.documentNumber))
+  ) {
+    errors.documentNumber =
+      values.personType === 'PF' ? 'Informe um CPF válido.' : 'Informe um CNPJ válido.';
   }
-  if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) errors.email = 'Informe um e-mail válido.';
+  if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email))
+    errors.email = 'Informe um e-mail válido.';
   if (onlyDigits(values.postalCode).length !== 8) errors.postalCode = 'Informe um CEP válido.';
-  if (!/^[A-Za-z]{2}$/.test(values.state.trim())) errors.state = 'Informe a sigla do estado com 2 letras.';
-  if (![10, 11].includes(onlyDigits(values.phone).length)) errors.phone = 'Informe um telefone válido.';
+  if (!/^[A-Za-z]{2}$/.test(values.state.trim()))
+    errors.state = 'Informe a sigla do estado com 2 letras.';
+  if (![10, 11].includes(onlyDigits(values.phone).length))
+    errors.phone = 'Informe um telefone válido.';
 
   return errors;
+}
+
+export function toPublicBuyerSubmissionParams(
+  publicToken: string,
+  values: PublicBuyerFormValues,
+): PublicBuyerSubmissionParams {
+  return {
+    p_public_token: publicToken,
+    p_client_full_name: values.fullName,
+    p_client_person_type: values.personType,
+    p_client_document_number: values.documentNumber,
+    p_client_email: values.email,
+    p_client_address_street: values.addressStreet,
+    p_client_address_number: values.addressNumber,
+    p_client_address_neighborhood: values.addressNeighborhood,
+    p_client_address_complement: values.addressComplement,
+    p_client_postal_code: values.postalCode,
+    p_client_city: values.city,
+    p_client_state: values.state,
+    p_client_phone: values.phone,
+  };
+}
+
+export function isPublicBuyerSubmissionAccepted(data: unknown, error: unknown) {
+  return !error && data === true;
 }

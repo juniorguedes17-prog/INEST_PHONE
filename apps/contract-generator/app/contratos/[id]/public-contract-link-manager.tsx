@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { isPublicContractToken, publicContractLinkUrl } from '../../../lib/public-contract-link';
 import { createClient } from '../../../lib/supabase/client';
+import { PublicBuyerRegistration } from './public-buyer-registration';
 
 type PublicContractLinkManagerProps = {
   contractId: string;
@@ -58,26 +59,49 @@ export function PublicContractLinkManager({ contractId }: PublicContractLinkMana
   return (
     <section className="contracts-card" aria-labelledby="public-link-title">
       <p className="route-kicker">Contrato</p>
-      <h1 className="route-title" id="public-link-title">Link público</h1>
+      <h1 className="route-title" id="public-link-title">
+        Link público
+      </h1>
       <p className="route-description">Gere um novo link ou revogue o acesso atual.</p>
       <div className="public-link-actions">
-        <button className="contract-choice" disabled={isSubmitting} onClick={regenerateLink} type="button">
+        <button
+          className="contract-choice"
+          disabled={isSubmitting}
+          onClick={regenerateLink}
+          type="button"
+        >
           Gerar novo link
         </button>
-        <button className="contract-choice" disabled={isSubmitting} onClick={revokeLink} type="button">
+        <button
+          className="contract-choice"
+          disabled={isSubmitting}
+          onClick={revokeLink}
+          type="button"
+        >
           Revogar link
         </button>
       </div>
       {publicUrl ? (
         <div className="public-link-notice" aria-live="polite">
           <p className="public-link-description">Compartilhe o novo link com o cliente.</p>
-          <a className="public-link-value" href={publicUrl}>{publicUrl}</a>
-          <button className="contract-choice" onClick={() => navigator.clipboard.writeText(publicUrl)} type="button">
+          <a className="public-link-value" href={publicUrl}>
+            {publicUrl}
+          </a>
+          <button
+            className="contract-choice"
+            onClick={() => navigator.clipboard.writeText(publicUrl)}
+            type="button"
+          >
             Copiar link
           </button>
         </div>
       ) : null}
-      {errorMessage ? <p className="contract-error" role="alert">{errorMessage}</p> : null}
+      {errorMessage ? (
+        <p className="contract-error" role="alert">
+          {errorMessage}
+        </p>
+      ) : null}
+      <PublicBuyerRegistration contractId={contractId} />
     </section>
   );
 }
