@@ -68,8 +68,8 @@ jobs:
           printf '%s\n' "$pg_dump_version"
           printf '%s\n' "$pg_restore_version"
 
-          grep -Eq '^pg_dump \(PostgreSQL\) 17\.11$' <<< "$pg_dump_version"
-          grep -Eq '^pg_restore \(PostgreSQL\) 17\.11$' <<< "$pg_restore_version"
+          grep -Eq '^pg_dump \(PostgreSQL\) 17\.11( \([^)]*\))?$' <<< "$pg_dump_version"
+          grep -Eq '^pg_restore \(PostgreSQL\) 17\.11( \([^)]*\))?$' <<< "$pg_restore_version"
 
       - name: Create and verify logical backup
         shell: bash
